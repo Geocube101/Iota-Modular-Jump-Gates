@@ -1,0 +1,1475 @@
+﻿using IOTA.ModularJumpGates.CubeBlock;
+using IOTA.ModularJumpGates.Terminal;
+using IOTA.ModularJumpGates.Util;
+using Sandbox.ModAPI;
+using System;
+using System.IO;
+using System.Linq;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Collections.Immutable;
+using System.Threading;
+using VRage.Game;
+using VRage.Game.Components;
+using VRage.Game.ModAPI;
+using VRage.ModAPI;
+using VRage.Utils;
+using VRageMath;
+using System.Diagnostics;
+using Sandbox.ModAPI.Interfaces.Terminal;
+using IOTA.ModularJumpGates.ISC;
+using IOTA.ModularJumpGates.API;
+using IOTA.ModularJumpGates.Util.ConcurrentCollections;
+
+namespace IOTA.ModularJumpGates
+{
+	public enum MySessionStatusEnum { OFFLINE, LOADING, RUNNING, UNLOADING };
+
+	[MySessionComponentDescriptor(MyUpdateOrder.AfterSimulation | MyUpdateOrder.BeforeSimulation)]
+	internal class MyJumpGateModSession : MySessionComponentBase
+	{
+		#region Public Static Variables
+		/// <summary>
+		/// The current, session local game tick
+		/// </summary>
+		public static ulong GameTick { get; private set; } = 0;
+
+		/// <summary>
+		/// The Guid used to store information in mod storage components
+		/// </summary>
+		public static readonly Guid BlockComponentDataGUID = new Guid("FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF");
+
+		/// <summary>
+		/// Whether to show debug draw
+		/// </summary>
+		public static bool DebugMode = false;
+
+		/// <summary>
+		/// The current session component status
+		/// </summary>
+		public static MySessionStatusEnum SessionStatus { get; private set; } = MySessionStatusEnum.OFFLINE;
+
+		/// <summary>
+		/// The world's world matrix
+		/// </summary>
+		public static readonly MatrixD WorldMatrix = MatrixD.CreateWorld(Vector3D.Zero, new Vector3D(0, 0, -1), new Vector3D(0, 1, 0));
+
+		/// <summary>
+		/// The Mod ID string used for terminal controls
+		/// </summary>
+		public static readonly string MODID = "IOTA.ModularJumpGatesMod";
+
+		/// <summary>
+		/// Configuration variables as loaded from file or recieved from server
+		/// </summary>
+		public static Configuration Configuration { get; private set; } = null;
+
+		/// <summary>
+		/// Reference to the instance of this session component
+		/// </summary>
+		public static MyJumpGateModSession Instance { get; private set; } = null;
+
+		/// <summary>
+		/// Reference to the instane of this session's network interface
+		/// </summary>
+		public static MyNetworkInterface Network { get; private set; } = null;
+		#endregion
+
+		#region Private Static Variables
+		/// <summary>
+		/// The time in game ticks used to detect entity load completed
+		/// </summary>
+		private static ushort InitialEntityLoadedDelayTicks = 300;
+		#endregion
+
+		#region Private Variables
+		/// <summary>
+		/// Whether to force a redraw of all terminal controls
+		/// </summary>
+		private bool __RedrawAllTerminalControls = false;
+
+		/// <summary>
+		/// The number of current active grid update threads
+		/// </summary>
+		private byte ActiveGridUpdateThreads = 0;
+
+		/// <summary>
+		/// The time in game ticks after session start to update grids
+		/// </summary>
+		private ushort FirstUpdateTimeTicks = 300;
+
+		/// <summary>
+		/// The time in game ticks after which all grids are sent from server to all clients
+		/// </summary>
+		private ushort GridNetworkUpdateDelay = 30 * 60;
+
+		/// <summary>
+		/// Stores the next index for queued animations
+		/// </summary>
+		private ulong AnimationQueueIndex = 0;
+
+		/// <summary>
+		/// Stores the active terminal block
+		/// </summary>
+		private long InteractedBlock = -1;
+
+		/// <summary>
+		/// Stores the last opened terminal page
+		/// </summary>
+		private MyTerminalPageEnum LastTerminalPage = MyTerminalPageEnum.None;
+
+		/// <summary>
+		/// Lock for operations on closure queue and grid map
+		/// </summary>
+		private object ClosureQueueMapIteratorLock = new object();
+
+		/// <summary>
+		/// A list of the last 60 update times
+		/// </summary>
+		private ConcurrentSpinQueue<double> GridUpdateTimeTicks = new ConcurrentSpinQueue<double>(60);
+
+		/// <summary>
+		/// A list of the last 60 update times
+		/// </summary>
+		private ConcurrentSpinQueue<double> SessionUpdateTimeTicks = new ConcurrentSpinQueue<double>(60);
+
+		/// <summary>
+		/// Used to store all grids requesting closure
+		/// </summary>
+		private ConcurrentQueue<KeyValuePair<MyJumpGateConstruct, bool>> GridCloseRequests = new ConcurrentQueue<KeyValuePair<MyJumpGateConstruct, bool>>();
+
+		/// <summary>
+		/// Used to store all jump gates requesting closure
+		/// </summary>
+		private ConcurrentQueue<MyJumpGate> GateCloseRequests = new ConcurrentQueue<MyJumpGate>();
+
+		/// <summary>
+		/// Master map for storing grid constructs
+		/// </summary>
+		private ConcurrentDictionary<long, MyJumpGateConstruct> GridMap = new ConcurrentDictionary<long, MyJumpGateConstruct>();
+
+		/// <summary>
+		/// Master map for storing in-progress animations
+		/// </summary>
+		private ConcurrentDictionary<ulong, AnimationInfo> JumpGateAnimations = new ConcurrentDictionary<ulong, AnimationInfo>();
+		#endregion
+
+		#region Temporary Containers
+		private List<IMyTerminalControl> TEMP_ControlsList = new List<IMyTerminalControl>();
+		#endregion
+
+		#region Internal Variables
+		/// <summary>
+		/// The time in game ticks used to detect entity load completed
+		/// </summary>
+		internal ushort EntityLoadedDelayTicks { get; private set; } = MyJumpGateModSession.InitialEntityLoadedDelayTicks;
+
+		/// <summary>
+		/// The number of currently outbound jump gates
+		/// </summary>
+		internal uint ConcurrentJumpsCounter = 0;
+		#endregion
+
+		#region Public Variables
+		/// <summary>
+		/// Whether all entities in session are loaded<br />
+		/// <i>Always false on client</i>
+		/// </summary>
+		public bool AllSessionEntitiesLoaded
+		{
+			get
+			{
+				return MyNetworkInterface.IsServerLike && this.EntityLoadedDelayTicks == 0;
+			}
+		}
+
+		/// <summary>
+		/// Whether the session has loaded completely
+		/// </summary>
+		public bool InitializationComplete { get; private set; } = false;
+		#endregion
+
+		#region Public Static Methods
+		/// <summary>
+		/// Checks whether the block is a derivative of CubeBlockBase
+		/// </summary>
+		/// <param name="block">The block to check</param>
+		/// <returns>Whether the "CubeBlockBase" game logic component is attached</returns>
+		public static bool IsBlockCubeBlockBase(IMyTerminalBlock block)
+		{
+			return MyJumpGateModSession.GetBlockAsCubeBlockBase(block) != null;
+		}
+
+		/// <summary>
+		/// Checks whether the block is a jump gate controller
+		/// </summary>
+		/// <param name="block">The block to check</param>
+		/// <returns>Whether the "JumpGateController" game logic component is attached</returns>
+		public static bool IsBlockJumpGateController(IMyTerminalBlock block)
+		{
+			return MyJumpGateModSession.GetBlockAsJumpGateController(block) != null;
+		}
+
+		/// <summary>
+		/// Checks whether the block is a jump gate drive
+		/// </summary>
+		/// <param name="block">The block to check</param>
+		/// <returns>Whether the "JumpGateDrive" game logic component is attached</returns>
+		public static bool IsBlockJumpGateDrive(IMyTerminalBlock block)
+		{
+			return MyJumpGateModSession.GetBlockAsJumpGateDrive(block) != null;
+		}
+
+		/// <summary>
+		/// Checks whether the block is a jump gate capacitor
+		/// </summary>
+		/// <param name="block">The block to check</param>
+		/// <returns>Whether the "JumpGateCapacitor" game logic component is attached</returns>
+		public static bool IsBlockJumpGateCapacitor(IMyTerminalBlock block)
+		{
+			return MyJumpGateModSession.GetBlockAsJumpGateCapacitor(block) != null;
+		}
+
+		/// <summary>
+		/// Checks whether the block is a jump gate server antenna
+		/// </summary>
+		/// <param name="block">The block to check</param>
+		/// <returns>Whether the "JumpGateServerAntenna" game logic component is attached</returns>
+		public static bool IsBlockJumpGateServerAntenna(IMyTerminalBlock block)
+		{
+			return MyJumpGateModSession.GetBlockAsJumpGateServerAntenna(block) != null;
+		}
+
+		/// <summary>
+		/// Checks if the position is both inside a cube grid's bounding box and whether that position is between at least two walls
+		/// </summary>
+		/// <param name="grid">The grid to check in</param>
+		/// <param name="position">The world coordinate</param>
+		/// <returns>Insideness</returns>
+		public static bool IsPositionInsideGrid(IMyCubeGrid grid, Vector3D position)
+		{
+			BoundingBoxD aabb = grid.WorldAABB;
+			MatrixD world_matrix = grid.WorldMatrix;
+			Vector3D vector1, vector2;
+			
+			vector1 = position - grid.WorldMatrix.Forward * aabb.Extents.Z;
+			vector2 = position + grid.WorldMatrix.Forward * aabb.Extents.Z;
+			if (grid.RayCastBlocks(vector1, position) != null && grid.RayCastBlocks(vector2, position) != null) return true;
+
+			vector1 = position + grid.WorldMatrix.Up * aabb.Extents.Y;
+			vector2 = position - grid.WorldMatrix.Up * aabb.Extents.Y;
+			if (grid.RayCastBlocks(vector1, position) != null && grid.RayCastBlocks(vector2, position) != null) return true;
+
+			vector1 = position - grid.WorldMatrix.Left * aabb.Extents.X;
+			vector2 = position + grid.WorldMatrix.Left * aabb.Extents.X;
+			if (grid.RayCastBlocks(vector1, position) != null && grid.RayCastBlocks(vector2, position) != null) return true;
+
+			return false;
+		}
+
+		/// <summary>
+		/// Converts a world position vector to a local position vector
+		/// </summary>
+		/// <param name="world_matrix">The world matrix</param>
+		/// <param name="world_pos">The world vector to convert</param>
+		/// <returns>The local vector</returns>
+		public static Vector3D WorldVectorToLocalVectorP(MatrixD world_matrix, Vector3D world_pos)
+		{
+			return Vector3D.TransformNormal(world_pos - world_matrix.Translation, MatrixD.Transpose(world_matrix));
+		}
+
+		/// <summary>
+		/// Converts a world position vector to a local position vector
+		/// </summary>
+		/// <param name="world_matrix">The world matrix</param>
+		/// <param name="world_pos">The world vector to convert</param>
+		/// <returns>The local vector</returns>
+		public static Vector3D WorldVectorToLocalVectorP(ref MatrixD world_matrix, Vector3D world_pos)
+		{
+			MatrixD transposed;
+			MatrixD.Transpose(ref world_matrix, out transposed);
+			return Vector3D.TransformNormal(world_pos - world_matrix.Translation, ref transposed);
+		}
+
+		/// <summary>
+		/// Converts a local position vector to a world position vector
+		/// </summary>
+		/// <param name="world_matrix">The world matrix</param>
+		/// <param name="world_pos">The local vector to convert</param>
+		/// <returns>The world vector</returns>
+		public static Vector3D LocalVectorToWorldVectorP(MatrixD world_matrix, Vector3D local_pos)
+		{
+			return Vector3D.Transform(local_pos, ref world_matrix);
+		}
+
+		/// <summary>
+		/// Converts a local position vector to a world position vector
+		/// </summary>
+		/// <param name="world_matrix">The world matrix</param>
+		/// <param name="world_pos">The local vector to convert</param>
+		/// <returns>The world vector</returns>
+		public static Vector3D LocalVectorToWorldVectorP(ref MatrixD world_matrix, Vector3D local_pos)
+		{
+			return Vector3D.Transform(local_pos, ref world_matrix);
+		}
+
+		/// <summary>
+		/// Converts a world direction vector to a local direction vector
+		/// </summary>
+		/// <param name="world_matrix">The world matrix</param>
+		/// <param name="world_pos">The world vector to convert</param>
+		/// <returns>The local vector</returns>
+		public static Vector3D WorldVectorToLocalVectorD(MatrixD world_matrix, Vector3D world_direction)
+		{
+			return Vector3D.TransformNormal(world_direction, MatrixD.Transpose(world_matrix));
+		}
+
+		/// <summary>
+		/// Converts a world direction vector to a local direction vector
+		/// </summary>
+		/// <param name="world_matrix">The world matrix</param>
+		/// <param name="world_pos">The world vector to convert</param>
+		/// <returns>The local vector</returns>
+		public static Vector3D WorldVectorToLocalVectorD(ref MatrixD world_matrix, Vector3D world_direction)
+		{
+			MatrixD transposed;
+			MatrixD.Transpose(ref world_matrix, out transposed);
+			return Vector3D.TransformNormal(world_direction, ref transposed);
+		}
+
+		/// <summary>
+		/// Converts a local direction vector to a world direction vector
+		/// </summary>
+		/// <param name="world_matrix">The world matrix</param>
+		/// <param name="world_pos">The local vector to convert</param>
+		/// <returns>The world vector</returns>
+		public static Vector3D LocalVectorToWorldVectorD(MatrixD world_matrix, Vector3D local_direction)
+		{
+			return Vector3D.TransformNormal(local_direction, ref world_matrix);
+		}
+
+		/// <summary>
+		/// Converts a local direction vector to a world direction vector
+		/// </summary>
+		/// <param name="world_matrix">The world matrix</param>
+		/// <param name="world_pos">The local vector to convert</param>
+		/// <returns>The world vector</returns>
+		public static Vector3D LocalVectorToWorldVectorD(ref MatrixD world_matrix, Vector3D local_direction)
+		{
+			return Vector3D.TransformNormal(local_direction, ref world_matrix);
+		}
+
+		/// <summary>
+		/// Gets a player by player ID
+		/// </summary>
+		/// <param name="player_id">The player ID</param>
+		/// <returns>The specified player or null</returns>
+		public static IMyPlayer GetPlayerByID(long player_id)
+		{
+			List<IMyPlayer> players = new List<IMyPlayer>();
+			MyAPIGateway.Players.GetPlayers(players, (player) => player.IdentityId == player_id);
+			return players.FirstOrDefault();
+		}
+
+		/// <summary>
+		/// Converts a value to its simplist metric unit<br />
+		/// Example: 1000 -> 1 K<br />
+		/// Example: 1000000 -> 1 M<br />
+		/// </summary>
+		/// <param name="value">The value to convert</param>
+		/// <param name="unit">The base unit</param>
+		/// <param name="places">The number of places to round to</param>
+		/// <returns>The resulting value</returns>
+		public static string AutoconvertMetricUnits(double value, string unit, int places)
+		{
+			if (double.IsPositiveInfinity(value)) return "INFINITE";
+			else if (double.IsNegativeInfinity(value)) return "-INFINITE";
+			else if (double.IsNaN(value)) return "NaN";
+			else if (value == 0) return $"0 {unit}";
+			string[] prefixes_up = { "", "K", "M", "G", "T", "P", "E", "Z", "Y", "R", "Q" };
+			string[] prefixes_down = { "", "m", "μ", "n", "p", "f", "a", "z", "y", "r", "q" };
+			int count = 0;
+
+			if (value > 0)
+			{
+				while (value >= 1e3 && count < prefixes_up.Length - 1)
+				{
+					++count;
+					value /= 1e3;
+				}
+
+				return $"{Math.Round(value, places)} {prefixes_up[count]}{unit}";
+			}
+			else if (value < 0)
+			{
+				while (value <= 1e3 && count < prefixes_down.Length - 1)
+				{
+					++count;
+					value *= 1e3;
+				}
+
+				return $"{Math.Round(value, places)} {prefixes_down[count]}{unit}";
+			}
+			else return $"{value} {unit}";
+		}
+
+		/// <summary>
+		/// Converts a value to base 10 scientific notation
+		/// </summary>
+		/// <param name="value">The value to convert</param>
+		/// <param name="places">The number of places to round to</param>
+		/// <param name="e">The value used in place of 'E'</param>
+		/// <returns>The resulting value in scientific notation</returns>
+		public static string AutoconvertSciNotUnits(double value, int places, string e = " E ")
+		{
+			if (double.IsPositiveInfinity(value)) return "INFINITE";
+			else if (double.IsNegativeInfinity(value)) return "-INFINITE";
+			else if (double.IsNaN(value)) return "NaN";
+			else if (value == 0) return "0";
+			int l10 = (int) Math.Floor(Math.Log10(Math.Abs(value)));
+			string sign = (value < 0) ? "-" : "";
+			value = value / Math.Pow(10, l10);
+			return $"{sign}{Math.Round(value, places)}{e}{l10}";
+		}
+
+		/// <summary>
+		/// Gets the block as a CubeBlockBase instance or null if not a derivative of CubeBlockBase
+		/// </summary>
+		/// <param name="block">The block to convert</param>
+		/// <returns>The "CubeBlockBase" game logic component or null</returns>
+		internal static MyCubeBlockBase GetBlockAsCubeBlockBase(IMyTerminalBlock block)
+		{
+			return block?.GameLogic?.GetAs<MyCubeBlockBase>();
+		}
+
+		/// <summary>
+		/// Gets the block as a jump gate controller or null if not a jump gate controller
+		/// </summary>
+		/// <param name="block">The block to convert</param>
+		/// <returns>The "JumpGateController" game logic component or null</returns>
+		public static MyJumpGateController GetBlockAsJumpGateController(IMyTerminalBlock block)
+		{
+			return block?.GameLogic?.GetAs<MyJumpGateController>();
+		}
+
+		/// <summary>
+		/// Gets the block as a jump gate drive or null if not a jump gate drive
+		/// </summary>
+		/// <param name="block">The block to convert</param>
+		/// <returns>The "JumpGateDrive" game logic component or null</returns>
+		public static MyJumpGateDrive GetBlockAsJumpGateDrive(IMyTerminalBlock block)
+		{
+			return block?.GameLogic?.GetAs<MyJumpGateDrive>();
+		}
+
+		/// <summary>
+		/// Gets the block as a jump gate capacitor of null if not a jump gate capacitor
+		/// </summary>
+		/// <param name="block">The block to convert</param>
+		/// <returns>The "JumpGateCapacitor" game logic component or null</returns>
+		public static MyJumpGateCapacitor GetBlockAsJumpGateCapacitor(IMyTerminalBlock block)
+		{
+			return block?.GameLogic?.GetAs<MyJumpGateCapacitor>();
+		}
+
+		/// <summary>
+		/// Gets the block as a jump gate server antenna of null if not a jump gate server antenna
+		/// </summary>
+		/// <param name="block">The block to convert</param>
+		/// <returns>The "JumpGateServerAntenna" game logic component or null</returns>
+		public static MyJumpGateServerAntenna GetBlockAsJumpGateServerAntenna(IMyTerminalBlock block)
+		{
+			return block?.GameLogic?.GetAs<MyJumpGateServerAntenna>();
+		}
+		#endregion
+		
+		#region "MySessionComponentBase" Methods
+		/// <summary>
+		/// MySessionComponentBase method<br />
+		/// Called when session is unloaded<br />
+		/// Saves and unloads all relevant mod data and configurations
+		/// </summary>
+		protected override void UnloadData()
+		{
+			MyJumpGateModSession.SessionStatus = MySessionStatusEnum.UNLOADING;
+			Logger.Log("Closing...");
+			base.UnloadData();
+			MyAPISession.Dispose();
+			MyAnimationHandler.Unload();
+
+			if (MyJumpGateModSession.Network != null && MyJumpGateModSession.Network.Registered)
+			{
+				MyJumpGateModSession.Network.Off(MyPacketTypeEnum.UPDATE_GRIDS, this.OnNetworkGridsUpdate);
+				MyJumpGateModSession.Network.Off(MyPacketTypeEnum.CLOSE_GRID, this.OnNetworkGridClose);
+				MyJumpGateModSession.Network.Off(MyPacketTypeEnum.DOWNLOAD_GRID, this.OnNetworkGridDownload);
+				MyJumpGateModSession.Network.Off(MyPacketTypeEnum.COMM_LINKED, this.OnNetworkCommLinkedUpdate);
+				MyJumpGateModSession.Network.Off(MyPacketTypeEnum.BEACON_LINKED, this.OnNetworkBeaconLinkedUpdate);
+				MyJumpGateModSession.Network.Unregister();
+			}
+
+			int closed_grids_count = 0;
+
+			foreach (MyJumpGateConstruct grid in this.GridMap.Values)
+			{
+				if (!grid.Closed)
+				{
+					grid.Dispose();
+					++closed_grids_count;
+				}
+			}
+
+			this.FlushClosureQueues();
+			Logger.Log($"Closed {closed_grids_count} Grids");
+			foreach (AnimationInfo animation in this.JumpGateAnimations.Values) animation.Animation.Clean();
+
+			this.GridUpdateTimeTicks.Clear();
+			this.SessionUpdateTimeTicks.Clear();
+			this.GridMap.Clear();
+			this.JumpGateAnimations.Clear();
+
+			this.GridUpdateTimeTicks = null;
+			this.SessionUpdateTimeTicks = null;
+			this.GridCloseRequests = null;
+			this.GateCloseRequests = null;
+			this.GridMap = null;
+			this.JumpGateAnimations = null;
+
+			MyAPIGateway.Entities.OnEntityAdd -= this.OnEntityAdd;
+			MyAPIGateway.Entities.OnEntityRemove -= this.OnEntityRemove;
+			MyAPIGateway.TerminalControls.CustomControlGetter -= this.OnTerminalSelector;
+
+			MyJumpGateModSession.Configuration.Save();
+			MyJumpGateModSession.Configuration = null;
+			MyJumpGateModSession.Network = null;
+			MyJumpGateModSession.Instance = null;
+			MyJumpGateModSession.SessionStatus = MySessionStatusEnum.OFFLINE;
+
+			Logger.Log("Closed.");
+			Logger.Flush();
+		}
+
+		/// <summary>
+		/// MySessionComponentBase method<br />
+		/// Called when session is loaded<br />
+		/// Loads all relevant mod data and configurations
+		/// </summary>
+		public override void LoadData()
+		{
+			// amogst the earliest execution points, but not everything is available at this point.
+
+			// These can be used anywhere, not just in this method/class:
+			// MyAPIGateway. - main entry point for the API
+			// MyDefinitionManager.Static. - reading/editing definitions
+			// MyGamePruningStructure. - fast way of finding entities in an area
+			// MyTransparentGeometry. and MySimpleObjectDraw. - to draw sprites (from TransparentMaterials.sbc) in world (they usually live a single tick)
+			// MyVisualScriptLogicProvider. - mainly designed for VST but has its uses, use as a last resort.
+			// System.Diagnostics.Stopwatch - for measuring code execution time.
+			// ...and many more things, ask in #programming-modding in keen's discord for what you want to do to be pointed at the available things to use.
+
+			Logger.Log("PREINIT - Loading Data...");
+			MyJumpGateModSession.SessionStatus = MySessionStatusEnum.LOADING;
+			MyJumpGateModSession.Instance = this;
+			MyJumpGateModSession.Configuration = Configuration.Load();
+			MyJumpGateModSession.Network = new MyNetworkInterface(0xFFFF);
+			if (MyNetworkInterface.IsServerLike && !MyAPIGateway.Utilities.GetVariable($"{MyJumpGateModSession.MODID}.DebugMode", out MyJumpGateModSession.DebugMode)) MyJumpGateModSession.DebugMode = false;
+			this.UpdateOnPause = true;
+
+			if (!MyNetworkInterface.IsSingleplayer)
+			{
+				MyJumpGateModSession.Network.Register();
+				MyJumpGateModSession.Network.On(MyPacketTypeEnum.UPDATE_GRIDS, this.OnNetworkGridsUpdate);
+				MyJumpGateModSession.Network.On(MyPacketTypeEnum.CLOSE_GRID, this.OnNetworkGridClose);
+				MyJumpGateModSession.Network.On(MyPacketTypeEnum.DOWNLOAD_GRID, this.OnNetworkGridDownload);
+			}
+
+			if (MyNetworkInterface.IsMultiplayerServer)
+			{
+				MyJumpGateModSession.Network.On(MyPacketTypeEnum.COMM_LINKED, this.OnNetworkCommLinkedUpdate);
+				MyJumpGateModSession.Network.On(MyPacketTypeEnum.BEACON_LINKED, this.OnNetworkBeaconLinkedUpdate);
+			}
+
+			if (MyNetworkInterface.IsServerLike) MyInterServerCommunication.Register(0, 0, null);
+			MyAPIGateway.Entities.OnEntityAdd += this.OnEntityAdd;
+			MyAPIGateway.Entities.OnEntityRemove += this.OnEntityRemove;
+			MyAPISession.Init();
+			Logger.Log("PREINIT - Loaded.");
+		}
+
+		/// <summary>
+		/// MySessionComponentBase method<br />
+		/// Called before session start<br />
+		/// Updates animations and loads controls
+		/// </summary>
+		public override void BeforeStart()
+		{
+			base.BeforeStart();
+			Logger.Log("INIT - Loading Data...");
+			MyAnimationHandler.Load();
+
+			if (MyJumpGateModSession.Network.Registered && MyNetworkInterface.IsStandaloneMultiplayerClient)
+			{
+				MyNetworkInterface.Packet update_request = new MyNetworkInterface.Packet {
+					PacketType = MyPacketTypeEnum.UPDATE_GRIDS,
+					TargetID = 0,
+					Broadcast = false,
+				};
+				update_request.Send();
+			}
+
+			if (!MyNetworkInterface.IsDedicatedMultiplayerServer) MyAPIGateway.Utilities.ShowMessage(MyJumpGateModSession.MODID, "Initializing Constructs...");
+			MyAPIGateway.TerminalControls.CustomControlGetter += this.OnTerminalSelector;
+			Logger.Log("INIT - Loaded.");
+		}
+
+		/// <summary>
+		/// MySessionComponentBase method<br />
+		/// Called every tick before simulation<br />
+		/// </summary>
+		public override void UpdateBeforeSimulation()
+		{
+			Stopwatch sw = new Stopwatch();
+			sw.Start();
+			
+			try
+			{
+				base.UpdateBeforeSimulation();
+				this.FlushClosureQueues();
+			}
+			finally
+			{
+				sw.Stop();
+				this.SessionUpdateTimeTicks.Enqueue(sw.Elapsed.TotalMilliseconds);
+			}
+		}
+
+		/// <summary>
+		/// MySessionComponentBase method<br />
+		/// Called every tick after simulation<br />
+		/// Primary logic executor; ticks grids, animations, teleport requests, terminal controls, and sound emitters
+		/// </summary>
+		public override void UpdateAfterSimulation()
+		{
+			Stopwatch sw = new Stopwatch();
+			sw.Start();
+
+			try
+			{
+				MyJumpGateModSession.SessionStatus = MySessionStatusEnum.RUNNING;
+				MyJumpGateModSession.GameTick = (MyJumpGateModSession.GameTick + 1) % 0xFFFFFFFFFFFFFFF0;
+				if (this.EntityLoadedDelayTicks > 0) --this.EntityLoadedDelayTicks;
+
+				// Update grids
+				if (MyNetworkInterface.IsStandaloneMultiplayerClient && MyJumpGateModSession.GameTick == this.FirstUpdateTimeTicks)
+				{
+					MyNetworkInterface.Packet packet = new MyNetworkInterface.Packet
+					{
+						PacketType = MyPacketTypeEnum.UPDATE_GRIDS,
+						TargetID = 0,
+						Broadcast = false,
+					};
+					packet.Send();
+					Logger.Debug($"INITAL_GRID_UPDATE", 2);
+				}
+
+				if (MyNetworkInterface.IsServerLike && !this.AllSessionEntitiesLoaded) return;
+				if (MyJumpGateModSession.GameTick == this.FirstUpdateTimeTicks && !this.InitializationComplete && !MyNetworkInterface.IsDedicatedMultiplayerServer) MyAPIGateway.Utilities.ShowMessage(MyJumpGateModSession.MODID, "Initialization Complete!");
+				this.InitializationComplete = true;
+
+				if (this.ActiveGridUpdateThreads < MyJumpGateModSession.Configuration.GeneralConfiguration.ConcurrentGridUpdateThreads)
+				{
+					++this.ActiveGridUpdateThreads;
+					MyAPIGateway.Parallel.StartBackground(this.TickUpdateGrids);
+				}
+
+				// Update grid non-threadable
+				foreach (KeyValuePair<long, MyJumpGateConstruct> pair in this.GridMap)
+				{
+					MyJumpGateConstruct grid = pair.Value;
+
+					if (!grid.MarkClosed && !grid.IsSuspended && grid.GetFirstCubeGrid((subgrid) => subgrid.MarkedForClose) == null && grid.AtLeastOneUpdate())
+					{
+						try
+						{
+							grid.UpdateNonThreadable();
+						}
+						catch (Exception e)
+						{
+							Logger.Error($"Error during construct no-thread tick - {grid.CubeGrid?.EntityId.ToString() ?? "N/A"} ({pair.Key})\n  ...\n[ {e} ]: {e.Message}\n{e.StackTrace}\n{e.InnerException}");
+						}
+					}
+				}
+
+				// Tick queued animations
+				foreach (KeyValuePair<ulong, AnimationInfo> pair in this.JumpGateAnimations)
+				{
+					AnimationInfo animation_info = pair.Value;
+					string animation_name = animation_info.Animation.FullAnimationName;
+					MyJumpGateAnimation animation = animation_info.Animation;
+					animation.Tick(animation_info.AnimationIndex);
+
+					if (animation.Stopped(animation_info.AnimationIndex))
+					{
+						if (animation_info.CompletionCallback != null) animation_info.CompletionCallback(animation_info.IterCallbackException);
+						this.JumpGateAnimations.Remove(pair.Key);
+					}
+					else if (animation_info.IterCallback != null)
+					{
+						bool stop;
+
+						try
+						{
+							stop = !animation_info.IterCallback();
+						}
+						catch (Exception e)
+						{
+							stop = true;
+							animation_info.IterCallbackException = e;
+							Logger.Error($"Error during animation iteration callback - {animation_name}\n  ...\n[ {e} ]: {e.Message}\n{e.StackTrace}\n{e.InnerException}");
+						}
+
+						if (stop) animation.Stop();
+					}
+					else if (animation.JumpGate.Closed) animation.Stop();
+				}
+
+				// Redraw Terminal Controls
+				if ((MyNetworkInterface.IsSingleplayer || MyNetworkInterface.IsMultiplayerClient) && (MyJumpGateModSession.GameTick % 60 == 0 || this.__RedrawAllTerminalControls))
+				{
+					MyAPIGateway.TerminalControls.GetControls<IMyUpgradeModule>(out this.TEMP_ControlsList);
+					foreach (IMyTerminalControl control in this.TEMP_ControlsList) control.UpdateVisual();
+					this.__RedrawAllTerminalControls = false;
+				}
+			}
+			finally
+			{
+				sw.Stop();
+				this.SessionUpdateTimeTicks[-1] += sw.Elapsed.TotalMilliseconds;
+			}
+		}
+
+		/// <summary>
+		/// MySessionComponentBase method<br />
+		/// Updates terminal block scrolling for detailed info
+		/// </summary>
+		public override void HandleInput()
+		{
+			base.HandleInput();
+			if (this.LastTerminalPage == MyTerminalPageEnum.ControlPanel && MyAPIGateway.Gui.GetCurrentScreen != MyTerminalPageEnum.ControlPanel) foreach (MyCubeBlockBase block in MyCubeBlockBase.Instances.Values) block.SetScroll(0);
+			this.LastTerminalPage = MyAPIGateway.Gui.GetCurrentScreen;
+			if (!MyAPIGateway.Gui.IsCursorVisible || MyAPIGateway.Gui.ChatEntryVisible || MyAPIGateway.Gui.GetCurrentScreen != MyTerminalPageEnum.ControlPanel) return;
+
+			MyCubeBlockBase interacted_cube_block;
+			if ((interacted_cube_block = MyCubeBlockBase.Instances.GetValueOrDefault(this.InteractedBlock, null)) == null) return;
+
+			Vector2 area = MyAPIGateway.Input.GetMouseAreaSize();
+			Vector2 position = MyAPIGateway.Input.GetMousePosition();
+			Vector2 percent_pos = position / area;
+			if (percent_pos.X < 0.6273438f || percent_pos.Y < 0.5972222 || percent_pos.X > 0.8605469f || percent_pos.Y > 0.88125f) return;
+			
+			if (MyAPIGateway.Input.DeltaMouseScrollWheelValue() > 0) interacted_cube_block.Scroll(3);
+			else if (MyAPIGateway.Input.DeltaMouseScrollWheelValue() < 0) interacted_cube_block.Scroll(-3);
+		}
+
+		/// <summary>
+		/// MySessionComponentBase method<br />
+		/// Called every tick<br />
+		/// Displays debug draw lines
+		/// </summary>
+		public override void Draw()
+		{
+			base.Draw();
+
+			// Debug draw
+			if (MyJumpGateModSession.DebugMode && !MyNetworkInterface.IsDedicatedMultiplayerServer)
+			{
+				Vector4 color4;
+				Color color;
+				Vector3D this_position = MyAPIGateway.Session.Camera.Position;
+				MyStringId line_material = MyStringId.GetOrCompute("WeaponLaser");
+				List<MyJumpGate> jump_gates = new List<MyJumpGate>();
+				List<MyJumpGateDrive> jump_drives = new List<MyJumpGateDrive>();
+
+				foreach (KeyValuePair<long, MyJumpGateConstruct> pair in this.GridMap)
+				{
+					MyJumpGateConstruct jump_grid = pair.Value;
+					if (jump_grid.IsSuspended || jump_grid.CubeGrid == null || !jump_grid.IsValid() || !jump_grid.AtLeastOneUpdate()) continue;
+					jump_grid.GetJumpGates(jump_gates);
+					jump_grid.GetAttachedJumpGateDrives(jump_drives);
+					color4 = Color.Violet.ToVector4() * 20;
+					foreach (MyJumpGate gate in jump_gates) if (gate.TrueEndpoint != null) MySimpleObjectDraw.DrawLine(gate.WorldJumpNode, gate.TrueEndpoint.Value, line_material, ref color4, 10);
+
+					try
+					{
+						if (Vector3D.Distance(this_position, jump_grid.CubeGrid.WorldMatrix.Translation) > MyJumpGateModSession.Configuration.GeneralConfiguration.DrawSyncDistance) continue;
+						MatrixD grid_matrix = jump_grid.CubeGrid.WorldMatrix;
+
+						color4 = Color.Gold.ToVector4();
+
+						foreach (MyJumpGateDrive drive in jump_drives)
+						{
+							if (drive.IsClosed()) continue;
+							Vector3D start = drive.GetDriveRaycastStartpoint();
+							Vector3D end = drive.GetDriveRaycastEndpoint(drive.MaxRaycastDistance);
+							MySimpleObjectDraw.DrawLine(start, end, line_material, ref color4, 0.25f);
+						}
+
+						foreach (MyJumpGate gate in jump_gates)
+						{
+							Vector3D world_node = gate.WorldJumpNode;
+							if (!gate.IsValid() || Vector3D.Angle(MyAPIGateway.Session.Camera.WorldMatrix.Forward, world_node - this_position) > 60d * Math.PI / 180d) continue;
+							MatrixD gate_matrix = gate.GetWorldMatrix(true, true);
+							BoundingEllipsoidD jump_ellipse = gate.JumpEllipse;
+							bool complete = gate.IsComplete();
+							color = Color.Aqua;
+
+							// Display drive intersections
+							if (Vector3D.Distance(this_position, world_node) <= 250)
+							{
+								foreach (Vector3D node in gate.WorldDriveIntersectNodes)
+								{
+									BoundingBoxD node_box = BoundingBoxD.CreateFromSphere(new BoundingSphereD(MyJumpGateModSession.WorldVectorToLocalVectorP(ref grid_matrix, node), 1));
+									MySimpleObjectDraw.DrawTransparentBox(ref grid_matrix, ref node_box, ref color, MySimpleObjectRasterizer.Wireframe, 1, 0.1f, null, line_material);
+								}
+							}
+
+							// Display gate ellipsoid
+							jump_ellipse.Draw((complete) ? Color.Lime : Color.Red, 90, 0.1f, line_material);
+							BoundingEllipsoidD effective_ellipse = gate.GetEffectiveJumpEllipse();
+							if (complete && effective_ellipse != jump_ellipse) effective_ellipse.Draw(Color.BlueViolet, 90, 0.1f, line_material);
+							if (complete && !MyJumpGateModSession.Configuration.GeneralConfiguration.LenientJumps) gate.ShearEllipse.Draw(Color.Red, 90, 0.1f, line_material);
+
+							// Display gate ellipsoid bounds
+							BoundingBoxD ellipse_aabb = BoundingBox.CreateFromHalfExtent(Vector3.Zero, jump_ellipse.Radii);
+							Vector3D jump_node = gate.WorldJumpNode;
+							color = Color.AliceBlue;
+							MySimpleObjectDraw.DrawTransparentBox(ref jump_ellipse.WorldMatrix, ref ellipse_aabb, ref color, MySimpleObjectRasterizer.Wireframe, 1, 0.01f, null, line_material);
+
+							// Display gate normal override
+							if (complete && gate.Controller.BlockSettings.HasVectorNormalOverride())
+							{
+								color4 = Color.Magenta;
+								Vector3D normal = gate.GetWorldMatrix(false, true).Forward;
+								MySimpleObjectDraw.DrawLine(jump_node, jump_node + normal * 500d, line_material, ref color4, 1);
+							}
+
+							// Display jump gate endpoint aligned axes
+							color4 = Color.Magenta;
+							Vector3D axis = MyJumpGateModSession.LocalVectorToWorldVectorP(ref gate_matrix, new Vector3D(5, 0, 0));
+							MySimpleObjectDraw.DrawLine(axis, jump_node, line_material, ref color4, 1f);
+							color4 = Color.Yellow;
+							axis = MyJumpGateModSession.LocalVectorToWorldVectorP(ref gate_matrix, new Vector3D(0, 5, 0));
+							MySimpleObjectDraw.DrawLine(axis, jump_node, line_material, ref color4, 1f);
+							color4 = Color.Cyan;
+							axis = MyJumpGateModSession.LocalVectorToWorldVectorP(ref gate_matrix, new Vector3D(0, 0, 5));
+							MySimpleObjectDraw.DrawLine(axis, jump_node, line_material, ref color4, 1f);
+
+							// Display jump gate axes
+							gate_matrix = jump_ellipse.WorldMatrix;
+							color4 = Color.Red;
+							axis = MyJumpGateModSession.LocalVectorToWorldVectorP(ref gate_matrix, new Vector3D(7.5, 0, 0));
+							MySimpleObjectDraw.DrawLine(axis, jump_node, line_material, ref color4, 0.5f);
+							color4 = Color.Green;
+							axis = MyJumpGateModSession.LocalVectorToWorldVectorP(ref gate_matrix, new Vector3D(0, 7.5, 0));
+							MySimpleObjectDraw.DrawLine(axis, jump_node, line_material, ref color4, 0.5f);
+							color4 = Color.Blue;
+							axis = MyJumpGateModSession.LocalVectorToWorldVectorP(ref gate_matrix, new Vector3D(0, 0, 7.5));
+							MySimpleObjectDraw.DrawLine(axis, jump_node, line_material, ref color4, 0.5f);
+						}
+					}
+					finally
+					{
+						jump_gates.Clear();
+						jump_drives.Clear();
+					}
+				}
+			}
+		}
+
+		/// <summary>
+		/// MySessionComponentBase method<br />
+		/// Called after world saved<br />
+		/// If singleplayer or multiplayer server: Saves configuration data to file
+		/// </summary>
+		public override void SaveData()
+		{
+			base.SaveData();
+			if (MyNetworkInterface.IsMultiplayerClient) return;
+			MyJumpGateModSession.Configuration?.Save();
+			MyAPIGateway.Utilities.SetVariable($"{MyJumpGateModSession.MODID}.DebugMode", MyJumpGateModSession.DebugMode);
+		}
+		#endregion
+
+		#region Private Methods
+		/// <summary>
+		/// Event handler for when entity added to session
+		/// </summary>
+		/// <param name="entity">The added entity</param>
+		private void OnEntityAdd(IMyEntity entity)
+		{
+			IMyCubeGrid cube_grid = entity as IMyCubeGrid;
+			if (cube_grid?.Physics == null) return;
+			Logger.Debug("ENTITY-ADD", 5);
+
+			if (MyNetworkInterface.IsStandaloneMultiplayerClient && MyJumpGateModSession.GameTick > this.FirstUpdateTimeTicks) this.RequestGridDownload(cube_grid.EntityId);
+			else if (MyNetworkInterface.IsServerLike) this.AddCubeGridToSession(cube_grid);
+		}
+
+		/// <summary>
+		/// Event handler for when entity removed from session
+		/// </summary>
+		/// <param name="entity">The removed entity</param>
+		private void OnEntityRemove(IMyEntity entity)
+		{
+			IMyCubeGrid cube_grid = entity as IMyCubeGrid;
+			if (cube_grid?.Physics == null) return;
+			Logger.Debug("ENTITY-REMOVE", 5);
+			MyJumpGateConstruct parent_grid = this.GridMap.GetValueOrDefault(cube_grid.EntityId, null);
+			if (parent_grid?.Closed ?? true) return;
+			if (MyNetworkInterface.IsStandaloneMultiplayerClient) parent_grid.Suspend(cube_grid.EntityId);
+			else parent_grid.Dispose();
+		}
+
+		/// <summary>
+		/// Event handler for when a block's terminal controls are iterated
+		/// </summary>
+		/// <param name="block">The block</param>
+		/// <param name="controls">The block's controls</param>
+		private void OnTerminalSelector(IMyTerminalBlock block, List<IMyTerminalControl> controls)
+		{
+			this.InteractedBlock = (MyJumpGateModSession.IsBlockCubeBlockBase(block)) ? block.EntityId : -1;
+		}
+
+		/// <summary>
+		/// Event handler for grid update packet<br />
+		/// If server: Sends current grids to client<br />
+		/// If client: Updates internal grid map from server
+		/// </summary>
+		/// <param name="packet">The received packet</param>
+		private void OnNetworkGridsUpdate(MyNetworkInterface.Packet packet)
+		{
+			if (packet == null) return;
+
+			if (MyNetworkInterface.IsMultiplayerServer && packet.PhaseFrame == 1)
+			{
+				List<MySerializedJumpGateConstruct> serialized_grids = this.GridMap.Values.Where((grid) => grid.AtLeastOneUpdate() && !grid.MarkClosed).Select((grid) => grid.ToSerialized(false)).ToList();
+				MyNetworkInterface.Packet grids_packet = new MyNetworkInterface.Packet
+				{
+					PacketType = MyPacketTypeEnum.UPDATE_GRIDS,
+					TargetID = packet.SenderID,
+					Broadcast = false,
+				};
+				grids_packet.Payload(serialized_grids);
+				grids_packet.Send();
+				Logger.Debug($"Got client grid update request - Sent grids: {string.Join(", ", serialized_grids.Select((grid) => JumpGateUUID.FromGuid(grid.UUID).GetJumpGateGrid().ToString()))}", 2);
+			}
+			else if (MyNetworkInterface.IsStandaloneMultiplayerClient && (packet.PhaseFrame == 1 || packet.PhaseFrame == 2))
+			{
+				Logger.Debug($"Got server grid update packet", 2);
+				List<MySerializedJumpGateConstruct> serialized_grids = packet.Payload<List<MySerializedJumpGateConstruct>>() ?? new List<MySerializedJumpGateConstruct>();
+				List<long> closed = new List<long>(this.GridMap.Keys);
+
+				foreach (MySerializedJumpGateConstruct serialized in serialized_grids)
+				{
+					MyJumpGateConstruct new_grid = this.StoreSerializedGrid(serialized);
+					if (new_grid == null) continue;
+					new_grid.LastUpdateDateTimeUTC = packet.EpochDateTimeUTC;
+					closed.Remove(new_grid.CubeGridID);
+				}
+
+				foreach (long gridid in closed) this.CloseGrid(this.GridMap.GetValueOrDefault(gridid, null));
+			}
+		}
+
+		/// <summary>
+		/// Event handler for grid download packet<br />
+		/// If server: Sends the specified grid to client<br />
+		/// If client: Updates the specified grid from server
+		/// </summary>
+		/// <param name="packet">The received packet</param>
+		private void OnNetworkGridDownload(MyNetworkInterface.Packet packet)
+		{
+			if (packet == null) return;
+
+			if (MyNetworkInterface.IsMultiplayerServer && packet.PhaseFrame == 1)
+			{
+				long grid_id = packet.Payload<long>();
+				packet = packet.Forward(packet.SenderID, false);
+				packet.Payload<MySerializedJumpGateConstruct>(this.GridMap.GetValueOrDefault(grid_id, null)?.ToSerialized(false));
+				packet.Send();
+				Logger.Debug($"Got client grid download request - Sent grid: {grid_id}", 2);
+			}
+			else if (MyNetworkInterface.IsStandaloneMultiplayerClient && packet.PhaseFrame == 2)
+			{
+				MyJumpGateConstruct new_grid = this.StoreSerializedGrid(packet.Payload<MySerializedJumpGateConstruct>());
+				if (new_grid == null) return;
+				new_grid.LastUpdateDateTimeUTC = packet.EpochDateTimeUTC;
+				Logger.Debug($"Grid '{new_grid.CubeGrid.EntityId}' NETWORK_DOWNLOAD", 2);
+			}
+		}
+
+		/// <summary>
+		/// Callback triggered when this object receives a comm-linked grids update request
+		/// </summary>
+		/// <param name="packet">The update request packet</param>
+		private void OnNetworkCommLinkedUpdate(MyNetworkInterface.Packet packet)
+		{
+			if (packet == null || !MyNetworkInterface.IsMultiplayerServer || packet.PhaseFrame != 1) return;
+			long construct_id = packet.Payload<long>();
+			MyJumpGateConstruct target = this.GridMap.GetValueOrDefault(construct_id, null);
+			List<MyJumpGateConstruct> comm_linked = (target == null) ? null : new List<MyJumpGateConstruct>();
+			target?.GetCommLinkedJumpGateGrids(comm_linked);
+			packet = packet.Forward(packet.SenderID, false);
+			packet.Payload(new KeyValuePair<long, List<long>>(construct_id, comm_linked?.Select((grid) => grid.CubeGridID)?.ToList()));
+			packet.Send();
+			Logger.Debug($"Got client comm-link request for \"{construct_id}\", sent grids: {string.Join(", ", comm_linked?.Select((grid) => grid.CubeGridID.ToString()).ToList() ?? new List<string>() { "N/A" })}", 3);
+		}
+
+		/// <summary>
+		/// Callback triggered when this object receives a beacon-linked grids update request
+		/// </summary>
+		/// <param name="packet">The update request packet</param>
+		private void OnNetworkBeaconLinkedUpdate(MyNetworkInterface.Packet packet)
+		{
+			if (packet == null || !MyNetworkInterface.IsMultiplayerServer || packet.PhaseFrame != 1) return;
+			long construct_id = packet.Payload<long>();
+			MyJumpGateConstruct target = this.GridMap.GetValueOrDefault(construct_id, null);
+			List<MyBeaconLinkWrapper> beacon_linked = (target == null) ? null : new List<MyBeaconLinkWrapper>();
+			target?.GetBeaconsWithinReverseBroadcastSphere(beacon_linked);
+			packet = packet.Forward(packet.SenderID, false);
+			packet.Payload(new KeyValuePair<long, List<MyBeaconLinkWrapper>>(construct_id, beacon_linked));
+			packet.Send();
+			Logger.Debug($"Got client beacon-link request for \"{construct_id}\", sent beacons: {string.Join(", ", beacon_linked?.Select((beacon) => beacon.BeaconID.ToString()).ToList() ?? new List<string>() { "N/A" })}", 3);
+		}
+
+		/// <summary>
+		/// Event handler for grid closed packet
+		/// If client: Closes the associated MyJumpGateConstruct indicated from server
+		/// </summary>
+		/// <param name="packet">The received packet</param>
+		private void OnNetworkGridClose(MyNetworkInterface.Packet packet)
+		{
+			if (packet == null || MyNetworkInterface.IsServerLike) return;
+			long gridid = packet.Payload<long>();
+			this.GridMap.GetValueOrDefault(gridid, null)?.Dispose();
+			Logger.Debug($"Grid '{gridid}' PURGED", 2);
+		}
+
+		/// <summary>
+		/// Updates all stored grids and sends grid update packet every second
+		/// </summary>
+		private void TickUpdateGrids()
+		{
+			Stopwatch sw = new Stopwatch();
+			sw.Start();
+
+			try
+			{
+				foreach (KeyValuePair<long, MyJumpGateConstruct> pair in this.GridMap)
+				{
+					long gridid = pair.Key;
+					MyJumpGateConstruct grid = pair.Value;
+
+					if (grid.Closed)
+					{
+						lock (this.ClosureQueueMapIteratorLock)
+						{
+							this.GridMap.Remove(gridid);
+							Logger.Log($"Grid {gridid} FULL_CLOSE");
+							continue;
+						}
+					}
+
+					try
+					{
+						grid.Update();
+					}
+					catch (Exception e)
+					{
+						Logger.Error($"Error during construct thread tick - {grid.CubeGrid?.EntityId.ToString() ?? "N/A"} ({gridid})\n  ...\n[ {e} ]: {e.Message}\n{e.StackTrace}\n{e.InnerException}");
+					}
+				}
+
+				// Force network update grid every "x" seconds
+				if (MyJumpGateModSession.Network.Registered && MyNetworkInterface.IsMultiplayerServer && MyJumpGateModSession.GameTick % this.GridNetworkUpdateDelay == 0)
+				{
+					MyNetworkInterface.Packet packet = new MyNetworkInterface.Packet
+					{
+						PacketType = MyPacketTypeEnum.UPDATE_GRIDS,
+						Broadcast = true,
+						TargetID = 0,
+					};
+
+					List<MySerializedJumpGateConstruct> serialized_grids = this.GridMap.Values.Where((grid) => !grid.Closed).Select((grid) => grid.ToSerialized(false)).ToList();
+					packet.Payload(serialized_grids);
+					packet.Send();
+				}
+			}
+			finally
+			{
+				sw.Stop();
+				this.GridUpdateTimeTicks.Enqueue(sw.Elapsed.TotalMilliseconds);
+				--this.ActiveGridUpdateThreads;
+			}
+		}
+
+		/// <summary>
+		/// Closes all pending grids and gates
+		/// </summary>
+		private void FlushClosureQueues()
+		{
+			lock (this.ClosureQueueMapIteratorLock)
+			{
+				KeyValuePair<MyJumpGateConstruct, bool> pair;
+				while (this.GridCloseRequests.TryDequeue(out pair)) if (!pair.Key.Closed) pair.Key.Close(pair.Value);
+				MyJumpGate gate;
+				while (this.GateCloseRequests.TryDequeue(out gate)) if (!gate.Closed) gate.Close();
+			}
+		}
+
+		/// <summary>
+		/// Deserializes and stores a MyJumpGateConstruct if applicable
+		/// </summary>
+		/// <param name="serialized">The serialized jump gate grid</param>
+		/// <returns>The new jump gate grid or null if the source grid could not be found</returns>
+		private MyJumpGateConstruct StoreSerializedGrid(MySerializedJumpGateConstruct serialized)
+		{
+			if (serialized == null) return null;
+			JumpGateUUID uuid = JumpGateUUID.FromGuid(serialized.UUID);
+			long gridid = uuid.GetJumpGateGrid();
+			IMyCubeGrid cube_grid = MyAPIGateway.Entities.GetEntityById(gridid) as IMyCubeGrid;
+			MyJumpGateConstruct grid = new MyJumpGateConstruct(cube_grid, gridid);
+			grid = this.GridMap.AddOrUpdate(gridid, grid, (_, old_grid) => {
+				if (old_grid.Closed) return grid;
+				grid.Release();
+				return old_grid;
+			});
+			bool deserialized = (grid.IsSuspended && cube_grid != null) ? grid.Persist(serialized) : grid.FromSerialized(serialized);
+			return (deserialized) ? grid : null;
+		}
+		#endregion
+
+		#region Public Methods
+		/// <summary>
+		/// Plays an animation on this session's game thread
+		/// </summary>
+		/// <param name="animation">The animation to play</param>
+		/// <param name="animation_type">The animation type to play</param>
+		/// <param name="callback">A callback called every animation tick; Iteration will stop if this callback returns false</param>
+		/// <param name="on_complete">A callback called once the animation is stopped (either from an exception, the previous parameter returning false, or the animation stopped normally)<br/>The callback will be passed the exception that caused the animation to stop, or null if no exception occured</param>
+		public void PlayAnimation(MyJumpGateAnimation animation, MyJumpGateAnimation.AnimationTypeEnum animation_type, Func<bool> callback = null, Action<Exception> on_complete = null)
+		{
+			if (animation == null) return;
+			animation.Stop();
+			animation.Restart((byte) animation_type);
+			AnimationInfo animation_info = new AnimationInfo(animation, animation_type, callback, on_complete);
+			this.JumpGateAnimations.AddOrUpdate(this.AnimationQueueIndex++, animation_info, (_1, _2) => animation_info);
+		}
+
+		/// <summary>
+		/// Stops an animation currently playing on this session's game thread
+		/// </summary>
+		/// <param name="animation">The animation to stop</param>
+		public void StopAnimation(MyJumpGateAnimation animation)
+		{
+			foreach (AnimationInfo anim in this.JumpGateAnimations.Values) if (anim.Animation == animation) anim.Animation.Stop();
+		}
+
+		/// <summary>
+		/// Marks this session to redraw JumpGateController terminal controls
+		/// </summary>
+		public void RedrawAllTerminalControls()
+		{
+			this.__RedrawAllTerminalControls = true;
+		}
+
+		/// <summary>
+		/// Queues a grid for closure on main game thread
+		/// </summary>
+		/// <param name="grid">The grid to close</param>
+		/// <param name="override_client">Whether to force closure on client</param>
+		public void CloseGrid(MyJumpGateConstruct grid, bool override_client = false)
+		{
+			if (grid == null || grid.Closed || !this.GridMap.ContainsKey(grid.CubeGridID)) return;
+			this.GridCloseRequests.Enqueue(new KeyValuePair<MyJumpGateConstruct, bool>(grid, override_client));
+		}
+
+		/// <summary>
+		/// Queues a gate for closure on main game thread
+		/// </summary>
+		/// <param name="gate">The gate to close</param>
+		public void CloseGate(MyJumpGate gate)
+		{
+			if (gate == null || gate.Closed) return;
+			this.GateCloseRequests.Enqueue(gate);
+		}
+
+		/// <summary>
+		/// Gets all animations playing from the specified jump gate
+		/// </summary>
+		/// <param name="gate">The gate to poll</param>
+		/// <param name="animations">All animations playing for the specified gate<br />List will not be cleared</param>
+		public void GetGateAnimationsPlaying(List<MyJumpGateAnimation> animations, MyJumpGate gate, Func<MyJumpGateConstruct, bool> filter = null)
+		{
+			if (gate == null) return;
+			foreach (KeyValuePair<ulong, AnimationInfo> pair in this.JumpGateAnimations) if (pair.Value.Animation.JumpGate == gate) animations.Add(pair.Value.Animation);
+		}
+
+		/// <summary>
+		/// Gets all valid jump gates stored by all grids in this session
+		/// </summary>
+		/// <param name="filter">A predicate to match jump gates against</param>
+		/// <param name="jump_gates">All attached jump gates<br />List will not be cleared</param>
+		public void GetAllJumpGates(List<MyJumpGate> jump_gates, Func<MyJumpGate, bool> filter = null)
+		{
+			foreach (MyJumpGateConstruct grid in this.GridMap.Values) if (grid.IsValid()) grid.GetJumpGates(jump_gates, (gate) => gate.IsValid() && (filter == null || filter(gate)));
+		}
+
+		/// <summary>
+		/// Gets all valid jump gate grids stored in this session
+		/// </summary>
+		/// <param name="filter">A predicate to match jump gate grids against</param>
+		/// <param name="grids">All jump gate grid constructs<br />List will be cleared</param>
+		public void GetAllJumpGateGrids(List<MyJumpGateConstruct> grids, Func<MyJumpGateConstruct, bool> filter = null)
+		{
+			grids.Clear();
+			foreach (MyJumpGateConstruct grid in this.GridMap.Values) if (grid.IsValid() && (filter == null || filter(grid))) grids.Add(grid);
+		}
+
+		/// <summary>
+		/// Requests a download of the specified construct from server<br />
+		/// Does nothing if not standalone multiplayer client
+		/// </summary>
+		/// <param name="grid_id">The grid ID to download</param>
+		public void RequestGridDownload(long grid_id)
+		{
+			if (MyNetworkInterface.IsServerLike) return;
+
+			MyNetworkInterface.Packet packet = new MyNetworkInterface.Packet {
+				PacketType = MyPacketTypeEnum.DOWNLOAD_GRID,
+				TargetID = 0,
+				Broadcast = false,
+			};
+
+			packet.Payload(grid_id);
+			packet.Send();
+		}
+
+		/// <summary>
+		/// </summary>
+		/// <returns>Whether all store grids had at least one update</returns>
+		public bool AllFirstTickComplete()
+		{
+			return this.GridMap.Values.Where((grid) => !grid.MarkClosed && !grid.Closed && !grid.IsSuspended).All((grid) => grid.AtLeastOneUpdate());
+		}
+
+		/// <summary>
+		/// Checks if a construct exists with the given ID in the internal grid map
+		/// </summary>
+		/// <param name="grid_id">The grid's ID</param>
+		/// <returns>Existedness</returns>
+		public bool HasCubeGrid(long grid_id)
+		{
+			return this.GridMap.ContainsKey(grid_id);
+		}
+
+		/// <summary>
+		/// Whether the grid should be considered valid in multiplayer context<br />
+		/// For server: Returns MyJumpGateConstruct::isValid()<br />
+		/// For client: Returns whether said grid is stored in the map
+		/// </summary>
+		/// <param name="grid">The grid to check</param>
+		/// <returns>True if this grid should be considered valid</returns>
+		public bool IsJumpGateGridMultiplayerValid(MyJumpGateConstruct grid)
+		{
+			if (grid?.CubeGrid == null) return false;
+			else if (MyNetworkInterface.IsServerLike) return grid.IsValid();
+			else return this.GridMap.ContainsKey(grid.CubeGrid.EntityId);
+		}
+
+		/// <summary>
+		/// </summary>
+		/// <param name="grid">The grid construct</param>
+		/// <returns>True if this grid has a duplicate construct</returns>
+		public bool HasDuplicateGrid(MyJumpGateConstruct grid)
+		{
+			List<IMyCubeGrid> grids = new List<IMyCubeGrid>();
+			grid.GetCubeGrids(grids);
+			foreach (IMyCubeGrid subgrid in grids) if (subgrid.EntityId != grid.CubeGridID && this.GridMap.ContainsKey(subgrid.EntityId)) return true;
+			return false;
+		}
+
+		/// <summary>
+		/// Moves the specified construct position in the internal grid map<br />
+		/// New ID must be an available spot and a subgrid ID of the specified construct
+		/// </summary>
+		/// <param name="grid">The unclosed construct to move</param>
+		/// <param name="new_id">The subgrid ID to move to</param>
+		/// <returns>Whether the grid was moved</returns>
+		public bool MoveGrid(MyJumpGateConstruct grid, long new_id)
+		{
+			if (grid == null || grid.MarkClosed || !grid.HasCubeGrid(new_id)) return false;
+			else if (grid.CubeGridID == new_id) return true;
+			MyJumpGateConstruct oldgrid = this.GridMap.GetValueOrDefault(new_id, null);
+			if (oldgrid != null && !oldgrid.MarkClosed) return false;
+			else if (oldgrid != null && !oldgrid.Closed) this.CloseGrid(oldgrid);
+			this.GridMap[new_id] = grid;
+			this.GridMap.Remove(grid.CubeGridID);
+			return true;
+		}
+
+		/// <summary>
+		/// </summary>
+		/// <returns>The average of all construct update times</returns>
+		public double AverageGridUpdateTime60()
+		{
+			try { return (this.GridUpdateTimeTicks.Count == 0) ? -1 : this.GridUpdateTimeTicks.Average(); }
+			catch (InvalidOperationException) { return -1; }
+		}
+
+		/// <summary>
+		/// </summary>
+		/// <returns>Returns the longest construct update time within the 60 tick buffer</returns>
+		public double LocalLongestGridUpdateTime60()
+		{
+			try { return (this.GridUpdateTimeTicks.Count == 0) ? -1 : this.GridUpdateTimeTicks.Max(); }
+			catch (InvalidOperationException) { return -1; }
+		}
+
+		/// <summary>
+		/// </summary>
+		/// <returns>The average of all session update times</returns>
+		public double AverageSessionUpdateTime60()
+		{
+			try { return (this.SessionUpdateTimeTicks.Count == 0) ? -1 : this.SessionUpdateTimeTicks.Average(); }
+			catch (InvalidOperationException) { return -1; }
+		}
+
+		/// <summary>
+		/// </summary>
+		/// <returns>Returns the longest session update time within the 60 tick buffer</returns>
+		public double LocalLongestSessionUpdateTime60()
+		{
+			try { return (this.SessionUpdateTimeTicks.Count == 0) ? -1 : this.SessionUpdateTimeTicks.Max(); }
+			catch (InvalidOperationException) { return -1; }
+		}
+
+		/// <summary>
+		/// Adds a new cube grid to this session's internal map
+		/// </summary>
+		/// <param name="cube_grid">The grid to add</param>
+		public MyJumpGateConstruct AddCubeGridToSession(IMyCubeGrid cube_grid)
+		{
+			MyJumpGateConstruct grid = this.GetJumpGateGrid(cube_grid);
+			if (grid != null) return grid;
+			grid = new MyJumpGateConstruct(cube_grid, cube_grid.EntityId);
+
+			if (this.GridMap.TryAdd(cube_grid.EntityId, grid))
+			{
+				Logger.Debug($"Grid {cube_grid.EntityId} added to session", 1);
+				return grid;
+			}
+			else
+			{
+				grid.Release();
+				Logger.Debug($"Grid {cube_grid.EntityId} skipped session add", 1);
+				return null;
+			}
+		}
+
+		/// <summary>
+		/// Gets the equivilent MyJumpGateConstruct given a cube grid ID
+		/// </summary>
+		/// <param name="id">The cube grid ID</param>
+		/// <returns>The matching MyJumpGateConstruct or null if not found</returns>
+		public MyJumpGateConstruct GetJumpGateGrid(long id)
+		{
+			MyJumpGateConstruct jump_gate_grid = this.GridMap.GetValueOrDefault(id, null);
+			if (jump_gate_grid != null) return jump_gate_grid;
+			return this.GetJumpGateGrid(MyAPIGateway.Entities.GetEntityById(id) as IMyCubeGrid);
+		}
+
+		/// <summary>
+		/// Gets the equivilent MyJumpGateConstruct given a cube grid
+		/// </summary>
+		/// <param name="cube_grid">The cube grid</param>
+		/// <returns>The matching MyJumpGateConstruct or null if not found</returns>
+		public MyJumpGateConstruct GetJumpGateGrid(IMyCubeGrid cube_grid)
+		{
+			if (cube_grid == null || cube_grid.Closed || cube_grid.MarkedForClose) return null;
+			MyJumpGateConstruct jump_gate_grid;
+			if (this.GridMap.TryGetValue(cube_grid.EntityId, out jump_gate_grid)) return jump_gate_grid;
+			List<IMyCubeGrid> connected_grids = new List<IMyCubeGrid>();
+			cube_grid.GetGridGroup(GridLinkTypeEnum.Logical | GridLinkTypeEnum.Mechanical).GetGrids(connected_grids);
+
+			foreach (IMyCubeGrid grid in connected_grids)
+			{
+				if (this.GridMap.TryGetValue(grid.EntityId, out jump_gate_grid)) return jump_gate_grid;
+			}
+
+			return null;
+		}
+
+		/// <summary>
+		/// Gets the equivilent MyJumpGateConstruct given a JumpGateUUID
+		/// </summary>
+		/// <param name="uuid">The cube grid UUID</param>
+		/// <returns>The matching MyJumpGateConstruct or null if not found</returns>
+		public MyJumpGateConstruct GetJumpGateGrid(JumpGateUUID uuid)
+		{
+			if (uuid == null) return null;
+			return this.GetJumpGateGrid(uuid.GetJumpGateGrid());
+		}
+
+		/// <summary>
+		/// Gets the equivilent MyJumpGateConstruct given a cube grid ID
+		/// </summary>
+		/// <param name="id">The cube grid ID</param>
+		/// <returns>The matching MyJumpGateConstruct or null if not found or marked closed</returns>
+		public MyJumpGateConstruct GetUnclosedJumpGateGrid(long id)
+		{
+			MyJumpGateConstruct jump_gate_grid = this.GridMap.GetValueOrDefault(id, null);
+			if (jump_gate_grid != null && !jump_gate_grid.MarkClosed) return jump_gate_grid;
+			return this.GetUnclosedJumpGateGrid(MyAPIGateway.Entities.GetEntityById(id) as IMyCubeGrid);
+		}
+
+		/// <summary>
+		/// Gets the equivilent MyJumpGateConstruct given a cube grid
+		/// </summary>
+		/// <param name="cube_grid">The cube grid</param>
+		/// <returns>The matching MyJumpGateConstruct or null if not found or marked closed</returns>
+		public MyJumpGateConstruct GetUnclosedJumpGateGrid(IMyCubeGrid cube_grid)
+		{
+			if (cube_grid == null || cube_grid.Closed || cube_grid.MarkedForClose) return null;
+			MyJumpGateConstruct jump_gate_grid;
+			if (this.GridMap.TryGetValue(cube_grid.EntityId, out jump_gate_grid) && !jump_gate_grid.MarkClosed) return jump_gate_grid;
+			List<IMyCubeGrid> connected_grids = new List<IMyCubeGrid>();
+			cube_grid.GetGridGroup(GridLinkTypeEnum.Logical | GridLinkTypeEnum.Mechanical).GetGrids(connected_grids);
+			foreach (IMyCubeGrid grid in connected_grids) if (this.GridMap.TryGetValue(grid.EntityId, out jump_gate_grid) && !jump_gate_grid.MarkClosed) return jump_gate_grid;
+			return null;
+		}
+
+		/// <summary>
+		/// Gets the equivilent MyJumpGateConstruct given a JumpGateUUID
+		/// </summary>
+		/// <param name="uuid">The cube grid UUID</param>
+		/// <returns>The matching MyJumpGateConstruct or null if not found or marked closed</returns>
+		public MyJumpGateConstruct GetUnclosedJumpGateGrid(JumpGateUUID uuid)
+		{
+			if (uuid == null) return null;
+			return this.GetUnclosedJumpGateGrid(uuid.GetJumpGateGrid());
+		}
+
+		/// <summary>
+		/// Gets the equivilent MyJumpGate given a JumpGateUUID
+		/// </summary>
+		/// <param name="uuid">The jump gate's JumpGateUUID</param>
+		/// <returns>The matching MyJumpGate or null if not found</returns>
+		public MyJumpGate GetJumpGate(JumpGateUUID uuid)
+		{
+			if (uuid == null) return null;
+			MyJumpGateConstruct grid = this.GetJumpGateGrid(uuid);
+			return (grid != null && grid.IsValid()) ? grid?.GetJumpGate(uuid.GetJumpGate()) : null;
+		}
+		#endregion
+	}
+}

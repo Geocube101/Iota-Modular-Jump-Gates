@@ -1,0 +1,29 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<RootNamespace>IOTA.ModularJumpGates</RootNamespace>
+		<TargetFramework>net48</TargetFramework>
+		<Platforms>x64</Platforms>
+		<LangVersion>6</LangVersion>
+		<GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+		<GenerateNeutralResourcesLanguageAttribute>false</GenerateNeutralResourcesLanguageAttribute>
+		<ImplicitUsings>disable</ImplicitUsings>
+	</PropertyGroup>
+
+	<ItemGroup>
+	  <Compile Remove="AAA_AudioSBC\**" />
+	  <EmbeddedResource Remove="AAA_AudioSBC\**" />
+	  <None Remove="AAA_AudioSBC\**" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Mal.Mdk2.ModAnalyzers" Version="*" />
+		<PackageReference Include="Mal.Mdk2.References" Version="*" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <Reference Include="ProtoBuf.Net">
+	    <HintPath>..\..\..\..\..\..\..\Program Files (x86)\Steam\steamapps\common\SpaceEngineers\Bin64\ProtoBuf.Net.dll</HintPath>
+	  </Reference>
+	</ItemGroup>
+</Project>
