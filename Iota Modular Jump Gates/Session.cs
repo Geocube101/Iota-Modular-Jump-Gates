@@ -737,6 +737,7 @@ namespace IOTA.ModularJumpGates
 				{
 					MyAPIGateway.TerminalControls.GetControls<IMyUpgradeModule>(out this.TEMP_ControlsList);
 					foreach (IMyTerminalControl control in this.TEMP_ControlsList) control.UpdateVisual();
+					this.TEMP_ControlsList.Clear();
 					this.__RedrawAllTerminalControls = false;
 				}
 			}

@@ -31,7 +31,7 @@ namespace IOTA.ModularJumpGates
 		/// <summary>
 		/// The delay in milliseconds after which the next call to comm linked grids should update the internal list
 		/// </summary>
-		private static readonly ushort CommLinkedUpdateDelay = (ushort) ((MyNetworkInterface.IsStandaloneMultiplayerClient) ? 3000u : 167u);
+		private static readonly ushort CommLinkedUpdateDelay = (ushort) ((MyNetworkInterface.IsStandaloneMultiplayerClient) ? 3000u : 500u);
 		#endregion
 
 		#region Private Variables
@@ -1458,28 +1458,23 @@ namespace IOTA.ModularJumpGates
 			else if (this.CommLinkedGrids != null && (DateTime.Now - this.LastCommLinkUpdate).TotalMilliseconds < MyJumpGateConstruct.CommLinkedUpdateDelay)
 			{
 				if (comm_linked_grids == null) return;
-				this.CommLinkedLock.AcquireReader();
 				
-				try
+				using (this.CommLinkedLock.WithReader())
 				{
 					if (filter == null) comm_linked_grids.AddList(this.CommLinkedGrids);
 					else comm_linked_grids.AddRange(this.CommLinkedGrids.Where(filter));
 					return;
 				}
-				finally { this.CommLinkedLock.ReleaseReader(); }
 			}
 			else if (MyNetworkInterface.IsStandaloneMultiplayerClient)
 			{
 				if (this.CommLinkedGrids != null && comm_linked_grids != null)
 				{
-					this.CommLinkedLock.AcquireReader();
-
-					try
+					using (this.CommLinkedLock.WithReader())
 					{
 						if (filter == null) comm_linked_grids.AddList(this.CommLinkedGrids);
 						else comm_linked_grids.AddRange(this.CommLinkedGrids.Where(filter));
 					}
-					finally { this.CommLinkedLock.ReleaseReader(); }
 				}
 
 				if (this.CommLinkedClientUpdate) return;
@@ -1494,9 +1489,7 @@ namespace IOTA.ModularJumpGates
 				return;
 			}
 
-			this.CommLinkedLock.AcquireWriter();
-
-			try
+			using (this.CommLinkedLock.WithWriter())
 			{
 				int list_index = 0;
 				if (this.CommLinkedGrids == null) this.CommLinkedGrids = new List<MyJumpGateConstruct>();
@@ -1506,6 +1499,7 @@ namespace IOTA.ModularJumpGates
 				List<Vector3D> points = new List<Vector3D>(8 * this.CubeGrids.Count);
 				foreach (IMyCubeGrid subgrid in this.CubeGrids.Values) for (int i = 0; i < 8; ++i) points.Add(subgrid.WorldAABB.GetCorner(i));
 				BoundingBoxD merged = BoundingBoxD.CreateFromPoints(points);
+				BoundingSphereD broadcast_sphere;
 
 				while (list_index < this.CommLinkedGrids.Count)
 				{
@@ -1522,13 +1516,15 @@ namespace IOTA.ModularJumpGates
 					foreach (IMyRadioAntenna antenna in grid.RadioAntennas.Values)
 					{
 						if (antenna.MarkedForClose || !antenna.IsWorking || !antenna.IsBroadcasting) continue;
-						BoundingSphereD broadcast_sphere = new BoundingSphereD(antenna.WorldMatrix.Translation, antenna.Radius);
+						broadcast_sphere.Center = antenna.WorldMatrix.Translation;
+						broadcast_sphere.Radius = antenna.Radius;
 						MyGamePruningStructure.GetAllTopMostEntitiesInSphere(ref broadcast_sphere, broadcast_entities);
 
 						foreach (MyEntity entity in broadcast_entities)
 						{
-							MyJumpGateConstruct target_grid;
-							if (!(entity is IMyCubeGrid) || entity.Physics == null || (target_grid = MyJumpGateModSession.Instance.GetJumpGateGrid(entity.EntityId)) == null || this.CommLinkedGrids.Contains(target_grid)) continue;
+							IMyCubeGrid target = (entity is IMyCubeGrid) ? (MyCubeGrid) entity : null;
+							MyJumpGateConstruct target_grid = (target == null) ? null : MyJumpGateModSession.Instance.GetJumpGateGrid(target);
+							if (entity.Physics == null || target_grid == null || target_grid == this || this.CommLinkedGrids.Contains(target_grid)) continue;
 
 							foreach (IMyRadioAntenna target_antenna in grid.RadioAntennas.Values)
 							{
@@ -1549,7 +1545,6 @@ namespace IOTA.ModularJumpGates
 				if (filter == null) comm_linked_grids.AddList(this.CommLinkedGrids);
 				else comm_linked_grids.AddRange(this.CommLinkedGrids.Where(filter));
 			}
-			finally { this.CommLinkedLock.ReleaseWriter(); }
 		}
 
 		/// <summary>
@@ -1563,28 +1558,23 @@ namespace IOTA.ModularJumpGates
 			else if (this.BeaconLinks != null && (DateTime.Now - this.LastBeaconLinkUpdate).TotalMilliseconds < MyJumpGateConstruct.CommLinkedUpdateDelay)
 			{
 				if (beacons == null) return;
-				this.BeaconLinkedLock.AcquireReader();
-
-				try
+				
+				using (this.BeaconLinkedLock.WithReader())
 				{
 					if (filter == null) beacons.AddList(this.BeaconLinks);
 					else beacons.AddRange(this.BeaconLinks.Where(filter));
 					return;
 				}
-				finally { this.BeaconLinkedLock.ReleaseReader(); }
 			}
 			else if (MyNetworkInterface.IsStandaloneMultiplayerClient)
 			{
 				if (this.BeaconLinks != null && beacons != null)
 				{
-					this.BeaconLinkedLock.AcquireReader();
-
-					try
+					using (this.BeaconLinkedLock.WithReader())
 					{
 						if (filter == null) beacons.AddList(this.BeaconLinks);
 						else beacons.AddRange(this.BeaconLinks.Where(filter));
 					}
-					finally { this.BeaconLinkedLock.ReleaseReader(); }
 				}
 
 				if (this.BeaconLinkedClientUpdate) return;
@@ -1599,28 +1589,27 @@ namespace IOTA.ModularJumpGates
 				return;
 			}
 
-			this.BeaconLinkedLock.AcquireWriter();
-
-			try
+			using (this.BeaconLinkedLock.WithWriter())
 			{
 				if (this.BeaconLinks == null) this.BeaconLinks = new List<MyBeaconLinkWrapper>();
 				else this.BeaconLinks.Clear();
 				List<MyEntity> broadcast_entities = new List<MyEntity>();
-				
+				BoundingSphereD broadcast_sphere = new BoundingSphereD(Vector3D.Zero, 200000);
+
 				foreach (IMyRadioAntenna antenna in this.RadioAntennas.Values)
 				{
-					BoundingSphereD broadcast_sphere = new BoundingSphereD(antenna.WorldMatrix.Translation, 200000);
+					broadcast_sphere.Center = antenna.WorldMatrix.Translation;
 					MyGamePruningStructure.GetAllTopMostEntitiesInSphere(ref broadcast_sphere, broadcast_entities);
 
 					foreach (MyEntity entity in broadcast_entities)
 					{
 						MyJumpGateConstruct target_grid;
-						if (!(entity is IMyCubeGrid) || entity.Physics == null || (target_grid = MyJumpGateModSession.Instance.GetJumpGateGrid(entity.EntityId)) == null) continue;
+						if (!(entity is IMyCubeGrid) || entity.Physics == null || (target_grid = MyJumpGateModSession.Instance.GetJumpGateGrid(entity.EntityId)) == null || target_grid == this) continue;
 
 						foreach (IMyBeacon beacon in target_grid.BeaconAntennas.Values)
 						{
-							MyBeaconLinkWrapper wrapper = new MyBeaconLinkWrapper(beacon);
-							if (beacon.MarkedForClose || !beacon.IsWorking || this.BeaconAntennas.ContainsKey(beacon.EntityId) || Vector3D.Distance(beacon.WorldMatrix.Translation, antenna.WorldMatrix.Translation) > beacon.Radius || this.BeaconLinks.Contains(wrapper)) continue;
+							MyBeaconLinkWrapper wrapper;
+							if (beacon.MarkedForClose || !beacon.IsWorking || Vector3D.Distance(beacon.WorldMatrix.Translation, antenna.WorldMatrix.Translation) > beacon.Radius || this.BeaconLinks.Contains(wrapper = new MyBeaconLinkWrapper(beacon))) continue;
 							this.BeaconLinks.Add(wrapper);
 						}
 					}
@@ -1633,7 +1622,6 @@ namespace IOTA.ModularJumpGates
 				if (filter == null) beacons.AddList(this.BeaconLinks);
 				else beacons.AddRange(this.BeaconLinks.Where(filter));
 			}
-			finally { this.BeaconLinkedLock.ReleaseWriter(); }
 		}
 
 		/// <summary>

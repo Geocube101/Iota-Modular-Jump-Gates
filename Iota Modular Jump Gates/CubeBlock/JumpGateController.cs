@@ -862,7 +862,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			}
 
 			// Update waypoints
-			if (jump_gate_valid && !MyNetworkInterface.IsDedicatedMultiplayerServer && MyAPIGateway.Gui.GetCurrentScreen == VRage.Game.ModAPI.MyTerminalPageEnum.ControlPanel && MyJumpGateModSession.GameTick % 60 == 0 && MyJumpGateModSession.Instance.AllFirstTickComplete())
+			if (jump_gate_valid && !MyNetworkInterface.IsDedicatedMultiplayerServer && MyAPIGateway.Gui.GetCurrentScreen == MyTerminalPageEnum.ControlPanel && MyJumpGateModSession.GameTick % 60 == 0 && MyJumpGateModSession.Instance.AllFirstTickComplete())
 			{
 				long player_identity = MyAPIGateway.Players.TryGetIdentityId(MyAPIGateway.Multiplayer.MyId);
 

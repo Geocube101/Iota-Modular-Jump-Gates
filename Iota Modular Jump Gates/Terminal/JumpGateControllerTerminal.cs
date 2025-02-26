@@ -22,6 +22,10 @@ namespace IOTA.ModularJumpGates.Terminal
 		public static bool IsLoaded { get; private set; } = false;
 		public static readonly string MODID_PREFIX = MyJumpGateModSession.MODID + ".JumpGateController.";
 
+		private static List<MyJumpGate> TEMP_JumpGates = new List<MyJumpGate>();
+		private static List<MyJumpGateWaypoint> TEMP_Waypoints = new List<MyJumpGateWaypoint>();
+		private static Dictionary<MyEntity, float> TEMP_JumpSpaceEntities = new Dictionary<MyEntity, float>();
+
 		private static void SetupTerminalSetupControls()
 		{
 			// Separator
@@ -60,10 +64,9 @@ namespace IOTA.ModularJumpGates.Terminal
 					if (controller == null || controller.JumpGateGrid == null || controller.JumpGateGrid.Closed) return;
 					content_list.Add(new MyTerminalControlListBoxItem(MyStringId.GetOrCompute("--deselect--"), MyStringId.GetOrCompute(""), -1L));
 					long selected_jump_gate_id = controller.BlockSettings.JumpGateID();
-					List<MyJumpGate> jump_gates = new List<MyJumpGate>();
-					controller.JumpGateGrid.GetJumpGates(jump_gates);
+					controller.JumpGateGrid.GetJumpGates(MyJumpGateControllerTerminal.TEMP_JumpGates);
 
-					foreach (MyJumpGate jump_gate in jump_gates.OrderBy((gate) => gate.JumpGateID))
+					foreach (MyJumpGate jump_gate in MyJumpGateControllerTerminal.TEMP_JumpGates.OrderBy((gate) => gate.JumpGateID))
 					{
 						if (!jump_gate.Closed && jump_gate.IsValid() && (jump_gate.Controller == null || jump_gate.Controller == controller))
 						{
@@ -84,6 +87,8 @@ namespace IOTA.ModularJumpGates.Terminal
 							preselect_list.Add(item);
 						}
 					}
+
+					MyJumpGateControllerTerminal.TEMP_JumpGates.Clear();
 				};
 
 				choose_jump_gate_lb.ItemSelected = (block, selected) => {
@@ -165,8 +170,7 @@ namespace IOTA.ModularJumpGates.Terminal
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block1);
 					MyJumpGate jump_gate = controller?.AttachedJumpGate();
 					if (controller == null || !controller.IsWorking() || jump_gate == null || jump_gate.Closed) return;
-					List<MyJumpGateWaypoint> waypoints = new List<MyJumpGateWaypoint>();
-					controller.GetWaypointsList(waypoints);
+					controller.GetWaypointsList(MyJumpGateControllerTerminal.TEMP_Waypoints);
 					MyJumpGateWaypoint selected_waypoint = controller.BlockSettings.SelectedWaypoint();
 					Vector3D jump_node = jump_gate.WorldJumpNode;
 					MyWaypointType last_waypoint_type = MyWaypointType.NONE;
@@ -215,7 +219,7 @@ namespace IOTA.ModularJumpGates.Terminal
 
 					content_list.Add(new MyTerminalControlListBoxItem(MyStringId.GetOrCompute("--deselect--"), MyStringId.GetOrCompute(""), (MyJumpGateWaypoint) null));
 
-					foreach (MyJumpGateWaypoint waypoint in waypoints)
+					foreach (MyJumpGateWaypoint waypoint in MyJumpGateControllerTerminal.TEMP_Waypoints)
 					{
 						MyTerminalControlListBoxItem item;
 						MyJumpGate destination_jump_gate;
@@ -285,6 +289,8 @@ namespace IOTA.ModularJumpGates.Terminal
 							content_list.Add(item);
 						}
 					}
+
+					MyJumpGateControllerTerminal.TEMP_Waypoints.Clear();
 				};
 
 				choose_waypoint_lb.ItemSelected = (block, selected) => {
@@ -449,10 +455,9 @@ namespace IOTA.ModularJumpGates.Terminal
 					MyJumpGate jump_gate = controller?.AttachedJumpGate();
 					if (controller == null || controller.JumpGateGrid == null || controller.JumpGateGrid.Closed || jump_gate == null || (!jump_gate.IsIdle() && !jump_gate.IsJumping())) return;
 					List<long> blacklisted = controller.BlockSettings.GetBlacklistedEntities();
-					Dictionary<MyEntity, float> entities = new Dictionary<MyEntity, float>();
-					jump_gate.GetEntitiesInJumpSpace(entities);
+					jump_gate.GetEntitiesInJumpSpace(MyJumpGateControllerTerminal.TEMP_JumpSpaceEntities);
 
-					foreach (MyEntity entity in entities.Keys)
+					foreach (MyEntity entity in MyJumpGateControllerTerminal.TEMP_JumpSpaceEntities.Keys)
 					{
 						string entity_name = entity.DisplayName ?? $"E:{entity.EntityId}";
 						if (entity_name.Length > 25) entity_name = $"{entity_name.Substring(0, 22)}...";
@@ -460,6 +465,8 @@ namespace IOTA.ModularJumpGates.Terminal
 						content_list.Add(item);
 						if (!blacklisted.Contains(entity.EntityId)) preselect_list.Add(item);
 					}
+
+					MyJumpGateControllerTerminal.TEMP_JumpSpaceEntities.Clear();
 				};
 
 				choose_allowed_entities_lb.ItemSelected = (block, selected) => {
