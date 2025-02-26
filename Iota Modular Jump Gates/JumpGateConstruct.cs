@@ -608,8 +608,6 @@ namespace IOTA.ModularJumpGates
             grid.OnBlockRemoved += this.OnBlockRemoved;
             grid.OnGridMerge += this.OnGridMerged;
             grid.OnGridSplit += this.OnGridSplit;
-			MyJumpGateConstruct parent = MyJumpGateModSession.Instance.GetJumpGateGrid(grid);
-			//if (parent != null && parent != this) Logger.Log($"Grid Construct {(parent.CubeGrid?.EntityId.ToString() ?? "N/A")} merged into this ({this.CubeGrid.EntityId})");
 			this.SetDirty();
         }
 
@@ -634,7 +632,6 @@ namespace IOTA.ModularJumpGates
 
             MyJumpGateConstruct parent = MyJumpGateModSession.Instance.GetJumpGateGrid(grid);
             if (parent == null && (MyJumpGateModSession.SessionStatus == MySessionStatusEnum.LOADING || MyJumpGateModSession.SessionStatus == MySessionStatusEnum.RUNNING)) parent = MyJumpGateModSession.Instance.AddCubeGridToSession(grid);
-			//Logger.Debug($"Grid Construct {(parent?.CubeGrid?.EntityId.ToString() ?? "N/A")} separated from this ({this.CubeGrid.EntityId})", 4);
 			this.SetDirty();
 		}
 
@@ -714,7 +711,7 @@ namespace IOTA.ModularJumpGates
 
 				if (drive_count != this.JumpGateDrives.Count || this.JumpGateDrives.Values.Any((drive) => drive.JumpGateGrid != this))
 				{
-					this.MarkGatesForUpdate();
+					this.MarkUpdateJumpGates = true;
 					this.DriveCombinations = null;
 				}
 
@@ -827,9 +824,8 @@ namespace IOTA.ModularJumpGates
 				{
 					this.SetupConstruct();
 					IMyCubeGrid main_grid = this.GetMainCubeGrid();
-					bool has_duplicate = MyJumpGateModSession.Instance.HasDuplicateGrid(this);
 
-					if (main_grid != this.CubeGrid && !has_duplicate)
+					if (main_grid != this.CubeGrid && !MyJumpGateModSession.Instance.HasCubeGrid(main_grid.EntityId))
 					{
 						if (MyJumpGateModSession.Instance.MoveGrid(this, main_grid.EntityId))
 						{
@@ -843,7 +839,7 @@ namespace IOTA.ModularJumpGates
 						else
 						{
 							MyJumpGateModSession.Instance.CloseGrid(this, true);
-							Logger.Debug($"[{grid_id}]] - Grid is not Main Grid; CLOSED", 2);
+							Logger.Debug($"[{grid_id}]] - Grid is not Main Grid @ {main_grid.EntityId}; CLOSED", 2);
 							return;
 						}
 					}
@@ -851,10 +847,10 @@ namespace IOTA.ModularJumpGates
 					{
 						MyJumpGateModSession.Instance.CloseGrid(this, true);
 						this.SendNetworkGridUpdate();
-						Logger.Debug($"[{grid_id}]] - Grid is not Main Grid; CLOSED", 2);
+						Logger.Debug($"[{grid_id}]] - Grid is not Main Grid @ {main_grid.EntityId}; CLOSED", 2);
 						return;
 					}
-					else if (has_duplicate)
+					else if (MyJumpGateModSession.Instance.HasDuplicateGrid(this))
 					{
 						Logger.Debug($"[{grid_id}]] - Grid duplicate exists; UPDATE_SKIPPED", 2);
 						return;
@@ -2132,7 +2128,7 @@ namespace IOTA.ModularJumpGates
 			foreach (IMyCubeGrid grid in this.CubeGrids.Values)
 			{
 				int count = ((MyCubeGrid) grid).BlocksCount;
-				if (count <= highest) continue;
+				if (count < highest || (count == highest && this.CubeGridID < grid.EntityId)) continue;
 				highest = count;
 				largest_grid = grid;
 			}
