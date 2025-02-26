@@ -1061,7 +1061,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				do_reconstruct_grid_gates.Title = MyStringId.GetOrCompute("Reconstruct Gates");
 				do_reconstruct_grid_gates.Tooltip = MyStringId.GetOrCompute("Forces this construct to reconstruct all jump gates");
 				do_reconstruct_grid_gates.SupportsMultipleBlocks = false;
-				do_reconstruct_grid_gates.Visible = (block) => MyNetworkInterface.IsServerLike && MyJumpGateModSession.DebugMode && MyJumpGateModSession.IsBlockJumpGateController(block);
+				do_reconstruct_grid_gates.Visible = (block) => MyNetworkInterface.IsServerLike && MyJumpGateModSession.IsBlockJumpGateController(block);
 				do_reconstruct_grid_gates.Enabled = (block) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					return controller != null && MyJumpGateModSession.DebugMode && controller.JumpGateGrid != null && !controller.JumpGateGrid.IsSuspended && !controller.JumpGateGrid.Closed;

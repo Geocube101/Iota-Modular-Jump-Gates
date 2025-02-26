@@ -595,6 +595,17 @@ namespace IOTA.ModularJumpGates.API
 		}
 
 		/// <summary>
+		/// Gets the number of blocks matching the specified predicate<br />
+		/// Gets the number of all blocks if predicate is null
+		/// </summary>
+		/// <param name="predicate">The predicate to filter blocks by</param>
+		/// <returns>The number of matching blocks</returns>
+		public int GetConstructBlockCount(Func<IMySlimBlock, bool> predicate = null)
+		{
+			return this.Construct.GetConstructBlockCount(predicate);
+		}
+
+		/// <summary>
 		/// Gets the reason this construct is invalid
 		/// </summary>
 		/// <returns>The invalidation reason or InvalidationReason.NONE</returns>

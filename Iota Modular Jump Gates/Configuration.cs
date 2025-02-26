@@ -237,15 +237,21 @@ namespace IOTA.ModularJumpGates
 
 			/// <summary>
 			/// The base input wattage (in MegaWatts) for large grid drives
+			/// Cannot be NaN or Infinity<br />
+			/// Should not be 0<br />
+			/// Defaults to 100<br />
 			/// </summary>
 			[ProtoMember(11, IsRequired = true)]
 			public double LargeDriveInputWattageMW = 100d;
 
 			/// <summary>
 			/// The base input wattage (in MegaWatts) for small grid drives
+			/// Cannot be NaN or Infinity<br />
+			/// Should not be 0<br />
+			/// Defaults to 25<br />
 			/// </summary>
 			[ProtoMember(12, IsRequired = true)]
-			public double SmallDriveInputWattageMW = 20d;
+			public double SmallDriveInputWattageMW = 25d;
 
 			/// <summary>
 			/// Validates all values
@@ -435,7 +441,7 @@ namespace IOTA.ModularJumpGates
 
 			/// <summary>
 			/// The maximum distance (in KiloMeters) per unit of gravity 'g' an endpoint will be offset by if untethered for large grid gates<br />
-			/// Cannot be NaN, Infinite, or less than 0<br />
+			/// Cannot be NaN or Infinite<br />
 			/// Defaults to 5 Km
 			/// </summary>
 			[ProtoMember(17, IsRequired = true)]
@@ -443,7 +449,7 @@ namespace IOTA.ModularJumpGates
 
 			/// <summary>
 			/// The maximum distance (in KiloMeters) per unit of gravity 'g' an endpoint will be offset by if untethered for small grid gates<br />
-			/// Cannot be NaN, Infinite, or less than 0<br />
+			/// Cannot be NaN or Infinite<br />
 			/// Defaults to 10 Km
 			/// </summary>
 			[ProtoMember(18, IsRequired = true)]
@@ -504,8 +510,8 @@ namespace IOTA.ModularJumpGates
 				this.SmallGateKilowattPerKilogram = ValidateDoubleValue(this.SmallGateKilowattPerKilogram, defaults.SmallGateKilowattPerKilogram, 0);
 				this.LargeGateRandomOffsetPerKilometer = ValidateDoubleValue(this.LargeGateRandomOffsetPerKilometer, defaults.LargeGateRandomOffsetPerKilometer, 0);
 				this.SmallGateRandomOffsetPerKilometer = ValidateDoubleValue(this.SmallGateRandomOffsetPerKilometer, defaults.SmallGateRandomOffsetPerKilometer, 0);
-				this.LargeGateKilometerOffsetPerUnitG = ValidateDoubleValue(this.LargeGateKilometerOffsetPerUnitG, defaults.LargeGateKilometerOffsetPerUnitG, 0);
-				this.SmallGateKilometerOffsetPerUnitG = ValidateDoubleValue(this.SmallGateKilometerOffsetPerUnitG, defaults.SmallGateKilometerOffsetPerUnitG, 0);
+				this.LargeGateKilometerOffsetPerUnitG = ValidateDoubleValue(this.LargeGateKilometerOffsetPerUnitG, defaults.LargeGateKilometerOffsetPerUnitG);
+				this.SmallGateKilometerOffsetPerUnitG = ValidateDoubleValue(this.SmallGateKilometerOffsetPerUnitG, defaults.SmallGateKilometerOffsetPerUnitG);
 
 				this.LargeGateDistanceScaleExponent = Math.Log((this.MaxLargeJumpGate50Distance - this.MinimumLargeJumpDistance) / 1000d, 50d);
 				this.SmallGateDistanceScaleExponent = Math.Log((this.MaxSmallJumpGate50Distance - this.MinimumSmallJumpDistance) / 1000d, 50d);
@@ -564,11 +570,11 @@ namespace IOTA.ModularJumpGates
 			/// Defaults to 3
 			/// </summary>
 			[ProtoMember(1, IsRequired = true)]
-			public byte DebugLogVerbosity = 5;
+			public byte DebugLogVerbosity = 3;
 
 			/// <summary>
 			/// The maximum distance (in meters) in which clients will be shown debug draw and gate particles<br />
-			/// Cannot be NaN, Infinity, or less than 500<br />
+			/// Cannot be NaN or less than 500<br />
 			/// Defaults to 5000 m
 			/// </summary>
 			[ProtoMember(2, IsRequired = true)]
@@ -617,7 +623,7 @@ namespace IOTA.ModularJumpGates
 			{
 				GeneralConfigurationSchema defaults = new GeneralConfigurationSchema();
 				this.DebugLogVerbosity =  MathHelper.Clamp(this.DebugLogVerbosity, (byte) 0, (byte) 5);
-				this.DrawSyncDistance = ValidateDoubleValue(this.DrawSyncDistance, defaults.DrawSyncDistance, 500);
+				this.DrawSyncDistance = ValidateDoubleValue(this.DrawSyncDistance, defaults.DrawSyncDistance, 500, allow_inf: true);
 			}
 		}
 		#endregion

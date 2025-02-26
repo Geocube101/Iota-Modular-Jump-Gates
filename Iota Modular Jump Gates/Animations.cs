@@ -30,9 +30,6 @@ namespace IOTA.ModularJumpGates.Animations
 	}
 }
 
-// Add tethered inbound animation
-// Add untethered inbound animation
-
 namespace IOTA.ModularJumpGates
 {
 	#region Enums

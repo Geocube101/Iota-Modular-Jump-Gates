@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using IOTA.ModularJumpGates.CubeBlock;
 using IOTA.ModularJumpGates.Util;
 using VRageMath;
+using VRage.Game.ModAPI;
 
 namespace IOTA.ModularJumpGates.ProgramScripting.CubeBlock
 {
@@ -543,6 +544,18 @@ namespace IOTA.ModularJumpGates.ProgramScripting.CubeBlock
 			MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(property);
 		}
 
+		private static void SetupConstructBlockCountTerminalAction()
+		{
+			IMyTerminalControlProperty<Func<Func<VRage.Game.ModAPI.Ingame.IMySlimBlock, bool>, int>> property = MyAPIGateway.TerminalControls.CreateProperty<Func<Func<VRage.Game.ModAPI.Ingame.IMySlimBlock, bool>, int>, IMyUpgradeModule>(MyCubeBlockTerminal.MODID_PREFIX + "GetConstructBlockCount");
+			property.Getter = (block) => {
+				MyCubeBlockBase block_base = MyJumpGateModSession.GetBlockAsCubeBlockBase(block);
+				if (block_base == null) throw new InvalidBlockTypeException("Specified block is not a jump gate block");
+				return (filter) => block_base.JumpGateGrid.GetConstructBlockCount((slim) => filter == null || filter(slim));
+			};
+			property.Setter = (block, value) => { throw new InvalidOperationException("Specified property is readonly"); };
+			MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(property);
+		}
+
 		private static void SetupConstructSyphonPowerTerminalAction()
 		{
 			IMyTerminalControlProperty<Func<double, double>> property = MyAPIGateway.TerminalControls.CreateProperty<Func<double, double>, IMyUpgradeModule>(MyCubeBlockTerminal.MODID_PREFIX + "SyphonConstructCapacitorPower");
@@ -822,6 +835,7 @@ namespace IOTA.ModularJumpGates.ProgramScripting.CubeBlock
 			MyPBCubeBlockBase.SetupConstructeBeaconAntennaCountTerminalAction();
 			MyPBCubeBlockBase.SetupConstructCubeGridCountTerminalAction();
 			MyPBCubeBlockBase.SetupConstructJumpGateCountTerminalAction();
+			MyPBCubeBlockBase.SetupConstructBlockCountTerminalAction();
 			MyPBCubeBlockBase.SetupConstructSyphonPowerTerminalAction();
 			MyPBCubeBlockBase.SetupConstructGetLaserAntennaTerminalAction();
 			MyPBCubeBlockBase.SetupConstructGetFirstLaserAntennaTerminalAction();

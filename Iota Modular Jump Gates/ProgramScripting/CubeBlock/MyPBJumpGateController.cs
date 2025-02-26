@@ -26,7 +26,26 @@ namespace IOTA.ModularJumpGates.ProgramScripting.CubeBlock
 				MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 				if (controller == null) throw new InvalidBlockTypeException("Specified block is not a jump gate controller");
 				MyJumpGateWaypoint waypoint = controller.BlockSettings.SelectedWaypoint();
-				return new KeyValuePair<object, int>(waypoint.GetEndpoint(), (int) (waypoint?.WaypointType ?? MyWaypointType.NONE));
+				if (waypoint == null) return new KeyValuePair<object, int>(null, (int) MyWaypointType.NONE);
+				int type = (int) waypoint.WaypointType;
+				MyJumpGate target_gate;
+				Vector3D? endpoint = waypoint.GetEndpoint(out target_gate);
+
+				switch (waypoint.WaypointType)
+				{
+					case MyWaypointType.NONE:
+						return new KeyValuePair<object, int>(null, type);
+					case MyWaypointType.JUMP_GATE:
+						return new KeyValuePair<object, int>(new long[] { target_gate.JumpGateGrid.CubeGridID, target_gate.JumpGateID }, type);
+					case MyWaypointType.GPS:
+						return new KeyValuePair<object, int>(endpoint.Value, type);
+					case MyWaypointType.BEACON:
+						return new KeyValuePair<object, int>(new long[] { waypoint.Beacon.Beacon.CubeGrid.EntityId, waypoint.Beacon.BeaconID }, type);
+					case MyWaypointType.SERVER:
+						return new KeyValuePair<object, int>(null, type);
+					default:
+						throw new InvalidOperationException($"Invalid jump gate waypoint type - {type} ");
+				}
 			};
 			property.Setter = (block, value) => {
 				MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
@@ -383,20 +402,6 @@ namespace IOTA.ModularJumpGates.ProgramScripting.CubeBlock
 			MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(property);
 		}
 
-		private static void SetupGateIsCompleteTerminalAction()
-		{
-			IMyTerminalControlProperty<bool> property = MyAPIGateway.TerminalControls.CreateProperty<bool, IMyUpgradeModule>(MyJumpGateControllerTerminal.MODID_PREFIX + "GateIsComplete");
-			property.Getter = (block) => {
-				MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
-				MyJumpGate jump_gate = controller?.AttachedJumpGate();
-				if (controller == null) throw new InvalidBlockTypeException("Specified block is not a jump gate controller");
-				else if (jump_gate == null) throw new InvalidOperationException("No jump gate attached");
-				return jump_gate.IsComplete();
-			};
-			property.Setter = (block, value) => { throw new InvalidOperationException("Specified property is readonly"); };
-			MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(property);
-		}
-
 		private static void SetupGateIsIdleTerminalAction()
 		{
 			IMyTerminalControlProperty<bool> property = MyAPIGateway.TerminalControls.CreateProperty<bool, IMyUpgradeModule>(MyJumpGateControllerTerminal.MODID_PREFIX + "GateIsIdle");
@@ -684,20 +689,6 @@ namespace IOTA.ModularJumpGates.ProgramScripting.CubeBlock
 			MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(property);
 		}
 
-		private static void SetupGateCalculateMaxDistanceTerminalAction()
-		{
-			IMyTerminalControlProperty<double> property = MyAPIGateway.TerminalControls.CreateProperty<double, IMyUpgradeModule>(MyJumpGateControllerTerminal.MODID_PREFIX + "CalculateGateMaxDistance");
-			property.Getter = (block) => {
-				MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
-				MyJumpGate jump_gate = controller?.AttachedJumpGate();
-				if (controller == null) throw new InvalidBlockTypeException("Specified block is not a jump gate controller");
-				else if (jump_gate == null) throw new InvalidOperationException("No jump gate attached");
-				return jump_gate.CalculateMaxGateDistance();
-			};
-			property.Setter = (block, value) => { throw new InvalidOperationException("Specified property is readonly"); };
-			MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(property);
-		}
-
 		private static void SetupGateCalculateTotalRequiredPowerAction()
 		{
 			IMyTerminalControlProperty<Func<Vector3D?, bool?, double?, double>> property = MyAPIGateway.TerminalControls.CreateProperty<Func<Vector3D?, bool?, double?, double>, IMyUpgradeModule>(MyJumpGateControllerTerminal.MODID_PREFIX + "CalculateGateTotalRequiredPower");
@@ -809,7 +800,6 @@ namespace IOTA.ModularJumpGates.ProgramScripting.CubeBlock
 			MyPBJumpGateController.SetupGateJumpEllipseTerminalAction();
 			MyPBJumpGateController.SetupGateShearEllipseTerminalAction();
 			MyPBJumpGateController.SetupGateIsValidTerminalAction();
-			MyPBJumpGateController.SetupGateIsCompleteTerminalAction();
 			MyPBJumpGateController.SetupGateIsJumpingTerminalAction();
 			MyPBJumpGateController.SetupGateIsLargeGridTerminalAction();
 			MyPBJumpGateController.SetupGateIsSmallGridTerminalAction();
@@ -831,7 +821,6 @@ namespace IOTA.ModularJumpGates.ProgramScripting.CubeBlock
 			MyPBJumpGateController.SetupGateCalculateDistanceRatioTerminalAction();
 			MyPBJumpGateController.SetupGateCalculatePowerFactorDistanceRatioTerminalAction();
 			MyPBJumpGateController.SetupGateCalculateUnitPowerTerminalAction();
-			MyPBJumpGateController.SetupGateCalculateMaxDistanceTerminalAction();
 			MyPBJumpGateController.SetupGateCalculateTotalRequiredPowerAction();
 			MyPBJumpGateController.SetupGateCalculateRequiredDrivesTerminalAction();
 			MyPBJumpGateController.SetupGateCalculateInstantPowerTerminalAction();

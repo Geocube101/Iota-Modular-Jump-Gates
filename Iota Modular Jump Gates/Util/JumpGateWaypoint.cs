@@ -492,7 +492,7 @@ namespace IOTA.ModularJumpGates.Util
 				default:
 					throw new InvalidOperationException("Waypoint is invalid");
 			}
-        }
+		}
 		#endregion
 	}
 }

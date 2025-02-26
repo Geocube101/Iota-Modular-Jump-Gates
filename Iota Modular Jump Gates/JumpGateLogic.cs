@@ -2629,7 +2629,7 @@ namespace IOTA.ModularJumpGates
 						{
 							MyPrefabInfo prefab = spawn_prefabs[i];
 							List<IMyCubeGrid> grids = (i >= spawned_grids.Count) ? new List<IMyCubeGrid>() : spawned_grids[i];
-							Vector3D world_pos = jump_node + prefab.Position;
+							Vector3D world_pos = MyJumpGateModSession.LocalVectorToWorldVectorP(ref gate_matrix, prefab.Position);
 
 							if (!jump_ellipse.IsPointInEllipse(world_pos))
 							{
@@ -3435,8 +3435,10 @@ namespace IOTA.ModularJumpGates
 			else if (entity.Physics.Mass < allowed_mass.Key || entity.Physics.Mass > allowed_mass.Value) return false;
 			else if (entity is MyCubeGrid)
 			{
-				MyCubeGrid grid = (MyCubeGrid) entity;
-				if (grid.BlocksCount < allowed_size.Key || grid.BlocksCount > allowed_size.Value) return false;
+				IMyCubeGrid grid = (MyCubeGrid) entity;
+				MyJumpGateConstruct construct = MyJumpGateModSession.Instance.GetJumpGateGrid(grid);
+				int count = construct?.GetConstructBlockCount() ?? -1;
+				if (construct == null || count < allowed_size.Key || count > allowed_size.Value) return false;
 			}
 			return true;
 		}
