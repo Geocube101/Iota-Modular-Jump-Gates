@@ -672,6 +672,17 @@ namespace IOTA.ModularJumpGates.API
 		}
 
 		/// <summary>
+		/// Checks if the specified world coordinate is within at least one grid of this construct<br />
+		/// Point must be within at least two walls of the same grid
+		/// </summary>
+		/// <param name="world_position">The world position</param>
+		/// <returns>The containing grid or null if not inside any subgrid</returns>
+		public IMyCubeGrid IsPositionInsideAnySubgrid(Vector3D world_position)
+		{
+			return this.Construct.IsPositionInsideAnySubgrid(world_position);
+		}
+
+		/// <summary>
 		/// </summary>
 		/// <returns>This construct's main cube grid</returns>
 		public IMyCubeGrid GetMainCubeGrid()
@@ -787,6 +798,15 @@ namespace IOTA.ModularJumpGates.API
 		public IEnumerator<IMySlimBlock> GetConstructBlocks()
 		{
 			return this.Construct.GetConstructBlocks();
+		}
+
+		/// <summary>
+		/// Creates a bounding box containing all sub grids' bounding box
+		/// </summary>
+		/// <returns>This construct's combined AABB or an invalid AABB if suspended</returns>
+		public BoundingBoxD GetCombinedAABB()
+		{
+			return this.Construct.GetCombinedAABB();
 		}
 
 		/// <summary>

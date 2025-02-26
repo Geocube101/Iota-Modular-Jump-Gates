@@ -608,8 +608,6 @@ namespace IOTA.ModularJumpGates
             grid.OnBlockRemoved += this.OnBlockRemoved;
             grid.OnGridMerge += this.OnGridMerged;
             grid.OnGridSplit += this.OnGridSplit;
-			MyJumpGateConstruct parent = MyJumpGateModSession.Instance.GetJumpGateGrid(grid);
-			//if (parent != null && parent != this) Logger.Log($"Grid Construct {(parent.CubeGrid?.EntityId.ToString() ?? "N/A")} merged into this ({this.CubeGrid.EntityId})");
 			this.SetDirty();
         }
 
@@ -634,7 +632,6 @@ namespace IOTA.ModularJumpGates
 
             MyJumpGateConstruct parent = MyJumpGateModSession.Instance.GetJumpGateGrid(grid);
             if (parent == null && (MyJumpGateModSession.SessionStatus == MySessionStatusEnum.LOADING || MyJumpGateModSession.SessionStatus == MySessionStatusEnum.RUNNING)) parent = MyJumpGateModSession.Instance.AddCubeGridToSession(grid);
-			//Logger.Debug($"Grid Construct {(parent?.CubeGrid?.EntityId.ToString() ?? "N/A")} separated from this ({this.CubeGrid.EntityId})", 4);
 			this.SetDirty();
 		}
 
@@ -714,7 +711,7 @@ namespace IOTA.ModularJumpGates
 
 				if (drive_count != this.JumpGateDrives.Count || this.JumpGateDrives.Values.Any((drive) => drive.JumpGateGrid != this))
 				{
-					this.MarkGatesForUpdate();
+					this.MarkUpdateJumpGates = true;
 					this.DriveCombinations = null;
 				}
 
@@ -827,9 +824,8 @@ namespace IOTA.ModularJumpGates
 				{
 					this.SetupConstruct();
 					IMyCubeGrid main_grid = this.GetMainCubeGrid();
-					bool has_duplicate = MyJumpGateModSession.Instance.HasDuplicateGrid(this);
 
-					if (main_grid != this.CubeGrid && !has_duplicate)
+					if (main_grid != this.CubeGrid && !MyJumpGateModSession.Instance.HasCubeGrid(main_grid.EntityId))
 					{
 						if (MyJumpGateModSession.Instance.MoveGrid(this, main_grid.EntityId))
 						{
@@ -843,7 +839,7 @@ namespace IOTA.ModularJumpGates
 						else
 						{
 							MyJumpGateModSession.Instance.CloseGrid(this, true);
-							Logger.Debug($"[{grid_id}]] - Grid is not Main Grid; CLOSED", 2);
+							Logger.Debug($"[{grid_id}]] - Grid is not Main Grid @ {main_grid.EntityId}; CLOSED", 2);
 							return;
 						}
 					}
@@ -851,10 +847,10 @@ namespace IOTA.ModularJumpGates
 					{
 						MyJumpGateModSession.Instance.CloseGrid(this, true);
 						this.SendNetworkGridUpdate();
-						Logger.Debug($"[{grid_id}]] - Grid is not Main Grid; CLOSED", 2);
+						Logger.Debug($"[{grid_id}]] - Grid is not Main Grid @ {main_grid.EntityId}; CLOSED", 2);
 						return;
 					}
-					else if (has_duplicate)
+					else if (MyJumpGateModSession.Instance.HasDuplicateGrid(this))
 					{
 						Logger.Debug($"[{grid_id}]] - Grid duplicate exists; UPDATE_SKIPPED", 2);
 						return;
@@ -1496,15 +1492,11 @@ namespace IOTA.ModularJumpGates
 				else this.CommLinkedGrids.Clear();
 				this.CommLinkedGrids.Add(this);
 				List<MyEntity> broadcast_entities = new List<MyEntity>();
-				List<Vector3D> points = new List<Vector3D>(8 * this.CubeGrids.Count);
-				foreach (IMyCubeGrid subgrid in this.CubeGrids.Values) for (int i = 0; i < 8; ++i) points.Add(subgrid.WorldAABB.GetCorner(i));
-				BoundingBoxD merged = BoundingBoxD.CreateFromPoints(points);
-				BoundingSphereD broadcast_sphere;
 
 				while (list_index < this.CommLinkedGrids.Count)
 				{
 					MyJumpGateConstruct grid = this.CommLinkedGrids[list_index++];
-					if (grid.Closed || grid.MarkClosed) continue;
+					if (grid.Closed || grid.MarkClosed || (grid.LaserAntennas.Count == 0 && grid.RadioAntennas.Count == 0)) continue;
 
 					foreach (IMyLaserAntenna antenna in grid.LaserAntennas.Values)
 					{
@@ -1513,12 +1505,14 @@ namespace IOTA.ModularJumpGates
 						if (other != null && !this.CommLinkedGrids.Contains(other)) this.CommLinkedGrids.Add(other);
 					}
 
+					if (grid.RadioAntennas.Count == 0) continue;
+					BoundingBoxD world_aabb = grid.GetCombinedAABB();
+					BoundingSphereD broadcast_sphere = new BoundingSphereD(world_aabb.Center, 50000 + world_aabb.Extents.Max());
+					MyGamePruningStructure.GetAllTopMostEntitiesInSphere(ref broadcast_sphere, broadcast_entities);
+
 					foreach (IMyRadioAntenna antenna in grid.RadioAntennas.Values)
 					{
 						if (antenna.MarkedForClose || !antenna.IsWorking || !antenna.IsBroadcasting) continue;
-						broadcast_sphere.Center = antenna.WorldMatrix.Translation;
-						broadcast_sphere.Radius = antenna.Radius;
-						MyGamePruningStructure.GetAllTopMostEntitiesInSphere(ref broadcast_sphere, broadcast_entities);
 
 						foreach (MyEntity entity in broadcast_entities)
 						{
@@ -1528,16 +1522,16 @@ namespace IOTA.ModularJumpGates
 
 							foreach (IMyRadioAntenna target_antenna in grid.RadioAntennas.Values)
 							{
-								if (target_antenna.IsWorking && target_antenna.IsBroadcasting)
+								if (target_antenna.IsWorking && target_antenna.IsBroadcasting && Vector3D.Distance(antenna.WorldMatrix.Translation, target_antenna.WorldMatrix.Translation) < Math.Min(antenna.Radius, target_antenna.Radius))
 								{
 									this.CommLinkedGrids.Add(target_grid);
 									break;
 								}
 							}
 						}
-
-						broadcast_entities.Clear();
 					}
+
+					broadcast_entities.Clear();
 				}
 
 				this.LastCommLinkUpdate = DateTime.Now;
@@ -1594,18 +1588,17 @@ namespace IOTA.ModularJumpGates
 				if (this.BeaconLinks == null) this.BeaconLinks = new List<MyBeaconLinkWrapper>();
 				else this.BeaconLinks.Clear();
 				List<MyEntity> broadcast_entities = new List<MyEntity>();
-				BoundingSphereD broadcast_sphere = new BoundingSphereD(Vector3D.Zero, 200000);
+				BoundingBoxD world_aabb = this.GetCombinedAABB();
+				BoundingSphereD broadcast_sphere = new BoundingSphereD(world_aabb.Center, 200000 + world_aabb.Extents.Max());
+				MyGamePruningStructure.GetAllTopMostEntitiesInSphere(ref broadcast_sphere, broadcast_entities);
 
-				foreach (IMyRadioAntenna antenna in this.RadioAntennas.Values)
+				foreach (MyEntity entity in broadcast_entities)
 				{
-					broadcast_sphere.Center = antenna.WorldMatrix.Translation;
-					MyGamePruningStructure.GetAllTopMostEntitiesInSphere(ref broadcast_sphere, broadcast_entities);
+					MyJumpGateConstruct target_grid;
+					if (!(entity is IMyCubeGrid) || entity.Physics == null || (target_grid = MyJumpGateModSession.Instance.GetJumpGateGrid(entity.EntityId)) == null || target_grid == this) continue;
 
-					foreach (MyEntity entity in broadcast_entities)
+					foreach (IMyRadioAntenna antenna in this.RadioAntennas.Values)
 					{
-						MyJumpGateConstruct target_grid;
-						if (!(entity is IMyCubeGrid) || entity.Physics == null || (target_grid = MyJumpGateModSession.Instance.GetJumpGateGrid(entity.EntityId)) == null || target_grid == this) continue;
-
 						foreach (IMyBeacon beacon in target_grid.BeaconAntennas.Values)
 						{
 							MyBeaconLinkWrapper wrapper;
@@ -1613,8 +1606,6 @@ namespace IOTA.ModularJumpGates
 							this.BeaconLinks.Add(wrapper);
 						}
 					}
-
-					broadcast_entities.Clear();
 				}
 
 				this.LastCommLinkUpdate = DateTime.Now;
@@ -2100,10 +2091,7 @@ namespace IOTA.ModularJumpGates
 		public Vector3D ConstructVolumeCenter()
 		{
 			this.CheckClosed();
-			if (this.IsSuspended) return Vector3D.Zero;
-			List<Vector3D> points = new List<Vector3D>(8 * this.CubeGrids.Count);
-			foreach (IMyCubeGrid grid in this.CubeGrids.Values) for (int i = 0; i < 8; ++i) points.Add(grid.WorldAABB.GetCorner(i));
-			return BoundingBoxD.CreateFromPoints(points).Center;
+			return this.GetCombinedAABB().Center;
 		}
 
 		/// <summary>
@@ -2121,6 +2109,19 @@ namespace IOTA.ModularJumpGates
 		}
 
 		/// <summary>
+		/// Checks if the specified world coordinate is within at least one grid of this construct<br />
+		/// Point must be within at least two walls of the same grid
+		/// </summary>
+		/// <param name="world_position">The world position</param>
+		/// <returns>The containing grid or null if not inside any subgrid</returns>
+		public IMyCubeGrid IsPositionInsideAnySubgrid(Vector3D world_position)
+		{
+			this.CheckClosed();
+			foreach (IMyCubeGrid grid in this.CubeGrids.Values) if (MyJumpGateModSession.IsPositionInsideGrid(grid, world_position)) return grid;
+			return null;
+		}
+
+		/// <summary>
 		/// </summary>
 		/// <returns>This construct's main cube grid</returns>
 		public IMyCubeGrid GetMainCubeGrid()
@@ -2132,7 +2133,7 @@ namespace IOTA.ModularJumpGates
 			foreach (IMyCubeGrid grid in this.CubeGrids.Values)
 			{
 				int count = ((MyCubeGrid) grid).BlocksCount;
-				if (count <= highest) continue;
+				if (count == 0 || count < highest || (count == highest && largest_grid.EntityId < grid.EntityId)) continue;
 				highest = count;
 				largest_grid = grid;
 			}
@@ -2267,6 +2268,19 @@ namespace IOTA.ModularJumpGates
 		{
 			this.CheckClosed();
 			return this.GridBlocks.GetEnumerator();
+		}
+
+		/// <summary>
+		/// Creates a bounding box containing all sub grids' bounding box
+		/// </summary>
+		/// <returns>This construct's combined AABB or an invalid AABB if suspended</returns>
+		public BoundingBoxD GetCombinedAABB()
+		{
+			this.CheckClosed();
+			if (this.IsSuspended) return BoundingBoxD.CreateInvalid();
+			List<Vector3D> points = new List<Vector3D>(8 * this.CubeGrids.Count);
+			foreach (IMyCubeGrid grid in this.CubeGrids.Values) for (int i = 0; i < 8; ++i) points.Add(grid.WorldAABB.GetCorner(i));
+			return BoundingBoxD.CreateFromPoints(points);
 		}
 
 		/// <summary>

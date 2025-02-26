@@ -1294,11 +1294,5 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// </summary>
 		[ProtoMember(21)]
 		public MyObjectBuilder_ComponentBase SerializedPanelInfo;
-
-		/// <summary>
-		/// The serialized block object builder
-		/// </summary>
-		[ProtoMember(22)]
-		public MyObjectBuilder_EntityBase ObjectBuilder;
 	}
 }

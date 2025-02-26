@@ -44,11 +44,6 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		private double RadiatorEmissiveRatio = 0;
 
 		/// <summary>
-		/// Average charge time for calculating capacitor charge time
-		/// </summary>
-		private double AverageCapacitorChargeRate;
-
-		/// <summary>
 		/// The power of this wattage sink override
 		/// </summary>
 		private double WrapperWattageSinkPower;
@@ -168,25 +163,21 @@ namespace IOTA.ModularJumpGates.CubeBlock
 
 				double input_wattage = this.ResourceSink.CurrentInputByType(MyResourceDistributorComponent.ElectricityId);
 				double charge_ratio = this.StoredChargeMW / this.DriveConfiguration.MaxDriveChargeMW;
-				double charge_time = -(this.DriveConfiguration.MaxDriveChargeMW - this.StoredChargeMW) / (this.DriveConfiguration.MaxDriveChargeRateMW * this.AverageCapacitorChargeRate);
-				double charge_time_multipler = Math.Pow(1d / (1d - charge_ratio), 1d / this.DriveConfiguration.DriveChargeRateFalloff);
-				charge_time *= charge_time_multipler;
-				charge_time = (double.IsNaN(charge_time) || double.IsInfinity(charge_time)) ? 0 : charge_time;
-				int minutes = (int) Math.Floor(charge_time / 60d);
-				int seconds = (int) Math.Floor(charge_time - minutes * 60d);
-				string drive_group_name = (jump_gate_valid) ? jump_gate.GetPrintableName() : "N/A";
-				string jump_gate_id = (jump_gate_valid) ? jump_gate.JumpGateID.ToString() : "N/A";
+				double charge_time = Math.Log((1 - charge_ratio) / 0.0005) * (this.DriveConfiguration.MaxDriveChargeMW / this.DriveConfiguration.MaxDriveChargeRateMW);
 
 				string stored_power = Math.Round(this.StoredChargeMW, 4).ToString("#.0000");
 				info.Append("\n-=-=-=( Jump Gate Drive )=-=-=-\n");
 				info.Append($" Input: {Math.Round(input_wattage, 4)} MW/s\n");
 				info.Append($" Required Input: {Math.Round(this.ResourceSink.RequiredInputByType(MyResourceDistributorComponent.ElectricityId), 4)} MW/s\n");
 				info.Append($" Stored Power: {stored_power} MW\n");
-				info.Append($" Stored Power %: {Math.Round(charge_ratio * 100, 2)}%\n");
+				info.Append($" Charge: {Math.Round(charge_ratio * 100, 1)}%\n");
 				info.Append($" Buffer Size: {MyJumpGateModSession.AutoconvertMetricUnits(this.DriveConfiguration.MaxDriveChargeMW * 1e6, "w", 4)}\n");
-				info.Append($" Charged in {minutes:00}:{seconds:00}\n\n");
-				info.Append($" Jump Gate: {drive_group_name}\n");
-				info.Append($" Jump Gate ID: {jump_gate_id}\n");
+				info.Append($" Charge Efficiency: {Math.Round(this.DriveConfiguration.DriveChargeEfficiency * 100, 2)}%\n");
+				if (double.IsInfinity(charge_time)) info.Append($" Charged in --:--:--\n");
+				else if (double.IsNaN(charge_time)) info.Append($" Charged in 00:00:00\n");
+				else info.Append($" Charged in {(int) Math.Floor(charge_time / 3600):00}:{(int) Math.Floor(charge_time % 3600 / 60d):00}:{(int) Math.Floor(charge_time % 60d):00}\n\n");
+				info.Append($" Jump Gate: {jump_gate?.GetPrintableName() ?? "N/A"}\n");
+				info.Append($" Jump Gate ID: {jump_gate?.JumpGateID.ToString() ?? "N/A"}\n");
 				info.Append($" Current Construct: {(this.JumpGateGrid?.CubeGridID.ToString() ?? "N/A")}");
 			}
 		}
@@ -212,8 +203,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				else if (this.TerminalBlock.IsWorking)
 				{
 					double capacity_ratio = MathHelperD.Clamp(this.StoredChargeMW / this.DriveConfiguration.MaxDriveChargeMW, 0, 1);
-					double charge = Math.Pow(1 - capacity_ratio, 1d / this.DriveConfiguration.DriveChargeRateFalloff);
-					return (float) (this.DriveConfiguration.MaxDriveChargeRateMW * charge + this.DriveConfiguration.BaseInputWattageMW);
+					return (float) (this.DriveConfiguration.MaxDriveChargeRateMW * (1 - capacity_ratio));
 				}
 				else return 0f;
 			}, MyJumpGateModSession.BlockComponentDataGUID);
@@ -238,8 +228,6 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			}
 			else this.ModStorageComponent.Add(MyJumpGateModSession.BlockComponentDataGUID, "");
 
-			double falloff = this.DriveConfiguration.DriveChargeRateFalloff;
-			this.AverageCapacitorChargeRate = -(falloff / (falloff + 1)) * Math.Pow(1, (falloff + 1) / falloff);
 			this.MaxRaycastDistance = this.DriveConfiguration.DriveRaycastDistance;
 			this.ResourceSink.SetMaxRequiredInputByType(MyResourceDistributorComponent.ElectricityId, (float) this.DriveConfiguration.MaxDriveChargeRateMW);
 
@@ -310,8 +298,8 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			// Update stored power charge
 			if (this.TerminalBlock.Enabled && this.TerminalBlock.IsFunctional && this.ResourceSink != null && this.SinkOverrideMW == -1)
 			{
-				double power_draw_mw = (((double) this.ResourceSink.CurrentInputByType(MyResourceDistributorComponent.ElectricityId)) - this.DriveConfiguration.BaseInputWattageMW - this.SinkOverrideMW) / 60d;
-				if (power_draw_mw > 0) this.StoredChargeMW = MathHelperD.Clamp(this.StoredChargeMW + power_draw_mw, 0, this.DriveConfiguration.MaxDriveChargeMW);
+				double power_draw_mw = (double) this.ResourceSink.CurrentInputByType(MyResourceDistributorComponent.ElectricityId) / 60d;
+				this.StoredChargeMW = MathHelperD.Clamp(this.StoredChargeMW + power_draw_mw * this.DriveConfiguration.DriveChargeEfficiency, 0, this.DriveConfiguration.MaxDriveChargeMW);
 			}
 
 			if (working && this.JumpGateGrid != null && !this.JumpGateGrid.Closed)
@@ -691,11 +679,5 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// </summary>
 		[ProtoMember(23)]
 		public long JumpGateID;
-
-		/// <summary>
-		/// The serialized block object builder
-		/// </summary>
-		[ProtoMember(24)]
-		public MyObjectBuilder_EntityBase ObjectBuilder;
 	}
 }

@@ -20,7 +20,6 @@ using System.Threading;
 using SpaceEngineers.Game.ModAPI;
 using System.Text;
 using IOTA.ModularJumpGates.Util.ConcurrentCollections;
-using Sandbox.Game.World;
 
 namespace IOTA.ModularJumpGates
 {
@@ -247,7 +246,7 @@ namespace IOTA.ModularJumpGates
 
 				this.JumpGate.GetWorkingJumpGateDrives(this.JumpGateDrives);
 				double power_per_drive = power_mw / this.JumpGateDrives.Count;
-				power_mw -= (syphon_grid_only) ? 0 : this.JumpGateDrives.Select((drive) => drive.DrainStoredCharge(power_per_drive)).Sum();
+				power_mw = (syphon_grid_only) ? power_mw : this.JumpGateDrives.Select((drive) => drive.DrainStoredCharge(power_per_drive)).Sum();
 
 				if (power_mw <= 0)
 				{
@@ -255,7 +254,7 @@ namespace IOTA.ModularJumpGates
 					return;
 				}
 
-				power_mw -= (syphon_grid_only) ? 0 : grid.SyphonConstructCapacitorPower(power_mw);
+				power_mw = (syphon_grid_only) ? power_mw : grid.SyphonConstructCapacitorPower(power_mw);
 
 				if (power_mw <= 0)
 				{
@@ -1463,7 +1462,7 @@ namespace IOTA.ModularJumpGates
 						}
 
 						// Apply Randomness to endpoint if untethered
-						else if (!MyJumpGateModSession.Configuration.GeneralConfiguration.SafeJumps && target_gate == null)
+						if (!MyJumpGateModSession.Configuration.GeneralConfiguration.SafeJumps && target_gate == null)
 						{
 							// Bend jump path around gravity
 							byte distance_multiplier = 1;
@@ -1484,50 +1483,360 @@ namespace IOTA.ModularJumpGates
 							distance_to_endpoint = Vector3D.Distance(startpos, jump_node);
 
 							// Apply random offset to endpoint
-							Random prng = new Random();
-							double max_offset = distance_to_endpoint * this.JumpGateConfiguration.GateRandomOffsetPerKilometer;
-							double rand1 = prng.NextDouble();
-							double rand2 = prng.NextDouble();
-							double rand3 = prng.NextDouble();
-							endpoint = new BoundingSphereD(startpos, max_offset).RandomToUniformPointInSphere(rand1, rand2, rand3);
-							distance_to_endpoint = Vector3D.Distance(endpoint, jump_node);
-							Logger.Debug($"APPLY_ENDPOINT_OFFSET: OLD={_endpoint.Value}; NEW={endpoint}; OFFSET={Vector3D.Distance(endpoint, _endpoint.Value)}", 5);
+							if (this.JumpGateConfiguration.ConfineUntetheredSpread)
+							{
+								Random prng = new Random();
+								double max_offset = distance_to_endpoint * this.JumpGateConfiguration.GateRandomOffsetPerKilometer;
+								double rand1 = prng.NextDouble();
+								double rand2 = prng.NextDouble();
+								double rand3 = prng.NextDouble();
+								endpoint = new BoundingSphereD(startpos, max_offset).RandomToUniformPointInSphere(rand1, rand2, rand3);
+								distance_to_endpoint = Vector3D.Distance(endpoint, jump_node);
+								Logger.Debug($"APPLY_ENDPOINT_OFFSET: OLD={_endpoint.Value}; NEW={endpoint}; OFFSET={Vector3D.Distance(endpoint, _endpoint.Value)}", 5);
+							}
 						}
 
-						// Calculate Power
-						double total_mass_kg = entities_to_jump.Sum((entity) => (double) entity.Key.Physics.Mass);
-						double power_scaler = (target_gate == null) ? this.JumpGateConfiguration.UntetheredJumpEnergyCost : 1;
-						double remaining_power_mw = Math.Round(total_mass_kg * this.CalculateUnitPowerRequiredForJump(ref default_endpoint), 8) * power_scaler / 1000;
-						Logger.Debug($"TOTAL_MASS={total_mass_kg}Kg; TOTAL_POWER_MW={remaining_power_mw}", 4);
-						remaining_power_mw = Math.Round(this.SyphonGridDrivePower(remaining_power_mw), 8);
-						Logger.Debug($"REMAINING_POWER_MW={remaining_power_mw}, AFTER_DRIVES", 4);
-						if (remaining_power_mw > 0) remaining_power_mw = Math.Round(this.JumpGateGrid.SyphonConstructCapacitorPower(remaining_power_mw), 8);
-						Logger.Debug($"REMAINING_POWER_MW={remaining_power_mw}, AFTER_CAPACITORS", 4);
+						// Jump entities
+						if (dst.WaypointType == MyWaypointType.SERVER)
+						{
+							SendJumpResponse(MyJumpFailReason.CROSS_SERVER_JUMP, false, null);
+							return;
+						}
 
-						if (!MyJumpGateModSession.Configuration.GeneralConfiguration.SyphonReactorPower && remaining_power_mw > 0)
+						int skipped_entities_count = 0;
+						double syphon_power = 0;
+						this.Phase = MyJumpGatePhase.JUMPING;
+						MatrixD this_matrix = this.TrueWorldJumpEllipse.WorldMatrix;
+						MatrixD target_matrix = target_gate?.TrueWorldJumpEllipse.WorldMatrix ?? MatrixD.CreateWorld(endpoint, this_matrix.Forward, this_matrix.Up);
+						Vector3D src_gate_velocity = this.JumpNodeVelocity;
+						Vector3D dst_gate_velocity = (target_gate == null) ? Vector3D.Zero : target_gate.JumpNodeVelocity;
+
+						List<MyEntity> obstructing = new List<MyEntity>();
+						List<KeyValuePair<List<MyEntity>, BoundingBoxD>> syphon_entities = new List<KeyValuePair<List<MyEntity>, BoundingBoxD>>();
+						List<MyVoxelBase> terrain = new List<MyVoxelBase>();
+						List<IMySlimBlock> destroyed = new List<IMySlimBlock>();
+						List<IMyCubeGrid> grids = new List<IMyCubeGrid>();
+
+						Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} JUMP ENTITY_TRANSIT", 3);
+
+						// Assemble batches
+						foreach (KeyValuePair<MyEntity, bool> pair in entities_to_jump)
+						{
+							MyEntity entity = pair.Key;
+							double batch_mass = (entity is IMyPlayer) ? ((IMyPlayer) entity).Character.CurrentMass : entity.Physics.Mass;
+							List<MyEntity> batch = new List<MyEntity>() { entity };
+							MatrixD entity_target_matrix = target_matrix;
+							BoundingBoxD obstruction_aabb;
+							MyJumpGateConstruct parent = null;
+
+							// Calculate end position
+							Vector3D forward_dir, up_dir;
+							Vector3D position = MyJumpGateModSession.WorldVectorToLocalVectorP(ref this_matrix, entity.WorldMatrix.Translation);
+							position = MyJumpGateModSession.LocalVectorToWorldVectorP(ref target_matrix, position);
+							entity_target_matrix.Translation = position;
+
+							// Apply randomness to end position of applicable
+							if (!this.JumpGateConfiguration.ConfineUntetheredSpread)
+							{
+								Random prng = new Random();
+								double max_offset = distance_to_endpoint * this.JumpGateConfiguration.GateRandomOffsetPerKilometer;
+								double rand1 = prng.NextDouble();
+								double rand2 = prng.NextDouble();
+								double rand3 = prng.NextDouble();
+								position = new BoundingSphereD(endpoint, max_offset).RandomToUniformPointInSphere(rand1, rand2, rand3);
+								Logger.Debug($"APPLY_LOCALENDPOINT_OFFSET: OLD={_endpoint.Value}; NEW={endpoint}; OFFSET={Vector3D.Distance(endpoint, _endpoint.Value)}", 5);
+							}
+
+							// Construct specific checks
+							if (entity is MyCubeGrid)
+							{
+								parent = MyJumpGateModSession.Instance.GetUnclosedJumpGateGrid(entity.EntityId);
+								if (parent == null || parent == this.JumpGateGrid) continue;
+
+								// Check cube grid obstructions
+								BoundingBoxD construct_aabb = parent.GetCombinedAABB();
+								obstruction_aabb = construct_aabb;
+								obstruction_aabb.TransformFast(ref entity_target_matrix, ref obstruction_aabb);
+								MyGamePruningStructure.GetTopmostEntitiesInBox(ref obstruction_aabb, obstructing);
+
+								obstructing.RemoveAll((obstruct) => {
+									if (!(obstruct is MyCubeGrid)) return true;
+									MyJumpGateConstruct obgrid = MyJumpGateModSession.Instance.GetJumpGateGrid(obstruct.EntityId);
+									if (obgrid == null || obgrid.MarkClosed) return true;
+									IEnumerator<IMySlimBlock> enumerator1 = parent.GetConstructBlocks();
+									IEnumerator<IMySlimBlock> enumerator2 = obgrid.GetConstructBlocks();
+
+									do
+									{
+										IMySlimBlock block1 = enumerator1.Current;
+										Vector3D block_pos_1 = block1.CubeGrid.GridIntegerToWorld(block1.Position);
+										block_pos_1 = MyJumpGateModSession.WorldVectorToLocalVectorP(ref this_matrix, block_pos_1);
+										block_pos_1 = MyJumpGateModSession.LocalVectorToWorldVectorP(ref target_matrix, block_pos_1);
+
+										do
+										{
+											IMySlimBlock block2 = enumerator2.Current;
+											BoundingBoxD block2_bounds;
+											block2.GetWorldBoundingBox(out block2_bounds);
+											if (block2_bounds.Contains(block_pos_1) != ContainmentType.Disjoint) return false;
+
+										} while (enumerator2.MoveNext());
+
+										enumerator2.Reset();
+									} while (enumerator1.MoveNext());
+
+									return true;
+								});
+
+								if (obstructing.Count > 0)
+								{
+									++skipped_entities_count;
+									obstructing.Clear();
+									Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} JUMP ENTITY_TRANSIT ENTITY_SKIPPED-OBSTRUCTED_ENTITY", 4);
+									continue;
+								}
+
+								obstructing.Clear();
+
+								// Gather contained child entities
+								MyGamePruningStructure.GetTopmostEntitiesInBox(ref construct_aabb, obstructing);
+								MyJumpGateConstruct subparent;
+								batch_mass = parent.ConstructMass();
+
+								foreach (MyEntity sub_entity in obstructing)
+								{
+									subparent = (sub_entity is MyCubeGrid) ? MyJumpGateModSession.Instance.GetUnclosedJumpGateGrid(sub_entity.EntityId) : null;
+									if (sub_entity == entity || subparent == parent || parent.IsPositionInsideAnySubgrid(sub_entity.WorldMatrix.Translation) == null) continue;
+									batch.Add(sub_entity);
+									batch_mass += (subparent != null) ? subparent.ConstructMass() : ((sub_entity is IMyPlayer) ? ((IMyPlayer) sub_entity).Character.CurrentMass : sub_entity.Physics.Mass);
+								}
+
+								obstructing.Clear();
+							}
+							else
+							{
+								obstruction_aabb = ((IMyEntity) entity).WorldAABB;
+								obstruction_aabb.TransformFast(ref entity_target_matrix, ref obstruction_aabb);
+							}
+
+							// Check terrain obstructions
+							MyGamePruningStructure.GetAllVoxelMapsInBox(ref obstruction_aabb, terrain);
+
+							if (terrain.Any((voxel) => voxel.GetIntersectionWithAABB(ref obstruction_aabb)))
+							{
+								++skipped_entities_count;
+								terrain.Clear();
+								Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} JUMP ENTITY_TRANSIT ENTITY_SKIPPED-OBSTRUCTED_TERRAIN", 4);
+								continue;
+							}
+
+							terrain.Clear();
+
+							// Destroy neccessary construct blocks
+							if (parent != null)
+							{
+								parent.GetCubeGrids(grids);
+
+								foreach (IMyCubeGrid grid in grids)
+								{
+									foreach (IMyShipConnector connector in grid.GetFatBlocks<IMyShipConnector>())
+									{
+										if (connector.IsWorking && connector.Status == Sandbox.ModAPI.Ingame.MyShipConnectorStatus.Connected && this.JumpGateGrid.HasCubeGrid(connector.OtherConnector.CubeGrid))
+										{
+											destroyed.Add(connector.SlimBlock);
+										}
+									}
+
+									foreach (IMyLandingGear gear in grid.GetFatBlocks<IMyLandingGear>())
+									{
+										IMyEntity attached_entity;
+										if (gear.IsWorking && gear.IsLocked && (attached_entity = gear.GetAttachedEntity()) is IMyCubeGrid && this.JumpGateGrid.HasCubeGrid(attached_entity as IMyCubeGrid))
+										{
+											Logger.Debug($"{gear.GetAttachedEntity().EntityId}, {this.JumpSpaceCollisionDetector?.EntityId}");
+											destroyed.Add(gear.SlimBlock);
+										}
+									}
+
+									if (destroyed.Count > 0 && this.JumpGateConfiguration.IgnoreDockedGrids)
+									{
+										++skipped_entities_count;
+										grids.Clear();
+										destroyed.Clear();
+										Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} JUMP ENTITY_TRANSIT ENTITY_SKIPPED_DOCKED", 4);
+										continue;
+									}
+									else
+									{
+										foreach (IMySlimBlock block in destroyed) grid.RemoveDestroyedBlock(block);
+									}
+
+									destroyed.Clear();
+
+									// Shear grid
+									if (!MyJumpGateModSession.Configuration.GeneralConfiguration.LenientJumps)
+									{
+										MyCubeGrid cubegrid = entity as MyCubeGrid;
+										foreach (IMySlimBlock block in this.ShearBlocks) if (block.CubeGrid == grid) grid.RemoveDestroyedBlock(block);
+										destroyed.AddRange(cubegrid.CubeBlocks.Where((block) => !jump_ellipse.IsPointInEllipse(grid.GridIntegerToWorld(((IMySlimBlock) block).Position))));
+										parent.SplitGrid(grid, destroyed);
+										destroyed.Clear();
+									}
+								}
+
+								grids.Clear();
+							}
+
+							// Calculate power
+							double available_power = this.CalculateTotalAvailableInstantPower();
+							double power_scaler = (target_gate == null) ? this.JumpGateConfiguration.UntetheredJumpEnergyCost : 1;
+							double required_power = Math.Round(batch_mass * this.CalculateUnitPowerRequiredForJump(ref default_endpoint), 8) * power_scaler / 1000;
+							Logger.Debug($"TOTAL_MASS={batch_mass}Kg; TOTAL_POWER_MW={required_power}; AVAILABLE_POWER_MW={available_power}", 4);
+
+							if (available_power < required_power)
+							{
+								syphon_entities.Add(new KeyValuePair<List<MyEntity>, BoundingBoxD>(batch, obstruction_aabb));
+								syphon_power += required_power;
+								continue;
+							}
+
+							required_power = Math.Round(this.SyphonGridDrivePower(required_power), 8);
+							Logger.Debug($"REMAINING_POWER_MW={required_power}, AFTER_DRIVES", 4);
+							if (required_power > 0) required_power = Math.Round(this.JumpGateGrid.SyphonConstructCapacitorPower(required_power), 8);
+							Logger.Debug($"REMAINING_POWER_MW={required_power}, AFTER_CAPACITORS", 4);
+
+							if (required_power > 0)
+							{
+								syphon_entities.Add(new KeyValuePair<List<MyEntity>, BoundingBoxD>(batch, obstruction_aabb));
+								syphon_power += required_power;
+								continue;
+							}
+
+							// Teleport batch
+							foreach (MyEntity child in batch)
+							{
+								// Calculate end position and velocity
+								position = MyJumpGateModSession.WorldVectorToLocalVectorP(ref this_matrix, child.WorldMatrix.Translation);
+								position = MyJumpGateModSession.LocalVectorToWorldVectorP(ref target_matrix, position);
+								forward_dir = child.WorldMatrix.Forward - this_matrix.Forward + target_matrix.Forward;
+								up_dir = child.WorldMatrix.Up - this_matrix.Up + target_matrix.Up;
+								MatrixD.CreateWorld(ref position, ref forward_dir, ref up_dir, out entity_target_matrix);
+								child.Teleport(entity_target_matrix);
+								Vector3D velocity = MyJumpGateModSession.WorldVectorToLocalVectorD(ref this_matrix, child.Physics.LinearVelocity);
+								child.Physics.LinearVelocity = MyJumpGateModSession.LocalVectorToWorldVectorD(ref target_matrix, velocity);
+							}
+						}
+
+						if (!MyJumpGateModSession.Configuration.GeneralConfiguration.SyphonReactorPower && syphon_entities.Count == entities_to_jump.Count)
 						{
 							SendJumpResponse(MyJumpFailReason.INSUFFICIENT_POWER, false, null);
 							return;
 						}
+						else if (!MyJumpGateModSession.Configuration.GeneralConfiguration.SyphonReactorPower && syphon_entities.Count > 0)
+						{
+							int final_count = entities_to_jump.Count - skipped_entities_count - syphon_entities.Count;
+							SendJumpResponse((final_count > 0) ? MyJumpFailReason.SUCCESS : MyJumpFailReason.NO_ENTITIES_JUMPED, final_count > 0, $"Jumped {final_count}/{entities_to_jump.Count} entities");
+							return;
+						}
 
 						Action<bool> power_syphon_callback = (power_syphoned) => {
-							if (!power_syphoned)
+							if (!power_syphoned && syphon_entities.Count == entities_to_jump.Count)
 							{
 								SendJumpResponse(MyJumpFailReason.INSUFFICIENT_POWER, false, null);
 								return;
 							}
+							else if (!power_syphoned)
+							{
+								int final_count = entities_to_jump.Count - skipped_entities_count - syphon_entities.Count;
+								SendJumpResponse((final_count > 0) ? MyJumpFailReason.SUCCESS : MyJumpFailReason.NO_ENTITIES_JUMPED, final_count > 0, $"Jumped {final_count}/{entities_to_jump.Count} entities");
+								return;
+							}
 
-							List<MyEntity> obstructing = new List<MyEntity>();
-							List<MyVoxelBase> terrain = new List<MyVoxelBase>();
-							List<IMySlimBlock> destroyed = new List<IMySlimBlock>();
-							List<IMyCubeGrid> grids = new List<IMyCubeGrid>();
-							this.Phase = MyJumpGatePhase.JUMPING;
-							MatrixD this_matrix = this.TrueWorldJumpEllipse.WorldMatrix;
-							Vector3D src_gate_velocity = this.JumpNodeVelocity;
-							Vector3D dst_gate_velocity = (target_gate == null) ? Vector3D.Zero : target_gate.JumpNodeVelocity;
+							MatrixD entity_target_matrix;
 
-							// Jump entities
-							Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} JUMP ENTITY_TRANSIT", 3);
+							foreach (KeyValuePair<List<MyEntity>, BoundingBoxD> pair in syphon_entities)
+							{
+								List<MyEntity> batch = pair.Key;
+								BoundingBoxD obstruction_aabb = pair.Value;
+								MyEntity entity = batch[0];
+								
+								// Construct specific checks
+								if (entity is MyCubeGrid)
+								{
+									MyJumpGateConstruct parent = MyJumpGateModSession.Instance.GetUnclosedJumpGateGrid(entity.EntityId);
+									if (parent == null || parent == this.JumpGateGrid) continue;
+
+									// Check cube grid obstructions
+									MyGamePruningStructure.GetTopmostEntitiesInBox(ref obstruction_aabb, obstructing);
+
+									obstructing.RemoveAll((obstruct) => {
+										if (!(obstruct is MyCubeGrid)) return true;
+										MyJumpGateConstruct obgrid = MyJumpGateModSession.Instance.GetJumpGateGrid(obstruct.EntityId);
+										if (obgrid == null || obgrid.MarkClosed) return true;
+										IEnumerator<IMySlimBlock> enumerator1 = parent.GetConstructBlocks();
+										IEnumerator<IMySlimBlock> enumerator2 = obgrid.GetConstructBlocks();
+
+										do
+										{
+											IMySlimBlock block1 = enumerator1.Current;
+											Vector3D block_pos_1 = block1.CubeGrid.GridIntegerToWorld(block1.Position);
+											block_pos_1 = MyJumpGateModSession.WorldVectorToLocalVectorP(ref this_matrix, block_pos_1);
+											block_pos_1 = MyJumpGateModSession.LocalVectorToWorldVectorP(ref target_matrix, block_pos_1);
+
+											do
+											{
+												IMySlimBlock block2 = enumerator2.Current;
+												BoundingBoxD block2_bounds;
+												block2.GetWorldBoundingBox(out block2_bounds);
+												if (block2_bounds.Contains(block_pos_1) != ContainmentType.Disjoint) return false;
+
+											} while (enumerator2.MoveNext());
+
+											enumerator2.Reset();
+										} while (enumerator1.MoveNext());
+
+										return true;
+									});
+
+									if (obstructing.Count > 0)
+									{
+										++skipped_entities_count;
+										obstructing.Clear();
+										Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} JUMP ENTITY_TRANSIT ENTITY_SKIPPED-OBSTRUCTED_ENTITY", 4);
+										continue;
+									}
+
+									obstructing.Clear();
+								}
+
+								// Check terrain obstructions
+								MyGamePruningStructure.GetAllVoxelMapsInBox(ref obstruction_aabb, terrain);
+
+								if (terrain.Any((voxel) => voxel.GetIntersectionWithAABB(ref obstruction_aabb)))
+								{
+									++skipped_entities_count;
+									terrain.Clear();
+									Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} JUMP ENTITY_TRANSIT ENTITY_SKIPPED-OBSTRUCTED_TERRAIN", 4);
+									continue;
+								}
+
+								terrain.Clear();
+								target_matrix = target_gate?.TrueWorldJumpEllipse.WorldMatrix ?? MatrixD.CreateWorld(endpoint, this_matrix.Forward, this_matrix.Up);
+								src_gate_velocity = this.JumpNodeVelocity;
+								dst_gate_velocity = (target_gate == null) ? Vector3D.Zero : target_gate.JumpNodeVelocity;
+
+								foreach (MyEntity child in batch)
+								{
+									// Calculate end position
+									Vector3D position = MyJumpGateModSession.WorldVectorToLocalVectorP(ref this_matrix, child.WorldMatrix.Translation);
+									position = MyJumpGateModSession.LocalVectorToWorldVectorP(ref target_matrix, position);
+									Vector3D forward_dir = child.WorldMatrix.Forward - this_matrix.Forward + target_matrix.Forward;
+									Vector3D up_dir = child.WorldMatrix.Up - this_matrix.Up + target_matrix.Up;
+									MatrixD.CreateWorld(ref position, ref forward_dir, ref up_dir, out entity_target_matrix);
+									child.Teleport(entity_target_matrix);
+									Vector3D velocity = MyJumpGateModSession.WorldVectorToLocalVectorD(ref this_matrix, child.Physics.LinearVelocity);
+									child.Physics.LinearVelocity = MyJumpGateModSession.LocalVectorToWorldVectorD(ref target_matrix, velocity);
+								}
+							}
 
 							if (dst.WaypointType == MyWaypointType.SERVER)
 							{
@@ -1535,151 +1844,13 @@ namespace IOTA.ModularJumpGates
 							}
 							else if (dst.WaypointType != MyWaypointType.SERVER)
 							{
-								int skipped_entities_count = 0;
-								BoundingEllipsoidD effective_target_ellipse = target_gate?.GetEffectiveJumpEllipse() ?? this.GetEffectiveJumpEllipse();
-								MatrixD target_matrix = target_gate?.TrueWorldJumpEllipse.WorldMatrix ?? MatrixD.Zero;
-
-								for (int i = 0; i < entities_to_jump.Count; ++i)
-								{
-									MyEntity entity = entities_to_jump[i].Key;
-									Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} JUMP_ENTITY={entity.DisplayName} @ {entity.EntityId}", 4);
-
-									if (entity is MyCubeGrid)
-									{
-										MyJumpGateConstruct parent = MyJumpGateModSession.Instance.GetUnclosedJumpGateGrid(entity.EntityId);
-										if (parent == null) continue;
-										parent.GetCubeGrids(grids);
-										
-										foreach (IMyCubeGrid grid in grids)
-										{
-											// Shear constraints attaching this cube grid to this jump gate
-											BoundingBoxD box = grid.WorldAABB;
-											MyGamePruningStructure.GetTopmostEntitiesInBox(ref box, obstructing);
-											MyJumpGateConstruct subparent;
-
-											foreach (MyEntity sub_entity in obstructing)
-											{
-												subparent = (sub_entity is MyCubeGrid) ? MyJumpGateModSession.Instance.GetUnclosedJumpGateGrid(sub_entity.EntityId) : null;
-												if (sub_entity != entity && subparent != parent && MyJumpGateModSession.IsPositionInsideGrid(grid, sub_entity.WorldMatrix.Translation)) entities_to_jump.Add(new KeyValuePair<MyEntity, bool>(sub_entity, sub_entity.Render.Visible));
-											}
-
-											obstructing.Clear();
-
-											foreach (IMyShipConnector connector in grid.GetFatBlocks<IMyShipConnector>())
-											{
-												if (connector.IsWorking && connector.Status == Sandbox.ModAPI.Ingame.MyShipConnectorStatus.Connected && this.JumpGateGrid.HasCubeGrid(connector.OtherConnector.CubeGrid))
-												{
-													destroyed.Add(connector.SlimBlock);
-												}
-											}
-
-											foreach (IMyLandingGear gear in grid.GetFatBlocks<IMyLandingGear>())
-											{
-												IMyEntity attached_entity;
-												if (gear.IsWorking && gear.IsLocked && (attached_entity = gear.GetAttachedEntity()) is IMyCubeGrid && this.JumpGateGrid.HasCubeGrid(attached_entity as IMyCubeGrid))
-												{
-													Logger.Debug($"{gear.GetAttachedEntity().EntityId}, {this.JumpSpaceCollisionDetector?.EntityId}");
-													destroyed.Add(gear.SlimBlock);
-												}
-											}
-
-											if (destroyed.Count > 0 && this.JumpGateConfiguration.IgnoreDockedGrids)
-											{
-												++skipped_entities_count;
-												Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} JUMP ENTITY_TRANSIT ENTITY_SKIPPED_DOCKED", 4);
-												continue;
-											}
-											else
-											{
-												foreach (IMySlimBlock block in destroyed) grid.RemoveDestroyedBlock(block);
-											}
-
-											destroyed.Clear();
-
-											// Shear grid
-											if (!MyJumpGateModSession.Configuration.GeneralConfiguration.LenientJumps)
-											{
-												MyCubeGrid cubegrid = entity as MyCubeGrid;
-												foreach (IMySlimBlock block in this.ShearBlocks) if (block.CubeGrid == grid) grid.RemoveDestroyedBlock(block);
-												destroyed.AddRange(cubegrid.CubeBlocks.Where((block) => !jump_ellipse.IsPointInEllipse(grid.GridIntegerToWorld(((IMySlimBlock) block).Position))));
-												parent.SplitGrid(grid, destroyed);
-												destroyed.Clear();
-											}
-										}
-									}
-
-									// Store and apply local offsets
-									MatrixD new_matrix = entity.WorldMatrix;
-									Vector3D final_velocity = entity.Physics.LinearVelocity;
-
-									if (target_gate != null)
-									{
-										// If applicable, match local rotations between gates
-										Vector3D local_up = MyJumpGateModSession.WorldVectorToLocalVectorD(ref this_matrix, entity.WorldMatrix.Up);
-										Vector3D local_forward = MyJumpGateModSession.WorldVectorToLocalVectorD(ref this_matrix, entity.WorldMatrix.Forward);
-										local_up = MyJumpGateModSession.LocalVectorToWorldVectorD(ref target_matrix, local_up);
-										local_forward = MyJumpGateModSession.LocalVectorToWorldVectorD(ref target_matrix, local_forward);
-
-										// If applicable, match local positions between gates
-										Vector3D local_trans = MyJumpGateModSession.WorldVectorToLocalVectorP(ref this_matrix, entity.WorldMatrix.Translation);
-										local_trans = MyJumpGateModSession.LocalVectorToWorldVectorP(ref target_matrix, local_trans);
-										MatrixD.CreateWorld(ref local_trans, ref local_forward, ref local_up, out new_matrix);
-
-										// If applicable, match local velocities between gates
-										final_velocity = MyJumpGateModSession.WorldVectorToLocalVectorD(ref this_matrix, final_velocity);
-										final_velocity = MyJumpGateModSession.LocalVectorToWorldVectorD(ref target_matrix, final_velocity);
-									}
-									else
-									{
-										// Apply local gate offset to endpoint
-										new_matrix.Translation = endpoint + (entity.WorldMatrix.Translation - jump_node);
-									}
-
-									// Check for collisions at destination
-									BoundingBoxD bounds = ((IMyEntity) entity).LocalAABB;
-									bounds = new BoundingBoxD(MyJumpGateModSession.LocalVectorToWorldVectorP(ref new_matrix, bounds.Min), MyJumpGateModSession.LocalVectorToWorldVectorP(ref new_matrix, bounds.Max));
-									MyGamePruningStructure.GetTopMostEntitiesInBox(ref bounds, obstructing);
-									MyGamePruningStructure.GetAllVoxelMapsInBox(ref bounds, terrain);
-
-									obstructing.RemoveAll((obstruct) => {
-										if (!(obstruct is MyCubeGrid)) return true;
-										MyCubeGrid grid = obstruct as MyCubeGrid;
-										
-										foreach (IMySlimBlock block in grid.CubeBlocks)
-										{
-											Vector3D world_pos = grid.GridIntegerToWorld(block.Position);
-											ContainmentType contains = bounds.Contains(world_pos);
-											if (contains == ContainmentType.Intersects || contains == ContainmentType.Contains) return false;
-										}
-
-										return true;
-									});
-									
-									if (obstructing.Count > 0)
-									{
-										++skipped_entities_count;
-										Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} JUMP ENTITY_TRANSIT ENTITY_SKIPPED-OBSTRUCTED_ENTITY", 4);
-										continue;
-									}
-									else if (terrain.Any((voxel) => voxel.GetIntersectionWithAABB(ref bounds)))
-									{
-										++skipped_entities_count;
-										Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} JUMP ENTITY_TRANSIT ENTITY_SKIPPED-OBSTRUCTED_TERRAIN", 4);
-										continue;
-									}
-
-									obstructing.Clear();
-									terrain.Clear();
-									entity.Teleport(new_matrix);
-									if (target_gate != null) entity.Physics.LinearVelocity = final_velocity;
-								}
 
 								int final_count = entities_to_jump.Count - skipped_entities_count;
 								SendJumpResponse((final_count > 0) ? MyJumpFailReason.SUCCESS : MyJumpFailReason.NO_ENTITIES_JUMPED, final_count > 0, $"Jumped {final_count}/{entities_to_jump.Count} entities");
 							}
 						};
 
-						this.CanDoSyphonGridPower(remaining_power_mw, 180, power_syphon_callback, true);
+						this.CanDoSyphonGridPower(syphon_power, 180, power_syphon_callback, false);
 					}
 					catch (Exception e)
 					{

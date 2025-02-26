@@ -55,11 +55,5 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		[ProtoMember(21)]
 		public string ServerPassword;
 
-		/// <summary>
-		/// The serialized block object builder
-		/// </summary>
-		[ProtoMember(22)]
-		public MyObjectBuilder_EntityBase ObjectBuilder;
-
 	}
 }

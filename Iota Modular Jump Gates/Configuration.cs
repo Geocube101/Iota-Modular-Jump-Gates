@@ -44,7 +44,7 @@ namespace IOTA.ModularJumpGates
 			/// Defaults to 12.5 MW/s
 			/// </summary>
 			[ProtoMember(3, IsRequired = true)]
-			public double MaxLargeCapacitorChargeRateMW = 12.5d;
+			public double MaxLargeCapacitorChargeRateMW = 25d;
 
 			/// <summary>
 			/// The maximum charge rate (in MegaWatts per second) a small grid capacitor can charge at<br />
@@ -53,44 +53,14 @@ namespace IOTA.ModularJumpGates
 			/// Defaults to 2.5 MW/s
 			/// </summary>
 			[ProtoMember(4, IsRequired = true)]
-			public double MaxSmallCapacitorChargeRateMW = 2.5d;
-
-			/// <summary>
-			/// The rate at which a large grid capacitor's charge rate drops<br />
-			/// This value controls the exponent "A" to the following equation:<br />
-			///  ... R = (1 - C) ^ (1 / A)<br />
-			/// Where:<br />
-			///  ... R = The momentary rate of charge<br />
-			///  ... C = The capacitor's charge percentage<br />
-			///  ... A = How quickly this curve falls off (1 is linear)<br />
-			/// Cannot be NaN or Infinity<br />
-			/// Should not be 0<br />
-			/// Defaults to 2.5
-			/// </summary>
-			[ProtoMember(5, IsRequired = true)]
-			public double LargeCapacitorChargeRateFalloff = 2.5d;
-
-			/// <summary>
-			/// The rate at which a small grid capacitor's charge rate drops<br />
-			/// This value controls the exponent "A" to the following equation:<br />
-			///  ... R = (1 - C) ^ (1 / A)<br />
-			/// Where:<br />
-			///  ... R = The momentary rate of charge<br />
-			///  ... C = The capacitor's charge percentage<br />
-			///  ... A = How quickly this curve falls off (1 is linear)<br />
-			/// Cannot be NaN or Infinity<br />
-			/// Should not be 0<br />
-			/// Defaults to 2.5
-			/// </summary>
-			[ProtoMember(6, IsRequired = true)]
-			public double SmallCapacitorChargeRateFalloff = 2.5d;
+			public double MaxSmallCapacitorChargeRateMW = 5d;
 
 			/// <summary>
 			/// The power transfer efficiency of large grid capacitors when charging<br />
 			/// Cannot be NaN, Infinity, negative, or higher than 1<br />
 			/// Defaults to 0.95
 			/// </summary>
-			[ProtoMember(7, IsRequired = true)]
+			[ProtoMember(5, IsRequired = true)]
 			public double LargeCapacitorChargeEfficiency = 0.95;
 
 			/// <summary>
@@ -98,7 +68,7 @@ namespace IOTA.ModularJumpGates
 			/// Cannot be NaN, Infinity, negative, or higher than 1<br />
 			/// Defaults to 0.8
 			/// </summary>
-			[ProtoMember(8, IsRequired = true)]
+			[ProtoMember(6, IsRequired = true)]
 			public double SmallCapacitorChargeEfficiency = 0.8;
 
 			/// <summary>
@@ -106,7 +76,7 @@ namespace IOTA.ModularJumpGates
 			/// Cannot be NaN, Infinity, negative, or higher than 1<br />
 			/// Defaults to 0.75
 			/// </summary>
-			[ProtoMember(9, IsRequired = true)]
+			[ProtoMember(7, IsRequired = true)]
 			public double LargeCapacitorDischargeEfficiency = 0.75;
 
 			/// <summary>
@@ -114,7 +84,7 @@ namespace IOTA.ModularJumpGates
 			/// Cannot be NaN, Infinity, negative, or higher than 1<br />
 			/// Defaults to 0.5
 			/// </summary>
-			[ProtoMember(10, IsRequired = true)]
+			[ProtoMember(8, IsRequired = true)]
 			public double SmallCapacitorDischargeEfficiency = 0.5;
 
 			/// <summary>
@@ -127,8 +97,6 @@ namespace IOTA.ModularJumpGates
 				this.MaxSmallCapacitorChargeMW = ValidateDoubleValue(this.MaxSmallCapacitorChargeMW, defaults.MaxSmallCapacitorChargeMW, 1);
 				this.MaxLargeCapacitorChargeRateMW = ValidateDoubleValue(this.MaxLargeCapacitorChargeRateMW, defaults.MaxLargeCapacitorChargeRateMW, 0);
 				this.MaxSmallCapacitorChargeRateMW = ValidateDoubleValue(this.MaxSmallCapacitorChargeRateMW, defaults.MaxSmallCapacitorChargeRateMW, 0);
-				this.LargeCapacitorChargeRateFalloff = ValidateDoubleValue(this.LargeCapacitorChargeRateFalloff, defaults.LargeCapacitorChargeRateFalloff);
-				this.SmallCapacitorChargeRateFalloff = ValidateDoubleValue(this.SmallCapacitorChargeRateFalloff, defaults.SmallCapacitorChargeRateFalloff);
 				this.LargeCapacitorChargeEfficiency = ValidateDoubleValue(this.LargeCapacitorChargeEfficiency, defaults.LargeCapacitorChargeEfficiency, 0, 1);
 				this.SmallCapacitorChargeEfficiency = ValidateDoubleValue(this.SmallCapacitorChargeEfficiency, defaults.SmallCapacitorChargeEfficiency, 0, 1);
 				this.LargeCapacitorDischargeEfficiency = ValidateDoubleValue(this.LargeCapacitorDischargeEfficiency, defaults.LargeCapacitorDischargeEfficiency, 0, 1);
@@ -206,42 +174,12 @@ namespace IOTA.ModularJumpGates
 			public double MaxSmallDriveChargeRateMW = 2d;
 
 			/// <summary>
-			/// The rate at which a large grid drive's charge rate drops<br />
-			/// This value controls the exponent "A" to the following equation:<br />
-			///  ... R = (1 - C) ^ (1 / A)<br />
-			/// Where:<br />
-			///  ... R = The momentary rate of charge<br />
-			///  ... C = The drive's charge percentage<br />
-			///  ... A = How quickly this curve falls off (1 is linear)<br />
-			/// Cannot be NaN or Infinity<br />
-			/// Should not be 0<br />
-			/// Defaults to 2.5<br />
-			/// </summary>
-			[ProtoMember(9, IsRequired = true)]
-			public double LargeDriveChargeRateFalloff = 2.5d;
-
-			/// <summary>
-			/// The rate at which a small grid drive's charge rate drops<br />
-			/// This value controls the exponent "A" to the following equation:<br />
-			///  ... R = (1 - C) ^ (1 / A)<br />
-			/// Where:<br />
-			///  ... R = The momentary rate of charge<br />
-			///  ... C = The drive's charge percentage<br />
-			///  ... A = How quickly this curve falls off (1 is linear)<br />
-			/// Cannot be NaN or Infinity<br />
-			/// Should not be 0<br />
-			/// Defaults to 2.5<br />
-			/// </summary>
-			[ProtoMember(10, IsRequired = true)]
-			public double SmallDriveChargeRateFalloff = 2.5d;
-
-			/// <summary>
 			/// The base input wattage (in MegaWatts) for large grid drives
 			/// Cannot be NaN or Infinity<br />
 			/// Should not be 0<br />
 			/// Defaults to 100<br />
 			/// </summary>
-			[ProtoMember(11, IsRequired = true)]
+			[ProtoMember(9, IsRequired = true)]
 			public double LargeDriveInputWattageMW = 100d;
 
 			/// <summary>
@@ -250,8 +188,24 @@ namespace IOTA.ModularJumpGates
 			/// Should not be 0<br />
 			/// Defaults to 25<br />
 			/// </summary>
-			[ProtoMember(12, IsRequired = true)]
+			[ProtoMember(10, IsRequired = true)]
 			public double SmallDriveInputWattageMW = 25d;
+
+			/// <summary>
+			/// The power transfer efficiency of large grid drives when charging<br />
+			/// Cannot be NaN, Infinity, negative, or higher than 1<br />
+			/// Defaults to 0.99
+			/// </summary>
+			[ProtoMember(11, IsRequired = true)]
+			public double LargeDriveChargeEfficiency = 0.99;
+
+			/// <summary>
+			/// The power transfer efficiency of small grid drives when charging<br />
+			/// Cannot be NaN, Infinity, negative, or higher than 1<br />
+			/// Defaults to 0.95
+			/// </summary>
+			[ProtoMember(12, IsRequired = true)]
+			public double SmallDriveChargeEfficiency = 0.95;
 
 			/// <summary>
 			/// Validates all values
@@ -267,10 +221,10 @@ namespace IOTA.ModularJumpGates
 				this.MaxSmallDriveChargeMW = ValidateDoubleValue(this.MaxSmallDriveChargeMW, defaults.MaxSmallDriveChargeMW, 1);
 				this.MaxLargeDriveChargeRateMW = ValidateDoubleValue(this.MaxLargeDriveChargeRateMW, defaults.MaxLargeDriveChargeRateMW, 0);
 				this.MaxSmallDriveChargeRateMW = ValidateDoubleValue(this.MaxSmallDriveChargeRateMW, defaults.MaxSmallDriveChargeRateMW, 0);
-				this.LargeDriveChargeRateFalloff = ValidateDoubleValue(this.LargeDriveChargeRateFalloff, defaults.LargeDriveChargeRateFalloff);
-				this.SmallDriveChargeRateFalloff = ValidateDoubleValue(this.SmallDriveChargeRateFalloff, defaults.SmallDriveChargeRateFalloff);
-				this.LargeDriveInputWattageMW = ValidateDoubleValue(this.LargeDriveInputWattageMW, defaults.LargeDriveChargeRateFalloff, 0);
+				this.LargeDriveInputWattageMW = ValidateDoubleValue(this.LargeDriveInputWattageMW, defaults.LargeDriveInputWattageMW, 0);
 				this.SmallDriveInputWattageMW = ValidateDoubleValue(this.SmallDriveInputWattageMW, defaults.SmallDriveInputWattageMW, 0);
+				this.LargeDriveChargeEfficiency = ValidateDoubleValue(this.LargeDriveChargeEfficiency, defaults.LargeDriveChargeEfficiency, 0, 1);
+				this.SmallDriveChargeEfficiency = ValidateDoubleValue(this.SmallDriveChargeEfficiency, defaults.SmallDriveChargeEfficiency, 0, 1);
 			}
 		}
 
@@ -489,6 +443,12 @@ namespace IOTA.ModularJumpGates
 			public uint MaxConcurrentJumps = MyNetworkInterface.IsMultiplayerServer ? 50u : 0u;
 
 			/// <summary>
+			/// Whether ships jumping to an untethered destination have randomness applied to each ship or once per the entire fleet
+			/// </summary>
+			[ProtoMember(23, IsRequired = true)]
+			public bool ConfineUntetheredSpread = false;
+
+			/// <summary>
 			/// Validates all values
 			/// </summary>
 			internal void Validate()
@@ -642,17 +602,6 @@ namespace IOTA.ModularJumpGates
 			public readonly double MaxCapacitorChargeRateMW;
 
 			/// <summary>
-			/// The rate at which this capacitor's charge rate drops<br />
-			/// This value controls the exponent "A" to the following equation:<br />
-			///  ... R = (1 - C) ^ (1 / A)<br />
-			/// Where:<br />
-			///  ... R = The momentary rate of charge<br />
-			///  ... C = The capacitor's charge percentage<br />
-			///  ... A = How quickly this curve falls off (1 is linear)<br />
-			///  </summary>
-			public readonly double CapacitorChargeRateFalloff;
-
-			/// <summary>
 			/// The power transfer efficiency of this capacitor when charging
 			/// </summary>
 			public readonly double CapacitorChargeEfficiency;
@@ -669,7 +618,6 @@ namespace IOTA.ModularJumpGates
 				{
 					this.MaxCapacitorChargeMW = config.MaxLargeCapacitorChargeMW;
 					this.MaxCapacitorChargeRateMW = config.MaxLargeCapacitorChargeRateMW;
-					this.CapacitorChargeRateFalloff = config.LargeCapacitorChargeRateFalloff;
 					this.CapacitorChargeEfficiency = config.LargeCapacitorChargeEfficiency;
 					this.CapacitorDischargeEfficiency = config.LargeCapacitorDischargeEfficiency;
 				}
@@ -677,7 +625,6 @@ namespace IOTA.ModularJumpGates
 				{
 					this.MaxCapacitorChargeMW = config.MaxSmallCapacitorChargeMW;
 					this.MaxCapacitorChargeRateMW = config.MaxSmallCapacitorChargeRateMW;
-					this.CapacitorChargeRateFalloff = config.SmallCapacitorChargeRateFalloff;
 					this.CapacitorChargeEfficiency = config.SmallCapacitorChargeEfficiency;
 					this.CapacitorDischargeEfficiency = config.SmallCapacitorDischargeEfficiency;
 				}
@@ -688,7 +635,6 @@ namespace IOTA.ModularJumpGates
 				return new Dictionary<string, object> {
 					["MaxCapacitorChargeMW"] = this.MaxCapacitorChargeMW,
 					["MaxCapacitorChargeRateMW"] = this.MaxCapacitorChargeRateMW,
-					["CapacitorChargeRateFalloff"] = this.CapacitorChargeRateFalloff,
 					["CapacitorChargeEfficiency"] = this.CapacitorChargeEfficiency,
 					["CapacitorDischargeEfficiency"] = this.CapacitorDischargeEfficiency,
 				};
@@ -718,20 +664,14 @@ namespace IOTA.ModularJumpGates
 			public readonly double MaxDriveChargeRateMW;
 
 			/// <summary>
-			/// The rate at which this drive's charge rate drops<br />
-			/// This value controls the exponent "A" to the following equation:<br />
-			///  ... R = (1 - C) ^ (1 / A)<br />
-			/// Where:<br />
-			///  ... R = The momentary rate of charge<br />
-			///  ... C = The drive's charge percentage<br />
-			///  ... A = How quickly this curve falls off (1 is linear)
-			/// </summary>
-			public readonly double DriveChargeRateFalloff;
-
-			/// <summary>
 			/// The base input wattage (in Mega-Watts) for this drive
 			/// </summary>
 			public readonly double BaseInputWattageMW;
+
+			/// <summary>
+			/// The power transfer efficiency of this drive when charging
+			/// </summary>
+			public readonly double DriveChargeEfficiency;
 
 			internal LocalDriveConfiguration(MyCubeBlockBase block, DriveConfigurationSchema config)
 			{
@@ -742,8 +682,8 @@ namespace IOTA.ModularJumpGates
 					this.DriveRaycastWidth = config.LargeDriveRaycastWidth;
 					this.MaxDriveChargeMW = config.MaxLargeDriveChargeMW;
 					this.MaxDriveChargeRateMW = config.MaxLargeDriveChargeRateMW;
-					this.DriveChargeRateFalloff = config.LargeDriveChargeRateFalloff;
 					this.BaseInputWattageMW = config.LargeDriveInputWattageMW;
+					this.DriveChargeEfficiency = config.LargeDriveChargeEfficiency;
 				}
 				else
 				{
@@ -751,8 +691,8 @@ namespace IOTA.ModularJumpGates
 					this.DriveRaycastWidth = config.SmallDriveRaycastWidth;
 					this.MaxDriveChargeMW = config.MaxSmallDriveChargeMW;
 					this.MaxDriveChargeRateMW = config.MaxSmallDriveChargeRateMW;
-					this.DriveChargeRateFalloff = config.SmallDriveChargeRateFalloff;
 					this.BaseInputWattageMW = config.SmallDriveInputWattageMW;
+					this.DriveChargeEfficiency = config.SmallDriveChargeEfficiency;
 				}
 			}
 
@@ -763,8 +703,8 @@ namespace IOTA.ModularJumpGates
 					["DriveRaycastWidth"] = this.DriveRaycastWidth,
 					["MaxDriveChargeMW"] = this.MaxDriveChargeMW,
 					["MaxDriveChargeRateMW"] = this.MaxDriveChargeRateMW,
-					["DriveChargeRateFalloff"] = this.DriveChargeRateFalloff,
 					["BaseInputWattageMW"] = this.BaseInputWattageMW,
+					["DriveChargeEfficiency"] = this.DriveChargeEfficiency,
 				};
 			}
 		}
@@ -844,6 +784,11 @@ namespace IOTA.ModularJumpGates
 			/// </summary>
 			public readonly uint MaxConcurrentJumps;
 
+			/// <summary>
+			/// Whether ships jumping to an untethered destination have randomness applied to each ship or once per the entire fleet
+			/// </summary>
+			public readonly bool ConfineUntetheredSpread;
+
 			internal LocalJumpGateConfiguration(MyJumpGate jump_gate, JumpGateConfigurationSchema config)
 			{
 				if (jump_gate == null) throw new ArgumentException("The specified jump gate is null");
@@ -878,6 +823,7 @@ namespace IOTA.ModularJumpGates
 
 				this.IgnoreDockedGrids = config.IgnoreDockedGrids;
 				this.MaxConcurrentJumps = config.MaxConcurrentJumps;
+				this.ConfineUntetheredSpread = config.ConfineUntetheredSpread;
 			}
 
 			internal Dictionary<string, object> ToDictionary()
@@ -896,6 +842,7 @@ namespace IOTA.ModularJumpGates
 					["IgnoreDockedGrids"] = this.IgnoreDockedGrids,
 					["ChargingDriveEffectorForceN"] = this.ChargingDriveEffectorForceN,
 					["MaxConcurrentJumps"] = this.MaxConcurrentJumps,
+					["ConfineUntetheredSpread"] = this.ConfineUntetheredSpread,
 				};
 			}
 		}

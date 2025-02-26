@@ -23,10 +23,7 @@ namespace IOTA.ModularJumpGates.Animations
 {
 	internal partial class AnimationDefinitions
 	{
-		public static void RegisterAnimations(params AnimationDef[] animations)
-		{
-			foreach (AnimationDef animation in animations) MyAnimationHandler.AddAnimationDefinition(animation);
-		}
+		
 	}
 }
 
@@ -725,12 +722,10 @@ namespace IOTA.ModularJumpGates
 				case RatioTypeEnum.NONE:
 					if (this.ClampResult)
 					{
-						Vector4D min, max;
-						Vector4DExt.MinMax(ref this.LowerClamp, ref this.UpperClamp, out min, out max);
-						double x = MathHelper.Clamp(result.X, min.X, max.X);
-						double y = MathHelper.Clamp(result.Y, min.Y, max.Y);
-						double z = MathHelper.Clamp(result.Z, min.Z, max.Z);
-						double w = MathHelper.Clamp(result.W, min.W, max.W);
+						double x = MathHelper.Clamp(result.X, Math.Min(this.LowerClamp.X, this.UpperClamp.X), Math.Max(this.LowerClamp.X, this.UpperClamp.X));
+						double y = MathHelper.Clamp(result.Y, Math.Min(this.LowerClamp.Y, this.UpperClamp.Y), Math.Max(this.LowerClamp.Y, this.UpperClamp.Y));
+						double z = MathHelper.Clamp(result.Z, Math.Min(this.LowerClamp.Z, this.UpperClamp.Z), Math.Max(this.LowerClamp.Z, this.UpperClamp.Z));
+						double w = MathHelper.Clamp(result.W, Math.Min(this.LowerClamp.W, this.UpperClamp.W), Math.Max(this.LowerClamp.W, this.UpperClamp.W));
 						return new Vector4D(x, y, z, w);
 					}
 					else return result;
