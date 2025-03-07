@@ -257,6 +257,11 @@ namespace IOTA.ModularJumpGates
 		GATE_ENDPOINT_NORMAL,
 
 		/// <summary>
+		/// Particles are oriented according to the gate's endpoint and not affected by the gate's normal override
+		/// </summary>
+		GATE_TRUE_ENDPOINT_NORMAL,
+
+		/// <summary>
 		/// Particles are oriented according to the gate's primary plane
 		/// </summary>
 		GATE_DRIVE_NORMAL,
@@ -1297,6 +1302,7 @@ namespace IOTA.ModularJumpGates
 			bool null_orientation = particle_orientation == null || particle_orientation.ParticleOrientation == ParticleOrientationEnum.GATE_ENDPOINT_NORMAL;
 			if (null_orientation && is_anti_node && target_gate != null) target_gate.GetWorldMatrix(out matrix, true, true);
 			else if (null_orientation) gate.GetWorldMatrix(out matrix, true, (is_anti_node) ? target_gate != null : true);
+			else if (particle_orientation.ParticleOrientation == ParticleOrientationEnum.GATE_TRUE_ENDPOINT_NORMAL) gate.GetWorldMatrix(out matrix, true, false);
 			else if (particle_orientation.ParticleOrientation == ParticleOrientationEnum.GATE_DRIVE_NORMAL) matrix = particle_orientation.WorldMatrix * gate.GetWorldMatrix(false, false);
 			else if (particle_orientation.ParticleOrientation == ParticleOrientationEnum.ANTIGATE_DRIVE_NORMAL) matrix = particle_orientation.WorldMatrix * (target_gate?.GetWorldMatrix(true, true) ?? gate.GetWorldMatrix(true, false));
 			else
@@ -2002,28 +2008,34 @@ namespace IOTA.ModularJumpGates
 		public ParticleDef[] NodeParticles = null;
 
 		/// <summary>
+		/// The travel particle effect shown to entities within the jump space
+		/// </summary>
+		[ProtoMember(6, IsRequired = true)]
+		public ParticleDef[] TravelEffect = null;
+
+		/// <summary>
 		/// The list of SoundDef definitions<br />
 		/// These sounds will be played once at the gate's jump node
 		/// </summary>
-		[ProtoMember(6, IsRequired = true)]
+		[ProtoMember(7, IsRequired = true)]
 		public SoundDef[] NodeSounds = null;
 
 		/// <summary>
 		/// The BeamPulseDef defining the beam pulse for this gate
 		/// </summary>
-		[ProtoMember(7, IsRequired = true)]
+		[ProtoMember(8, IsRequired = true)]
 		public BeamPulseDef BeamPulse = null;
 
 		/// <summary>
 		/// The DriveEmissiveColorDef defining the color for this gate's jump drive emitter emissives
 		/// </summary>
-		[ProtoMember(8, IsRequired = true)]
+		[ProtoMember(9, IsRequired = true)]
 		public DriveEmissiveColorDef DriveEmissiveColor = null;
 
 		/// <summary>
 		/// The NodePhysicsDef defining the attractor forces for this gate's jump node
 		/// </summary>
-		[ProtoMember(9, IsRequired = true)]
+		[ProtoMember(10, IsRequired = true)]
 		public NodePhysicsDef NodePhysics = null;
 
 		/// <summary>
@@ -2031,7 +2043,7 @@ namespace IOTA.ModularJumpGates
 		/// These particles will be played once at the gate's anti-node<br />
 		/// <i>The anti-node is the region at the endpoint of this gate</i>
 		/// </summary>
-		[ProtoMember(10, IsRequired = true)]
+		[ProtoMember(11, IsRequired = true)]
 		public ParticleDef[] AntiNodeParticles = null;
 
 		/// <summary>
@@ -2039,14 +2051,14 @@ namespace IOTA.ModularJumpGates
 		/// These sounds will be played once at the gate's anti-node<br />
 		/// <i>The anti-node is the region at the endpoint of this gate</i>
 		/// </summary>
-		[ProtoMember(11, IsRequired = true)]
+		[ProtoMember(12, IsRequired = true)]
 		public SoundDef[] AntiNodeSounds = null;
 
 		/// <summary>
 		/// The NodePhysicsDef defining the attractor forces for this gate's anti-ode<br />
 		/// <i>The anti-node is the region at the endpoint of this gate</i>
 		/// </summary>
-		[ProtoMember(12, IsRequired = true)]
+		[ProtoMember(13, IsRequired = true)]
 		public NodePhysicsDef AntiNodePhysics = null;
 		#endregion
 
@@ -2322,11 +2334,6 @@ namespace IOTA.ModularJumpGates
 		private List<byte> ParticleTransientIDs = null;
 
 		/// <summary>
-		/// The particle definition
-		/// </summary>
-		private ParticleDef ParticleDefinition;
-
-		/// <summary>
 		/// The calling jump gate
 		/// </summary>
 		private MyJumpGate JumpGate;
@@ -2340,6 +2347,13 @@ namespace IOTA.ModularJumpGates
 		/// The calling jump gate's controller settings
 		/// </summary>
 		private MyJumpGateController.MyControllerBlockSettingsStruct ControllerSettings;
+		#endregion
+
+		#region Public Variables
+		/// <summary>
+		/// The particle definition
+		/// </summary>
+		public ParticleDef ParticleDefinition { get; private set; }
 		#endregion
 
 		#region Constructors
@@ -2417,7 +2431,7 @@ namespace IOTA.ModularJumpGates
 				if (current_tick == this.ParticleDefinition.StartTime) foreach (MyParticleEffect effect in this.ParticleEffects) effect.Play();
 				ushort local_tick = (ushort) (current_tick - this.ParticleDefinition.StartTime);
 				Vector3D rotations_per_second = Vector3D.Zero;
-				Vector3D offset = Vector3D.Zero;
+				Vector3D offset = this.ParticleDefinition.ParticleOffset;
 				Vector4D rps, off;
 
 				float birth_mp = (float) AttributeAnimationDef.GetAnimatedDoubleValue(this.ParticleDefinition.Animations?.ParticleBirthAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, this_entity?.WorldMatrix.Translation, 1);
@@ -2434,7 +2448,7 @@ namespace IOTA.ModularJumpGates
 				rps = AttributeAnimationDef.GetAnimatedVectorValue(this.ParticleDefinition.Animations?.ParticleRotationSpeedAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, this_entity?.WorldMatrix.Translation, Vector4D.Zero);
 				rotations_per_second = new Vector3D(rps.X, rps.Y, rps.Z) * 360d / 60d * (Math.PI / 180d);
 
-				off = AttributeAnimationDef.GetAnimatedVectorValue(this.ParticleDefinition.Animations?.ParticleOffsetAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, this_entity?.WorldMatrix.Translation, Vector4D.Zero);
+				off = AttributeAnimationDef.GetAnimatedVectorValue(this.ParticleDefinition.Animations?.ParticleOffsetAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, this_entity?.WorldMatrix.Translation, new Vector4D(offset, 0));
 				offset = new Vector3D(off.X, off.Y, off.Z);
 
 				MatrixD base_matrix = source ?? ParticleOrientationDef.GetJumpGateMatrix(this.JumpGate, this.TargetGate, this.IsAntiNode, ref endpoint, this.ParticleDefinition.ParticleOrientation);
@@ -2533,11 +2547,6 @@ namespace IOTA.ModularJumpGates
 		private List<ulong?> SoundIDs = null;
 
 		/// <summary>
-		/// The sound definition
-		/// </summary>
-		private SoundDef SoundDefinition;
-
-		/// <summary>
 		/// The calling jump gate
 		/// </summary>
 		private MyJumpGate JumpGate;
@@ -2546,6 +2555,13 @@ namespace IOTA.ModularJumpGates
 		/// The targeted jump gate or null
 		/// </summary>
 		private MyJumpGate TargetGate;
+		#endregion
+
+		#region Public Variables
+		/// <summary>
+		/// The sound definition
+		/// </summary>
+		public SoundDef SoundDefinition { get; private set; }
 		#endregion
 
 		#region Constructors
@@ -2634,11 +2650,6 @@ namespace IOTA.ModularJumpGates
 	{
 		#region Private Variables
 		/// <summary>
-		/// The beam pulse definition
-		/// </summary>
-		private BeamPulseDef BeamPulseDefinition;
-
-		/// <summary>
 		/// The duration of this beam pulse effect in game ticks
 		/// </summary>
 		private readonly ushort Duration;
@@ -2662,6 +2673,13 @@ namespace IOTA.ModularJumpGates
 		/// The beam material
 		/// </summary>
 		private MyStringId? BeamMaterial = null;
+		#endregion
+
+		#region Public Variables
+		/// <summary>
+		/// The beam pulse definition
+		/// </summary>
+		public BeamPulseDef BeamPulseDefinition { get; private set; }
 		#endregion
 
 		#region Constructors
@@ -2768,11 +2786,6 @@ namespace IOTA.ModularJumpGates
 	{
 		#region Private Variables
 		/// <summary>
-		/// The emitter emissive color definition
-		/// </summary>
-		private readonly DriveEmissiveColorDef DriveEmissiveColorDef;
-
-		/// <summary>
 		/// The duration of this drive emissive effect in game ticks
 		/// </summary>
 		private readonly ushort Duration;
@@ -2796,6 +2809,13 @@ namespace IOTA.ModularJumpGates
 		/// Map mapping all drives to animate with their initial emitter emissive colors
 		/// </summary>
 		private readonly Dictionary<long, Color> InitialDriveColors = new Dictionary<long, Color>();
+		#endregion
+
+		#region Public Variables
+		/// <summary>
+		/// The emitter emissive color definition
+		/// </summary>
+		public DriveEmissiveColorDef DriveEmissiveColorDef { get; private set; }
 		#endregion
 
 		#region Constructors
@@ -2862,6 +2882,7 @@ namespace IOTA.ModularJumpGates
 			this.JumpGate = null;
 			this.TargetGate = null;
 			this.ControllerSettings = null;
+			this.DriveEmissiveColorDef = null;
 		}
 		#endregion
 	}
@@ -2883,11 +2904,6 @@ namespace IOTA.ModularJumpGates
 		private readonly ushort Duration;
 
 		/// <summary>
-		/// The node physics definition
-		/// </summary>
-		private NodePhysicsDef NodePhysicsDefinition;
-
-		/// <summary>
 		/// The calling jump gate
 		/// </summary>
 		private MyJumpGate JumpGate;
@@ -2896,6 +2912,13 @@ namespace IOTA.ModularJumpGates
 		/// The targeted jump gate or null
 		/// </summary>
 		private MyJumpGate TargetGate;
+		#endregion
+
+		#region Public Variables
+		/// <summary>
+		/// The node physics definition
+		/// </summary>
+		public NodePhysicsDef NodePhysicsDefinition { get; private set; }
 		#endregion
 
 		#region Constructors
@@ -3256,11 +3279,11 @@ namespace IOTA.ModularJumpGates
 
 	internal class MyJumpGateJumpingAnimation : MyAnimation
 	{
-		#region Private Variables
+		#region Public Variables
 		/// <summary>
 		/// The animation definition for the "jumping/charging" animation
 		/// </summary>
-		private JumpGateJumpingAnimationDef AnimationDefinition;
+		public JumpGateJumpingAnimationDef AnimationDefinition { get; private set; }
 		#endregion
 
 		#region Constructors
@@ -3402,14 +3425,26 @@ namespace IOTA.ModularJumpGates
 	{
 		#region Private Variables
 		/// <summary>
-		/// The animation definition for the "jumped" animation
-		/// </summary>
-		private JumpGateJumpedAnimationDef AnimationDefinition;
-
-		/// <summary>
 		/// The beam pulse definition
 		/// </summary>
 		private BeamPulse Beam;
+
+		/// <summary>
+		/// The travel particle effects
+		/// </summary>
+		private List<Particle> TravelParticles = null;
+
+		/// <summary>
+		/// A list of the attached jump gate's batch entities
+		/// </summary>
+		private List<MyEntity> JumpedEntities = new List<MyEntity>();
+		#endregion
+
+		#region Public Variables
+		/// <summary>
+		/// The animation definition for the "jumped" animation
+		/// </summary>
+		public JumpGateJumpedAnimationDef AnimationDefinition { get; private set; }
 		#endregion
 
 		#region Constructors
@@ -3436,7 +3471,7 @@ namespace IOTA.ModularJumpGates
 			if (def.NodeSounds != null) foreach (SoundDef sound_def in def.NodeSounds) this.NodeSounds.Add(new Sound(sound_def, def.Duration, jump_gate, target_gate, false));
 			if (def.AntiNodeSounds != null) foreach (SoundDef sound_def in def.AntiNodeSounds) this.AntiNodeSounds.Add(new Sound(sound_def, def.Duration, jump_gate, target_gate, true));
 			if (def.NodeParticles != null) foreach (ParticleDef particle_def in def.NodeParticles) this.NodeParticles.Add(new Particle(particle_def, def.Duration, jump_gate, target_gate, controller_settings, ParticleOrientationDef.GetJumpGateMatrix(jump_gate, target_gate, false, ref endpoint, particle_def.ParticleOrientation), jump_gate.WorldJumpNode, false));
-			if (def.AntiNodeParticles != null) foreach (ParticleDef particle_def in def.AntiNodeParticles) this.AntiNodeParticles.Add(new Particle(particle_def, def.Duration, jump_gate, target_gate, controller_settings, ParticleOrientationDef.GetJumpGateMatrix(jump_gate, target_gate, true, ref anti_node, particle_def.ParticleOrientation), anti_node, true)); ;
+			if (def.AntiNodeParticles != null) foreach (ParticleDef particle_def in def.AntiNodeParticles) this.AntiNodeParticles.Add(new Particle(particle_def, def.Duration, jump_gate, target_gate, controller_settings, ParticleOrientationDef.GetJumpGateMatrix(jump_gate, target_gate, true, ref anti_node, particle_def.ParticleOrientation), anti_node, true));
 		}
 		#endregion
 
@@ -3475,7 +3510,30 @@ namespace IOTA.ModularJumpGates
 
 					this.ClosedEntities.Clear();
 				}
+				
+				MyEntity controller = (MyNetworkInterface.IsDedicatedMultiplayerServer) ? null : MyAPIGateway.Session.CameraController?.Entity;
+				EntityBatch batch = this.JumpGate.GetEntityBatchFromEntity(controller);
 
+				if (batch == null && this.TravelParticles != null)
+				{
+					foreach (Particle particle in this.TravelParticles) particle.Stop();
+					this.TravelParticles.Clear();
+					this.TravelParticles = null;
+				}
+				else if (batch != null && this.AnimationDefinition.TravelEffect != null && (this.JumpType == MyJumpTypeEnum.STANDARD || this.JumpType == MyJumpTypeEnum.OUTBOUND_VOID))
+				{
+					ushort duration = this.Beam?.BeamPulseDefinition?.Duration ?? this.AnimationDefinition.Duration;
+					MyEntity parent = batch.Parent;
+					this.TravelParticles = this.TravelParticles ?? this.AnimationDefinition.TravelEffect.Select((particle) => new Particle(particle, duration, this.JumpGate, this.TargetGate, this.ControllerSettings, parent.WorldMatrix, parent.WorldMatrix.Translation, false)).ToList();
+
+					foreach (Particle particle in this.TravelParticles)
+					{
+						MatrixD source = ParticleOrientationDef.GetJumpGateMatrix(this.JumpGate, this.TargetGate, false, ref endpoint, particle.ParticleDefinition.ParticleOrientation);
+						source.Translation = parent.WorldMatrix.Translation;
+						particle.Tick(this.CurrentTick, source, jump_gate_drives, this.JumpedEntities, ref endpoint, parent);
+					}
+				}
+				
 				if (this.AnimationDefinition.PerDriveParticles != null && jump_gate_drives != null && (this.JumpType == MyJumpTypeEnum.STANDARD || this.JumpType == MyJumpTypeEnum.OUTBOUND_VOID))
 				{
 					this.ClosedDrives.AddRange(this.PerDriveParticles.Keys);
@@ -3550,8 +3608,23 @@ namespace IOTA.ModularJumpGates
 
 		public override void Clean(bool full_close = true)
 		{
-			this.Beam?.Clean();
-			this.Beam = null;
+			foreach (Particle particle in this.TravelParticles)
+			{
+				if (full_close) particle.Clean();
+				else particle.Stop();
+			}
+
+			this.TravelParticles.Clear();
+			this.JumpedEntities.Clear();
+			this.TravelParticles = null;
+
+			if (full_close)
+			{
+				this.Beam?.Clean();
+				this.Beam = null;
+				this.JumpedEntities = null;
+			}
+
 			base.Clean(full_close);
 		}
 		#endregion
@@ -3559,11 +3632,11 @@ namespace IOTA.ModularJumpGates
 
 	internal class MyJumpGateFailedAnimation : MyAnimation
 	{
-		#region Private Variables
+		#region Public Variables
 		/// <summary>
 		/// The animation definition for the "failed" animation
 		/// </summary>
-		private JumpGateFailedAnimationDef AnimationDefinition;
+		public JumpGateFailedAnimationDef AnimationDefinition { get; private set; }
 		#endregion
 
 		#region Constructors
@@ -3721,21 +3794,6 @@ namespace IOTA.ModularJumpGates
 		private MyJumpTypeEnum GateJumpType;
 
 		/// <summary>
-		/// The "jumping/charging" animation definition
-		/// </summary>
-		private JumpGateJumpingAnimationDef GateJumpingAnimationDef;
-
-		/// <summary>
-		/// The "jumped" animation definition
-		/// </summary>
-		private JumpGateJumpedAnimationDef GateJumpedAnimationDef;
-
-		/// <summary>
-		/// The "failed" animation definition
-		/// </summary>
-		private JumpGateFailedAnimationDef GateFailedAnimationDef;
-
-		/// <summary>
 		/// The "jumping/charging" animation
 		/// </summary>
 		private MyJumpGateJumpingAnimation GateJumpingAnimation;
@@ -3778,6 +3836,21 @@ namespace IOTA.ModularJumpGates
 		/// The controller settings of the targeted jump gate or null
 		/// </summary>
 		public MyJumpGateController.MyControllerBlockSettingsStruct TargetControllerSettings { get; private set; }
+
+		/// <summary>
+		/// The "jumping/charging" animation definition
+		/// </summary>
+		public JumpGateJumpingAnimationDef GateJumpingAnimationDef { get; private set; }
+
+		/// <summary>
+		/// The "jumped" animation definition
+		/// </summary>
+		public JumpGateJumpedAnimationDef GateJumpedAnimationDef { get; private set; }
+
+		/// <summary>
+		/// The "failed" animation definition
+		/// </summary>
+		public JumpGateFailedAnimationDef GateFailedAnimationDef { get; private set; }
 
 		/// <summary>
 		/// Whether this animation can be cancelled immediatly<br />
@@ -3929,10 +4002,9 @@ namespace IOTA.ModularJumpGates
 			this.ActiveAnimationIndex = index;
 			if ((this.JumpGate?.Closed ?? true) || (this.JumpGate?.JumpGateGrid?.Closed ?? true)) return;
 			List<MyJumpGateDrive> drives = null;
-			List<MyEntity> entities = null;
 			this.JumpGate.GetJumpGateDrives(this.TEMP_JumpGateDrives);
-			this.JumpGate.GetEntitiesInJumpSpace(this.TEMP_JumpGateEntities);
 			this.TEMP_JumpGateEntitiesL.AddRange(this.TEMP_JumpGateEntities.Keys);
+			this.TEMP_JumpGateEntitiesL.AddRange(this.JumpGate.EntityBatches.Keys);
 			drives = this.TEMP_JumpGateDrives;
 
 			List<MyJumpGateDrive> anti_drives = null;
@@ -3976,15 +4048,15 @@ namespace IOTA.ModularJumpGates
 			{
 				case 0:
 					if (this.GateJumpingAnimation == null) this.GateJumpingAnimation = (this.GateJumpingAnimationDef == null) ? null : new MyJumpGateJumpingAnimation(this.GateJumpingAnimationDef, this.JumpGate, this.TargetGate, this.ControllerSettings, ref endpoint, ref anti_node, this.GateJumpType);
-					this.GateJumpingAnimation?.Tick(ref endpoint, ref anti_node, ref target_world_jump_node, drives, anti_drives, entities);
+					this.GateJumpingAnimation?.Tick(ref endpoint, ref anti_node, ref target_world_jump_node, drives, anti_drives, this.TEMP_JumpGateEntitiesL);
 					break;
 				case 1:
 					if (this.GateJumpedAnimation == null) this.GateJumpedAnimation = (this.GateJumpedAnimationDef == null) ? null : new MyJumpGateJumpedAnimation(this.GateJumpedAnimationDef, this.JumpGate, this.TargetGate, this.ControllerSettings, ref endpoint, ref anti_node, this.GateJumpType);
-					this.GateJumpedAnimation?.Tick(ref endpoint, ref anti_node, ref target_world_jump_node, drives, anti_drives, entities);
+					this.GateJumpedAnimation?.Tick(ref endpoint, ref anti_node, ref target_world_jump_node, drives, anti_drives, this.TEMP_JumpGateEntitiesL);
 					break;
 				case 2:
 					if (this.GateFailedAnimation == null) this.GateFailedAnimation = (this.GateFailedAnimationDef == null) ? null : new MyJumpGateFailedAnimation(this.GateFailedAnimationDef, this.JumpGate, this.TargetGate, this.ControllerSettings, ref endpoint, ref anti_node, this.GateJumpType);
-					this.GateFailedAnimation?.Tick(ref endpoint, ref anti_node, ref target_world_jump_node, drives, anti_drives, entities);
+					this.GateFailedAnimation?.Tick(ref endpoint, ref anti_node, ref target_world_jump_node, drives, anti_drives, this.TEMP_JumpGateEntitiesL);
 					break;
 			}
 

@@ -1,5 +1,6 @@
 ﻿using IOTA.ModularJumpGates.CubeBlock;
 using ProtoBuf;
+using Sandbox.Game;
 using Sandbox.Game.Entities;
 using Sandbox.ModAPI;
 using System;
@@ -7,8 +8,10 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using System.Text;
+using VRage.Game.Components;
 using VRage.Game.Entity;
 using VRage.Game.ModAPI;
+using VRage.ModAPI;
 using VRageMath;
 
 namespace IOTA.ModularJumpGates.Util
@@ -61,6 +64,143 @@ namespace IOTA.ModularJumpGates.Util
             this.CompletionCallback = on_complete;
         }
 		#endregion
+	}
+
+	internal class EntityWarpInfo
+	{
+		private MatrixD Endpoint;
+		private MatrixD StartPoint;
+		private MatrixD CurrentPos;
+		private readonly List<MyEntity> EntityBatch;
+		private readonly List<Vector3D[]> RelativeEntityOffsets;
+		private readonly List<MyPhysicsComponentBase> EntityPhysics;
+		private readonly Action<List<MyEntity>> Callback;
+
+		public readonly ushort Duration;
+		public ushort CurrentTick { get; private set; }
+
+		public EntityWarpInfo(MyJumpGate jump_gate, ref MatrixD current_position, ref MatrixD target_position, List<MyEntity> entity_batch, ushort time, Action<List<MyEntity>> callback)
+		{
+			MyEntity parent = entity_batch[0];
+			this.Duration = time;
+			this.CurrentTick = 0;
+			this.EntityBatch = entity_batch;
+			this.Endpoint = target_position;
+			this.StartPoint = current_position;
+			this.CurrentPos = current_position;
+			this.RelativeEntityOffsets = new List<Vector3D[]>();
+			this.Callback = callback;
+			this.EntityPhysics = new List<MyPhysicsComponentBase>() { parent.Physics };
+			
+			foreach (MyEntity entity in entity_batch.Skip(1))
+			{
+				this.RelativeEntityOffsets.Add(new Vector3D[3] {
+					MyJumpGateModSession.WorldVectorToLocalVectorP(ref current_position, entity.WorldMatrix.Translation),
+					MyJumpGateModSession.WorldVectorToLocalVectorD(ref current_position, entity.WorldMatrix.Forward),
+					MyJumpGateModSession.WorldVectorToLocalVectorD(ref current_position, entity.WorldMatrix.Up),
+				});
+
+				MyJumpGateConstruct construct = (entity is MyCubeGrid) ? MyJumpGateModSession.Instance.GetJumpGateGrid(entity.EntityId) : null;
+				if (construct != null) construct.BatchingGate = jump_gate;
+				this.EntityPhysics.Add(entity.Physics);
+				entity.Physics.Enabled = false;
+				entity.Physics = null;
+			}
+		}
+
+		public bool Update()
+		{
+			++this.CurrentTick;
+			bool complete = this.CurrentTick >= this.Duration;
+			double tick_ratio = (double) this.CurrentTick / this.Duration;
+			MyEntity parent = this.EntityBatch[0];
+			MatrixD world_matrix;
+			MatrixD.Lerp(ref this.StartPoint, ref this.Endpoint, tick_ratio, out this.CurrentPos);
+			
+			if (parent is IMyPlayer)
+			{
+				world_matrix = parent.WorldMatrix;
+				world_matrix.Translation = this.CurrentPos.Translation;
+				parent.Teleport(world_matrix);
+			}
+			else
+			{
+				parent.Teleport(this.CurrentPos);
+				parent.WorldMatrix = MatrixD.Normalize(this.CurrentPos);
+			}
+
+			for (int i = 0; i < this.EntityBatch.Count - 1; ++i)
+			{
+				MyEntity entity = this.EntityBatch[i + 1];
+				Vector3D[] relative_offsets = this.RelativeEntityOffsets[i];
+				Vector3D translation = MyJumpGateModSession.LocalVectorToWorldVectorP(ref this.CurrentPos, relative_offsets[0]);
+				
+				if (entity is IMyPlayer)
+				{
+					world_matrix = entity.WorldMatrix;
+					world_matrix.Translation = translation;
+					entity.Teleport(world_matrix);
+				}
+				else
+				{
+					Vector3D forward = MyJumpGateModSession.LocalVectorToWorldVectorD(ref this.CurrentPos, relative_offsets[1]);
+					Vector3D up = MyJumpGateModSession.LocalVectorToWorldVectorD(ref this.CurrentPos, relative_offsets[2]);
+					forward.Normalize();
+					up.Normalize();
+					MatrixD.CreateWorld(ref translation, ref forward, ref up, out world_matrix);
+					entity.Teleport(world_matrix);
+					entity.WorldMatrix = world_matrix;
+				}
+			}
+
+			if (complete)
+			{
+				for (int i = 0; i < this.EntityBatch.Count; ++i)
+				{
+					MyEntity entity = this.EntityBatch[i];
+					entity.Physics = this.EntityPhysics[i];
+					entity.Physics.Enabled = true;
+					MyJumpGateConstruct construct = (entity is MyCubeGrid) ? MyJumpGateModSession.Instance.GetJumpGateGrid(entity.EntityId) : null;
+					if (construct != null) construct.BatchingGate = null;
+				}
+
+				if (this.Callback != null) this.Callback(this.EntityBatch);
+			}
+
+			return complete;
+		}
+	}
+
+	internal class EntityBatch
+	{
+		public readonly List<MyEntity> Batch;
+		public BoundingBoxD ObstructAABB;
+		public MatrixD ParentTargetMatrix;
+
+		public MyEntity Parent { get { return this.Batch[0]; } }
+
+		public double BatchMass
+		{
+			get
+			{
+				double mass = 0;
+
+				foreach (MyEntity child in this.Batch)
+				{
+					MyJumpGateConstruct parent = (child is MyCubeGrid) ? MyJumpGateModSession.Instance.GetJumpGateGrid(child.EntityId) : null;
+					mass += (parent != null) ? parent.ConstructMass() : ((child is IMyPlayer) ? ((IMyPlayer) child).Character.CurrentMass : (child.Physics?.Mass ?? 0));
+				}
+
+				return mass;
+			}
+		}
+
+		public EntityBatch(List<MyEntity> batch, ref BoundingBoxD obstruct_aabb, ref MatrixD target_matrix)
+		{
+			this.Batch = batch;
+			this.ObstructAABB = obstruct_aabb;
+			this.ParentTargetMatrix = target_matrix;
+		}
 	}
 
 	/// <summary>

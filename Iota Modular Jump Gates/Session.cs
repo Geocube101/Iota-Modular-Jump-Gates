@@ -20,6 +20,7 @@ using Sandbox.ModAPI.Interfaces.Terminal;
 using IOTA.ModularJumpGates.ISC;
 using IOTA.ModularJumpGates.API;
 using IOTA.ModularJumpGates.Util.ConcurrentCollections;
+using VRage.Game.Entity;
 
 namespace IOTA.ModularJumpGates
 {
@@ -152,6 +153,11 @@ namespace IOTA.ModularJumpGates
 		/// Master map for storing in-progress animations
 		/// </summary>
 		private ConcurrentDictionary<ulong, AnimationInfo> JumpGateAnimations = new ConcurrentDictionary<ulong, AnimationInfo>();
+
+		/// <summary>
+		/// Master map for storing entity warps
+		/// </summary>
+		private ConcurrentDictionary<long, EntityWarpInfo> EntityWarps = new ConcurrentDictionary<long, EntityWarpInfo>();
 		#endregion
 
 		#region Temporary Containers
@@ -526,6 +532,7 @@ namespace IOTA.ModularJumpGates
 			this.SessionUpdateTimeTicks.Clear();
 			this.GridMap.Clear();
 			this.JumpGateAnimations.Clear();
+			this.EntityWarps.Clear();
 
 			this.GridUpdateTimeTicks = null;
 			this.SessionUpdateTimeTicks = null;
@@ -533,6 +540,7 @@ namespace IOTA.ModularJumpGates
 			this.GateCloseRequests = null;
 			this.GridMap = null;
 			this.JumpGateAnimations = null;
+			this.EntityWarps = null;
 
 			MyAPIGateway.Entities.OnEntityAdd -= this.OnEntityAdd;
 			MyAPIGateway.Entities.OnEntityRemove -= this.OnEntityRemove;
@@ -672,8 +680,12 @@ namespace IOTA.ModularJumpGates
 				}
 
 				if (MyNetworkInterface.IsServerLike && !this.AllSessionEntitiesLoaded) return;
-				if (MyJumpGateModSession.GameTick == this.FirstUpdateTimeTicks && !this.InitializationComplete && !MyNetworkInterface.IsDedicatedMultiplayerServer) MyAPIGateway.Utilities.ShowMessage(MyJumpGateModSession.MODID, "Initialization Complete!");
-				this.InitializationComplete = true;
+
+				if (!this.InitializationComplete && ((MyNetworkInterface.IsServerLike && this.AllFirstTickComplete()) || (MyNetworkInterface.IsStandaloneMultiplayerClient && MyJumpGateModSession.GameTick == this.FirstUpdateTimeTicks)))
+				{
+					MyAPIGateway.Utilities.ShowMessage(MyJumpGateModSession.MODID, "Initialization Complete!");
+					this.InitializationComplete = true;
+				}
 
 				if (this.ActiveGridUpdateThreads < MyJumpGateModSession.Configuration.GeneralConfiguration.ConcurrentGridUpdateThreads)
 				{
@@ -682,19 +694,22 @@ namespace IOTA.ModularJumpGates
 				}
 
 				// Update grid non-threadable
-				foreach (KeyValuePair<long, MyJumpGateConstruct> pair in this.GridMap)
+				if (this.AllFirstTickComplete())
 				{
-					MyJumpGateConstruct grid = pair.Value;
-
-					if (!grid.MarkClosed && !grid.IsSuspended && grid.GetFirstCubeGrid((subgrid) => subgrid.MarkedForClose) == null && grid.AtLeastOneUpdate())
+					foreach (KeyValuePair<long, MyJumpGateConstruct> pair in this.GridMap)
 					{
-						try
+						MyJumpGateConstruct grid = pair.Value;
+
+						if (!grid.MarkClosed && !grid.IsSuspended && grid.GetFirstCubeGrid((subgrid) => subgrid.MarkedForClose) == null && grid.AtLeastOneUpdate())
 						{
-							grid.UpdateNonThreadable();
-						}
-						catch (Exception e)
-						{
-							Logger.Error($"Error during construct no-thread tick - {grid.CubeGrid?.EntityId.ToString() ?? "N/A"} ({pair.Key})\n  ...\n[ {e} ]: {e.Message}\n{e.StackTrace}\n{e.InnerException}");
+							try
+							{
+								grid.UpdateNonThreadable();
+							}
+							catch (Exception e)
+							{
+								Logger.Error($"Error during construct no-thread tick - {grid.CubeGrid?.EntityId.ToString() ?? "N/A"} ({pair.Key})\n  ...\n[ {e} ]: {e.Message}\n{e.StackTrace}\n{e.InnerException}");
+							}
 						}
 					}
 				}
@@ -731,6 +746,9 @@ namespace IOTA.ModularJumpGates
 					}
 					else if (animation.JumpGate.Closed) animation.Stop();
 				}
+
+				// Tick queued entity warps
+				foreach (KeyValuePair<long, EntityWarpInfo> pair in this.EntityWarps) if (pair.Value.Update()) this.EntityWarps.Remove(pair.Key);
 
 				// Redraw Terminal Controls
 				if ((MyNetworkInterface.IsSingleplayer || MyNetworkInterface.IsMultiplayerClient) && (MyJumpGateModSession.GameTick % 60 == 0 || this.__RedrawAllTerminalControls))
@@ -1253,6 +1271,22 @@ namespace IOTA.ModularJumpGates
 
 			packet.Payload(grid_id);
 			packet.Send();
+		}
+
+		/// <summary>
+		/// Queues an entity warp<br />
+		/// This will move the specified entity over time to the targeted position and rotation
+		/// </summary>
+		/// <param name="jump_gate">The calling jump gate</param>
+		/// <param name="entity_batch">The batch of entities to move</param>
+		/// <param name="source_matrix">The starting location of the batch's parent</param>
+		/// <param name="dest_matrix">The ending location of the batch's parent</param>
+		/// <param name="time">The duration in game ticks</param>
+		/// <param name="callback">A callback called when the warp is complete</param>
+		public void WarpEntityBatchOverTime(MyJumpGate jump_gate, List<MyEntity> entity_batch, ref MatrixD source_matrix, ref MatrixD dest_matrix, ushort time, Action<List<MyEntity>> callback = null)
+		{
+			if (MyNetworkInterface.IsStandaloneMultiplayerClient) return;
+			this.EntityWarps.TryAdd(entity_batch[0].EntityId, new EntityWarpInfo(jump_gate, ref source_matrix, ref dest_matrix, entity_batch, time, callback));
 		}
 
 		/// <summary>

@@ -239,13 +239,18 @@ namespace IOTA.ModularJumpGates
 		/// The main cube grid for this construct
 		/// </summary>
 		public IMyCubeGrid CubeGrid { get; private set; }
+
+		/// <summary>
+		/// The gate this construct is currently being jumped by or null
+		/// </summary>
+		public MyJumpGate BatchingGate = null;
 		#endregion
 
 		#region Constructors
-        /// <summary>
-        /// Creates a new construct from a CubeGrid
-        /// </summary>
-        /// <param name="source">The main cube grid</param>
+		/// <summary>
+		/// Creates a new construct from a CubeGrid
+		/// </summary>
+		/// <param name="source">The main cube grid</param>
 		public MyJumpGateConstruct(IMyCubeGrid source, long fallback_id)
         {
             this.CubeGrid = source;
@@ -767,6 +772,7 @@ namespace IOTA.ModularJumpGates
 			this.DriveCombinations = null;
 			this.GridBlocks = null;
 
+			this.BatchingGate = null;
 			this.CubeGrid = null;
 			this.MarkClosed = true;
 			this.Closed = true;
@@ -1983,7 +1989,7 @@ namespace IOTA.ModularJumpGates
             if (this.Closed || this.MarkClosed) return GridInvalidationReason.CLOSED;
             else if (this.CubeGrid == null) return (this.IsSuspended) ? GridInvalidationReason.NONE : GridInvalidationReason.NULL_GRID;
             else if (this.CubeGrids.Count == 0) return GridInvalidationReason.INSUFFICIENT_GRIDS;
-            else if (this.GetCubeGridPhysics() == null) return GridInvalidationReason.NULL_PHYSICS;
+            else if (this.BatchingGate == null && this.GetCubeGridPhysics() == null) return GridInvalidationReason.NULL_PHYSICS;
             else return GridInvalidationReason.NONE;
 		}
 

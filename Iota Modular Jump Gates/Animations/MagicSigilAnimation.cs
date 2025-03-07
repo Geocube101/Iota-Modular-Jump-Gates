@@ -861,11 +861,21 @@ namespace IOTA.ModularJumpGates.Animations
 					new SoundDef {
 						SoundNames = new string[] { "IOTA.MagicSigil.JumpGateJumping" },
 					},
+					new SoundDef {
+						SoundNames = new string[] { "IOTA.MagicSigil.JumpGateJumpedInbound" },
+						Duration = 210,
+						StartTime = 510,
+					},
 				},
 
 				AntiNodeSounds = new SoundDef[] {
 					new SoundDef {
 						SoundNames = new string[] { "IOTA.MagicSigil.JumpGateJumping" },
+					},
+					new SoundDef {
+						SoundNames = new string[] { "IOTA.MagicSigil.JumpGateJumpedInbound" },
+						Duration = 210,
+						StartTime = 510,
 					},
 				},
 
@@ -1697,6 +1707,22 @@ namespace IOTA.ModularJumpGates.Animations
 					},
 				},
 
+				TravelEffect = new ParticleDef[] {
+					new ParticleDef {
+						Duration = 240,
+						ParticleNames = new string[] { "IOTA.TravelEffect.WarpField" },
+						ParticleOrientation = new ParticleOrientationDef(ParticleOrientationEnum.GATE_TRUE_ENDPOINT_NORMAL),
+						ParticleOffset = new Vector3D(0, 0, -250),
+
+						Animations = new AttributeAnimationDef {
+							ParticleColorAnimation = new VectorKeyframe[] {
+								new VectorKeyframe(0, new Vector4D(0.5, 0.625, 1, 1), EasingCurveEnum.EXPONENTIAL, EasingTypeEnum.EASE_IN),
+								new VectorKeyframe(210, new Vector4D(0.5, 0.625, 1, 0)),
+							},
+						},
+					},
+				},
+
 				BeamPulse = new BeamPulseDef
 				{
 					Duration = 300,
@@ -1729,8 +1755,8 @@ namespace IOTA.ModularJumpGates.Animations
 
 				AntiNodeSounds = new SoundDef[] {
 					new SoundDef {
-						SoundNames = new string[] { "IOTA.MagicSigil.JumpGateJumpedInbound" },
-						Duration = 210,
+						SoundNames = new string[] { "IOTA.MagicSigil.JumpGateJumpedOutbound" },
+						Duration = 300,
 					},
 				},
 			},

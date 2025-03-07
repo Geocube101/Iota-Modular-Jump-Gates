@@ -319,6 +319,22 @@ namespace IOTA.ModularJumpGates.Animations
 					},
 				},
 
+				TravelEffect = new ParticleDef[] {
+					new ParticleDef {
+						Duration = 180,
+						ParticleNames = new string[] { "IOTA.TravelEffect.WarpField" },
+						ParticleOrientation = new ParticleOrientationDef(ParticleOrientationEnum.GATE_TRUE_ENDPOINT_NORMAL),
+						ParticleOffset = new Vector3D(0, 0, -250),
+
+						Animations = new AttributeAnimationDef {
+							ParticleColorAnimation = new VectorKeyframe[] {
+								new VectorKeyframe(0, new Vector4D(0.5, 0.625, 1, 1), EasingCurveEnum.EXPONENTIAL, EasingTypeEnum.EASE_IN),
+								new VectorKeyframe(150, new Vector4D(0.5, 0.625, 1, 0)),
+							},
+						},
+					},
+				},
+
 				BeamPulse = new BeamPulseDef
 				{
 					BeamColor = new Vector4(0.15f, 0.39f, 1f, 1f),

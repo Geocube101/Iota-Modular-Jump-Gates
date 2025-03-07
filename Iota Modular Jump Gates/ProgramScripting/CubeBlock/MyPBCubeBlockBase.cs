@@ -61,6 +61,17 @@ namespace IOTA.ModularJumpGates.ProgramScripting.CubeBlock
 			property.Setter = (block, value) => { throw new InvalidOperationException("Specified property is readonly"); };
 			MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(property);
 		}
+		private static void SetupInitializedTerminalAction()
+		{
+			IMyTerminalControlProperty<bool> property = MyAPIGateway.TerminalControls.CreateProperty<bool, IMyUpgradeModule>(MyCubeBlockTerminal.MODID_PREFIX + "FullyInitialized");
+			property.Getter = (block) => {
+				MyCubeBlockBase block_base = MyJumpGateModSession.GetBlockAsCubeBlockBase(block);
+				if (block_base == null) throw new InvalidBlockTypeException("Specified block is not a jump gate block");
+				return MyJumpGateModSession.Instance.InitializationComplete;
+			};
+			property.Setter = (block, value) => { throw new InvalidOperationException("Specified property is readonly"); };
+			MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(property);
+		}
 		private static void SetupIsMarkedForCloseTerminalAction()
 		{
 			IMyTerminalControlProperty<bool> property = MyAPIGateway.TerminalControls.CreateProperty<bool, IMyUpgradeModule>(MyCubeBlockTerminal.MODID_PREFIX + "IsMarkedForClose");
@@ -788,6 +799,7 @@ namespace IOTA.ModularJumpGates.ProgramScripting.CubeBlock
 		public static void SetupBlockTerminal()
 		{
 			MyPBCubeBlockBase.SetupIsBlockBaseTerminalAction();
+			MyPBCubeBlockBase.SetupInitializedTerminalAction();
 			MyPBCubeBlockBase.SetupIsControllerTerminalAction();
 			MyPBCubeBlockBase.SetupIsDriveTerminalAction();
 			MyPBCubeBlockBase.SetupIsCapacitorTerminalAction();
