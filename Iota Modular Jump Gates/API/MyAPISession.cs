@@ -47,6 +47,12 @@ namespace IOTA.ModularJumpGates.API
 		public static bool AllSessionEntitiesLoaded { get { return MyJumpGateModSession.Instance.AllSessionEntitiesLoaded; } }
 
 		/// <summary>
+		/// For server like: Whether all constructs have had at least one tick<br />
+		/// For client like: Whether session has begun ticking
+		/// </summary>
+		public static bool ModFullyInitialized { get { return MyJumpGateModSession.Instance.InitializationComplete; } }
+
+		/// <summary>
 		/// The current, session local game tick
 		/// </summary>
 		public static ulong GameTick { get { return MyJumpGateModSession.GameTick; } }

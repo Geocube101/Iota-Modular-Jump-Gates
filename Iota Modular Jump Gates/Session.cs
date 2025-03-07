@@ -672,8 +672,12 @@ namespace IOTA.ModularJumpGates
 				}
 
 				if (MyNetworkInterface.IsServerLike && !this.AllSessionEntitiesLoaded) return;
-				if (MyJumpGateModSession.GameTick == this.FirstUpdateTimeTicks && !this.InitializationComplete && !MyNetworkInterface.IsDedicatedMultiplayerServer) MyAPIGateway.Utilities.ShowMessage(MyJumpGateModSession.MODID, "Initialization Complete!");
-				this.InitializationComplete = true;
+
+				if (!this.InitializationComplete && ((MyNetworkInterface.IsServerLike && this.AllFirstTickComplete()) || (MyNetworkInterface.IsStandaloneMultiplayerClient && MyJumpGateModSession.GameTick == this.FirstUpdateTimeTicks)))
+				{
+					MyAPIGateway.Utilities.ShowMessage(MyJumpGateModSession.MODID, "Initialization Complete!");
+					this.InitializationComplete = true;
+				}
 
 				if (this.ActiveGridUpdateThreads < MyJumpGateModSession.Configuration.GeneralConfiguration.ConcurrentGridUpdateThreads)
 				{
