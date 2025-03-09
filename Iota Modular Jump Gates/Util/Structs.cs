@@ -12,6 +12,7 @@ using VRage.Game.Components;
 using VRage.Game.Entity;
 using VRage.Game.ModAPI;
 using VRage.ModAPI;
+using VRage.Serialization;
 using VRageMath;
 
 namespace IOTA.ModularJumpGates.Util
@@ -66,8 +67,29 @@ namespace IOTA.ModularJumpGates.Util
 		#endregion
 	}
 
-	internal class EntityWarpInfo
+	internal sealed class EntityWarpInfo
 	{
+		[ProtoContract]
+		private sealed class SerializedEntityWarpInfo
+		{
+			[ProtoMember(1)]
+			public Vector3D[] Endpoint;
+			[ProtoMember(2)]
+			public Vector3D[] StartPoint;
+			[ProtoMember(3)]
+			public Vector3D[] CurrentPosition;
+			[ProtoMember(4)]
+			public List<long> EntityBatch;
+			[ProtoMember(5)]
+			public List<string> RelativeEntityOffsets;
+			[ProtoMember(6)]
+			public Guid JumpGate;
+			[ProtoMember(7)]
+			public ushort Duration;
+			[ProtoMember(8)]
+			public ushort CurrentTick;
+		}
+
 		private MatrixD Endpoint;
 		private MatrixD StartPoint;
 		private MatrixD CurrentPos;
@@ -76,12 +98,61 @@ namespace IOTA.ModularJumpGates.Util
 		private readonly List<MyPhysicsComponentBase> EntityPhysics;
 		private readonly Action<List<MyEntity>> Callback;
 
+		public readonly MyJumpGate JumpGate;
 		public readonly ushort Duration;
 		public ushort CurrentTick { get; private set; }
+
+		public MyEntity Parent
+		{
+			get
+			{
+				return this.EntityBatch[0];
+			}
+		}
+
+		public static EntityWarpInfo FromSerialized(string serialized_warp_info, Action<List<MyEntity>> callback)
+		{
+			SerializedEntityWarpInfo serialized = MyAPIGateway.Utilities.SerializeFromBinary<SerializedEntityWarpInfo>(Convert.FromBase64String(serialized_warp_info));
+			MatrixD endpoint, startpoint, current_pos;
+			MatrixD.CreateWorld(ref serialized.Endpoint[0], ref serialized.Endpoint[1], ref serialized.Endpoint[2], out endpoint);
+			MatrixD.CreateWorld(ref serialized.StartPoint[0], ref serialized.StartPoint[1], ref serialized.StartPoint[2], out startpoint);
+			MatrixD.CreateWorld(ref serialized.CurrentPosition[0], ref serialized.CurrentPosition[1], ref serialized.CurrentPosition[2], out current_pos);
+			List<MyEntity> batch_entities = serialized.EntityBatch?.Select((id) => (MyEntity) MyAPIGateway.Entities.GetEntityById(id))?.Where((entity) => entity != null)?.ToList() ?? new List<MyEntity>();
+			List<Vector3D[]> relative_entity_offsets = serialized.RelativeEntityOffsets?.Select((offsets) => MyAPIGateway.Utilities.SerializeFromBinary<Vector3D[]>(Convert.FromBase64String(offsets)))?.ToList() ?? new List<Vector3D[]>();
+			MyJumpGate jump_gate = MyJumpGateModSession.Instance.GetJumpGate(JumpGateUUID.FromGuid(serialized.JumpGate));
+			if (jump_gate == null || batch_entities.Count == 0) return null;
+			return new EntityWarpInfo(ref endpoint, ref startpoint, ref current_pos, batch_entities, relative_entity_offsets, jump_gate, serialized.Duration, serialized.CurrentTick, callback);
+		}
+
+		private EntityWarpInfo(ref MatrixD endpoint, ref MatrixD startpoint, ref MatrixD current_position, List<MyEntity> batch_entities, List<Vector3D[]> relative_offsets, MyJumpGate jump_gate, ushort duration, ushort current_tick, Action<List<MyEntity>> callback)
+		{
+			MyEntity parent = batch_entities[0];
+			this.JumpGate = jump_gate;
+			this.Endpoint = endpoint;
+			this.StartPoint = startpoint;
+			this.CurrentPos = current_position;
+			this.EntityBatch = new List<MyEntity>();
+			this.RelativeEntityOffsets = new List<Vector3D[]>();
+			this.EntityPhysics = new List<MyPhysicsComponentBase>() { parent.Physics };
+			this.Duration = duration;
+			this.CurrentTick = current_tick;
+			this.Callback = callback;
+
+			for (int i = 1; i < batch_entities.Count; ++i)
+			{
+				MyEntity entity = batch_entities[i];
+				if (entity == null || entity.MarkedForClose) continue;
+				MyJumpGateConstruct construct = (entity is MyCubeGrid) ? MyJumpGateModSession.Instance.GetJumpGateGrid(entity.EntityId) : null;
+				if (construct != null) construct.BatchingGate = jump_gate;
+				this.RelativeEntityOffsets.Add(relative_offsets[i - 1]);
+				this.EntityPhysics.Add(entity.Physics);
+			}
+		}
 
 		public EntityWarpInfo(MyJumpGate jump_gate, ref MatrixD current_position, ref MatrixD target_position, List<MyEntity> entity_batch, ushort time, Action<List<MyEntity>> callback)
 		{
 			MyEntity parent = entity_batch[0];
+			this.JumpGate = jump_gate;
 			this.Duration = time;
 			this.CurrentTick = 0;
 			this.EntityBatch = entity_batch;
@@ -117,13 +188,13 @@ namespace IOTA.ModularJumpGates.Util
 			MatrixD world_matrix;
 			MatrixD.Lerp(ref this.StartPoint, ref this.Endpoint, tick_ratio, out this.CurrentPos);
 			
-			if (parent is IMyPlayer)
+			if (!parent.MarkedForClose && parent is IMyPlayer)
 			{
 				world_matrix = parent.WorldMatrix;
 				world_matrix.Translation = this.CurrentPos.Translation;
 				parent.Teleport(world_matrix);
 			}
-			else
+			else if (!parent.MarkedForClose)
 			{
 				parent.Teleport(this.CurrentPos);
 				parent.WorldMatrix = MatrixD.Normalize(this.CurrentPos);
@@ -132,6 +203,7 @@ namespace IOTA.ModularJumpGates.Util
 			for (int i = 0; i < this.EntityBatch.Count - 1; ++i)
 			{
 				MyEntity entity = this.EntityBatch[i + 1];
+				if (entity.MarkedForClose) continue;
 				Vector3D[] relative_offsets = this.RelativeEntityOffsets[i];
 				Vector3D translation = MyJumpGateModSession.LocalVectorToWorldVectorP(ref this.CurrentPos, relative_offsets[0]);
 				
@@ -159,7 +231,7 @@ namespace IOTA.ModularJumpGates.Util
 				{
 					MyEntity entity = this.EntityBatch[i];
 					entity.Physics = this.EntityPhysics[i];
-					entity.Physics.Enabled = true;
+					if (entity.Physics != null) entity.Physics.Enabled = true;
 					MyJumpGateConstruct construct = (entity is MyCubeGrid) ? MyJumpGateModSession.Instance.GetJumpGateGrid(entity.EntityId) : null;
 					if (construct != null) construct.BatchingGate = null;
 				}
@@ -169,10 +241,35 @@ namespace IOTA.ModularJumpGates.Util
 
 			return complete;
 		}
+
+		public string ToSerialized()
+		{
+			return Convert.ToBase64String(MyAPIGateway.Utilities.SerializeToBinary(new SerializedEntityWarpInfo {
+				Endpoint = new Vector3D[3] { this.Endpoint.Translation, this.Endpoint.Forward, this.Endpoint.Up },
+				StartPoint = new Vector3D[3] { this.StartPoint.Translation, this.StartPoint.Forward, this.StartPoint.Up },
+				CurrentPosition = new Vector3D[3] { this.CurrentPos.Translation, this.CurrentPos.Forward, this.CurrentPos.Up },
+				EntityBatch = this.EntityBatch.Select((entity) => entity.EntityId).ToList(),
+				RelativeEntityOffsets = this.RelativeEntityOffsets.Select((offsets) => Convert.ToBase64String(MyAPIGateway.Utilities.SerializeToBinary(offsets))).ToList(),
+				JumpGate = JumpGateUUID.FromJumpGate(this.JumpGate).ToGuid(),
+				Duration = this.Duration,
+				CurrentTick = this.CurrentTick,
+			}));
+		}
 	}
 
 	internal class EntityBatch
 	{
+		[ProtoContract]
+		private sealed class SerializedEntityBatch
+		{
+			[ProtoMember(1)]
+			public List<long> Batch;
+			[ProtoMember(2)]
+			public Vector3D[] ObstructAABB;
+			[ProtoMember(3)]
+			public Vector3D[] ParentTargetMatrix;
+		}
+
 		public readonly List<MyEntity> Batch;
 		public BoundingBoxD ObstructAABB;
 		public MatrixD ParentTargetMatrix;
@@ -195,11 +292,28 @@ namespace IOTA.ModularJumpGates.Util
 			}
 		}
 
+		public EntityBatch(string serialized_batch)
+		{
+			SerializedEntityBatch serialized = MyAPIGateway.Utilities.SerializeFromBinary<SerializedEntityBatch>(Convert.FromBase64String(serialized_batch));
+			this.Batch = serialized.Batch?.Select((id) => (MyEntity) MyAPIGateway.Entities.GetEntityById(id))?.Where((entity) => entity != null)?.ToList() ?? new List<MyEntity>();
+			this.ObstructAABB = new BoundingBoxD(serialized.ObstructAABB[0], serialized.ObstructAABB[1]);
+			this.ParentTargetMatrix = MatrixD.CreateWorld(serialized.ParentTargetMatrix[0], serialized.ParentTargetMatrix[1], serialized.ParentTargetMatrix[2]);
+		}
+
 		public EntityBatch(List<MyEntity> batch, ref BoundingBoxD obstruct_aabb, ref MatrixD target_matrix)
 		{
 			this.Batch = batch;
 			this.ObstructAABB = obstruct_aabb;
 			this.ParentTargetMatrix = target_matrix;
+		}
+
+		public string ToSerialized()
+		{
+			return Convert.ToBase64String(MyAPIGateway.Utilities.SerializeToBinary(new SerializedEntityBatch {
+				Batch = this.Batch.Select((entity) => entity.EntityId).ToList(),
+				ObstructAABB = new Vector3D[2] { this.ObstructAABB.Min, this.ObstructAABB.Max },
+				ParentTargetMatrix = new Vector3D[3] { this.ParentTargetMatrix.Translation, this.ParentTargetMatrix.Forward, this.ParentTargetMatrix.Up },
+			}));
 		}
 	}
 
@@ -581,6 +695,18 @@ namespace IOTA.ModularJumpGates.Util
 		public void Spawn(List<IMyCubeGrid> spawned_grids)
 		{
 			MyAPIGateway.PrefabManager.SpawnPrefab(spawned_grids, this.PrefabName, this.Position, this.Forward, this.Up, this.InitialLinearVelocity, this.InitialAngularVelocity, this.BeaconName, this.SpawningOptions, this.UpdateSync, this.Callback);
+		}
+	}
+
+	public sealed class Pair<T1, T2>
+	{
+		public T1 First;
+		public T2 Second;
+
+		public Pair(T1 first = default(T1), T2 second = default(T2))
+		{
+			this.First = first;
+			this.Second = second;
 		}
 	}
 }

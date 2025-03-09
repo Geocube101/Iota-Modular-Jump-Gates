@@ -1707,7 +1707,7 @@ namespace IOTA.ModularJumpGates.Animations
 					},
 				},
 
-				TravelEffect = new ParticleDef[] {
+				TravelEffects = new ParticleDef[] {
 					new ParticleDef {
 						Duration = 240,
 						ParticleNames = new string[] { "IOTA.TravelEffect.WarpField" },
@@ -1720,6 +1720,14 @@ namespace IOTA.ModularJumpGates.Animations
 								new VectorKeyframe(210, new Vector4D(0.5, 0.625, 1, 0)),
 							},
 						},
+					},
+				},
+
+				TravelSounds = new SoundDef[] {
+					new SoundDef {
+						Duration = 240,
+						SoundNames = new string[] { "IOTA.TravelEffects.Standard_0" },
+						Distance = 1000,
 					},
 				},
 

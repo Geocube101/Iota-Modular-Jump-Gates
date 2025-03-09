@@ -18,6 +18,7 @@ using Sandbox.Game.Entities;
 using Sandbox.Engine.Physics;
 using VRage.Game.Components;
 using IOTA.ModularJumpGates.Extensions;
+using VRageRender;
 
 namespace IOTA.ModularJumpGates.Animations
 {
@@ -81,9 +82,17 @@ namespace IOTA.ModularJumpGates
 
 		/// <summary>
 		/// Attribute is modified based on this jump gate's radii (size of jump space axes in meters)<br />
-		/// The value is the jump gate radii in meters
+		/// For double values: The value is the length of the jump gate radii vector<br />
+		/// For vector values: The value is the jump gate radii in meters
 		/// </summary>
 		JUMP_GATE_RADII,
+
+		/// <summary>
+		/// Attribute is modified based on this jump gate's velocity (velovity of jump node in meters per second)<br />
+		/// For double values: The value is the length of the velocity vector<br />
+		/// For vector values: The value is the jump gate velocity in meters
+		/// </summary>
+		JUMP_GATE_VELOCITY,
 
 		/// <summary>
 		/// Attribute is modified based on the target jump gate's size (size of jump space in meters)<br />
@@ -94,9 +103,17 @@ namespace IOTA.ModularJumpGates
 
 		/// <summary>
 		/// Attribute is modified based on this jump gate's radii (size of jump space axes in meters)<br />
-		/// The value is the jump gate radii in meters
+		/// For double values: The value is the length of the jump gate radii vector<br />
+		/// For vector values: The value is the jump gate radii in meters
 		/// </summary>
 		JUMP_ANTIGATE_RADII,
+
+		/// <summary>
+		/// Attribute is modified based on the target jump gate's velocity (velovity of jump node in meters per second)<br />
+		/// For double values: The value is the length of the velocity vector<br />
+		/// For vector values: The value is the jump gate velocity in meters
+		/// </summary>
+		JUMP_ANTIGATE_VELOCITY,
 
 		/// <summary>
 		/// Attribute is modified based on a random value rolled every tick<br />
@@ -142,6 +159,13 @@ namespace IOTA.ModularJumpGates
 		/// The value will be the distance from this entity to the nearest jump space entity in meters
 		/// </summary>
 		DISTANCE_ENTITY_TO_ENTITY,
+
+		/// <summary>
+		/// Attribute is modified based on this entity's velocity<br />
+		/// For double values: The value is the length of the velocity vector<br />
+		/// For vector values: The value is the jump gate velocity in meters
+		/// </summary>
+		ENTITY_VELOCITY,
 
 		/// <summary>
 		/// Attribute is modified based on current planetary gravity<br />
@@ -485,7 +509,7 @@ namespace IOTA.ModularJumpGates
 			this.ClampResult = lower != null || upper != null;
 		}
 
-		public double GetValue(ushort current_tick, ushort total_duration, MyJumpGate jump_gate, MyJumpGate target_gate, List<MyJumpGateDrive> drives, List<MyEntity> entities, ref Vector3D endpoint, Vector3D? this_position = null)
+		public double GetValue(ushort current_tick, ushort total_duration, MyJumpGate jump_gate, MyJumpGate target_gate, List<MyJumpGateDrive> drives, List<MyEntity> entities, ref Vector3D endpoint, Vector3D? this_position, MyEntity this_entity)
 		{
 			Vector3D jump_node = jump_gate.WorldJumpNode;
 			double result, ratio;
@@ -504,11 +528,17 @@ namespace IOTA.ModularJumpGates
 				case AnimationSourceEnum.JUMP_GATE_RADII:
 					result = (jump_gate.Closed) ? 0 : jump_gate.JumpEllipse.Radii.Length();
 					break;
+				case AnimationSourceEnum.JUMP_GATE_VELOCITY:
+					result = (jump_gate.Closed) ? 0 : jump_gate.JumpNodeVelocity.Length();
+					break;
 				case AnimationSourceEnum.JUMP_ANTIGATE_SIZE:
 					result = (target_gate != null && !target_gate.Closed) ? target_gate.JumpNodeRadius() : ((jump_gate.Closed) ? 0 : jump_gate.JumpNodeRadius());
 					break;
 				case AnimationSourceEnum.JUMP_ANTIGATE_RADII:
 					result = (target_gate != null && !target_gate.Closed) ? target_gate.JumpEllipse.Radii.Length() : ((jump_gate.Closed) ? 0 : jump_gate.JumpEllipse.Radii.Length());
+					break;
+				case AnimationSourceEnum.JUMP_ANTIGATE_VELOCITY:
+					result = (target_gate != null && !target_gate.Closed) ? target_gate.JumpNodeVelocity.Length() : 0;
 					break;
 				case AnimationSourceEnum.RANDOM:
 					result = new Random().NextDouble();
@@ -544,6 +574,9 @@ namespace IOTA.ModularJumpGates
 					
 					break;
 				}
+				case AnimationSourceEnum.ENTITY_VELOCITY:
+					result = (this_entity == null && jump_gate.Closed) ? 0 : (this_entity?.Physics?.LinearVelocity ?? jump_gate.JumpNodeVelocity).Length();
+					break;
 				case AnimationSourceEnum.GRAVITY:
 					result = (jump_gate.Closed) ? 0 : MyAPIGateway.GravityProviderSystem.CalculateNaturalGravityInPoint(jump_node).Length();
 					break;
@@ -646,7 +679,7 @@ namespace IOTA.ModularJumpGates
 			this.ClampResult = lower != null || upper != null;
 		}
 
-		public Vector4D GetValue(ushort current_tick, ushort total_duration, MyJumpGate jump_gate, MyJumpGate target_gate, List<MyJumpGateDrive> drives, List<MyEntity> entities, ref Vector3D endpoint, Vector3D? this_position = null)
+		public Vector4D GetValue(ushort current_tick, ushort total_duration, MyJumpGate jump_gate, MyJumpGate target_gate, List<MyJumpGateDrive> drives, List<MyEntity> entities, ref Vector3D endpoint, Vector3D? this_position, MyEntity this_entity)
 		{
 			Vector3D jump_node = jump_gate.WorldJumpNode;
 			Vector4D result;
@@ -666,11 +699,17 @@ namespace IOTA.ModularJumpGates
 				case AnimationSourceEnum.JUMP_GATE_RADII:
 					result = (jump_gate.Closed) ? Vector4D.Zero : new Vector4D(jump_gate.JumpEllipse.Radii, 0);
 					break;
+				case AnimationSourceEnum.JUMP_GATE_VELOCITY:
+					result = (jump_gate.Closed) ? Vector4D.Zero : new Vector4D(jump_gate.JumpNodeVelocity, 0);
+					break;
 				case AnimationSourceEnum.JUMP_ANTIGATE_SIZE:
 					result = new Vector4D((target_gate != null && !target_gate.Closed) ? target_gate.JumpNodeRadius() : ((jump_gate.Closed) ? 0 : jump_gate.JumpNodeRadius()));
 					break;
 				case AnimationSourceEnum.JUMP_ANTIGATE_RADII:
 					result = (target_gate != null && !target_gate.Closed) ? new Vector4D(target_gate.JumpEllipse.Radii, 0) : ((jump_gate.Closed) ? Vector4D.Zero : new Vector4D(jump_gate.JumpEllipse.Radii, 0));
+					break;
+				case AnimationSourceEnum.JUMP_ANTIGATE_VELOCITY:
+					result = (target_gate != null && !target_gate.Closed) ? new Vector4D(target_gate.JumpNodeVelocity, 0) : Vector4D.Zero;
 					break;
 				case AnimationSourceEnum.RANDOM:
 				{
@@ -709,6 +748,9 @@ namespace IOTA.ModularJumpGates
 					}
 					break;
 				}
+				case AnimationSourceEnum.ENTITY_VELOCITY:
+					result = (this_entity == null && jump_gate.Closed) ? Vector4D.Zero : new Vector4D(this_entity?.Physics?.LinearVelocity ?? jump_gate.JumpNodeVelocity, 0);
+					break;
 				case AnimationSourceEnum.GRAVITY:
 					result = new Vector4D((jump_gate.Closed) ? 0 : MyAPIGateway.GravityProviderSystem.CalculateNaturalGravityInPoint(jump_node).Length());
 					break;
@@ -922,34 +964,34 @@ namespace IOTA.ModularJumpGates
 		#endregion
 
 		#region Internal Methods
-		internal double GetValueFromStack(ushort current_tick, ushort total_duration, MyJumpGate jump_gate, MyJumpGate target_gate, List<MyJumpGateDrive> drives, List<MyEntity> entities, ref Vector3D endpoint, Vector3D? this_position = null)
+		internal double GetValueFromStack(ushort current_tick, ushort total_duration, MyJumpGate jump_gate, MyJumpGate target_gate, List<MyJumpGateDrive> drives, List<MyEntity> entities, ref Vector3D endpoint, Vector3D? this_position, MyEntity this_entity)
 		{
 			DoubleValue initial = this.Values[0];
 
 			if (initial.Operation == MathOperationEnum.AVERAGE)
 			{
 				double sum = 0;
-				foreach (DoubleValue value in this.Values) sum += value.GetValue(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position);
+				foreach (DoubleValue value in this.Values) sum += value.GetValue(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position, this_entity);
 				return sum / this.Values.Count;
 			}
 			else if (initial.Operation == MathOperationEnum.SMALLEST)
 			{
 				double smallest = 0;
-				foreach (DoubleValue value in this.Values) smallest = Math.Min(smallest, value.GetValue(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position));
+				foreach (DoubleValue value in this.Values) smallest = Math.Min(smallest, value.GetValue(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position, this_entity));
 				return smallest;
 			}
 			else if (initial.Operation == MathOperationEnum.LARGEST)
 			{
 				double largest = 0;
-				foreach (DoubleValue value in this.Values) largest = Math.Max(largest, value.GetValue(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position));
+				foreach (DoubleValue value in this.Values) largest = Math.Max(largest, value.GetValue(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position, this_entity));
 				return largest;
 			}
 
-			double result = initial.GetValue(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position);
+			double result = initial.GetValue(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position, this_entity);
 
 			foreach (DoubleValue value in this.Values.Skip(1))
 			{
-				double local_result = value.GetValue(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position);
+				double local_result = value.GetValue(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position, this_entity);
 
 				switch (value.Operation)
 				{
@@ -1191,23 +1233,23 @@ namespace IOTA.ModularJumpGates
 		#endregion
 
 		#region Internal Methods
-		internal Vector4D GetValueFromStack(ushort current_tick, ushort total_duration, MyJumpGate jump_gate, MyJumpGate target_gate, List<MyJumpGateDrive> drives, List<MyEntity> entities, ref Vector3D endpoint, Vector3D? this_position = null)
+		internal Vector4D GetValueFromStack(ushort current_tick, ushort total_duration, MyJumpGate jump_gate, MyJumpGate target_gate, List<MyJumpGateDrive> drives, List<MyEntity> entities, ref Vector3D endpoint, Vector3D? this_position, MyEntity this_entity)
 		{
 			VectorValue initial = this.Values[0];
 
 			if (initial.Operation == MathOperationEnum.AVERAGE)
 			{
 				Vector4D average = Vector4D.Zero;
-				foreach (VectorValue value in this.Values) average += value.GetValue(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position);
+				foreach (VectorValue value in this.Values) average += value.GetValue(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position, this_entity);
 				return average / this.Values.Count;
 			}
 			else if (initial.Operation == MathOperationEnum.SMALLEST)
 			{
-				Vector4D smallest = this.Values[0].GetValue(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position);
+				Vector4D smallest = this.Values[0].GetValue(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position, this_entity);
 
 				foreach (VectorValue value in this.Values)
 				{
-					Vector4D local = value.GetValue(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position);
+					Vector4D local = value.GetValue(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position, this_entity);
 					if (local.Length() < smallest.Length()) smallest = local;
 				}
 
@@ -1215,22 +1257,22 @@ namespace IOTA.ModularJumpGates
 			}
 			else if (initial.Operation == MathOperationEnum.LARGEST)
 			{
-				Vector4D largest = this.Values[0].GetValue(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position);
+				Vector4D largest = this.Values[0].GetValue(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position, this_entity);
 
 				foreach (VectorValue value in this.Values)
 				{
-					Vector4D local = value.GetValue(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position);
+					Vector4D local = value.GetValue(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position, this_entity);
 					if (local.Length() > largest.Length()) largest = local;
 				}
 
 				return largest;
 			}
 
-			Vector4D result = initial.GetValue(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position);
+			Vector4D result = initial.GetValue(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position, this_entity);
 
 			foreach (VectorValue value in this.Values.Skip(1))
 			{
-				Vector4D local_result = value.GetValue(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position);
+				Vector4D local_result = value.GetValue(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position, this_entity);
 
 				switch (value.Operation)
 				{
@@ -1409,16 +1451,16 @@ namespace IOTA.ModularJumpGates
 	[ProtoContract]
 	public sealed class AttributeAnimationDef
 	{
-		internal static double GetAnimatedDoubleValue(DoubleKeyframe[] keyframes, ushort current_tick, ushort total_duration, MyJumpGate jump_gate, MyJumpGate target_gate, List <MyJumpGateDrive> drives, List <MyEntity> entities, ref Vector3D endpoint, Vector3D? this_position = null, double default_ = default(double))
+		internal static double GetAnimatedDoubleValue(DoubleKeyframe[] keyframes, ushort current_tick, ushort total_duration, MyJumpGate jump_gate, MyJumpGate target_gate, List <MyJumpGateDrive> drives, List <MyEntity> entities, ref Vector3D endpoint, Vector3D? this_position, MyEntity this_entity, double default_ = default(double))
 		{
 			if (keyframes == null || keyframes.Length == 0) return default_;
-			else if (keyframes.Length == 1) return keyframes[0].GetValueFromStack(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position);
+			else if (keyframes.Length == 1) return keyframes[0].GetValueFromStack(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position, this_entity);
 			DoubleKeyframe last_keyframe = null;
 			DoubleKeyframe next_keyframe = null;
 
 			foreach (DoubleKeyframe keyframe in keyframes.OrderBy((frame) => frame.Position))
 			{
-				if (keyframe.Position == current_tick) return keyframe.GetValueFromStack(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position);
+				if (keyframe.Position == current_tick) return keyframe.GetValueFromStack(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position, this_entity);
 				else if (keyframe.Position > current_tick)
 				{
 					next_keyframe = keyframe;
@@ -1428,29 +1470,29 @@ namespace IOTA.ModularJumpGates
 				last_keyframe = keyframe;
 			}
 
-			if (next_keyframe == null) return last_keyframe.GetValueFromStack(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position);
-			else if (last_keyframe == null) return next_keyframe.GetValueFromStack(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position);
+			if (next_keyframe == null) return last_keyframe.GetValueFromStack(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position, this_entity);
+			else if (last_keyframe == null) return next_keyframe.GetValueFromStack(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position, this_entity);
 
 			double curr = current_tick;
 			double last = last_keyframe.Position;
 			double next = next_keyframe.Position;
 			double ratio = MathHelper.Clamp((curr - last) / (next - last), 0, 1);
 			ratio = EasingFunctor.GetEaseResult(ratio, last_keyframe.EasingType, last_keyframe.EasingCurve);
-			last = last_keyframe.GetValueFromStack(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position);
-			next = next_keyframe.GetValueFromStack(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position);
+			last = last_keyframe.GetValueFromStack(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position, this_entity);
+			next = next_keyframe.GetValueFromStack(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position, this_entity);
 			return (next - last) * ratio + last;
 		}
 
-		internal static Vector4D GetAnimatedVectorValue(VectorKeyframe[] keyframes, ushort current_tick, ushort total_duration, MyJumpGate jump_gate, MyJumpGate target_gate, List<MyJumpGateDrive> drives, List<MyEntity> entities, ref Vector3D endpoint, Vector3D? this_position = null, Vector4D default_ = default(Vector4D))
+		internal static Vector4D GetAnimatedVectorValue(VectorKeyframe[] keyframes, ushort current_tick, ushort total_duration, MyJumpGate jump_gate, MyJumpGate target_gate, List<MyJumpGateDrive> drives, List<MyEntity> entities, ref Vector3D endpoint, Vector3D? this_position, MyEntity this_entity, Vector4D default_ = default(Vector4D))
 		{
 			if (keyframes == null || keyframes.Length == 0) return default_;
-			else if (keyframes.Length == 1) return keyframes[0].GetValueFromStack(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position);
+			else if (keyframes.Length == 1) return keyframes[0].GetValueFromStack(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position, this_entity);
 			VectorKeyframe last_keyframe = null;
 			VectorKeyframe next_keyframe = null;
 
 			foreach (VectorKeyframe keyframe in keyframes.OrderBy((frame) => frame.Position))
 			{
-				if (keyframe.Position == current_tick) return keyframe.GetValueFromStack(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position);
+				if (keyframe.Position == current_tick) return keyframe.GetValueFromStack(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position, this_entity);
 				else if (keyframe.Position > current_tick)
 				{
 					next_keyframe = keyframe;
@@ -1460,16 +1502,16 @@ namespace IOTA.ModularJumpGates
 				last_keyframe = keyframe;
 			}
 
-			if (next_keyframe == null) return last_keyframe.GetValueFromStack(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position);
-			else if (last_keyframe == null) return next_keyframe.GetValueFromStack(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position);
+			if (next_keyframe == null) return last_keyframe.GetValueFromStack(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position, this_entity);
+			else if (last_keyframe == null) return next_keyframe.GetValueFromStack(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position, this_entity);
 
 			double curr = current_tick;
 			double last = last_keyframe.Position;
 			double next = next_keyframe.Position;
 			double ratio = MathHelper.Clamp((curr - last) / (next - last), 0, 1);
 			ratio = EasingFunctor.GetEaseResult(ratio, last_keyframe.EasingType, last_keyframe.EasingCurve);
-			Vector4D last_value = last_keyframe.GetValueFromStack(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position);
-			Vector4D next_value = next_keyframe.GetValueFromStack(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position);
+			Vector4D last_value = last_keyframe.GetValueFromStack(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position, this_entity);
+			Vector4D next_value = next_keyframe.GetValueFromStack(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position, this_entity);
 			return (next_value - last_value) * ratio + last_value;
 		}
 
@@ -2011,7 +2053,7 @@ namespace IOTA.ModularJumpGates
 		/// The travel particle effect shown to entities within the jump space
 		/// </summary>
 		[ProtoMember(6, IsRequired = true)]
-		public ParticleDef[] TravelEffect = null;
+		public ParticleDef[] TravelEffects = null;
 
 		/// <summary>
 		/// The list of SoundDef definitions<br />
@@ -2021,21 +2063,28 @@ namespace IOTA.ModularJumpGates
 		public SoundDef[] NodeSounds = null;
 
 		/// <summary>
-		/// The BeamPulseDef defining the beam pulse for this gate
+		/// The list of SoundDef definitions<br />
+		/// These sounds will be played once to entities currently being jumped
 		/// </summary>
 		[ProtoMember(8, IsRequired = true)]
+		public SoundDef[] TravelSounds = null;
+
+		/// <summary>
+		/// The BeamPulseDef defining the beam pulse for this gate
+		/// </summary>
+		[ProtoMember(9, IsRequired = true)]
 		public BeamPulseDef BeamPulse = null;
 
 		/// <summary>
 		/// The DriveEmissiveColorDef defining the color for this gate's jump drive emitter emissives
 		/// </summary>
-		[ProtoMember(9, IsRequired = true)]
+		[ProtoMember(10, IsRequired = true)]
 		public DriveEmissiveColorDef DriveEmissiveColor = null;
 
 		/// <summary>
 		/// The NodePhysicsDef defining the attractor forces for this gate's jump node
 		/// </summary>
-		[ProtoMember(10, IsRequired = true)]
+		[ProtoMember(11, IsRequired = true)]
 		public NodePhysicsDef NodePhysics = null;
 
 		/// <summary>
@@ -2043,7 +2092,7 @@ namespace IOTA.ModularJumpGates
 		/// These particles will be played once at the gate's anti-node<br />
 		/// <i>The anti-node is the region at the endpoint of this gate</i>
 		/// </summary>
-		[ProtoMember(11, IsRequired = true)]
+		[ProtoMember(12, IsRequired = true)]
 		public ParticleDef[] AntiNodeParticles = null;
 
 		/// <summary>
@@ -2051,14 +2100,14 @@ namespace IOTA.ModularJumpGates
 		/// These sounds will be played once at the gate's anti-node<br />
 		/// <i>The anti-node is the region at the endpoint of this gate</i>
 		/// </summary>
-		[ProtoMember(12, IsRequired = true)]
+		[ProtoMember(13, IsRequired = true)]
 		public SoundDef[] AntiNodeSounds = null;
 
 		/// <summary>
 		/// The NodePhysicsDef defining the attractor forces for this gate's anti-ode<br />
 		/// <i>The anti-node is the region at the endpoint of this gate</i>
 		/// </summary>
-		[ProtoMember(13, IsRequired = true)]
+		[ProtoMember(14, IsRequired = true)]
 		public NodePhysicsDef AntiNodePhysics = null;
 		#endregion
 
@@ -2428,27 +2477,28 @@ namespace IOTA.ModularJumpGates
 			if (this.ParticleEffects == null || this.ParticleEffects.Count == 0) return;
 			else if (current_tick >= this.ParticleDefinition.StartTime && current_tick <= this.ParticleDefinition.StartTime + this.Duration)
 			{
-				if (current_tick == this.ParticleDefinition.StartTime) foreach (MyParticleEffect effect in this.ParticleEffects) effect.Play();
+				if (current_tick >= this.ParticleDefinition.StartTime) foreach (MyParticleEffect effect in this.ParticleEffects) effect.Play();
+
 				ushort local_tick = (ushort) (current_tick - this.ParticleDefinition.StartTime);
 				Vector3D rotations_per_second = Vector3D.Zero;
 				Vector3D offset = this.ParticleDefinition.ParticleOffset;
 				Vector4D rps, off;
 
-				float birth_mp = (float) AttributeAnimationDef.GetAnimatedDoubleValue(this.ParticleDefinition.Animations?.ParticleBirthAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, this_entity?.WorldMatrix.Translation, 1);
-				float color_intensity_mp = (float) AttributeAnimationDef.GetAnimatedDoubleValue(this.ParticleDefinition.Animations?.ParticleColorIntensityAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, this_entity?.WorldMatrix.Translation, 1);
-				float fade_mp = (float) AttributeAnimationDef.GetAnimatedDoubleValue(this.ParticleDefinition.Animations?.ParticleFadeAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, this_entity?.WorldMatrix.Translation, 1);
-				float life_mp = (float) AttributeAnimationDef.GetAnimatedDoubleValue(this.ParticleDefinition.Animations?.ParticleLifeAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, this_entity?.WorldMatrix.Translation, 1);
-				float radius_mp = (float) AttributeAnimationDef.GetAnimatedDoubleValue(this.ParticleDefinition.Animations?.ParticleRadiusAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, this_entity?.WorldMatrix.Translation, 1);
-				float scale_mp = (float) AttributeAnimationDef.GetAnimatedDoubleValue(this.ParticleDefinition.Animations?.ParticleScaleAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, this_entity?.WorldMatrix.Translation, 1);
-				float velocity_mp = (float) AttributeAnimationDef.GetAnimatedDoubleValue(this.ParticleDefinition.Animations?.ParticleVelocityAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, this_entity?.WorldMatrix.Translation, 1);
+				float birth_mp = (float) AttributeAnimationDef.GetAnimatedDoubleValue(this.ParticleDefinition.Animations?.ParticleBirthAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, this_entity?.WorldMatrix.Translation, this_entity, 1);
+				float color_intensity_mp = (float) AttributeAnimationDef.GetAnimatedDoubleValue(this.ParticleDefinition.Animations?.ParticleColorIntensityAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, this_entity?.WorldMatrix.Translation, this_entity, 1);
+				float fade_mp = (float) AttributeAnimationDef.GetAnimatedDoubleValue(this.ParticleDefinition.Animations?.ParticleFadeAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, this_entity?.WorldMatrix.Translation, this_entity, 1);
+				float life_mp = (float) AttributeAnimationDef.GetAnimatedDoubleValue(this.ParticleDefinition.Animations?.ParticleLifeAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, this_entity?.WorldMatrix.Translation, this_entity, 1);
+				float radius_mp = (float) AttributeAnimationDef.GetAnimatedDoubleValue(this.ParticleDefinition.Animations?.ParticleRadiusAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, this_entity?.WorldMatrix.Translation, this_entity, 1);
+				float scale_mp = (float) AttributeAnimationDef.GetAnimatedDoubleValue(this.ParticleDefinition.Animations?.ParticleScaleAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, this_entity?.WorldMatrix.Translation, this_entity, 1);
+				float velocity_mp = (float) AttributeAnimationDef.GetAnimatedDoubleValue(this.ParticleDefinition.Animations?.ParticleVelocityAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, this_entity?.WorldMatrix.Translation, this_entity, 1);
 
-				Vector4D color = AttributeAnimationDef.GetAnimatedVectorValue(this.ParticleDefinition.Animations?.ParticleColorAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, this_entity?.WorldMatrix.Translation, Vector4D.One);
+				Vector4D color = AttributeAnimationDef.GetAnimatedVectorValue(this.ParticleDefinition.Animations?.ParticleColorAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, this_entity?.WorldMatrix.Translation, this_entity, Vector4D.One);
 				color *= this.ControllerSettings?.JumpEffectAnimationColorShift().ToVector4D() ?? Vector4D.One;
 
-				rps = AttributeAnimationDef.GetAnimatedVectorValue(this.ParticleDefinition.Animations?.ParticleRotationSpeedAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, this_entity?.WorldMatrix.Translation, Vector4D.Zero);
+				rps = AttributeAnimationDef.GetAnimatedVectorValue(this.ParticleDefinition.Animations?.ParticleRotationSpeedAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, this_entity?.WorldMatrix.Translation, this_entity, Vector4D.Zero);
 				rotations_per_second = new Vector3D(rps.X, rps.Y, rps.Z) * 360d / 60d * (Math.PI / 180d);
 
-				off = AttributeAnimationDef.GetAnimatedVectorValue(this.ParticleDefinition.Animations?.ParticleOffsetAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, this_entity?.WorldMatrix.Translation, new Vector4D(offset, 0));
+				off = AttributeAnimationDef.GetAnimatedVectorValue(this.ParticleDefinition.Animations?.ParticleOffsetAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, this_entity?.WorldMatrix.Translation, this_entity, new Vector4D(offset, 0));
 				offset = new Vector3D(off.X, off.Y, off.Z);
 
 				MatrixD base_matrix = source ?? ParticleOrientationDef.GetJumpGateMatrix(this.JumpGate, this.TargetGate, this.IsAntiNode, ref endpoint, this.ParticleDefinition.ParticleOrientation);
@@ -2555,6 +2605,11 @@ namespace IOTA.ModularJumpGates
 		/// The targeted jump gate or null
 		/// </summary>
 		private MyJumpGate TargetGate;
+
+		/// <summary>
+		/// The sound emitters for non-gate sounds
+		/// </summary>
+		private List<MyEntity3DSoundEmitter> SoundEmitters = null;
 		#endregion
 
 		#region Public Variables
@@ -2594,7 +2649,7 @@ namespace IOTA.ModularJumpGates
 		/// <param name="drives">The list of drives belonging to this gate</param>
 		/// <param name="entities">The list of entities within this gate's jump space</param>
 		/// <param name="endpoint">The gate's targeted endpoint</param>
-		public void Tick(ushort current_tick, List<MyJumpGateDrive> drives, List<MyEntity> entities, ref Vector3D endpoint)
+		public void Tick(ushort current_tick, List<MyJumpGateDrive> drives, List<MyEntity> entities, ref Vector3D endpoint, MyEntity source)
 		{
 			if (this.JumpGate == null || this.JumpGate.Closed) return;
 
@@ -2602,18 +2657,43 @@ namespace IOTA.ModularJumpGates
 			{
 				bool is_start = current_tick == this.SoundDefinition.StartTime;
 				ushort local_tick = (ushort) (current_tick - this.SoundDefinition.StartTime);
-				if (is_start && this.IsAntiNode) foreach (string sound_name in this.SoundDefinition.SoundNames) this.SoundIDs.Add(this.JumpGate.PlaySound(sound_name, pos: endpoint));
+
+				if (is_start && source != null)
+				{
+					this.SoundEmitters = new List<MyEntity3DSoundEmitter>();
+
+					foreach (string sound_name in this.SoundDefinition.SoundNames)
+					{
+						MyEntity3DSoundEmitter emitter = new MyEntity3DSoundEmitter(source);
+						emitter.PlaySound(new MySoundPair(sound_name), true, alwaysHearOnRealistic: true, force3D: true);
+						this.SoundEmitters.Add(emitter);
+					}
+				}
+				else if (is_start && this.IsAntiNode) foreach (string sound_name in this.SoundDefinition.SoundNames) this.SoundIDs.Add(this.JumpGate.PlaySound(sound_name, pos: endpoint));
 				else if (is_start) foreach (string sound_name in this.SoundDefinition.SoundNames) this.SoundIDs.Add(this.JumpGate.PlaySound(sound_name));
+
 				float volume = this.SoundDefinition.Volume;
 				float? distance = this.SoundDefinition.Distance;
 
-				volume = (float) AttributeAnimationDef.GetAnimatedDoubleValue(this.SoundDefinition.Animations?.SoundVolumeAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, null, volume);
-				if (this.SoundDefinition.Animations?.SoundDistanceAnimation != null) distance = (float) AttributeAnimationDef.GetAnimatedDoubleValue(this.SoundDefinition.Animations?.SoundDistanceAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, null);
+				volume = (float) AttributeAnimationDef.GetAnimatedDoubleValue(this.SoundDefinition.Animations?.SoundVolumeAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, source?.WorldMatrix.Translation, source, volume);
+				if (this.SoundDefinition.Animations?.SoundDistanceAnimation != null) distance = (float) AttributeAnimationDef.GetAnimatedDoubleValue(this.SoundDefinition.Animations?.SoundDistanceAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, source?.WorldMatrix.Translation, source);
 
-				foreach (ulong? sound_id in this.SoundIDs)
+				if (this.SoundEmitters == null)
 				{
-					this.JumpGate.SetSoundVolume(sound_id, volume);
-					this.JumpGate.SetSoundDistance(sound_id, distance);
+					foreach (ulong? sound_id in this.SoundIDs)
+					{
+						this.JumpGate.SetSoundVolume(sound_id, volume);
+						this.JumpGate.SetSoundDistance(sound_id, distance);
+					}
+				}
+				else
+				{
+					foreach (MyEntity3DSoundEmitter emitter in this.SoundEmitters)
+					{
+						emitter.VolumeMultiplier = volume;
+						emitter.CustomMaxDistance = distance;
+						emitter.SetPosition(source?.WorldMatrix.Translation);
+					}
 				}
 			}
 			else if (current_tick > this.SoundDefinition.StartTime + this.Duration) this.Stop();
@@ -2630,6 +2710,7 @@ namespace IOTA.ModularJumpGates
 			this.JumpGate = null;
 			this.TargetGate = null;
 			this.SoundDefinition = null;
+			this.SoundEmitters = null;
 		}
 
 		/// <summary>
@@ -2638,7 +2719,9 @@ namespace IOTA.ModularJumpGates
 		public void Stop()
 		{
 			foreach (ulong? sound_id in this.SoundIDs) this.JumpGate.StopSound(sound_id);
+			if (this.SoundEmitters != null) foreach (MyEntity3DSoundEmitter emitter in this.SoundEmitters) emitter.StopSound(true);
 			this.SoundIDs.Clear();
+			this.SoundEmitters?.Clear();
 		}
 		#endregion
 	}
@@ -2720,10 +2803,10 @@ namespace IOTA.ModularJumpGates
 				ushort local_tick = (ushort) (current_tick - this.BeamPulseDefinition.StartTime);
 				ushort travel_time = Math.Max((ushort) 0, this.BeamPulseDefinition.TravelTime);
 				double tick_ratio = (travel_time == 0) ? 1 : ((double) local_tick / travel_time);
-				double frequency = Math.Max(0, AttributeAnimationDef.GetAnimatedDoubleValue(this.BeamPulseDefinition.Animations?.BeamFrequencyAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, null, this.BeamPulseDefinition.BeamFrequency));
-				double beam_length = AttributeAnimationDef.GetAnimatedDoubleValue(this.BeamPulseDefinition.Animations?.ParticleLifeAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, null, this.BeamPulseDefinition.BeamLength);
-				double duty_cycle = MathHelper.Clamp(AttributeAnimationDef.GetAnimatedDoubleValue(this.BeamPulseDefinition.Animations?.BeamDutyCycleAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, null, this.BeamPulseDefinition.BeamDutyCycle), 0, 1);
-				double offset = AttributeAnimationDef.GetAnimatedDoubleValue(this.BeamPulseDefinition.Animations?.BeamOffsetAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, null, this.BeamPulseDefinition.BeamOffset);
+				double frequency = Math.Max(0, AttributeAnimationDef.GetAnimatedDoubleValue(this.BeamPulseDefinition.Animations?.BeamFrequencyAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, null, null, this.BeamPulseDefinition.BeamFrequency));
+				double beam_length = AttributeAnimationDef.GetAnimatedDoubleValue(this.BeamPulseDefinition.Animations?.ParticleLifeAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, null, null, this.BeamPulseDefinition.BeamLength);
+				double duty_cycle = MathHelper.Clamp(AttributeAnimationDef.GetAnimatedDoubleValue(this.BeamPulseDefinition.Animations?.BeamDutyCycleAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, null, null, this.BeamPulseDefinition.BeamDutyCycle), 0, 1);
+				double offset = AttributeAnimationDef.GetAnimatedDoubleValue(this.BeamPulseDefinition.Animations?.BeamOffsetAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, null, null, this.BeamPulseDefinition.BeamOffset);
 				
 				Vector3D beam_dir = endpoint - jump_node;
 				Vector3D beam_dir_n = beam_dir.Normalized();
@@ -2738,8 +2821,8 @@ namespace IOTA.ModularJumpGates
 
 				if (frequency == 0)
 				{
-					beam_width = Math.Abs(beam_width = AttributeAnimationDef.GetAnimatedDoubleValue(this.BeamPulseDefinition.Animations?.ParticleRadiusAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, null, this.BeamPulseDefinition.BeamWidth));
-					beam_color = AttributeAnimationDef.GetAnimatedVectorValue(this.BeamPulseDefinition.Animations?.ParticleColorAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, null, this.BeamPulseDefinition.BeamColor.ToVector4D()) * new Vector4D(new Vector3D(Math.Abs(this.BeamPulseDefinition.BeamBrightness)), 1) * (this.ControllerSettings?.JumpEffectAnimationColorShift().ToVector4D() ?? Vector4D.One);
+					beam_width = Math.Abs(beam_width = AttributeAnimationDef.GetAnimatedDoubleValue(this.BeamPulseDefinition.Animations?.ParticleRadiusAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, null, null, this.BeamPulseDefinition.BeamWidth));
+					beam_color = AttributeAnimationDef.GetAnimatedVectorValue(this.BeamPulseDefinition.Animations?.ParticleColorAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, null, null, this.BeamPulseDefinition.BeamColor.ToVector4D()) * new Vector4D(new Vector3D(Math.Abs(this.BeamPulseDefinition.BeamBrightness)), 1) * (this.ControllerSettings?.JumpEffectAnimationColorShift().ToVector4D() ?? Vector4D.One);
 					MySimpleObjectDraw.DrawLine(beam_start, beam_end, this.BeamMaterial, ref beam_color, (float) beam_width);
 					return;
 				}
@@ -2754,8 +2837,8 @@ namespace IOTA.ModularJumpGates
 
 				for (double i = 0; i < frequency; ++i)
 				{
-					beam_width = Math.Abs(beam_width = AttributeAnimationDef.GetAnimatedDoubleValue(this.BeamPulseDefinition.Animations?.ParticleRadiusAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, beam_start, this.BeamPulseDefinition.BeamWidth));
-					beam_color = AttributeAnimationDef.GetAnimatedVectorValue(this.BeamPulseDefinition.Animations?.ParticleColorAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, beam_start, this.BeamPulseDefinition.BeamColor.ToVector4D()) * new Vector4D(new Vector3D(Math.Abs(this.BeamPulseDefinition.BeamBrightness)), 1) * (this.ControllerSettings?.JumpEffectAnimationColorShift().ToVector4D() ?? Vector4D.One);
+					beam_width = Math.Abs(beam_width = AttributeAnimationDef.GetAnimatedDoubleValue(this.BeamPulseDefinition.Animations?.ParticleRadiusAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, beam_start, null, this.BeamPulseDefinition.BeamWidth));
+					beam_color = AttributeAnimationDef.GetAnimatedVectorValue(this.BeamPulseDefinition.Animations?.ParticleColorAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, beam_start, null, this.BeamPulseDefinition.BeamColor.ToVector4D()) * new Vector4D(new Vector3D(Math.Abs(this.BeamPulseDefinition.BeamBrightness)), 1) * (this.ControllerSettings?.JumpEffectAnimationColorShift().ToVector4D() ?? Vector4D.One);
 					beam_dir_length += waveform;
 					beam_end = beam_start + ((beam_dir_length > beam_length) ? (beam_dir_n * (waveform - (beam_dir_length - beam_length))) : on_delta);
 					MySimpleObjectDraw.DrawLine(beam_start, beam_end, this.BeamMaterial, ref beam_color, (float) beam_width);
@@ -2862,8 +2945,8 @@ namespace IOTA.ModularJumpGates
 					double brightness = this.DriveEmissiveColorDef.Brightness;
 					Vector4D color = this.DriveEmissiveColorDef.EmissiveColor.ToVector4D() * (this.ControllerSettings?.JumpEffectAnimationColorShift().ToVector4D() ?? Vector4D.One);
 
-					color = AttributeAnimationDef.GetAnimatedVectorValue(this.DriveEmissiveColorDef.Animations?.ParticleColorAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, null, color);
-					brightness = AttributeAnimationDef.GetAnimatedDoubleValue(this.DriveEmissiveColorDef.Animations?.ParticleColorIntensityAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, null, brightness);
+					color = AttributeAnimationDef.GetAnimatedVectorValue(this.DriveEmissiveColorDef.Animations?.ParticleColorAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, null, null, color);
+					brightness = AttributeAnimationDef.GetAnimatedDoubleValue(this.DriveEmissiveColorDef.Animations?.ParticleColorIntensityAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, null, null, brightness);
 
 					Vector4D start = this.InitialDriveColors[drive.TerminalBlock.EntityId].ToVector4();
 					Vector4D result = (color - start) * tick_ratio + start;
@@ -2962,12 +3045,12 @@ namespace IOTA.ModularJumpGates
 				double max_speed = this.NodePhysicsDefinition.MaxSpeed;
 				Vector4D torque = new Vector4D(this.NodePhysicsDefinition.AttractorTorque, 0);
 
-				attractor_force = AttributeAnimationDef.GetAnimatedDoubleValue(this.NodePhysicsDefinition.Animations?.PhysicsForceAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, null, attractor_force);
-				attractor_force_falloff = AttributeAnimationDef.GetAnimatedDoubleValue(this.NodePhysicsDefinition.Animations?.PhysicsForceFalloffAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, null, attractor_force_falloff);
-				max_speed = AttributeAnimationDef.GetAnimatedDoubleValue(this.NodePhysicsDefinition.Animations?.PhysicsForceMaxSpeedAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, null, max_speed);
+				attractor_force = AttributeAnimationDef.GetAnimatedDoubleValue(this.NodePhysicsDefinition.Animations?.PhysicsForceAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, null, null, attractor_force);
+				attractor_force_falloff = AttributeAnimationDef.GetAnimatedDoubleValue(this.NodePhysicsDefinition.Animations?.PhysicsForceFalloffAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, null, null, attractor_force_falloff);
+				max_speed = AttributeAnimationDef.GetAnimatedDoubleValue(this.NodePhysicsDefinition.Animations?.PhysicsForceMaxSpeedAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, null, null, max_speed);
 
-				force_offset = AttributeAnimationDef.GetAnimatedVectorValue(this.NodePhysicsDefinition.Animations?.PhysicsForceOffsetAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, null, force_offset);
-				torque = AttributeAnimationDef.GetAnimatedVectorValue(this.NodePhysicsDefinition.Animations?.PhysicsForceTorqueAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, null, torque);
+				force_offset = AttributeAnimationDef.GetAnimatedVectorValue(this.NodePhysicsDefinition.Animations?.PhysicsForceOffsetAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, null, null, force_offset);
+				torque = AttributeAnimationDef.GetAnimatedVectorValue(this.NodePhysicsDefinition.Animations?.PhysicsForceTorqueAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, null, null, torque);
 
 				if (attractor_force != 0)
 				{
@@ -3398,7 +3481,7 @@ namespace IOTA.ModularJumpGates
 				if (this.JumpType == MyJumpTypeEnum.STANDARD || this.JumpType == MyJumpTypeEnum.OUTBOUND_VOID)
 				{
 					foreach (Particle particle in this.NodeParticles) particle.Tick(this.CurrentTick, null, jump_gate_drives, jump_gate_entities, ref endpoint);
-					foreach (Sound sound in this.NodeSounds) sound.Tick(this.CurrentTick, jump_gate_drives, jump_gate_entities, ref endpoint);
+					foreach (Sound sound in this.NodeSounds) sound.Tick(this.CurrentTick, jump_gate_drives, jump_gate_entities, ref endpoint, null);
 					this.NodePhysics?.Tick(this.CurrentTick, jump_gate_drives, jump_gate_entities, ref endpoint);
 					this.DriveColor?.Tick(this.CurrentTick, jump_gate_drives, jump_gate_entities, ref endpoint);
 				}
@@ -3406,7 +3489,7 @@ namespace IOTA.ModularJumpGates
 				if (this.JumpType == MyJumpTypeEnum.STANDARD || this.JumpType == MyJumpTypeEnum.INBOUND_VOID)
 				{
 					foreach (Particle particle in this.AntiNodeParticles) particle.Tick(this.CurrentTick, null, jump_gate_drives, jump_gate_entities, ref anti_node);
-					foreach (Sound sound in this.AntiNodeSounds) sound.Tick(this.CurrentTick, jump_gate_drives, jump_gate_entities, ref anti_node);
+					foreach (Sound sound in this.AntiNodeSounds) sound.Tick(this.CurrentTick, jump_gate_drives, jump_gate_entities, ref anti_node, null);
 					this.AntiNodePhysics?.Tick(this.CurrentTick, jump_gate_drives, jump_gate_entities, ref anti_node);
 				}
 			}
@@ -3433,6 +3516,11 @@ namespace IOTA.ModularJumpGates
 		/// The travel particle effects
 		/// </summary>
 		private List<Particle> TravelParticles = null;
+
+		/// <summary>
+		/// The travel sound effects
+		/// </summary>
+		private List<Sound> TravelSounds = null;
 
 		/// <summary>
 		/// A list of the attached jump gate's batch entities
@@ -3511,7 +3599,7 @@ namespace IOTA.ModularJumpGates
 					this.ClosedEntities.Clear();
 				}
 				
-				MyEntity controller = (MyNetworkInterface.IsDedicatedMultiplayerServer) ? null : MyAPIGateway.Session.CameraController?.Entity;
+				MyEntity controller = (MyNetworkInterface.IsDedicatedMultiplayerServer) ? null : MyAPIGateway.Session.CameraController?.Entity?.GetTopMostParent();
 				EntityBatch batch = this.JumpGate.GetEntityBatchFromEntity(controller);
 
 				if (batch == null && this.TravelParticles != null)
@@ -3520,12 +3608,12 @@ namespace IOTA.ModularJumpGates
 					this.TravelParticles.Clear();
 					this.TravelParticles = null;
 				}
-				else if (batch != null && this.AnimationDefinition.TravelEffect != null && (this.JumpType == MyJumpTypeEnum.STANDARD || this.JumpType == MyJumpTypeEnum.OUTBOUND_VOID))
+				else if (batch != null && this.AnimationDefinition.TravelEffects != null && (this.JumpType == MyJumpTypeEnum.STANDARD || this.JumpType == MyJumpTypeEnum.OUTBOUND_VOID))
 				{
 					ushort duration = this.Beam?.BeamPulseDefinition?.Duration ?? this.AnimationDefinition.Duration;
 					MyEntity parent = batch.Parent;
-					this.TravelParticles = this.TravelParticles ?? this.AnimationDefinition.TravelEffect.Select((particle) => new Particle(particle, duration, this.JumpGate, this.TargetGate, this.ControllerSettings, parent.WorldMatrix, parent.WorldMatrix.Translation, false)).ToList();
-
+					this.TravelParticles = this.TravelParticles ?? this.AnimationDefinition.TravelEffects.Select((particle) => new Particle(particle, duration, this.JumpGate, this.TargetGate, this.ControllerSettings, parent.WorldMatrix, parent.WorldMatrix.Translation, false)).ToList();
+					
 					foreach (Particle particle in this.TravelParticles)
 					{
 						MatrixD source = ParticleOrientationDef.GetJumpGateMatrix(this.JumpGate, this.TargetGate, false, ref endpoint, particle.ParticleDefinition.ParticleOrientation);
@@ -3533,7 +3621,21 @@ namespace IOTA.ModularJumpGates
 						particle.Tick(this.CurrentTick, source, jump_gate_drives, this.JumpedEntities, ref endpoint, parent);
 					}
 				}
-				
+
+				if (batch == null && this.TravelSounds != null)
+				{
+					foreach (Sound sound in this.TravelSounds) sound.Stop();
+					this.TravelSounds.Clear();
+					this.TravelSounds = null;
+				}
+				else if (batch != null && this.AnimationDefinition.TravelSounds != null && (this.JumpType == MyJumpTypeEnum.STANDARD || this.JumpType == MyJumpTypeEnum.OUTBOUND_VOID))
+				{
+					ushort duration = this.Beam?.BeamPulseDefinition?.Duration ?? this.AnimationDefinition.Duration;
+					MyEntity parent = batch.Parent;
+					this.TravelSounds = this.TravelSounds ?? this.AnimationDefinition.TravelSounds.Select((sound) => new Sound(sound, duration, this.JumpGate, this.TargetGate, false)).ToList();
+					foreach (Sound sound in this.TravelSounds) sound.Tick(this.CurrentTick, jump_gate_drives, this.JumpedEntities, ref endpoint, parent);
+				}
+
 				if (this.AnimationDefinition.PerDriveParticles != null && jump_gate_drives != null && (this.JumpType == MyJumpTypeEnum.STANDARD || this.JumpType == MyJumpTypeEnum.OUTBOUND_VOID))
 				{
 					this.ClosedDrives.AddRange(this.PerDriveParticles.Keys);
@@ -3580,12 +3682,12 @@ namespace IOTA.ModularJumpGates
 					this.ClosedDrives.Clear();
 				}
 
-				this.Beam?.Tick(this.CurrentTick, jump_gate_drives, jump_gate_entities, ref endpoint, ref world_jump_node);
+				if (batch == null) this.Beam?.Tick(this.CurrentTick, jump_gate_drives, jump_gate_entities, ref endpoint, ref world_jump_node);
 
 				if (this.JumpType == MyJumpTypeEnum.STANDARD || this.JumpType == MyJumpTypeEnum.OUTBOUND_VOID)
 				{
 					foreach (Particle particle in this.NodeParticles) particle.Tick(this.CurrentTick, null, jump_gate_drives, jump_gate_entities, ref endpoint);
-					foreach (Sound sound in this.NodeSounds) sound.Tick(this.CurrentTick, jump_gate_drives, jump_gate_entities, ref endpoint);
+					foreach (Sound sound in this.NodeSounds) sound.Tick(this.CurrentTick, jump_gate_drives, jump_gate_entities, ref endpoint, null);
 					this.NodePhysics?.Tick(this.CurrentTick, jump_gate_drives, jump_gate_entities, ref endpoint);
 					this.DriveColor?.Tick(this.CurrentTick, jump_gate_drives, jump_gate_entities, ref endpoint);
 				}
@@ -3593,7 +3695,7 @@ namespace IOTA.ModularJumpGates
 				if (this.JumpType == MyJumpTypeEnum.STANDARD || this.JumpType == MyJumpTypeEnum.INBOUND_VOID)
 				{
 					foreach (Particle particle in this.AntiNodeParticles) particle.Tick(this.CurrentTick, null, jump_gate_drives, jump_gate_entities, ref anti_node);
-					foreach (Sound sound in this.AntiNodeSounds) sound.Tick(this.CurrentTick, jump_gate_drives, jump_gate_entities, ref anti_node);
+					foreach (Sound sound in this.AntiNodeSounds) sound.Tick(this.CurrentTick, jump_gate_drives, jump_gate_entities, ref anti_node, null);
 					this.AntiNodePhysics?.Tick(this.CurrentTick, jump_gate_drives, jump_gate_entities, ref anti_node);
 				}
 			}
@@ -3608,15 +3710,29 @@ namespace IOTA.ModularJumpGates
 
 		public override void Clean(bool full_close = true)
 		{
-			foreach (Particle particle in this.TravelParticles)
+			if (this.TravelParticles != null)
 			{
-				if (full_close) particle.Clean();
-				else particle.Stop();
+				foreach (Particle particle in this.TravelParticles)
+				{
+					if (full_close) particle.Clean();
+					else particle.Stop();
+				}
 			}
 
-			this.TravelParticles.Clear();
+			if (this.TravelSounds != null)
+			{
+				foreach (Sound sound in this.TravelSounds)
+				{
+					if (full_close) sound.Clean();
+					else sound.Stop();
+				}
+			}
+
+			this.TravelParticles?.Clear();
+			this.TravelSounds?.Clear();
 			this.JumpedEntities.Clear();
 			this.TravelParticles = null;
+			this.TravelSounds = null;
 
 			if (full_close)
 			{
@@ -3751,7 +3867,7 @@ namespace IOTA.ModularJumpGates
 				if (this.JumpType == MyJumpTypeEnum.STANDARD || this.JumpType == MyJumpTypeEnum.OUTBOUND_VOID)
 				{
 					foreach (Particle particle in this.NodeParticles) particle.Tick(this.CurrentTick, null, jump_gate_drives, jump_gate_entities, ref endpoint);
-					foreach (Sound sound in this.NodeSounds) sound.Tick(this.CurrentTick, jump_gate_drives, jump_gate_entities, ref endpoint);
+					foreach (Sound sound in this.NodeSounds) sound.Tick(this.CurrentTick, jump_gate_drives, jump_gate_entities, ref endpoint, null);
 					this.NodePhysics?.Tick(this.CurrentTick, jump_gate_drives, jump_gate_entities, ref endpoint);
 					this.DriveColor?.Tick(this.CurrentTick, jump_gate_drives, jump_gate_entities, ref endpoint);
 				}
@@ -3759,7 +3875,7 @@ namespace IOTA.ModularJumpGates
 				if (this.JumpType == MyJumpTypeEnum.STANDARD || this.JumpType == MyJumpTypeEnum.INBOUND_VOID)
 				{
 					foreach (Particle particle in this.AntiNodeParticles) particle.Tick(this.CurrentTick, null, jump_gate_drives, jump_gate_entities, ref anti_node);
-					foreach (Sound sound in this.AntiNodeSounds) sound.Tick(this.CurrentTick, jump_gate_drives, jump_gate_entities, ref anti_node);
+					foreach (Sound sound in this.AntiNodeSounds) sound.Tick(this.CurrentTick, jump_gate_drives, jump_gate_entities, ref anti_node, null);
 					this.AntiNodePhysics?.Tick(this.CurrentTick, jump_gate_drives, jump_gate_entities, ref anti_node);
 				}
 			}

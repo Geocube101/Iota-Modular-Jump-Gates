@@ -145,6 +145,11 @@ namespace IOTA.ModularJumpGates
 		private ConcurrentQueue<MyJumpGate> GateCloseRequests = new ConcurrentQueue<MyJumpGate>();
 
 		/// <summary>
+		/// Used to store all constructs that are partially loaded
+		/// </summary>
+		private ConcurrentDictionary<long, byte> PartialSuspendedGridsQueue = new ConcurrentDictionary<long, byte>();
+
+		/// <summary>
 		/// Master map for storing grid constructs
 		/// </summary>
 		private ConcurrentDictionary<long, MyJumpGateConstruct> GridMap = new ConcurrentDictionary<long, MyJumpGateConstruct>();
@@ -533,6 +538,7 @@ namespace IOTA.ModularJumpGates
 			this.GridMap.Clear();
 			this.JumpGateAnimations.Clear();
 			this.EntityWarps.Clear();
+			this.PartialSuspendedGridsQueue.Clear();
 
 			this.GridUpdateTimeTicks = null;
 			this.SessionUpdateTimeTicks = null;
@@ -541,6 +547,7 @@ namespace IOTA.ModularJumpGates
 			this.GridMap = null;
 			this.JumpGateAnimations = null;
 			this.EntityWarps = null;
+			this.PartialSuspendedGridsQueue = null;
 
 			MyAPIGateway.Entities.OnEntityAdd -= this.OnEntityAdd;
 			MyAPIGateway.Entities.OnEntityRemove -= this.OnEntityRemove;
@@ -613,17 +620,7 @@ namespace IOTA.ModularJumpGates
 			base.BeforeStart();
 			Logger.Log("INIT - Loading Data...");
 			MyAnimationHandler.Load();
-
-			if (MyJumpGateModSession.Network.Registered && MyNetworkInterface.IsStandaloneMultiplayerClient)
-			{
-				MyNetworkInterface.Packet update_request = new MyNetworkInterface.Packet {
-					PacketType = MyPacketTypeEnum.UPDATE_GRIDS,
-					TargetID = 0,
-					Broadcast = false,
-				};
-				update_request.Send();
-			}
-
+			if (MyJumpGateModSession.Network.Registered && MyNetworkInterface.IsStandaloneMultiplayerClient) this.RequestGridsDownload();
 			if (!MyNetworkInterface.IsDedicatedMultiplayerServer) MyAPIGateway.Utilities.ShowMessage(MyJumpGateModSession.MODID, "Initializing Constructs...");
 			MyAPIGateway.TerminalControls.CustomControlGetter += this.OnTerminalSelector;
 			Logger.Log("INIT - Loaded.");
@@ -642,6 +639,20 @@ namespace IOTA.ModularJumpGates
 			{
 				base.UpdateBeforeSimulation();
 				this.FlushClosureQueues();
+
+				foreach (KeyValuePair<long, byte> partial_grid in this.PartialSuspendedGridsQueue)
+				{
+					byte new_time = (byte) (partial_grid.Value - 1);
+
+					if (new_time > 0)
+					{
+						this.PartialSuspendedGridsQueue[partial_grid.Key] = new_time;
+						continue;
+					}
+
+					this.PartialSuspendedGridsQueue.Remove(partial_grid.Key);
+					this.RequestGridDownload(partial_grid.Key);
+				}
 			}
 			finally
 			{
@@ -669,13 +680,7 @@ namespace IOTA.ModularJumpGates
 				// Update grids
 				if (MyNetworkInterface.IsStandaloneMultiplayerClient && MyJumpGateModSession.GameTick == this.FirstUpdateTimeTicks)
 				{
-					MyNetworkInterface.Packet packet = new MyNetworkInterface.Packet
-					{
-						PacketType = MyPacketTypeEnum.UPDATE_GRIDS,
-						TargetID = 0,
-						Broadcast = false,
-					};
-					packet.Send();
+					this.RequestGridsDownload();
 					Logger.Debug($"INITAL_GRID_UPDATE", 2);
 				}
 
@@ -856,6 +861,7 @@ namespace IOTA.ModularJumpGates
 							BoundingEllipsoidD effective_ellipse = gate.GetEffectiveJumpEllipse();
 							if (complete && effective_ellipse != jump_ellipse) effective_ellipse.Draw(Color.BlueViolet, 90, 0.1f, line_material);
 							if (complete && !MyJumpGateModSession.Configuration.GeneralConfiguration.LenientJumps) gate.ShearEllipse.Draw(Color.Red, 90, 0.1f, line_material);
+							new BoundingEllipsoidD(jump_ellipse.Radii.Max() * 2, ref jump_ellipse.WorldMatrix).Draw(Color.LightSkyBlue, 90, 0.1f, line_material);
 
 							// Display gate ellipsoid bounds
 							BoundingBoxD ellipse_aabb = BoundingBox.CreateFromHalfExtent(Vector3.Zero, jump_ellipse.Radii);
@@ -1013,7 +1019,7 @@ namespace IOTA.ModularJumpGates
 			{
 				long grid_id = packet.Payload<long>();
 				packet = packet.Forward(packet.SenderID, false);
-				packet.Payload<MySerializedJumpGateConstruct>(this.GridMap.GetValueOrDefault(grid_id, null)?.ToSerialized(false));
+				packet.Payload(this.GridMap.GetValueOrDefault(grid_id, null)?.ToSerialized(false));
 				packet.Send();
 				Logger.Debug($"Got client grid download request - Sent grid: {grid_id}", 2);
 			}
@@ -1022,7 +1028,7 @@ namespace IOTA.ModularJumpGates
 				MyJumpGateConstruct new_grid = this.StoreSerializedGrid(packet.Payload<MySerializedJumpGateConstruct>());
 				if (new_grid == null) return;
 				new_grid.LastUpdateDateTimeUTC = packet.EpochDateTimeUTC;
-				Logger.Debug($"Grid '{new_grid.CubeGrid.EntityId}' NETWORK_DOWNLOAD", 2);
+				Logger.Debug($"Grid '{new_grid.CubeGridID}' NETWORK_DOWNLOAD", 2);
 			}
 		}
 
@@ -1274,8 +1280,27 @@ namespace IOTA.ModularJumpGates
 		}
 
 		/// <summary>
+		/// Requests a download of all constructs from server<br />
+		/// Does nothing if not standalone multiplayer client
+		/// </summary>
+		public void RequestGridsDownload()
+		{
+			if (MyNetworkInterface.IsServerLike) return;
+
+			MyNetworkInterface.Packet packet = new MyNetworkInterface.Packet
+			{
+				PacketType = MyPacketTypeEnum.UPDATE_GRIDS,
+				TargetID = 0,
+				Broadcast = false,
+			};
+
+			packet.Send();
+		}
+
+		/// <summary>
 		/// Queues an entity warp<br />
-		/// This will move the specified entity over time to the targeted position and rotation
+		/// This will move the specified entity over time to the targeted position and rotation<br />
+		/// Does nothing on standalone multiplayer client
 		/// </summary>
 		/// <param name="jump_gate">The calling jump gate</param>
 		/// <param name="entity_batch">The batch of entities to move</param>
@@ -1287,6 +1312,27 @@ namespace IOTA.ModularJumpGates
 		{
 			if (MyNetworkInterface.IsStandaloneMultiplayerClient) return;
 			this.EntityWarps.TryAdd(entity_batch[0].EntityId, new EntityWarpInfo(jump_gate, ref source_matrix, ref dest_matrix, entity_batch, time, callback));
+		}
+
+		/// <summary>
+		/// Gets all active entity batch warps for the specified jump gate<br />
+		/// Does nothing on standalone multiplayer client
+		/// </summary>
+		/// <param name="jump_gate">The jump gate who's batch warps to get</param>
+		/// <param name="batch_warps">A list of batch warps<br />List will not be cleared</param>
+		public void GetEntityBatchWarpsForGate(MyJumpGate jump_gate, List<EntityWarpInfo> batch_warps)
+		{
+			if (MyNetworkInterface.IsStandaloneMultiplayerClient) return;
+			foreach (EntityWarpInfo warp in this.EntityWarps.Values) if (warp.JumpGate == jump_gate) batch_warps.Add(warp);
+		}
+
+		/// <summary>
+		/// Queues a construct for redownload after 1 second
+		/// </summary>
+		/// <param name="main_grid_id">The id of the construct's main grid</param>
+		public void QueuePartialConstructForReload(long main_grid_id)
+		{
+			this.PartialSuspendedGridsQueue[main_grid_id] = 60;
 		}
 
 		/// <summary>

@@ -114,7 +114,11 @@ namespace IOTA.ModularJumpGates
 			/// <param name="data">The data</param>
 			public void Payload<T>(T data)
 			{
-				if (data == null) this.PayloadIsNull = true;
+				if (data == null)
+				{
+					this.PayloadIsNull = true;
+					this.Buffer = null;
+				}
 				else
 				{
 					byte[] serialized = MyAPIGateway.Utilities.SerializeToBinary(data);

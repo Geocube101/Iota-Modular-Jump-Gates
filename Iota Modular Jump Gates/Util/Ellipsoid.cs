@@ -95,13 +95,13 @@ namespace IOTA.ModularJumpGates.Util
 		{
 			double[] doubles = new double[12];
 			for (int i = 0; i < doubles.Length; ++i) doubles[i] = BitConverter.ToDouble(bytes, offset + i * sizeof(double));
-			Vector3D radii = new Vector3D(doubles[0], doubles[1], doubles[2]);
+			BoundingEllipsoidD ellipsoid;
+			ellipsoid.Radii = new Vector3D(doubles[0], doubles[1], doubles[2]);
 			Vector3D forward = new Vector3D(doubles[3], doubles[4], doubles[5]);
 			Vector3D up = new Vector3D(doubles[6], doubles[7], doubles[8]);
 			Vector3D translation = new Vector3D(doubles[9], doubles[10], doubles[11]);
-			MatrixD matrix;
-			MatrixD.CreateWorld(ref translation, ref forward, ref up, out matrix);
-			return new BoundingEllipsoidD(ref radii, ref matrix);
+			MatrixD.CreateWorld(ref translation, ref forward, ref up, out ellipsoid.WorldMatrix);
+			return ellipsoid;
 		}
 		#endregion
 
@@ -131,6 +131,17 @@ namespace IOTA.ModularJumpGates.Util
 		/// <summary>
 		/// Creates a new BoundingEllipsoidD
 		/// </summary>
+		/// <param name="radius">The ellipsoid's spherical radius</param>
+		/// <param name="world_matrix">The ellipsoid's world matrix</param>
+		public BoundingEllipsoidD(double radius, MatrixD world_matrix)
+		{
+			this.Radii = new Vector3D(Math.Abs(radius));
+			this.WorldMatrix = world_matrix;
+		}
+
+		/// <summary>
+		/// Creates a new BoundingEllipsoidD
+		/// </summary>
 		/// <param name="radii">The ellipsoid's radii</param>
 		/// <param name="world_matrix">The ellipsoid's world matrix</param>
 		public BoundingEllipsoidD(Vector3D radii, ref MatrixD world_matrix)
@@ -147,6 +158,17 @@ namespace IOTA.ModularJumpGates.Util
 		public BoundingEllipsoidD(ref Vector3D radii, ref MatrixD world_matrix)
 		{
 			this.Radii = Vector3D.Abs(radii);
+			this.WorldMatrix = world_matrix;
+		}
+
+		/// <summary>
+		/// Creates a new BoundingEllipsoidD
+		/// </summary>
+		/// <param name="radius">The ellipsoid's spherical radius</param>
+		/// <param name="world_matrix">The ellipsoid's world matrix</param>
+		public BoundingEllipsoidD(double radius, ref MatrixD world_matrix)
+		{
+			this.Radii = new Vector3D(Math.Abs(radius));
 			this.WorldMatrix = world_matrix;
 		}
 		#endregion
@@ -293,14 +315,7 @@ namespace IOTA.ModularJumpGates.Util
 		/// <returns>True if point is inside</returns>
 		public bool IsLocalPointInEllipse(ref Vector3D local_coord)
 		{
-			double xc2 = Math.Pow(local_coord.X, 2);
-			double yc2 = Math.Pow(local_coord.Y, 2);
-			double zc2 = Math.Pow(local_coord.Z, 2);
-			double xr2 = Math.Pow(this.Radii.X, 2);
-			double yr2 = Math.Pow(this.Radii.Y, 2);
-			double zr2 = Math.Pow(this.Radii.Z, 2);
-
-			return xc2 / xr2 + yc2 / yr2 + zc2 / zr2 <= 1;
+			return Math.Pow(local_coord.X / this.Radii.X, 2) + Math.Pow(local_coord.Y / this.Radii.Y, 2) + Math.Pow(local_coord.Z / this.Radii.Z, 2) <= 1;
 		}
 
 		/// <summary>
@@ -310,14 +325,7 @@ namespace IOTA.ModularJumpGates.Util
 		/// <returns>True if point is inside</returns>
 		public bool IsLocalPointInEllipse(Vector3D local_coord)
 		{
-			double xc2 = Math.Pow(local_coord.X, 2);
-			double yc2 = Math.Pow(local_coord.Y, 2);
-			double zc2 = Math.Pow(local_coord.Z, 2);
-			double xr2 = Math.Pow(this.Radii.X, 2);
-			double yr2 = Math.Pow(this.Radii.Y, 2);
-			double zr2 = Math.Pow(this.Radii.Z, 2);
-
-			return xc2 / xr2 + yc2 / yr2 + zc2 / zr2 <= 1;
+			return Math.Pow(local_coord.X / this.Radii.X, 2) + Math.Pow(local_coord.Y / this.Radii.Y, 2) + Math.Pow(local_coord.Z / this.Radii.Z, 2) <= 1;
 		}
 
 		/// <summary>

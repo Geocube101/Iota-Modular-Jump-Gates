@@ -649,7 +649,7 @@ namespace IOTA.ModularJumpGates
         {
             this.CheckClosed();
 			List<IMyCubeGrid> construct = (grids == null) ? new List<IMyCubeGrid>() : new List<IMyCubeGrid>(grids);
-
+			
 			if (this.CubeGrid == null || this.CubeGrid.MarkedForClose || this.CubeGrid.Closed)
             {
                 this.CubeGrid = null;
@@ -1676,6 +1676,14 @@ namespace IOTA.ModularJumpGates
 			{
 				IMyCubeGrid new_grid = MyAPIGateway.Entities.GetEntityById(gridid) as IMyCubeGrid;
 				Logger.Debug($"CUBE_GRID_SETUP::{gridid}, NULLGRID={new_grid == null}", 2);
+
+				if (this.IsSuspended && new_grid != null && grid.CubeGrids.Any((subgrid_id) => ((IMyCubeGrid) MyAPIGateway.Entities.GetEntityById(subgrid_id)) == null))
+				{
+					MyJumpGateModSession.Instance.QueuePartialConstructForReload(gridid);
+					Logger.Debug($" ... PARTIAL_GRID >> MARKED_FOR_SINGLE_UPDATE_60");
+					return true;
+				}
+
 				this.MarkClosed = false;
 				this.PrimaryCubeGridCustomName = new_grid?.CustomName ?? "";
 				List<MySerializedJumpGate> jump_gates = grid.JumpGates ?? new List<MySerializedJumpGate>();
@@ -1690,7 +1698,7 @@ namespace IOTA.ModularJumpGates
 				if (new_grid != null && MyNetworkInterface.IsStandaloneMultiplayerClient)
 				{
 					this.CubeGrid = new_grid;
-					this.SetupConstruct(grid.CubeGrids.Select((subgrid) => (IMyCubeGrid) MyAPIGateway.Entities.GetEntityById(subgrid)));
+					this.SetupConstruct(grid.CubeGrids.Select((subgrid) => (IMyCubeGrid) MyAPIGateway.Entities.GetEntityById(subgrid)).Where((subgrid) => subgrid != null));
 				}
 				
 				foreach (MySerializedJumpGateDrive serialized in drives)

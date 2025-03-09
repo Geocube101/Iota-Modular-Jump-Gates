@@ -940,10 +940,10 @@ namespace IOTA.ModularJumpGates.CubeBlock
 					MatrixD player_holo_matrix = MatrixD.CreateWorld(table_holo_center, player_facing, up);
 					MatrixD holo_matrix = MatrixD.CreateWorld(table_holo_center, this.TerminalBlock.WorldMatrix.Up, this.TerminalBlock.WorldMatrix.Forward);
 					jump_gate_valid = jump_gate != null && jump_gate.IsComplete();
+					if (jump_gate_valid) jump_gate.GetJumpGateDrives(this.AttachedJumpGateDrives);
 
-					if (jump_gate_valid && jump_gate.JumpGateGrid.GetDriveCount((drive) => drive.JumpGateID == jump_gate.JumpGateID && drive.IsWorking()) >= 2)
+					if (jump_gate_valid && this.AttachedJumpGateDrives.Where((drive) => drive.IsWorking()).Count() >= 2)
 					{
-						jump_gate.GetJumpGateDrives(this.AttachedJumpGateDrives);
 						BoundingEllipsoidD jump_ellipse = jump_gate.JumpEllipse;
 						Color color = new Color(97, 205, 202);
 						Vector4D red_color_vec = Color.Red.ToVector4() * 2;
@@ -987,8 +987,6 @@ namespace IOTA.ModularJumpGates.CubeBlock
 								MySimpleObjectDraw.DrawTransparentBox(ref holo_matrix, ref transparent_box, ref drive_color, MySimpleObjectRasterizer.Wireframe, 1, 0.01f, null, line_mat, intensity: 10);
 							}
 						}
-
-						this.AttachedJumpGateDrives.Clear();
 						
 						if (view_distance <= 50)
 						{
@@ -1011,18 +1009,20 @@ namespace IOTA.ModularJumpGates.CubeBlock
 					}
 					else if (jump_gate_valid)
 					{
-						Vector4D color = Color.White.ToVector4();
+						Vector4D color = new Color(97, 205, 202).ToVector4();
 						color *= 2;
 						color.W = 1;
 						MyTransparentGeometry.AddBillboardOriented(MyStringId.GetOrCompute("IOTA.JumpGateControllerIcon.GateOffline"), color, player_holo_matrix.Translation, player_holo_matrix.Right, player_holo_matrix.Down, 0.75f, 0.75f);
 					}
 					else
 					{
-						Vector4D color = Color.White.ToVector4();
+						Vector4D color = Color.Red.ToVector4();
 						color *= 2;
 						color.W = 1;
 						MyTransparentGeometry.AddBillboardOriented(MyStringId.GetOrCompute("IOTA.JumpGateControllerIcon.NoGateConnected"), color, player_holo_matrix.Translation, player_holo_matrix.Right, player_holo_matrix.Down, 0.75f, 0.75f);
 					}
+
+					this.AttachedJumpGateDrives.Clear();
 				}
 			}
 			

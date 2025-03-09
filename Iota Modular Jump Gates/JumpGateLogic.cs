@@ -20,7 +20,6 @@ using System.Threading;
 using SpaceEngineers.Game.ModAPI;
 using System.Text;
 using IOTA.ModularJumpGates.Util.ConcurrentCollections;
-using System.Text.RegularExpressions;
 
 namespace IOTA.ModularJumpGates
 {
@@ -92,6 +91,12 @@ namespace IOTA.ModularJumpGates
 			/// </summary>
 			[ProtoMember(8)]
 			public string ResultMessage;
+
+			/// <summary>
+			/// The entity batches for this jump
+			/// </summary>
+			[ProtoMember(9)]
+			public List<string> EntityBatches;
 			#endregion
 
 			#region Constructors
@@ -1146,6 +1151,9 @@ namespace IOTA.ModularJumpGates
 				// Is server, broadcast jump results
 				if (MyNetworkInterface.IsMultiplayerServer)
 				{
+					List<EntityWarpInfo> batch_warps = new List<EntityWarpInfo>();
+					MyJumpGateModSession.Instance.GetEntityBatchWarpsForGate(this, batch_warps);
+
 					MyNetworkInterface.Packet packet = new MyNetworkInterface.Packet {
 						PacketType = MyPacketTypeEnum.JUMP_GATE_JUMP,
 						TargetID = 0,
@@ -1159,6 +1167,7 @@ namespace IOTA.ModularJumpGates
 						ControllerSettings = controller_settings,
 						ResultMessage = message,
 						CancelOverride = this.Status == MyJumpGateStatus.CANCELLED,
+						EntityBatches = this.EntityBatches.Values.Select((batch) => batch.ToSerialized()).ToList(),
 					});
 					packet.Send();
 				}
@@ -1799,7 +1808,7 @@ namespace IOTA.ModularJumpGates
 								MatrixD entity_matrix = entity.WorldMatrix;
 								Vector3D velocity = MyJumpGateModSession.WorldVectorToLocalVectorD(ref this_matrix, entity.Physics.LinearVelocity);
 								velocity = MyJumpGateModSession.LocalVectorToWorldVectorD(ref target_matrix, velocity);
-								MyJumpGateModSession.Instance.WarpEntityBatchOverTime(this, batch.Batch, ref entity_matrix, ref batch.ParentTargetMatrix, jump_duration, (batch_) => { foreach (MyEntity child in batch_) child.Physics.LinearVelocity = velocity; });
+								MyJumpGateModSession.Instance.WarpEntityBatchOverTime(this, batch.Batch, ref entity_matrix, ref batch.ParentTargetMatrix, jump_duration, (batch_) => { foreach (MyEntity child in batch_) if (child != null && !child.MarkedForClose) child.Physics.LinearVelocity = velocity; });
 								Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} ... TP_SUCCESS_BATCH_{entity.EntityId} - ENDPOINT={batch.ParentTargetMatrix.Translation}", 4);
 							}
 						}
@@ -1929,7 +1938,7 @@ namespace IOTA.ModularJumpGates
 									MatrixD entity_matrix = entity.WorldMatrix;
 									Vector3D velocity = MyJumpGateModSession.WorldVectorToLocalVectorD(ref this_matrix, entity.Physics.LinearVelocity);
 									velocity = MyJumpGateModSession.LocalVectorToWorldVectorD(ref target_matrix, velocity);
-									MyJumpGateModSession.Instance.WarpEntityBatchOverTime(this, batch.Batch, ref entity_matrix, ref batch.ParentTargetMatrix, jump_duration, (batch_) => { foreach (MyEntity child in batch_) child.Physics.LinearVelocity = velocity; });
+									MyJumpGateModSession.Instance.WarpEntityBatchOverTime(this, batch.Batch, ref entity_matrix, ref batch.ParentTargetMatrix, jump_duration, (batch_) => { foreach (MyEntity child in batch_) if (child != null && !child.MarkedForClose) child.Physics.LinearVelocity = velocity; });
 									Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} ... TP_SUCCESS_BATCH_{entity.EntityId} - ENDPOINT={batch.ParentTargetMatrix.Translation}", 4);
 								}
 							}
@@ -1994,6 +2003,13 @@ namespace IOTA.ModularJumpGates
 				{
 					this.ServerJumpResponse = jump_gate_info;
 
+					foreach (string serialized_batch in jump_gate_info.EntityBatches)
+					{
+						EntityBatch batch = new EntityBatch(serialized_batch);
+						if (batch.Batch.Count == 0) continue;
+						this.EntityBatches[batch.Parent] = batch;
+					}
+
 					switch (this.ServerJumpResponse.Type)
 					{
 						case JumpGateInfo.TypeEnum.JUMP_FAIL:
@@ -2004,6 +2020,7 @@ namespace IOTA.ModularJumpGates
 							break;
 						case JumpGateInfo.TypeEnum.JUMP_SUCCESS:
 							SendJumpResponse(this.ServerJumpResponse.ResultMessage, true);
+							MyJumpGateModSession.Instance.RequestGridsDownload();
 							break;
 					}
 				}
@@ -2023,6 +2040,7 @@ namespace IOTA.ModularJumpGates
 				Action<Exception> onend = (error) => {
 					gate_animation?.Clean();
 					this.TrueEndpoint = null;
+					this.EntityBatches.Clear();
 					if (this.ServerJumpResponse != null && this.ServerJumpResponse.Type == JumpGateInfo.TypeEnum.CLOSED) this.Dispose();
 					else if (!this.Closed && !this.MarkClosed) this.Reset();
 					this.ServerJumpResponse = null;
@@ -3197,7 +3215,7 @@ namespace IOTA.ModularJumpGates
 									}
 								} while (enumerator.MoveNext());
 							}
-							else if (entity is IMyCharacter)
+							else if (entity is IMyCharacter && jump_ellipse.IsPointInEllipse(entity.WorldMatrix.Translation))
 							{
 								add_entity = entity;
 								mass = ((IMyCharacter) entity).CurrentMass;
@@ -3683,10 +3701,8 @@ namespace IOTA.ModularJumpGates
 		public bool IsPointInHudBroadcastRange(ref Vector3D pos)
 		{
 			this.CheckClosed();
-			BoundingEllipsoidD ellipsoid = this.JumpEllipse * 2;
-			if (ellipsoid.IsPointInEllipse(ref pos)) return true;
-			else if (this.Controller == null) return false;
-			return new BoundingSphereD(this.Controller.WorldMatrix.Translation, 50).Contains(pos) == ContainmentType.Contains;
+			BoundingEllipsoidD jump_ellipse = this.JumpEllipse;
+			return new BoundingSphereD(jump_ellipse.WorldMatrix.Translation, jump_ellipse.Radii.Max() * 2).Contains(pos) == ContainmentType.Contains || (this.Controller != null && new BoundingSphereD(this.Controller.WorldMatrix.Translation, 50).Contains(pos) == ContainmentType.Contains);
 		}
 
 		/// <summary>
