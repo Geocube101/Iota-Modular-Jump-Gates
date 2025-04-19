@@ -12,6 +12,7 @@ using System.Linq;
 using System.Text;
 using VRage.Game;
 using VRage.Game.Components;
+using VRage.Game.ModAPI;
 using VRage.ModAPI;
 using VRage.ObjectBuilders;
 using VRageMath;
@@ -62,6 +63,11 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// The world matrix of this block
 		/// </summary>
 		private MatrixD BlockWorldMatrix;
+
+		/// <summary>
+		/// The last detailed info string
+		/// </summary>
+		private string LastDetailedInfoString = "";
 		#endregion
 
 		#region Protected Variables
@@ -241,8 +247,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		public override void UpdateOnceBeforeFrame()
 		{
 			base.UpdateOnceBeforeFrame();
-			if (MyCubeBlockBase.ModelBoundingBoxSize == Vector3D.Zero && !this.IsNullWrapper) MyCubeBlockBase.ModelBoundingBoxSize = this.TerminalBlock.Model.BoundingBoxSize;
-
+			MyCubeBlockBase.ModelBoundingBoxSize = (MyCubeBlockBase.ModelBoundingBoxSize == Vector3D.Zero && !this.IsNullWrapper) ? new Vector3D(this.TerminalBlock.Model.BoundingBoxSize) : MyCubeBlockBase.ModelBoundingBoxSize;
 			MyCubeBlockTerminal.Load(this.ModContext);
 			MyJumpGateControllerTerminal.Load(this.ModContext);
 			MyJumpGateCapacitorTerminal.Load(this.ModContext);
@@ -259,8 +264,8 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		{
 			base.UpdateBeforeSimulation();
 			if (this.TerminalBlock == null || this.TerminalBlock?.CubeGrid?.Physics == null) return;
-			if (this.ResourceSink != null) this.ResourceSink.Update();
-			if (!MyJumpGateModSession.Instance.IsJumpGateGridMultiplayerValid(this.JumpGateGrid) && !this.IsClosed()) this.JumpGateGrid = MyJumpGateModSession.Instance.GetJumpGateGrid(this.TerminalBlock.CubeGrid);
+			this.ResourceSink?.Update();
+			this.JumpGateGrid = (!MyJumpGateModSession.Instance.IsJumpGateGridMultiplayerValid(this.JumpGateGrid) && !this.IsClosed()) ? MyJumpGateModSession.Instance.GetJumpGateGrid(this.TerminalBlock.CubeGrid) : this.JumpGateGrid;
 		}
 
 		/// <summary>
@@ -274,12 +279,9 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			base.UpdateAfterSimulation();
 			if (this.TerminalBlock == null || this.TerminalBlock.MarkedForClose) return;
 			++this.LocalGameTick;
-
-			if (MyAPIGateway.Gui.GetCurrentScreen == VRage.Game.ModAPI.MyTerminalPageEnum.ControlPanel)// && MyAPIGateway.Gui.InteractedEntity == this.TerminalBlock)
-			{
-				this.TerminalBlock.RefreshCustomInfo();
-				this.TerminalBlock.SetDetailedInfoDirty();
-			}
+			if (MyAPIGateway.Gui.GetCurrentScreen != VRage.Game.ModAPI.MyTerminalPageEnum.ControlPanel) return;
+			this.TerminalBlock.RefreshCustomInfo();
+			this.TerminalBlock.SetDetailedInfoDirty();
 		}
 
 		/// <summary>
@@ -355,14 +357,17 @@ namespace IOTA.ModularJumpGates.CubeBlock
 
 				try
 				{
+					int count = local_sb.Length;
 					this.AppendCustomInfo(local_sb);
+					string result = local_sb.ToString();
+					this.LastDetailedInfoString = (result.Length == count) ? this.LastDetailedInfoString : result;
 				}
 				catch (NullReferenceException e)
 				{
 					local_sb.Append($"Detailed Info Error:\n{e.Message}\n ... \n{e.StackTrace}");
 				}
 
-				string[] lines = local_sb.ToString().Trim(' ', '\t', '\n').Split('\n');
+				string[] lines = this.LastDetailedInfoString.Trim(' ', '\t', '\n').Split('\n');
 				int max_length = 9;
 
 				if (lines.Length <= max_length)
@@ -565,7 +570,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// <returns>Closedness</returns>
 		public bool IsClosed()
 		{
-			return (this.IsNullWrapper && (this.SerializedWrapperInfo?.IsClosed ?? true)) || (this.TerminalBlock == null || this.TerminalBlock.Closed || this.TerminalBlock.MarkedForClose || this.TerminalBlock.CubeGrid.Physics == null);
+			return (this.IsNullWrapper && (this.SerializedWrapperInfo?.IsClosed ?? true)) || (this.TerminalBlock == null || this.TerminalBlock.Closed || this.TerminalBlock.MarkedForClose || this.TerminalBlock.CubeGrid?.Physics == null);
 		}
 
 		/// <summary>
@@ -581,12 +586,12 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		}
 
 		/// <summary>
-		/// Gets whether block is enabled (not closed)
+		/// Gets whether block is enabled
 		/// </summary>
 		/// <returns>Enabledness</returns>
 		public bool IsEnabled()
 		{
-			return (this.IsNullWrapper && (this.SerializedWrapperInfo?.IsEnabled ?? false)) || (!this.IsClosed() && this.TerminalBlock.Enabled);
+			return (this.IsNullWrapper && (this.SerializedWrapperInfo?.IsEnabled ?? false)) || this.TerminalBlock.Enabled;
 		}
 
 		/// <summary>
@@ -595,7 +600,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// <returns>Workingness</returns>
 		public bool IsWorking()
 		{
-			return (this.IsNullWrapper && (this.SerializedWrapperInfo?.IsEnabled ?? false)) || (!this.IsClosed() && this.IsEnabled() && this.IsPowered() && this.TerminalBlock.IsFunctional);
+			return !this.IsClosed() && this.IsEnabled() && this.IsPowered() && this.TerminalBlock.IsFunctional;
 		}
 
 		/// <summary>

@@ -310,25 +310,25 @@ namespace IOTA.ModularJumpGates.API
 		{
 			MyAPISession.Instance = null;
 
-			foreach (MyAPICubeBlockBase api in MyAPISession.CubeBlockAPIs.Values)
+			foreach (KeyValuePair<long, MyAPICubeBlockBase> api in MyAPISession.CubeBlockAPIs)
 			{
-				api.ObjectInterfaceID = -1;
-				api.ReferenceCounter = 0;
-				api.CubeBlock = null;
+				api.Value.ObjectInterfaceID = -1;
+				api.Value.ReferenceCounter = 0;
+				api.Value.CubeBlock = null;
 			}
 
-			foreach (MyAPIJumpGateConstruct api in MyAPISession.JumpGateGridAPIs.Values)
+			foreach (KeyValuePair<long, MyAPIJumpGateConstruct> api in MyAPISession.JumpGateGridAPIs)
 			{
-				api.ObjectInterfaceID = -1;
-				api.ReferenceCounter = 0;
-				api.Construct = null;
+				api.Value.ObjectInterfaceID = -1;
+				api.Value.ReferenceCounter = 0;
+				api.Value.Construct = null;
 			}
 
-			foreach (MyAPIJumpGate api in MyAPISession.JumpGateAPIs.Values)
+			foreach (KeyValuePair<JumpGateUUID, MyAPIJumpGate> api in MyAPISession.JumpGateAPIs)
 			{
-				api.ObjectInterfaceID = -1;
-				api.ReferenceCounter = 0;
-				api.JumpGate = null;
+				api.Value.ObjectInterfaceID = -1;
+				api.Value.ReferenceCounter = 0;
+				api.Value.JumpGate = null;
 			}
 
 			MyAPISession.CubeBlockAPIs.Clear();

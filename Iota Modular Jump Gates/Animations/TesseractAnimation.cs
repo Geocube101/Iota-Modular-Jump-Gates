@@ -7,7 +7,7 @@ using VRageMath;
 
 namespace IOTA.ModularJumpGates.Animations
 {
-    internal partial class AnimationDefinitions
+    public partial class AnimationDefinitions
     {
 		public AnimationDef TesseractAnimation = new AnimationDef("Tesseract", "A nested tesseract jump gate animation")
 		{
@@ -343,26 +343,18 @@ namespace IOTA.ModularJumpGates.Animations
 					},
 				},
 
-				BeamPulse = new BeamPulseDef
-				{
-					BeamColor = new Vector4(0.15f, 0.39f, 1f, 1f),
-					BeamLength = -1,
-					BeamWidth = 1,
+				BeamPulse = new BeamPulseDef {
 					BeamBrightness = 20,
-					StartTime = 0,
-					Duration = 360,
-					TravelTime = 180,
-					BeamDutyCycle = 0,
 					BeamFrequency = 0,
+					TravelTime = 180,
 
 					Animations = new AttributeAnimationDef {
 						ParticleColorAnimation = new VectorKeyframe[] {
-							new VectorKeyframe(0, new Vector4D(0.5, 0.5, 1, 1), EasingCurveEnum.CIRCULAR, EasingTypeEnum.EASE_IN),
-							new VectorKeyframe(360, new Vector4D(0.5, 0.5, 1, 1)),
+							new VectorKeyframe(0, new Vector4D(0.5, 0.625, 1, 1)),
+							new VectorKeyframe(240, Vector4D.Zero),
 						},
 						ParticleRadiusAnimation = new DoubleKeyframe[] {
-							new DoubleKeyframe(0, AnimationSourceEnum.RANDOM, EasingCurveEnum.CIRCULAR, EasingTypeEnum.EASE_IN) * 0.5d * AnimationSourceEnum.JUMP_GATE_SIZE / 10d,
-							new DoubleKeyframe(0, 0d),
+							new DoubleKeyframe(0, 0d, ratio_type: RatioTypeEnum.RANDOM, lower: 0.25, upper: 1) * AnimationSourceEnum.JUMP_GATE_SIZE / 25,
 						},
 					},
 				},

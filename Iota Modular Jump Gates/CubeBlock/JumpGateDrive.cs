@@ -11,10 +11,6 @@ using VRageMath;
 using IOTA.ModularJumpGates.Util;
 using ProtoBuf;
 using VRage.Game.ModAPI;
-using VRage.Game;
-using VRageRender;
-using System.Collections.Concurrent;
-using IOTA.ModularJumpGates.Extensions;
 
 namespace IOTA.ModularJumpGates.CubeBlock
 {
@@ -79,18 +75,6 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		private IMyModelDummy RaycastDummy;
 		#endregion
 
-		#region Temporary Collections
-		/// <summary>
-		/// Temporary list of construct grids
-		/// </summary>
-		private List<IMyCubeGrid> TEMP_ConstructsList = new List<IMyCubeGrid>();
-
-		/// <summary>
-		/// Temporary list of grid positions
-		/// </summary>
-		private List<Vector3I> TEMP_RaycastCells = new List<Vector3I>();
-		#endregion
-
 		#region Public Variables
 		/// <summary>
 		/// The stored capacitor charge in MegaWatts
@@ -100,7 +84,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// <summary>
 		/// The maximum possible distance this drive can raycast
 		/// </summary>
-		public double MaxRaycastDistance { get; private set; }
+		public double MaxRaycastDistance;
 
 		/// <summary>
 		/// The brightness for the emitter emissives
@@ -185,10 +169,6 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		protected override void Clean()
 		{
 			base.Clean();
-			this.TEMP_ConstructsList?.Clear();
-			this.TEMP_RaycastCells?.Clear();
-			this.TEMP_ConstructsList = null;
-			this.TEMP_RaycastCells = null;
 			this.DriveConfiguration = null;
 		}
 
@@ -219,7 +199,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				{
 					byte[] bytes = Convert.FromBase64String(blockdata);
 					this.StoredChargeMW = MathHelper.Clamp(BitConverter.ToDouble(bytes, 0), 0, this.DriveConfiguration.MaxDriveChargeMW);
-					this.JumpGateID = BitConverter.ToInt64(bytes, 8);
+					this.JumpGateID = BitConverter.ToInt64(bytes, sizeof(double));
 				}
 				catch (Exception e)
 				{
@@ -268,9 +248,9 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		public override void UpdateAfterSimulation()
 		{
 			base.UpdateAfterSimulation();
-
-			// Skip update if a projection
-			if (this.TerminalBlock?.CubeGrid?.Physics == null) return;
+			
+			// Skip update if a projection or closed
+			if (this.TerminalBlock?.CubeGrid?.Physics == null || this.IsClosed()) return;
 
 			// Update emissives
 			bool working = this.IsWorking();
@@ -279,7 +259,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			else this.TerminalBlock.SetEmissiveParts("Emissive1", Color.Black, 0);
 
 			// Update local position
-			if (this.JumpGateGrid != null && !this.JumpGateGrid.IsSuspended && this.JumpGateGrid.CubeGrid != null && MyJumpGateModSession.Instance.AllFirstTickComplete())
+			if (this.LocalGameTick % 10 == 0 && this.JumpGateGrid?.CubeGrid != null && this.JumpGateGrid.FullyInitialized)
 			{
 				MatrixD matrix = this.JumpGateGrid.CubeGrid.WorldMatrix;
 				Vector3D local_position = MyJumpGateModSession.WorldVectorToLocalVectorP(ref matrix, this.TerminalBlock.WorldMatrix.Translation);
@@ -287,7 +267,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				double distance = (this.IsLargeGrid) ? 1.25 : 0.25;
 				double degrees = 0.05d * Math.PI / 180d;
 
-				if (Vector3D.Distance(local_position, this.LastLocalPosition) >= distance || Vector3D.Distance(local_rotation, this.LastLocalRotation) >= degrees)
+				if (Vector3D.Distance(local_position, this.LastLocalPosition) >= distance || Vector3D.Angle(local_rotation, this.LastLocalRotation) >= degrees)
 				{
 					this.JumpGateGrid.MarkGatesForUpdate();
 					this.LastLocalPosition = local_position;
@@ -296,15 +276,15 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			}
 
 			// Update stored power charge
-			if (this.TerminalBlock.Enabled && this.TerminalBlock.IsFunctional && this.ResourceSink != null && this.SinkOverrideMW == -1)
+			if (working && this.ResourceSink != null && this.SinkOverrideMW == -1 && this.StoredChargeMW < this.DriveConfiguration.MaxDriveChargeMW)
 			{
 				double power_draw_mw = (double) this.ResourceSink.CurrentInputByType(MyResourceDistributorComponent.ElectricityId) / 60d;
 				this.StoredChargeMW = MathHelperD.Clamp(this.StoredChargeMW + power_draw_mw * this.DriveConfiguration.DriveChargeEfficiency, 0, this.DriveConfiguration.MaxDriveChargeMW);
 			}
 
+			// Update emissives further (based on jump gate status)
 			if (working && this.JumpGateGrid != null && !this.JumpGateGrid.Closed)
 			{
-				// Update emissives further (based on jump gate status)
 				MyJumpGate jump_gate = this.JumpGateGrid?.GetJumpGate(this.JumpGateID);
 				bool controlled = jump_gate?.Controller != null;
 
@@ -314,41 +294,13 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				}
 				else if (jump_gate != null)
 				{
-					Color color = (MyJumpGateModSession.GameTick % 120 >= 60) ? Color.Green : Color.Black;
 					if (this.DriveEmitterColor != Color.Black && !this.DriveEmitterCycling()) this.CycleDriveEmitter(this.DriveEmitterColor, Color.Black, 300);
-					this.TerminalBlock.SetEmissiveParts("Emissive1", color, 1);
+					this.TerminalBlock.SetEmissiveParts("Emissive1", (MyJumpGateModSession.GameTick % 120 >= 60) ? Color.Green : Color.Black, 1);
 				}
 				else
 				{
 					if (this.DriveEmitterColor != Color.Black && !this.DriveEmitterCycling()) this.CycleDriveEmitter(this.DriveEmitterColor, Color.Black, 300);
 					this.TerminalBlock.SetEmissiveParts("Emissive1", Color.Gold, 1);
-				}
-
-				// Update max raycast distance
-				if (this.LocalGameTick % 60 == 0)
-				{
-					double closest_distance = this.DriveConfiguration.DriveRaycastDistance;
-					Vector3D raycast_start = this.GetDriveRaycastStartpoint();
-					Vector3D raycast_end = this.GetDriveRaycastEndpoint(closest_distance);
-					this.JumpGateGrid.GetCubeGrids(this.TEMP_ConstructsList);
-
-					foreach (IMyCubeGrid grid in this.TEMP_ConstructsList)
-					{
-						grid.RayCastCells(raycast_start, raycast_end, this.TEMP_RaycastCells);
-
-						foreach (Vector3I cell in this.TEMP_RaycastCells)
-						{
-							IMySlimBlock block = grid.GetCubeBlock(cell);
-							if (block?.FatBlock == null || block.FatBlock == this.TerminalBlock) continue;
-							closest_distance = Math.Min(closest_distance, Vector3D.Distance(grid.GridIntegerToWorld(cell), raycast_start));
-						}
-
-						this.TEMP_RaycastCells.Clear();
-					}
-
-					this.TEMP_ConstructsList.Clear();
-					if (this.MaxRaycastDistance != closest_distance) this.JumpGateGrid.MarkGatesForUpdate();
-					this.MaxRaycastDistance = closest_distance;
 				}
 			}
 			else
@@ -357,6 +309,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				this.TerminalBlock.SetEmissiveParts("Emissive2", Color.Black, 0);
 			}
 
+			// Animate emitter emissives
 			ulong cycle_tick_0 = this.EmitterEmissiveTick[0];
 			ulong cycle_tick_1 = this.EmitterEmissiveTick[1];
 
@@ -379,6 +332,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 
 			this.TerminalBlock.SetEmissiveParts("Emissive0", this.DriveEmitterColor, (float) (this.DriveEmitterColor.A / 255d * this.EmitterEmissiveBrightness));
 
+			// Animate radiator emissive
 			if (this.SinkOverrideMW != -1 && this.RadiatorEmissiveRatio < 1) this.RadiatorEmissiveRatio += 1d / 60d / 50d;
 			else if (this.SinkOverrideMW == -1 && this.RadiatorEmissiveRatio > 0) this.RadiatorEmissiveRatio -= 1d / 60d / 50d;
 			this.RadiatorEmissiveRatio = MathHelperD.Clamp(this.RadiatorEmissiveRatio, 0, 1);
@@ -405,7 +359,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		public override bool IsSerialized()
 		{
 			bool res = base.IsSerialized();
-			byte[] bytes = new byte[16];
+			byte[] bytes = new byte[sizeof(double) + sizeof(long)];
 			Buffer.BlockCopy(BitConverter.GetBytes(this.StoredChargeMW), 0, bytes, 0, 8);
 			Buffer.BlockCopy(BitConverter.GetBytes(this.JumpGateID), 0, bytes, 8, 8);
 			this.ModStorageComponent[MyJumpGateModSession.BlockComponentDataGUID] = Convert.ToBase64String(bytes);

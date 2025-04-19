@@ -8,21 +8,19 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.IO;
-using System.Xml.Serialization;
 using VRage.Game;
 using VRage.Game.Entity;
-using VRage.Game.VisualScripting.Utils;
 using VRage.Utils;
 using VRageMath;
 using Sandbox.Game.Entities;
 using Sandbox.Engine.Physics;
 using VRage.Game.Components;
 using IOTA.ModularJumpGates.Extensions;
-using VRageRender;
+using VRage.ModAPI;
 
 namespace IOTA.ModularJumpGates.Animations
 {
-	internal partial class AnimationDefinitions
+	public partial class AnimationDefinitions
 	{
 		
 	}
@@ -63,14 +61,12 @@ namespace IOTA.ModularJumpGates
 	/// </summary>
 	public enum AnimationSourceEnum : byte {
 		/// <summary>
-		/// Attribute is not animated and uses the specified fixed value<br />
-		/// The value is the average of "from" and "to"
+		/// Attribute is not animated and uses the specified fixed initial value
 		/// </summary>
 		FIXED,
 
 		/// <summary>
-		/// Attribute is animated over time<br />
-		/// The value is animated from "from" to "to"
+		/// Attribute is animated over time
 		/// </summary>
 		TIME,
 
@@ -114,6 +110,14 @@ namespace IOTA.ModularJumpGates
 		/// For vector values: The value is the jump gate velocity in meters
 		/// </summary>
 		JUMP_ANTIGATE_VELOCITY,
+
+		/// <summary>
+		/// Attribute is modified based on the normal vector between this gate and the destination<br />
+		/// The resulting vector is a normalized vector pointing from this gate to this gate's destination<br />
+		/// For double values: The value is one<br />
+		/// For vector values: The value is the normalized normal
+		/// </summary>
+		JUMP_NORMAL,
 
 		/// <summary>
 		/// Attribute is modified based on a random value rolled every tick<br />
@@ -161,11 +165,31 @@ namespace IOTA.ModularJumpGates
 		DISTANCE_ENTITY_TO_ENTITY,
 
 		/// <summary>
-		/// Attribute is modified based on this entity's velocity<br />
-		/// For double values: The value is the length of the velocity vector<br />
-		/// For vector values: The value is the jump gate velocity in meters
+		/// Attribute is modified based on this entity's velocity
 		/// </summary>
 		ENTITY_VELOCITY,
+
+		/// <summary>
+		/// Attribute is modified based on this entity's volume<br />
+		/// The value is the volume of this entity
+		/// </summary>
+		ENTITY_VOLUME,
+
+		/// <summary>
+		/// Attribute is modified based on this entity's mass<br />
+		/// The value is the mass of this entity
+		/// </summary>
+		ENTITY_MASS,
+
+		/// <summary>
+		/// Attribute is modified based on this entity's bounding box extents
+		/// </summary>
+		ENTITY_EXTENTS,
+
+		/// <summary>
+		/// Attribute is modified based on this entity's bounding box extents projected onto the endpoint plane
+		/// </summary>
+		ENTITY_FACING_EXTENTS,
 
 		/// <summary>
 		/// Attribute is modified based on current planetary gravity<br />
@@ -184,50 +208,20 @@ namespace IOTA.ModularJumpGates
 	/// Enum representing the operation by which values should be joined
 	/// </summary>
 	internal enum MathOperationEnum {
-		/// <summary>
-		/// All modifiers of the same type will be added
-		/// </summary>
 		ADD,
-
-		/// <summary>
-		/// All modifiers of the same type will be subtracted
-		/// </summary>
 		SUBTRACT,
-
-		/// <summary>
-		/// All modifiers of the same type will be multiplied
-		/// </summary>
 		MULTIPLY,
-
-		/// <summary>
-		/// All modifiers of the same type will be divided
-		/// </summary>
 		DIVIDE,
-
-		/// <summary>
-		/// All modifiers of the same type will be modulo'd
-		/// </summary>
 		MODULO,
-
-		/// <summary>
-		/// All modifiers of the same type will be exponentiated
-		/// </summary>
 		POWER,
-
-		/// <summary>
-		/// All modifiers of the same type will be averaged
-		/// </summary>
 		AVERAGE,
-
-		/// <summary>
-		/// The smallest result will be used from all modifiers of the same type
-		/// </summary>
 		SMALLEST,
-
-		/// <summary>
-		/// The largest result will be used from all modifiers of the same type
-		/// </summary>
-		LARGEST
+		LARGEST,
+		FUNCTION,
+		CLAMP,
+		LENGTH,
+		VMIN,
+		VMAX,
 	};
 
 	/// <summary>
@@ -464,465 +458,1072 @@ namespace IOTA.ModularJumpGates
 		#endregion
 	}
 
-	[ProtoContract]
-	internal class DoubleValue
+	public class AnimationExpression
 	{
-		[ProtoMember(1, IsRequired = true)]
-		public MathOperationEnum Operation = MathOperationEnum.ADD;
-		[ProtoMember(2, IsRequired = true)]
-		public double InitialValue;
-		[ProtoMember(3, IsRequired = true)]
-		public AnimationSourceEnum AnimationSource;
-		[ProtoMember(4, IsRequired = true)]
-		public double LowerClamp = double.NegativeInfinity;
-		[ProtoMember(5, IsRequired = true)]
-		public double UpperClamp = double.PositiveInfinity;
-		[ProtoMember(6, IsRequired = true)]
-		public bool ClampResult = false;
-		[ProtoMember(7, IsRequired = true)]
-		internal RatioTypeEnum RatioType = RatioTypeEnum.NONE;
-
-		/// <summary>
-		/// Parameterless constructor for serialization
-		/// </summary>
-		internal DoubleValue() { }
-
-		public DoubleValue(double initial_value, MathOperationEnum operation, RatioTypeEnum ratio_type = RatioTypeEnum.NONE, double? lower = null, double? upper = null)
+		internal struct EvaluatedResult
 		{
-			this.InitialValue = initial_value;
-			this.Operation = operation;
-			this.AnimationSource = AnimationSourceEnum.FIXED;
-			this.RatioType = ratio_type;
-			this.LowerClamp = lower ?? double.NegativeInfinity;
-			this.UpperClamp = upper ?? double.PositiveInfinity;
-			this.ClampResult = lower != null || upper != null;
-		}
+			public bool IsVector;
+			public double DoubleResult;
+			public Vector4D VectorResult;
 
-		public DoubleValue(AnimationSourceEnum animation_source, MathOperationEnum operation, RatioTypeEnum ratio_type = RatioTypeEnum.NONE, double? lower = null, double? upper = null)
-		{
-			this.InitialValue = 0;
-			this.Operation = operation;
-			this.AnimationSource = animation_source;
-			this.RatioType = ratio_type;
-			this.LowerClamp = lower ?? double.NegativeInfinity;
-			this.UpperClamp = upper ?? double.PositiveInfinity;
-			this.ClampResult = lower != null || upper != null;
-		}
-
-		public double GetValue(ushort current_tick, ushort total_duration, MyJumpGate jump_gate, MyJumpGate target_gate, List<MyJumpGateDrive> drives, List<MyEntity> entities, ref Vector3D endpoint, Vector3D? this_position, MyEntity this_entity)
-		{
-			Vector3D jump_node = jump_gate.WorldJumpNode;
-			double result, ratio;
-
-			switch (this.AnimationSource)
+			public EvaluatedResult(double result)
 			{
-				case AnimationSourceEnum.FIXED:
-					result = this.InitialValue;
-					break;
-				case AnimationSourceEnum.TIME:
-					result = (double) current_tick / (double) total_duration;
-					break;
-				case AnimationSourceEnum.JUMP_GATE_SIZE:
-					result = (jump_gate.Closed) ? 0 : jump_gate.JumpNodeRadius();
-					break;
-				case AnimationSourceEnum.JUMP_GATE_RADII:
-					result = (jump_gate.Closed) ? 0 : jump_gate.JumpEllipse.Radii.Length();
-					break;
-				case AnimationSourceEnum.JUMP_GATE_VELOCITY:
-					result = (jump_gate.Closed) ? 0 : jump_gate.JumpNodeVelocity.Length();
-					break;
-				case AnimationSourceEnum.JUMP_ANTIGATE_SIZE:
-					result = (target_gate != null && !target_gate.Closed) ? target_gate.JumpNodeRadius() : ((jump_gate.Closed) ? 0 : jump_gate.JumpNodeRadius());
-					break;
-				case AnimationSourceEnum.JUMP_ANTIGATE_RADII:
-					result = (target_gate != null && !target_gate.Closed) ? target_gate.JumpEllipse.Radii.Length() : ((jump_gate.Closed) ? 0 : jump_gate.JumpEllipse.Radii.Length());
-					break;
-				case AnimationSourceEnum.JUMP_ANTIGATE_VELOCITY:
-					result = (target_gate != null && !target_gate.Closed) ? target_gate.JumpNodeVelocity.Length() : 0;
-					break;
-				case AnimationSourceEnum.RANDOM:
-					result = new Random().NextDouble();
-					break;
-				case AnimationSourceEnum.N_ENTITIES:
-					result = entities.Count;
-					break;
-				case AnimationSourceEnum.N_DRIVES:
-					result = drives.Count;
-					break;
-				case AnimationSourceEnum.DISTANCE_ENTITY_TO_ENDPOINT:
-					result = (this_position == null) ? 0 : Vector3D.Distance(endpoint, this_position.Value);
-					break;
-				case AnimationSourceEnum.DISTANCE_GATE_TO_ENDPOINT:
-					result = (jump_gate.Closed) ? 0 : Vector3D.Distance(jump_node, endpoint);
-					break;
-				case AnimationSourceEnum.DISTANCE_ENTITY_TO_GATE:
-					result = (this_position == null || jump_gate.Closed) ? 0 : Vector3D.Distance(jump_node, this_position.Value);
-					break;
-				case AnimationSourceEnum.DISTANCE_ENTITY_TO_ENTITY:
+				this.IsVector = false;
+				this.DoubleResult = result;
+				this.VectorResult = default(Vector4D);
+			}
+			public EvaluatedResult(Vector3D result)
+			{
+				this.IsVector = true;
+				this.DoubleResult = default(double);
+				this.VectorResult = new Vector4D(result, 0);
+			}
+			public EvaluatedResult(Vector4D result)
+			{
+				this.IsVector = true;
+				this.DoubleResult = default(double);
+				this.VectorResult = result;
+			}
+
+			public Vector4D AsVector()
+			{
+				return (this.IsVector) ? this.VectorResult : new Vector4D(this.DoubleResult);
+			}
+			public double AsDouble()
+			{
+				return (this.IsVector) ? (this.VectorResult.X + this.VectorResult.Y + this.VectorResult.Z + this.VectorResult.W) / 4d : this.DoubleResult;
+			}
+		}
+
+		internal class ExpressionArguments
+		{
+			public readonly ushort CurrentTick;
+			public readonly ushort TotalDuration;
+			public readonly MyJumpGate JumpGate;
+			public readonly MyJumpGate TargetGate;
+			public readonly List<MyJumpGateDrive> JumpGateDrives;
+			public readonly List<MyEntity> JumpSpaceEntities;
+			public readonly Vector3D Endpoint;
+			public Vector3D? ThisPosition;
+			public MyEntity ThisEntity;
+
+			public ExpressionArguments(ushort current_tick, ushort total_duration, MyJumpGate jump_gate, MyJumpGate target_gate, List<MyJumpGateDrive> drives, List<MyEntity> entities, ref Vector3D endpoint, Vector3D? this_position, MyEntity this_entity)
+			{
+				this.CurrentTick = current_tick;
+				this.TotalDuration = total_duration;
+				this.JumpGate = jump_gate;
+				this.TargetGate = target_gate;
+				this.JumpGateDrives = drives;
+				this.JumpSpaceEntities = entities;
+				this.Endpoint = endpoint;
+				this.ThisPosition = this_position;
+				this.ThisEntity = this_entity;
+			}
+
+			public ExpressionArguments SetThis(Vector3D? this_position)
+			{
+				this.ThisPosition = this_position;
+				return this;
+			}
+			public ExpressionArguments SetThis(MyEntity this_entity)
+			{
+				this.ThisEntity = this_entity;
+				return this;
+			}
+			public ExpressionArguments SetThis(Vector3D? this_position, MyEntity this_entity)
+			{
+				this.ThisPosition = this_position;
+				this.ThisEntity = this_entity;
+				return this;
+			}
+		}
+
+		#region Public Variables
+		internal readonly MathOperationEnum Operation;
+		internal readonly List<AnimationExpression> Arguments;
+		internal readonly double? SingleDoubleValue;
+		internal readonly Vector4D? SingleVectorValue;
+		internal readonly AnimationSourceEnum SingleSourceValue;
+		internal readonly Func<double, double> Function;
+		internal readonly EvaluatedResult[] ClampBounds;
+		internal readonly RatioTypeEnum RatioType;
+		#endregion
+
+		#region Operators
+		public static AnimationExpression operator +(AnimationExpression left, double right)
+		{
+			return new AnimationExpression(left, new AnimationExpression(right, RatioTypeEnum.NONE, null, null), MathOperationEnum.ADD);
+		}
+		public static AnimationExpression operator +(AnimationExpression left, Vector3D right)
+		{
+			return new AnimationExpression(left, new AnimationExpression(right, RatioTypeEnum.NONE, null, null), MathOperationEnum.ADD);
+		}
+		public static AnimationExpression operator +(AnimationExpression left, Vector4D right)
+		{
+			return new AnimationExpression(left, new AnimationExpression(right, RatioTypeEnum.NONE, null, null), MathOperationEnum.ADD);
+		}
+		public static AnimationExpression operator +(AnimationExpression left, AnimationSourceEnum right)
+		{
+			return new AnimationExpression(left, new AnimationExpression(right, RatioTypeEnum.NONE, (double?) null, (double?) null), MathOperationEnum.ADD);
+		}
+		public static AnimationExpression operator +(AnimationExpression left, AnimationExpression right)
+		{
+			return new AnimationExpression(left, right, MathOperationEnum.ADD);
+		}
+
+		public static AnimationExpression operator -(AnimationExpression left, double right)
+		{
+			return new AnimationExpression(left, new AnimationExpression(right, RatioTypeEnum.NONE, null, null), MathOperationEnum.SUBTRACT);
+		}
+		public static AnimationExpression operator -(AnimationExpression left, Vector3D right)
+		{
+			return new AnimationExpression(left, new AnimationExpression(right, RatioTypeEnum.NONE, null, null), MathOperationEnum.SUBTRACT);
+		}
+		public static AnimationExpression operator -(AnimationExpression left, Vector4D right)
+		{
+			return new AnimationExpression(left, new AnimationExpression(right, RatioTypeEnum.NONE, null, null), MathOperationEnum.SUBTRACT);
+		}
+		public static AnimationExpression operator -(AnimationExpression left, AnimationSourceEnum right)
+		{
+			return new AnimationExpression(left, new AnimationExpression(right, RatioTypeEnum.NONE, (double?) null, (double?) null), MathOperationEnum.SUBTRACT);
+		}
+		public static AnimationExpression operator -(AnimationExpression left, AnimationExpression right)
+		{
+			return new AnimationExpression(left, right, MathOperationEnum.SUBTRACT);
+		}
+		public static AnimationExpression operator -(AnimationExpression unary)
+		{
+			return new AnimationExpression(unary, MathOperationEnum.SUBTRACT);
+		}
+
+		public static AnimationExpression operator *(AnimationExpression left, double right)
+		{
+			return new AnimationExpression(left, new AnimationExpression(right, RatioTypeEnum.NONE, null, null), MathOperationEnum.MULTIPLY);
+		}
+		public static AnimationExpression operator *(AnimationExpression left, Vector3D right)
+		{
+			return new AnimationExpression(left, new AnimationExpression(right, RatioTypeEnum.NONE, null, null), MathOperationEnum.MULTIPLY);
+		}
+		public static AnimationExpression operator *(AnimationExpression left, Vector4D right)
+		{
+			return new AnimationExpression(left, new AnimationExpression(right, RatioTypeEnum.NONE, null, null), MathOperationEnum.MULTIPLY);
+		}
+		public static AnimationExpression operator *(AnimationExpression left, AnimationSourceEnum right)
+		{
+			return new AnimationExpression(left, new AnimationExpression(right, RatioTypeEnum.NONE, (double?) null, (double?) null), MathOperationEnum.MULTIPLY);
+		}
+		public static AnimationExpression operator *(AnimationExpression left, AnimationExpression right)
+		{
+			return new AnimationExpression(left, right, MathOperationEnum.MULTIPLY);
+		}
+
+		public static AnimationExpression operator /(AnimationExpression left, double right)
+		{
+			return new AnimationExpression(left, new AnimationExpression(right, RatioTypeEnum.NONE, null, null), MathOperationEnum.DIVIDE);
+		}
+		public static AnimationExpression operator /(AnimationExpression left, Vector3D right)
+		{
+			return new AnimationExpression(left, new AnimationExpression(right, RatioTypeEnum.NONE, null, null), MathOperationEnum.DIVIDE);
+		}
+		public static AnimationExpression operator /(AnimationExpression left, Vector4D right)
+		{
+			return new AnimationExpression(left, new AnimationExpression(right, RatioTypeEnum.NONE, null, null), MathOperationEnum.DIVIDE);
+		}
+		public static AnimationExpression operator /(AnimationExpression left, AnimationSourceEnum right)
+		{
+			return new AnimationExpression(left, new AnimationExpression(right, RatioTypeEnum.NONE, (double?) null, (double?) null), MathOperationEnum.DIVIDE);
+		}
+		public static AnimationExpression operator /(AnimationExpression left, AnimationExpression right)
+		{
+			return new AnimationExpression(left, right, MathOperationEnum.DIVIDE);
+		}
+
+		public static AnimationExpression operator %(AnimationExpression left, double right)
+		{
+			return new AnimationExpression(left, new AnimationExpression(right, RatioTypeEnum.NONE, null, null), MathOperationEnum.MODULO);
+		}
+		public static AnimationExpression operator %(AnimationExpression left, Vector3D right)
+		{
+			return new AnimationExpression(left, new AnimationExpression(right, RatioTypeEnum.NONE, null, null), MathOperationEnum.MODULO);
+		}
+		public static AnimationExpression operator %(AnimationExpression left, Vector4D right)
+		{
+			return new AnimationExpression(left, new AnimationExpression(right, RatioTypeEnum.NONE, null, null), MathOperationEnum.MODULO);
+		}
+		public static AnimationExpression operator %(AnimationExpression left, AnimationSourceEnum right)
+		{
+			return new AnimationExpression(left, new AnimationExpression(right, RatioTypeEnum.NONE, (double?) null, (double?) null), MathOperationEnum.MODULO);
+		}
+		public static AnimationExpression operator %(AnimationExpression left, AnimationExpression right)
+		{
+			return new AnimationExpression(left, right, MathOperationEnum.MODULO);
+		}
+
+		public static AnimationExpression operator ^(AnimationExpression left, double right)
+		{
+			return new AnimationExpression(left, new AnimationExpression(right, RatioTypeEnum.NONE, null, null), MathOperationEnum.POWER);
+		}
+		public static AnimationExpression operator ^(AnimationExpression left, Vector3D right)
+		{
+			return new AnimationExpression(left, new AnimationExpression(right, RatioTypeEnum.NONE, null, null), MathOperationEnum.POWER);
+		}
+		public static AnimationExpression operator ^(AnimationExpression left, Vector4D right)
+		{
+			return new AnimationExpression(left, new AnimationExpression(right, RatioTypeEnum.NONE, null, null), MathOperationEnum.POWER);
+		}
+		public static AnimationExpression operator ^(AnimationExpression left, AnimationSourceEnum right)
+		{
+			return new AnimationExpression(left, new AnimationExpression(right, RatioTypeEnum.NONE, (double?) null, (double?) null), MathOperationEnum.POWER);
+		}
+		public static AnimationExpression operator ^(AnimationExpression left, AnimationExpression right)
+		{
+			return new AnimationExpression(left, right, MathOperationEnum.POWER);
+		}
+		#endregion
+
+		#region Public Static Methods
+		public static AnimationExpression Average(params double[] arguments)
+		{
+			return new AnimationExpression(arguments.Select((value) => new AnimationExpression(value, RatioTypeEnum.NONE, null, null)), MathOperationEnum.AVERAGE);
+		}
+		public static AnimationExpression Average(params Vector3D[] arguments)
+		{
+			return new AnimationExpression(arguments.Select((value) => new AnimationExpression(value, RatioTypeEnum.NONE, null, null)), MathOperationEnum.AVERAGE);
+		}
+		public static AnimationExpression Average(params Vector4D[] arguments)
+		{
+			return new AnimationExpression(arguments.Select((value) => new AnimationExpression(value, RatioTypeEnum.NONE, null, null)), MathOperationEnum.AVERAGE);
+		}
+		public static AnimationExpression Average(params AnimationSourceEnum[] arguments)
+		{
+			return new AnimationExpression(arguments.Select((value) => new AnimationExpression(value, RatioTypeEnum.NONE, (double?) null, null)), MathOperationEnum.AVERAGE);
+		}
+		public static AnimationExpression Average(params AnimationExpression[] arguments)
+		{
+			return new AnimationExpression(arguments, MathOperationEnum.AVERAGE);
+		}
+
+		public static AnimationExpression Largest(params double[] arguments)
+		{
+			return new AnimationExpression(arguments.Select((value) => new AnimationExpression(value, RatioTypeEnum.NONE, null, null)), MathOperationEnum.LARGEST);
+		}
+		public static AnimationExpression Largest(params Vector3D[] arguments)
+		{
+			return new AnimationExpression(arguments.Select((value) => new AnimationExpression(value, RatioTypeEnum.NONE, null, null)), MathOperationEnum.LARGEST);
+		}
+		public static AnimationExpression Largest(params Vector4D[] arguments)
+		{
+			return new AnimationExpression(arguments.Select((value) => new AnimationExpression(value, RatioTypeEnum.NONE, null, null)), MathOperationEnum.LARGEST);
+		}
+		public static AnimationExpression Largest(params AnimationSourceEnum[] arguments)
+		{
+			return new AnimationExpression(arguments.Select((value) => new AnimationExpression(value, RatioTypeEnum.NONE, (double?) null, null)), MathOperationEnum.LARGEST);
+		}
+		public static AnimationExpression Largest(params AnimationExpression[] arguments)
+		{
+			return new AnimationExpression(arguments, MathOperationEnum.LARGEST);
+		}
+
+		public static AnimationExpression Smallest(params double[] arguments)
+		{
+			return new AnimationExpression(arguments.Select((value) => new AnimationExpression(value, RatioTypeEnum.NONE, null, null)), MathOperationEnum.SMALLEST);
+		}
+		public static AnimationExpression Smallest(params Vector3D[] arguments)
+		{
+			return new AnimationExpression(arguments.Select((value) => new AnimationExpression(value, RatioTypeEnum.NONE, null, null)), MathOperationEnum.SMALLEST);
+		}
+		public static AnimationExpression Smallest(params Vector4D[] arguments)
+		{
+			return new AnimationExpression(arguments.Select((value) => new AnimationExpression(value, RatioTypeEnum.NONE, null, null)), MathOperationEnum.SMALLEST);
+		}
+		public static AnimationExpression Smallest(params AnimationSourceEnum[] arguments)
+		{
+			return new AnimationExpression(arguments.Select((value) => new AnimationExpression(value, RatioTypeEnum.NONE, (double?) null, null)), MathOperationEnum.SMALLEST);
+		}
+		public static AnimationExpression Smallest(params AnimationExpression[] arguments)
+		{
+			return new AnimationExpression(arguments, MathOperationEnum.SMALLEST);
+		}
+
+		public static AnimationExpression Length(double expr)
+		{
+			return new AnimationExpression(expr, RatioTypeEnum.NONE, null, null);
+		}
+		public static AnimationExpression Length(Vector3D expr)
+		{
+			return new AnimationExpression(expr.Length(), RatioTypeEnum.NONE, null, null);
+		}
+		public static AnimationExpression Length(Vector4D expr)
+		{
+			return new AnimationExpression(expr.Length(), RatioTypeEnum.NONE, null, null);
+		}
+		public static AnimationExpression Length(AnimationSourceEnum expr)
+		{
+			return new AnimationExpression(new AnimationExpression(expr, RatioTypeEnum.NONE, (double?) null, null), MathOperationEnum.LENGTH);
+		}
+		public static AnimationExpression Length(AnimationExpression expr)
+		{
+			return new AnimationExpression(expr, MathOperationEnum.LENGTH);
+		}
+
+		public static AnimationExpression VectorMin(double expr)
+		{
+			return new AnimationExpression(expr, RatioTypeEnum.NONE, null, null);
+		}
+		public static AnimationExpression VectorMin(Vector3D expr)
+		{
+			return new AnimationExpression(expr.Min(), RatioTypeEnum.NONE, null, null);
+		}
+		public static AnimationExpression VectorMin(Vector4D expr)
+		{
+			return new AnimationExpression(Math.Min(Math.Min(expr.X, expr.Y), Math.Min(expr.Z, expr.W)), RatioTypeEnum.NONE, null, null);
+		}
+		public static AnimationExpression VectorMin(AnimationSourceEnum expr)
+		{
+			return new AnimationExpression(new AnimationExpression(expr, RatioTypeEnum.NONE, (double?) null, null), MathOperationEnum.VMIN);
+		}
+		public static AnimationExpression VectorMin(AnimationExpression expr)
+		{
+			return new AnimationExpression(expr, MathOperationEnum.VMIN);
+		}
+
+		public static AnimationExpression VectorMax(double expr)
+		{
+			return new AnimationExpression(expr, RatioTypeEnum.NONE, null, null);
+		}
+		public static AnimationExpression VectorMax(Vector3D expr)
+		{
+			return new AnimationExpression(expr.Max(), RatioTypeEnum.NONE, null, null);
+		}
+		public static AnimationExpression VectorMax(Vector4D expr)
+		{
+			return new AnimationExpression(Math.Max(Math.Max(expr.X, expr.Y), Math.Max(expr.Z, expr.W)), RatioTypeEnum.NONE, null, null);
+		}
+		public static AnimationExpression VectorMax(AnimationSourceEnum expr)
+		{
+			return new AnimationExpression(new AnimationExpression(expr, RatioTypeEnum.NONE, (double?) null, null), MathOperationEnum.VMAX);
+		}
+		public static AnimationExpression VectorMax(AnimationExpression expr)
+		{
+			return new AnimationExpression(expr, MathOperationEnum.VMAX);
+		}
+
+		public static AnimationExpression Sin(double expr)
+		{
+			return new AnimationExpression(Math.Sin(expr), RatioTypeEnum.NONE, null, null);
+		}
+		public static AnimationExpression Sin(Vector3D expr)
+		{
+			return new AnimationExpression(new Vector3D(Math.Sin(expr.X), Math.Sin(expr.Y), Math.Sin(expr.Z)), RatioTypeEnum.NONE, null, null);
+		}
+		public static AnimationExpression Sin(Vector4D expr)
+		{
+			return new AnimationExpression(new Vector4D(Math.Sin(expr.X), Math.Sin(expr.Y), Math.Sin(expr.Z), Math.Sin(expr.W)), RatioTypeEnum.NONE, null, null);
+		}
+		public static AnimationExpression Sin(AnimationSourceEnum expr)
+		{
+			return new AnimationExpression(new AnimationExpression(expr, RatioTypeEnum.NONE, (double?) null, null), Math.Sin);
+		}
+		public static AnimationExpression Sin(AnimationExpression expr)
+		{
+			return new AnimationExpression(expr, Math.Sin);
+		}
+
+		public static AnimationExpression Cos(double expr)
+		{
+			return new AnimationExpression(Math.Cos(expr), RatioTypeEnum.NONE, null, null);
+		}
+		public static AnimationExpression Cos(Vector3D expr)
+		{
+			return new AnimationExpression(new Vector3D(Math.Cos(expr.X), Math.Cos(expr.Y), Math.Cos(expr.Z)), RatioTypeEnum.NONE, null, null);
+		}
+		public static AnimationExpression Cos(Vector4D expr)
+		{
+			return new AnimationExpression(new Vector4D(Math.Sin(expr.X), Math.Sin(expr.Y), Math.Sin(expr.Z), Math.Sin(expr.W)), RatioTypeEnum.NONE, null, null);
+		}
+		public static AnimationExpression Cos(AnimationSourceEnum expr)
+		{
+			return new AnimationExpression(new AnimationExpression(expr, RatioTypeEnum.NONE, (double?) null, null), Math.Cos);
+		}
+		public static AnimationExpression Cos(AnimationExpression expr)
+		{
+			return new AnimationExpression(expr, Math.Cos);
+		}
+
+		public static AnimationExpression Tan(double expr)
+		{
+			return new AnimationExpression(Math.Tan(expr), RatioTypeEnum.NONE, null, null);
+		}
+		public static AnimationExpression Tan(Vector3D expr)
+		{
+			return new AnimationExpression(new Vector3D(Math.Tan(expr.X), Math.Tan(expr.Y), Math.Tan(expr.Z)), RatioTypeEnum.NONE, null, null);
+		}
+		public static AnimationExpression Tan(Vector4D expr)
+		{
+			return new AnimationExpression(new Vector4D(Math.Tan(expr.X), Math.Tan(expr.Y), Math.Tan(expr.Z), Math.Tan(expr.W)), RatioTypeEnum.NONE, null, null);
+		}
+		public static AnimationExpression Tan(AnimationSourceEnum expr)
+		{
+			return new AnimationExpression(new AnimationExpression(expr, RatioTypeEnum.NONE, (double?) null, null), Math.Tan);
+		}
+		public static AnimationExpression Tan(AnimationExpression expr)
+		{
+			return new AnimationExpression(expr, Math.Tan);
+		}
+
+		public static AnimationExpression ASin(double expr)
+		{
+			return new AnimationExpression(Math.Asin(expr), RatioTypeEnum.NONE, null, null);
+		}
+		public static AnimationExpression ASin(Vector3D expr)
+		{
+			return new AnimationExpression(new Vector3D(Math.Asin(expr.X), Math.Asin(expr.Y), Math.Asin(expr.Z)), RatioTypeEnum.NONE, null, null);
+		}
+		public static AnimationExpression ASin(Vector4D expr)
+		{
+			return new AnimationExpression(new Vector4D(Math.Asin(expr.X), Math.Asin(expr.Y), Math.Asin(expr.Z), Math.Asin(expr.W)), RatioTypeEnum.NONE, null, null);
+		}
+		public static AnimationExpression ASin(AnimationSourceEnum expr)
+		{
+			return new AnimationExpression(new AnimationExpression(expr, RatioTypeEnum.NONE, (double?) null, null), Math.Asin);
+		}
+		public static AnimationExpression ASin(AnimationExpression expr)
+		{
+			return new AnimationExpression(expr, Math.Asin);
+		}
+
+		public static AnimationExpression ACos(double expr)
+		{
+			return new AnimationExpression(Math.Acos(expr), RatioTypeEnum.NONE, null, null);
+		}
+		public static AnimationExpression ACos(Vector3D expr)
+		{
+			return new AnimationExpression(new Vector3D(Math.Acos(expr.X), Math.Acos(expr.Y), Math.Acos(expr.Z)), RatioTypeEnum.NONE, null, null);
+		}
+		public static AnimationExpression ACos(Vector4D expr)
+		{
+			return new AnimationExpression(new Vector4D(Math.Acos(expr.X), Math.Acos(expr.Y), Math.Acos(expr.Z), Math.Acos(expr.W)), RatioTypeEnum.NONE, null, null);
+		}
+		public static AnimationExpression ACos(AnimationSourceEnum expr)
+		{
+			return new AnimationExpression(new AnimationExpression(expr, RatioTypeEnum.NONE, (double?) null, null), Math.Acos);
+		}
+		public static AnimationExpression ACos(AnimationExpression expr)
+		{
+			return new AnimationExpression(expr, Math.Acos);
+		}
+
+		public static AnimationExpression ATan(double expr)
+		{
+			return new AnimationExpression(Math.Atan(expr), RatioTypeEnum.NONE, null, null);
+		}
+		public static AnimationExpression ATan(Vector3D expr)
+		{
+			return new AnimationExpression(new Vector3D(Math.Atan(expr.X), Math.Atan(expr.Y), Math.Atan(expr.Z)), RatioTypeEnum.NONE, null, null);
+		}
+		public static AnimationExpression ATan(Vector4D expr)
+		{
+			return new AnimationExpression(new Vector4D(Math.Atan(expr.X), Math.Atan(expr.Y), Math.Atan(expr.Z), Math.Atan(expr.W)), RatioTypeEnum.NONE, null, null);
+		}
+		public static AnimationExpression ATan(AnimationSourceEnum expr)
+		{
+			return new AnimationExpression(new AnimationExpression(expr, RatioTypeEnum.NONE, (double?) null, null), Math.Atan);
+		}
+		public static AnimationExpression ATan(AnimationExpression expr)
+		{
+			return new AnimationExpression(expr, Math.Atan);
+		}
+		#endregion
+
+		#region Private Static Methods
+		private static EvaluatedResult[] CreateBounds(double? lower, double? upper)
+		{
+			return (lower == null && upper == null) ? null : new EvaluatedResult[2] { new EvaluatedResult(lower ?? double.NegativeInfinity), new EvaluatedResult(upper ?? double.PositiveInfinity) };
+		}
+
+		private static EvaluatedResult[] CreateBounds(Vector3D? lower, Vector3D? upper)
+		{
+			if (lower == null && upper == null) return null;
+			else if (lower != null && upper != null) return new EvaluatedResult[2] { new EvaluatedResult(lower.Value), new EvaluatedResult(upper.Value) };
+			else if (lower == null) return new EvaluatedResult[2] { new EvaluatedResult(new Vector4D(double.NegativeInfinity, 0, 0, 0)), new EvaluatedResult(upper.Value) };
+			else if (upper == null) return new EvaluatedResult[2] { new EvaluatedResult(lower.Value), new EvaluatedResult(new Vector4D(double.PositiveInfinity, 0, 0, 0)) };
+			else return null;
+		}
+
+		private static EvaluatedResult[] CreateBounds(Vector4D? lower, Vector4D? upper)
+		{
+			if (lower == null && upper == null) return null;
+			else if (lower != null && upper != null) return new EvaluatedResult[2] { new EvaluatedResult(lower.Value), new EvaluatedResult(upper.Value) };
+			else if (lower == null) return new EvaluatedResult[2] { new EvaluatedResult(new Vector4D(double.NegativeInfinity, 0, 0, 0)), new EvaluatedResult(upper.Value) };
+			else if (upper == null) return new EvaluatedResult[2] { new EvaluatedResult(lower.Value), new EvaluatedResult(new Vector4D(double.PositiveInfinity, 0, 0, 0)) };
+			else return null;
+		}
+		#endregion
+
+		#region Constructors
+		private AnimationExpression(AnimationExpression left, AnimationExpression right, MathOperationEnum operation)
+		{
+			if (left == null || right == null) throw new ArgumentNullException("One or more sides of equation is null");
+			this.SingleDoubleValue = null;
+			this.SingleVectorValue = null;
+			this.SingleSourceValue = AnimationSourceEnum.FIXED;
+			this.Arguments = new List<AnimationExpression>() { left, right };
+			this.Operation = operation;
+			this.Function = null;
+			this.ClampBounds = null;
+			this.RatioType = RatioTypeEnum.NONE;
+		}
+		private AnimationExpression(IEnumerable<AnimationExpression> arguments, MathOperationEnum operation)
+		{
+			this.SingleDoubleValue = null;
+			this.SingleVectorValue = null;
+			this.SingleSourceValue = AnimationSourceEnum.FIXED;
+			this.Arguments = new List<AnimationExpression>(arguments);
+			this.Operation = operation;
+			this.Function = null;
+			this.ClampBounds = null;
+			this.RatioType = RatioTypeEnum.NONE;
+			if (this.Arguments.Any((side) => side != null)) throw new ArgumentNullException("One or more sides of equation is null");
+		}
+		private AnimationExpression(AnimationExpression unary, MathOperationEnum operation)
+		{
+			if (unary == null) throw new ArgumentNullException("Unary side of equation is null");
+			this.SingleDoubleValue = null;
+			this.SingleVectorValue = null;
+			this.SingleSourceValue = AnimationSourceEnum.FIXED;
+			this.Arguments = new List<AnimationExpression>() { unary };
+			this.Operation = operation;
+			this.Function = null;
+			this.ClampBounds = null;
+			this.RatioType = RatioTypeEnum.NONE;
+		}
+		private AnimationExpression(AnimationExpression unary, Func<double, double> function)
+		{
+			if (unary == null) throw new ArgumentNullException("Unary side of equation is null");
+			this.SingleDoubleValue = null;
+			this.SingleVectorValue = null;
+			this.SingleSourceValue = AnimationSourceEnum.FIXED;
+			this.Arguments = new List<AnimationExpression>() { unary };
+			this.Operation = MathOperationEnum.FUNCTION;
+			this.Function = function;
+			this.ClampBounds = null;
+			this.RatioType = RatioTypeEnum.NONE;
+		}
+		internal AnimationExpression(double value, RatioTypeEnum ratio_type, double? lower, double? upper)
+		{
+			this.SingleDoubleValue = value;
+			this.SingleVectorValue = null;
+			this.SingleSourceValue = AnimationSourceEnum.FIXED;
+			this.Arguments = new List<AnimationExpression>();
+			this.Operation = MathOperationEnum.ADD;
+			this.Function = null;
+			this.ClampBounds = AnimationExpression.CreateBounds(lower, upper);
+			this.RatioType = ratio_type;
+		}
+		internal AnimationExpression(Vector3D value, RatioTypeEnum ratio_type, Vector3D? lower, Vector3D? upper)
+		{
+			this.SingleDoubleValue = null;
+			this.SingleVectorValue = new Vector4D(value, 0);
+			this.SingleSourceValue = AnimationSourceEnum.FIXED;
+			this.Arguments = new List<AnimationExpression>();
+			this.Operation = MathOperationEnum.ADD;
+			this.Function = null;
+			this.ClampBounds = AnimationExpression.CreateBounds(lower, upper);
+			this.RatioType = ratio_type;
+		}
+		internal AnimationExpression(Vector4D value, RatioTypeEnum ratio_type, Vector4D? lower, Vector4D? upper)
+		{
+			this.SingleDoubleValue = null;
+			this.SingleVectorValue = value;
+			this.SingleSourceValue = AnimationSourceEnum.FIXED;
+			this.Arguments = new List<AnimationExpression>();
+			this.Operation = MathOperationEnum.ADD;
+			this.Function = null;
+			this.ClampBounds = AnimationExpression.CreateBounds(lower, upper);
+			this.RatioType = ratio_type;
+		}
+		internal AnimationExpression(AnimationSourceEnum value, RatioTypeEnum ratio_type, double? lower, double? upper)
+		{
+			this.SingleDoubleValue = null;
+			this.SingleVectorValue = null;
+			this.SingleSourceValue = value;
+			this.Arguments = new List<AnimationExpression>();
+			this.Operation = MathOperationEnum.ADD;
+			this.Function = null;
+			this.ClampBounds = AnimationExpression.CreateBounds(lower, upper);
+			this.RatioType = ratio_type;
+		}
+		internal AnimationExpression(AnimationSourceEnum value, RatioTypeEnum ratio_type, Vector3D? lower, Vector3D? upper)
+		{
+			this.SingleDoubleValue = null;
+			this.SingleVectorValue = null;
+			this.SingleSourceValue = value;
+			this.Arguments = new List<AnimationExpression>();
+			this.Operation = MathOperationEnum.ADD;
+			this.Function = null;
+			this.ClampBounds = AnimationExpression.CreateBounds(lower, upper);
+			this.RatioType = ratio_type;
+		}
+		internal AnimationExpression(AnimationSourceEnum value, RatioTypeEnum ratio_type, Vector4D? lower, Vector4D? upper)
+		{
+			this.SingleDoubleValue = null;
+			this.SingleVectorValue = null;
+			this.SingleSourceValue = value;
+			this.Arguments = new List<AnimationExpression>();
+			this.Operation = MathOperationEnum.ADD;
+			this.Function = null;
+			this.ClampBounds = AnimationExpression.CreateBounds(lower, upper);
+			this.RatioType = ratio_type;
+		}
+		#endregion
+
+		internal EvaluatedResult Evaluate(ExpressionArguments arguments)
+		{
+			if (this.Arguments.Count == 0)
+			{
+				if (this.SingleDoubleValue == null && this.SingleVectorValue == null && this.SingleSourceValue == AnimationSourceEnum.FIXED) throw new InvalidOperationException("Operation on null value");
+				Vector3D jump_node = arguments.JumpGate.WorldJumpNode;
+				EvaluatedResult lower_clamp = (this.ClampBounds == null) ? new EvaluatedResult(double.NegativeInfinity) : this.ClampBounds[0];
+				EvaluatedResult upper_clamp = (this.ClampBounds == null) ? new EvaluatedResult(double.PositiveInfinity) : this.ClampBounds[1];
+				double ratio;
+
+				switch (this.RatioType)
 				{
-					if (this_position == null || entities.Count == 0) result = 0;
-					else
+					case RatioTypeEnum.NONE:
 					{
-						result = double.MaxValue;
+						EvaluatedResult result;
 
-						foreach (MyEntity entity in entities)
+						switch (this.SingleSourceValue)
 						{
-							double distance = Vector3D.Distance(entity.WorldMatrix.Translation, this_position.Value);
-							result = (distance > 0) ? Math.Min(result, distance) : result;
+							case AnimationSourceEnum.FIXED:
+								result = (this.SingleDoubleValue == null) ? new EvaluatedResult(this.SingleVectorValue.Value) : new EvaluatedResult(this.SingleDoubleValue.Value);
+								break;
+							case AnimationSourceEnum.TIME:
+								result = new EvaluatedResult((double) arguments.CurrentTick / arguments.TotalDuration);
+								break;
+							case AnimationSourceEnum.JUMP_GATE_SIZE:
+								result = new EvaluatedResult((arguments.JumpGate.Closed) ? 0 : arguments.JumpGate.JumpNodeRadius());
+								break;
+							case AnimationSourceEnum.JUMP_GATE_RADII:
+								result = new EvaluatedResult((arguments.JumpGate.Closed) ? Vector3D.Zero : arguments.JumpGate.JumpEllipse.Radii);
+								break;
+							case AnimationSourceEnum.JUMP_GATE_VELOCITY:
+								result = new EvaluatedResult((arguments.JumpGate.Closed) ? Vector3D.Zero : arguments.JumpGate.JumpNodeVelocity);
+								break;
+							case AnimationSourceEnum.JUMP_ANTIGATE_SIZE:
+								result = new EvaluatedResult((arguments.TargetGate != null && !arguments.TargetGate.Closed) ? arguments.TargetGate.JumpNodeRadius() : ((arguments.JumpGate.Closed) ? 0 : arguments.JumpGate.JumpNodeRadius()));
+								break;
+							case AnimationSourceEnum.JUMP_ANTIGATE_RADII:
+								result = new EvaluatedResult((arguments.TargetGate != null && !arguments.TargetGate.Closed) ? arguments.TargetGate.JumpEllipse.Radii : ((arguments.JumpGate.Closed) ? Vector3D.Zero : arguments.JumpGate.JumpEllipse.Radii));
+								break;
+							case AnimationSourceEnum.JUMP_ANTIGATE_VELOCITY:
+								result = new EvaluatedResult((arguments.TargetGate != null && !arguments.TargetGate.Closed) ? arguments.TargetGate.JumpNodeVelocity : ((arguments.JumpGate.Closed) ? Vector3D.Zero : arguments.JumpGate.JumpNodeVelocity));
+								break;
+							case AnimationSourceEnum.JUMP_NORMAL:
+								result = new EvaluatedResult((arguments.Endpoint - jump_node).Normalized());
+								break;
+							case AnimationSourceEnum.RANDOM:
+								result = new EvaluatedResult(new Random().NextDouble());
+								break;
+							case AnimationSourceEnum.N_ENTITIES:
+								result = new EvaluatedResult(arguments.JumpSpaceEntities.Count);
+								break;
+							case AnimationSourceEnum.N_DRIVES:
+								result = new EvaluatedResult(arguments.JumpGateDrives.Count);
+								break;
+							case AnimationSourceEnum.DISTANCE_ENTITY_TO_ENDPOINT:
+								result = new EvaluatedResult((arguments.ThisPosition == null) ? 0 : Vector3D.Distance(arguments.Endpoint, arguments.ThisPosition.Value));
+								break;
+							case AnimationSourceEnum.DISTANCE_GATE_TO_ENDPOINT:
+								result = new EvaluatedResult((arguments.JumpGate.Closed) ? 0 : Vector3D.Distance(jump_node, arguments.Endpoint));
+								break;
+							case AnimationSourceEnum.DISTANCE_ENTITY_TO_GATE:
+								result = new EvaluatedResult((arguments.ThisPosition == null || arguments.JumpGate.Closed) ? 0 : Vector3D.Distance(jump_node, arguments.ThisPosition.Value));
+								break;
+							case AnimationSourceEnum.DISTANCE_ENTITY_TO_ENTITY:
+							{
+								if (arguments.ThisPosition == null || arguments.JumpSpaceEntities.Count == 0) result = new EvaluatedResult(0);
+								else
+								{
+									result = new EvaluatedResult(double.MaxValue);
+
+									foreach (MyEntity entity in arguments.JumpSpaceEntities)
+									{
+										double distance = Vector3D.Distance(entity.WorldMatrix.Translation, arguments.ThisPosition.Value);
+										result.DoubleResult = Math.Min(result.DoubleResult, distance);
+									}
+
+									return result;
+								}
+								break;
+							}
+							case AnimationSourceEnum.ENTITY_VELOCITY:
+								result = new EvaluatedResult((arguments.ThisEntity == null && arguments.JumpGate.Closed) ? Vector3.Zero : (arguments.ThisEntity?.Physics?.LinearVelocity ?? arguments.JumpGate.JumpNodeVelocity));
+								break;
+							case AnimationSourceEnum.ENTITY_VOLUME:
+							{
+								if (arguments.ThisEntity == null) result = new EvaluatedResult(0);
+								BoundingBoxD aabb = ((IMyEntity) arguments.ThisEntity).WorldAABB;
+								BoundingSphereD sphere = ((IMyEntity) arguments.ThisEntity).WorldVolume;
+								result = new EvaluatedResult(Math.Min(aabb.Volume, (4 * Math.PI * sphere.Radius * sphere.Radius * sphere.Radius) / 3));
+								break;
+							}
+							case AnimationSourceEnum.ENTITY_MASS:
+								result = new EvaluatedResult(arguments.ThisEntity?.Physics?.Mass ?? 0);
+								break;
+							case AnimationSourceEnum.ENTITY_EXTENTS:
+								result = new EvaluatedResult((arguments.ThisEntity == null) ? Vector3D.Zero : ((IMyEntity) arguments.ThisEntity).WorldAABB.Extents);
+								break;
+							case AnimationSourceEnum.ENTITY_FACING_EXTENTS:
+								if (arguments.ThisEntity == null || arguments.JumpGate.PrimaryDrivePlane == null) result = new EvaluatedResult(Vector3D.Zero);
+								else
+								{
+									Vector3D extents = ((IMyEntity) arguments.ThisEntity).WorldAABB.Extents;
+									Vector3D normal = arguments.JumpGate.PrimaryDrivePlane.Value.Normal;
+									result = new EvaluatedResult(Vector3D.ProjectOnPlane(ref extents, ref normal));
+								}
+								
+								break;
+							case AnimationSourceEnum.GRAVITY:
+								result = new EvaluatedResult((arguments.JumpGate.Closed) ? 0 : MyAPIGateway.GravityProviderSystem.CalculateNaturalGravityInPoint(jump_node).Length());
+								break;
+							case AnimationSourceEnum.ATMOSPHERE:
+							{
+								MyPlanet planet = (arguments.JumpGate.Closed) ? null : MyGamePruningStructure.GetClosestPlanet(jump_node);
+								result = new EvaluatedResult((planet == null || !planet.HasAtmosphere) ? 0 : Math.Max(0, 1 - (Vector3D.Distance(jump_node, planet.WorldMatrix.Translation) / (double) planet.AtmosphereRadius)));
+								break;
+							}
+							default:
+								throw new InvalidOperationException($"Invalid animation source - {(byte) this.SingleSourceValue}");
 						}
+
+						if (this.ClampBounds != null && result.IsVector)
+						{
+							Vector4D _lower = lower_clamp.AsVector();
+							Vector4D _upper = upper_clamp.AsVector();
+
+							return new EvaluatedResult(new Vector4D(
+								MathHelper.Clamp(result.VectorResult.X, _lower.X, _upper.X),
+								MathHelper.Clamp(result.VectorResult.X, _lower.Y, _upper.Y),
+								MathHelper.Clamp(result.VectorResult.X, _lower.Z, _upper.Z),
+								MathHelper.Clamp(result.VectorResult.X, _lower.W, _upper.W)
+							));
+						}
+						else if (this.ClampBounds != null) return new EvaluatedResult(MathHelper.Clamp(result.DoubleResult, lower_clamp.AsDouble(), upper_clamp.AsDouble()));
+						else return result;
 					}
-					
-					break;
+					case RatioTypeEnum.TIME:
+						ratio = (double) arguments.CurrentTick / arguments.TotalDuration;
+						break;
+					case RatioTypeEnum.ENDPOINT_DISTANCE:
+						ratio = (arguments.ThisPosition == null) ? 0.5 : (1 - (Vector3D.Distance(arguments.ThisPosition.Value, arguments.Endpoint) / Vector3D.Distance(jump_node, arguments.Endpoint)));
+						break;
+					case RatioTypeEnum.ENTITY_DISTANCE:
+						ratio = (arguments.ThisPosition == null) ? 0.5 : (1 - (Vector3D.Distance(arguments.ThisPosition.Value, jump_node) / arguments.JumpSpaceEntities.Max((entity) => Vector3D.Distance(entity.WorldMatrix.Translation, jump_node))));
+						break;
+					case RatioTypeEnum.ATMOSPHERE:
+					{
+						MyPlanet planet = (arguments.ThisPosition == null) ? null : MyGamePruningStructure.GetClosestPlanet(arguments.ThisPosition.Value);
+						ratio = (planet == null || !planet.HasAtmosphere) ? 0.5 : Math.Max(0, 1 - (Vector3D.Distance(jump_node, planet.WorldMatrix.Translation) / (double) planet.AtmosphereRadius));
+						break;
+					}
+					case RatioTypeEnum.GRAVITY:
+						ratio = (arguments.ThisPosition == null) ? 0.5 : MyAPIGateway.GravityProviderSystem.CalculateNaturalGravityInPoint(jump_node).Length();
+						break;
+					case RatioTypeEnum.RANDOM:
+						ratio = new Random().NextDouble();
+						break;
+					default:
+						throw new InvalidOperationException($"Invalid animation ratio relator - {(byte) this.RatioType}");
 				}
-				case AnimationSourceEnum.ENTITY_VELOCITY:
-					result = (this_entity == null && jump_gate.Closed) ? 0 : (this_entity?.Physics?.LinearVelocity ?? jump_gate.JumpNodeVelocity).Length();
-					break;
-				case AnimationSourceEnum.GRAVITY:
-					result = (jump_gate.Closed) ? 0 : MyAPIGateway.GravityProviderSystem.CalculateNaturalGravityInPoint(jump_node).Length();
-					break;
-				case AnimationSourceEnum.ATMOSPHERE:
-				{
-					MyPlanet planet = (jump_gate.Closed) ? null : MyGamePruningStructure.GetClosestPlanet(jump_node);
-					result = (planet == null || !planet.HasAtmosphere) ? 0 : Math.Max(0, 1 - (Vector3D.Distance(jump_node, planet.WorldMatrix.Translation) / (double) planet.AtmosphereRadius));
-					break;
-				}
-				default:
-					throw new InvalidOperationException($"Invalid animation source - {(byte) this.AnimationSource}");
-			}
 
-			switch (this.RatioType)
+				if (lower_clamp.IsVector) return new EvaluatedResult(Vector4D.Lerp(lower_clamp.AsVector(), upper_clamp.AsVector(), ratio % 1));
+				else return new EvaluatedResult(MathHelper.Lerp(lower_clamp.AsDouble(), upper_clamp.AsDouble(), ratio % 1));
+			}
+			else if (this.Operation == MathOperationEnum.CLAMP)
 			{
-				case RatioTypeEnum.NONE:
-					return (this.ClampResult) ? MathHelper.Clamp(result, this.LowerClamp, this.UpperClamp) : result;
-				case RatioTypeEnum.TIME:
-					ratio = (double) current_tick / total_duration;
-					break;
-				case RatioTypeEnum.ENDPOINT_DISTANCE:
-					ratio = (this_position == null) ? 0.5 : (1 - (Vector3D.Distance(this_position.Value, endpoint) / Vector3D.Distance(jump_node, endpoint)));
-					break;
-				case RatioTypeEnum.ENTITY_DISTANCE:
-					ratio = (this_position == null) ? 0.5 : (1 - (Vector3D.Distance(this_position.Value, jump_node) / entities.Max((entity) => Vector3D.Distance(entity.WorldMatrix.Translation, jump_node))));
-					break;
-				case RatioTypeEnum.ATMOSPHERE:
-				{
-					MyPlanet planet = (this_position == null) ? null : MyGamePruningStructure.GetClosestPlanet(this_position.Value);
-					ratio = (planet == null || !planet.HasAtmosphere) ? 0.5 : Math.Max(0, 1 - (Vector3D.Distance(jump_node, planet.WorldMatrix.Translation) / (double) planet.AtmosphereRadius));
-					break;
-				}
-				case RatioTypeEnum.GRAVITY:
-					ratio = (this_position == null) ? 0.5 : MyAPIGateway.GravityProviderSystem.CalculateNaturalGravityInPoint(jump_node).Length();
-					break;
-				case RatioTypeEnum.RANDOM:
-					ratio = new Random().NextDouble();
-					break;
-				default:
-					throw new InvalidOperationException($"Invalid animation ratio relator - {(byte) this.RatioType}");
-			}
+				EvaluatedResult target_result = this.Arguments[0].Evaluate(arguments);
+				EvaluatedResult lower_result = this.Arguments[1].Evaluate(arguments);
+				EvaluatedResult upper_result = this.Arguments[2].Evaluate(arguments);
 
-			return (this.UpperClamp - this.LowerClamp) * (ratio % 1) + this.LowerClamp;
+				if (target_result.IsVector) return new EvaluatedResult(Vector4D.Clamp(target_result.VectorResult, lower_result.AsVector(), upper_result.AsVector()));
+				else return new EvaluatedResult(MathHelper.Clamp(target_result.DoubleResult, lower_result.AsDouble(), upper_result.AsDouble()));
+			}
+			else if (this.Arguments.Count == 1)
+			{
+				EvaluatedResult result = this.Arguments[0].Evaluate(arguments);
+
+				switch (this.Operation)
+				{
+					case MathOperationEnum.ADD:
+						return result;
+					case MathOperationEnum.SUBTRACT:
+						if (result.IsVector) return new EvaluatedResult(-result.VectorResult);
+						else return new EvaluatedResult(-result.DoubleResult);
+					case MathOperationEnum.FUNCTION:
+						if (result.IsVector) return new EvaluatedResult(new Vector4D(
+							this.Function(result.VectorResult.X),
+							this.Function(result.VectorResult.Y),
+							this.Function(result.VectorResult.Z),
+							this.Function(result.VectorResult.W)
+						));
+						else return new EvaluatedResult(this.Function(result.DoubleResult));
+					case MathOperationEnum.LENGTH:
+						if (result.IsVector) return new EvaluatedResult(result.VectorResult.Length());
+						else return result;
+					case MathOperationEnum.VMIN:
+						if (result.IsVector) result = new EvaluatedResult(Math.Min(Math.Min(result.VectorResult.X, result.VectorResult.Y), Math.Min(result.VectorResult.Z, result.VectorResult.W)));
+						else return result;
+						return result;
+					case MathOperationEnum.VMAX:
+						if (result.IsVector) return new EvaluatedResult(Math.Max(Math.Max(result.VectorResult.X, result.VectorResult.Y), Math.Max(result.VectorResult.Z, result.VectorResult.W)));
+						else return result;
+					default:
+						throw new InvalidOperationException($"Invalid animation source - {(byte) this.SingleSourceValue}");
+				}
+			}
+			else
+			{
+				EvaluatedResult left_result = this.Arguments[0].Evaluate(arguments);
+				EvaluatedResult right_result = this.Arguments[1].Evaluate(arguments);
+				bool returns_vector = left_result.IsVector || right_result.IsVector;
+
+				switch (this.Operation)
+				{
+					case MathOperationEnum.ADD:
+						if (returns_vector) return new EvaluatedResult(left_result.AsVector() + right_result.AsVector());
+						else return new EvaluatedResult(left_result.DoubleResult + right_result.DoubleResult);
+					case MathOperationEnum.SUBTRACT:
+						if (returns_vector) return new EvaluatedResult(left_result.AsVector() - right_result.AsVector());
+						else return new EvaluatedResult(left_result.DoubleResult - right_result.DoubleResult);
+					case MathOperationEnum.MULTIPLY:
+						if (returns_vector) return new EvaluatedResult(left_result.AsVector() * right_result.AsVector());
+						else return new EvaluatedResult(left_result.DoubleResult * right_result.DoubleResult);
+					case MathOperationEnum.DIVIDE:
+						if (returns_vector) return new EvaluatedResult(left_result.AsVector() / right_result.AsVector());
+						else return new EvaluatedResult(left_result.DoubleResult / right_result.DoubleResult);
+					case MathOperationEnum.MODULO:
+						if (returns_vector)
+						{
+							Vector4D left = left_result.AsVector();
+							Vector4D right = right_result.AsVector();
+							return new EvaluatedResult(new Vector4D(
+								left.X % right.X,
+								left.Y % right.Y,
+								left.Z % right.Z,
+								left.W % right.W
+							));
+						}
+						else return new EvaluatedResult(left_result.DoubleResult * right_result.DoubleResult);
+					case MathOperationEnum.POWER:
+						if (returns_vector)
+						{
+							Vector4D left = left_result.AsVector();
+							Vector4D right = right_result.AsVector();
+							return new EvaluatedResult(new Vector4D(
+								Math.Pow(left.X, right.X),
+								Math.Pow(left.Y, right.Y),
+								Math.Pow(left.Z, right.Z),
+								Math.Pow(left.W, right.W)
+							));
+						}
+						else return new EvaluatedResult(Math.Pow(left_result.DoubleResult, right_result.DoubleResult));
+					case MathOperationEnum.AVERAGE:
+						if (returns_vector) return new EvaluatedResult((left_result.AsVector() + right_result.AsVector()) / 2);
+						else return new EvaluatedResult((left_result.DoubleResult + right_result.DoubleResult) / 2);
+					case MathOperationEnum.SMALLEST:
+						if (returns_vector) return new EvaluatedResult(Vector4D.Min(left_result.AsVector(), right_result.AsVector()));
+						else return new EvaluatedResult(Math.Min(left_result.DoubleResult, right_result.DoubleResult));
+					case MathOperationEnum.LARGEST:
+						if (returns_vector) return new EvaluatedResult(Vector4D.Max(left_result.AsVector(), right_result.AsVector()));
+						else return new EvaluatedResult(Math.Max(left_result.DoubleResult, right_result.DoubleResult));
+					default:
+						throw new InvalidOperationException($"Invalid animation source - {(byte) this.SingleSourceValue}");
+				}
+			}
 		}
 	}
 
-	[ProtoContract]
-	internal class VectorValue
-	{
-		[ProtoMember(1, IsRequired = true)]
-		public MathOperationEnum Operation = MathOperationEnum.ADD;
-		[ProtoMember(2, IsRequired = true)]
-		public Vector4D InitialValue;
-		[ProtoMember(3, IsRequired = true)]
-		public AnimationSourceEnum AnimationSource;
-		[ProtoMember(4, IsRequired = true)]
-		public Vector4D LowerClamp = new Vector4D(double.NegativeInfinity);
-		[ProtoMember(5, IsRequired = true)]
-		public Vector4D UpperClamp = new Vector4D(double.PositiveInfinity);
-		[ProtoMember(6, IsRequired = true)]
-		public bool ClampResult = false;
-		[ProtoMember(7, IsRequired = true)]
-		internal RatioTypeEnum RatioType = RatioTypeEnum.NONE;
-
-		/// <summary>
-		/// Parameterless constructor for serialization
-		/// </summary>
-		internal VectorValue() { }
-
-		public VectorValue(double initial_value, MathOperationEnum operation, RatioTypeEnum ratio_type = RatioTypeEnum.NONE, Vector4D? lower = null, Vector4D? upper = null)
-		{
-			this.InitialValue = new Vector4D(initial_value);
-			this.Operation = operation;
-			this.AnimationSource = AnimationSourceEnum.FIXED;
-			this.RatioType = ratio_type;
-			this.LowerClamp = lower ?? new Vector4D(double.NegativeInfinity);
-			this.UpperClamp = upper ?? new Vector4D(double.PositiveInfinity);
-			this.ClampResult = lower != null || upper != null;
-		}
-
-		public VectorValue(Vector4D initial_value, MathOperationEnum operation, RatioTypeEnum ratio_type = RatioTypeEnum.NONE, Vector4D? lower = null, Vector4D? upper = null)
-		{
-			this.InitialValue = initial_value;
-			this.Operation = operation;
-			this.AnimationSource = AnimationSourceEnum.FIXED;
-			this.RatioType = ratio_type;
-			this.LowerClamp = lower ?? new Vector4D(double.NegativeInfinity);
-			this.UpperClamp = upper ?? new Vector4D(double.PositiveInfinity);
-			this.ClampResult = lower != null || upper != null;
-		}
-
-		public VectorValue(AnimationSourceEnum animation_source, MathOperationEnum operation, RatioTypeEnum ratio_type = RatioTypeEnum.NONE, Vector4D? lower = null, Vector4D? upper = null)
-		{
-			this.InitialValue = Vector4D.Zero;
-			this.Operation = operation;
-			this.AnimationSource = animation_source;
-			this.RatioType = ratio_type;
-			this.LowerClamp = lower ?? new Vector4D(double.NegativeInfinity);
-			this.UpperClamp = upper ?? new Vector4D(double.PositiveInfinity);
-			this.ClampResult = lower != null || upper != null;
-		}
-
-		public Vector4D GetValue(ushort current_tick, ushort total_duration, MyJumpGate jump_gate, MyJumpGate target_gate, List<MyJumpGateDrive> drives, List<MyEntity> entities, ref Vector3D endpoint, Vector3D? this_position, MyEntity this_entity)
-		{
-			Vector3D jump_node = jump_gate.WorldJumpNode;
-			Vector4D result;
-			double ratio;
-
-			switch (this.AnimationSource)
-			{
-				case AnimationSourceEnum.FIXED:
-					result = this.InitialValue;
-					break;
-				case AnimationSourceEnum.TIME:
-					result = new Vector4D((double) current_tick / (double) total_duration);
-					break;
-				case AnimationSourceEnum.JUMP_GATE_SIZE:
-					result = new Vector4D((jump_gate.Closed) ? 0 : jump_gate.JumpNodeRadius());
-					break;
-				case AnimationSourceEnum.JUMP_GATE_RADII:
-					result = (jump_gate.Closed) ? Vector4D.Zero : new Vector4D(jump_gate.JumpEllipse.Radii, 0);
-					break;
-				case AnimationSourceEnum.JUMP_GATE_VELOCITY:
-					result = (jump_gate.Closed) ? Vector4D.Zero : new Vector4D(jump_gate.JumpNodeVelocity, 0);
-					break;
-				case AnimationSourceEnum.JUMP_ANTIGATE_SIZE:
-					result = new Vector4D((target_gate != null && !target_gate.Closed) ? target_gate.JumpNodeRadius() : ((jump_gate.Closed) ? 0 : jump_gate.JumpNodeRadius()));
-					break;
-				case AnimationSourceEnum.JUMP_ANTIGATE_RADII:
-					result = (target_gate != null && !target_gate.Closed) ? new Vector4D(target_gate.JumpEllipse.Radii, 0) : ((jump_gate.Closed) ? Vector4D.Zero : new Vector4D(jump_gate.JumpEllipse.Radii, 0));
-					break;
-				case AnimationSourceEnum.JUMP_ANTIGATE_VELOCITY:
-					result = (target_gate != null && !target_gate.Closed) ? new Vector4D(target_gate.JumpNodeVelocity, 0) : Vector4D.Zero;
-					break;
-				case AnimationSourceEnum.RANDOM:
-				{
-					Random prng = new Random();
-					result = new Vector4D(prng.NextDouble(), prng.NextDouble(), prng.NextDouble(), prng.NextDouble());
-					break;
-				}
-				case AnimationSourceEnum.N_ENTITIES:
-					result = new Vector4D(entities.Count);
-					break;
-				case AnimationSourceEnum.N_DRIVES:
-					result = new Vector4D(drives.Count);
-					break;
-				case AnimationSourceEnum.DISTANCE_ENTITY_TO_ENDPOINT:
-					result = new Vector4D((this_position == null) ? 0 : Vector3D.Distance(endpoint, this_position.Value));
-					break;
-				case AnimationSourceEnum.DISTANCE_GATE_TO_ENDPOINT:
-					result = new Vector4D((jump_gate.Closed) ? 0 : Vector3D.Distance(jump_node, endpoint));
-					break;
-				case AnimationSourceEnum.DISTANCE_ENTITY_TO_GATE:
-					result = new Vector4D((this_position == null || jump_gate.Closed) ? 0 : Vector3D.Distance(jump_node, this_position.Value));
-					break;
-				case AnimationSourceEnum.DISTANCE_ENTITY_TO_ENTITY:
-				{
-					if (this_position == null || entities.Count == 0) result = Vector4D.Zero;
-					else
-					{
-						double min_distance = double.MaxValue;
-
-						foreach (MyEntity entity in entities)
-						{
-							double distance = Vector3D.Distance(entity.WorldMatrix.Translation, this_position.Value);
-							min_distance = (distance > 0) ? Math.Min(min_distance, distance) : min_distance;
-						}
-						result = new Vector4D(min_distance);
-					}
-					break;
-				}
-				case AnimationSourceEnum.ENTITY_VELOCITY:
-					result = (this_entity == null && jump_gate.Closed) ? Vector4D.Zero : new Vector4D(this_entity?.Physics?.LinearVelocity ?? jump_gate.JumpNodeVelocity, 0);
-					break;
-				case AnimationSourceEnum.GRAVITY:
-					result = new Vector4D((jump_gate.Closed) ? 0 : MyAPIGateway.GravityProviderSystem.CalculateNaturalGravityInPoint(jump_node).Length());
-					break;
-				case AnimationSourceEnum.ATMOSPHERE:
-				{
-					MyPlanet planet = (jump_gate.Closed) ? null : MyGamePruningStructure.GetClosestPlanet(jump_node);
-					result = new Vector4D((planet == null || !planet.HasAtmosphere) ? 0 : Math.Max(0, 1 - (Vector3D.Distance(jump_node, planet.WorldMatrix.Translation) / (double) planet.AtmosphereRadius)));
-					break;
-				}
-				default:
-					throw new InvalidOperationException($"Invalid animation source - {(byte) this.AnimationSource}");
-			}
-
-			switch (this.RatioType)
-			{
-				case RatioTypeEnum.NONE:
-					if (this.ClampResult)
-					{
-						double x = MathHelper.Clamp(result.X, Math.Min(this.LowerClamp.X, this.UpperClamp.X), Math.Max(this.LowerClamp.X, this.UpperClamp.X));
-						double y = MathHelper.Clamp(result.Y, Math.Min(this.LowerClamp.Y, this.UpperClamp.Y), Math.Max(this.LowerClamp.Y, this.UpperClamp.Y));
-						double z = MathHelper.Clamp(result.Z, Math.Min(this.LowerClamp.Z, this.UpperClamp.Z), Math.Max(this.LowerClamp.Z, this.UpperClamp.Z));
-						double w = MathHelper.Clamp(result.W, Math.Min(this.LowerClamp.W, this.UpperClamp.W), Math.Max(this.LowerClamp.W, this.UpperClamp.W));
-						return new Vector4D(x, y, z, w);
-					}
-					else return result;
-				case RatioTypeEnum.TIME:
-					ratio = (double) current_tick / total_duration;
-					break;
-				case RatioTypeEnum.ENDPOINT_DISTANCE:
-					ratio = (this_position == null) ? 0.5 : (1 - (Vector3D.Distance(this_position.Value, endpoint) / Vector3D.Distance(jump_node, endpoint)));
-					break;
-				case RatioTypeEnum.ENTITY_DISTANCE:
-					ratio = (this_position == null) ? 0.5 : (1 - (Vector3D.Distance(this_position.Value, jump_node) / entities.Max((entity) => Vector3D.Distance(entity.WorldMatrix.Translation, jump_node))));
-					break;
-				case RatioTypeEnum.ATMOSPHERE:
-				{
-					MyPlanet planet = (this_position == null) ? null : MyGamePruningStructure.GetClosestPlanet(this_position.Value);
-					ratio = (planet == null || !planet.HasAtmosphere) ? 0.5 : Math.Max(0, 1 - (Vector3D.Distance(jump_node, planet.WorldMatrix.Translation) / (double) planet.AtmosphereRadius));
-					break;
-				}
-				case RatioTypeEnum.GRAVITY:
-					ratio = (this_position == null) ? 0.5 : MyAPIGateway.GravityProviderSystem.CalculateNaturalGravityInPoint(jump_node).Length();
-					break;
-				case RatioTypeEnum.RANDOM:
-					ratio = new Random().NextDouble();
-					break;
-				default:
-					throw new InvalidOperationException($"Invalid animation ratio relator - {(byte) this.RatioType}");
-			}
-
-			return (this.UpperClamp - this.LowerClamp) * (ratio % 1) + this.LowerClamp;
-		}
-	}
-
-	[ProtoContract]
 	public class DoubleKeyframe
 	{
 		#region Internal Variables
 		/// <summary>
 		/// The value of this keyframe
 		/// </summary>
-		[ProtoMember(1, IsRequired = true)]
-		internal List<DoubleValue> Values;
+		internal AnimationExpression Expression;
 
 		/// <summary>
 		/// The position of this keyframe<br />
 		/// Relative to animation start
 		/// </summary>
-		[ProtoMember(2, IsRequired = true)]
 		internal ushort Position;
 
 		/// <summary>
 		/// The interpolation method from this keyframe to the next
 		/// </summary>
-		[ProtoMember(3, IsRequired = true)]
 		internal EasingCurveEnum EasingCurve = EasingCurveEnum.LINEAR;
 
 		/// <summary>
 		/// The easing method from this keyframe to the next
 		/// </summary>
-		[ProtoMember(4, IsRequired = true)]
 		internal EasingTypeEnum EasingType = EasingTypeEnum.EASE_IN_OUT;
 		#endregion
 
 		#region Operators
 		public static DoubleKeyframe operator +(DoubleKeyframe a, double b)
 		{
-			a.Values.Add(new DoubleValue(b, MathOperationEnum.ADD));
+			a.Expression += b;
+			return a;
+		}
+		public static DoubleKeyframe operator +(DoubleKeyframe a, Vector3D b)
+		{
+			a.Expression += b;
+			return a;
+		}
+		public static DoubleKeyframe operator +(DoubleKeyframe a, Vector4D b)
+		{
+			a.Expression += b;
 			return a;
 		}
 		public static DoubleKeyframe operator +(DoubleKeyframe a, AnimationSourceEnum b)
 		{
-			a.Values.Add(new DoubleValue(b, MathOperationEnum.ADD));
+			a.Expression += b;
+			return a;
+		}
+		public static DoubleKeyframe operator +(DoubleKeyframe a, AnimationExpression b)
+		{
+			a.Expression += b;
 			return a;
 		}
 
 		public static DoubleKeyframe operator -(DoubleKeyframe a, double b)
 		{
-			a.Values.Add(new DoubleValue(b, MathOperationEnum.SUBTRACT));
+			a.Expression -= b;
+			return a;
+		}
+		public static DoubleKeyframe operator -(DoubleKeyframe a, Vector3D b)
+		{
+			a.Expression -= b;
+			return a;
+		}
+		public static DoubleKeyframe operator -(DoubleKeyframe a, Vector4D b)
+		{
+			a.Expression -= b;
 			return a;
 		}
 		public static DoubleKeyframe operator -(DoubleKeyframe a, AnimationSourceEnum b)
 		{
-			a.Values.Add(new DoubleValue(b, MathOperationEnum.SUBTRACT));
+			a.Expression -= b;
+			return a;
+		}
+		public static DoubleKeyframe operator -(DoubleKeyframe a, AnimationExpression b)
+		{
+			a.Expression -= b;
 			return a;
 		}
 
 		public static DoubleKeyframe operator *(DoubleKeyframe a, double b)
 		{
-			a.Values.Add(new DoubleValue(b, MathOperationEnum.MULTIPLY));
+			a.Expression *= b;
+			return a;
+		}
+		public static DoubleKeyframe operator *(DoubleKeyframe a, Vector3D b)
+		{
+			a.Expression *= b;
+			return a;
+		}
+		public static DoubleKeyframe operator *(DoubleKeyframe a, Vector4D b)
+		{
+			a.Expression *= b;
 			return a;
 		}
 		public static DoubleKeyframe operator *(DoubleKeyframe a, AnimationSourceEnum b)
 		{
-			a.Values.Add(new DoubleValue(b, MathOperationEnum.MULTIPLY));
+			a.Expression *= b;
+			return a;
+		}
+		public static DoubleKeyframe operator *(DoubleKeyframe a, AnimationExpression b)
+		{
+			a.Expression *= b;
 			return a;
 		}
 
 		public static DoubleKeyframe operator /(DoubleKeyframe a, double b)
 		{
-			a.Values.Add(new DoubleValue(b, MathOperationEnum.DIVIDE));
+			a.Expression /= b;
+			return a;
+		}
+		public static DoubleKeyframe operator /(DoubleKeyframe a, Vector3D b)
+		{
+			a.Expression /= b;
+			return a;
+		}
+		public static DoubleKeyframe operator /(DoubleKeyframe a, Vector4D b)
+		{
+			a.Expression /= b;
 			return a;
 		}
 		public static DoubleKeyframe operator /(DoubleKeyframe a, AnimationSourceEnum b)
 		{
-			a.Values.Add(new DoubleValue(b, MathOperationEnum.DIVIDE));
+			a.Expression /= b;
+			return a;
+		}
+		public static DoubleKeyframe operator /(DoubleKeyframe a, AnimationExpression b)
+		{
+			a.Expression /= b;
 			return a;
 		}
 
 		public static DoubleKeyframe operator %(DoubleKeyframe a, double b)
 		{
-			a.Values.Add(new DoubleValue(b, MathOperationEnum.MODULO));
+			a.Expression %= b;
+			return a;
+		}
+		public static DoubleKeyframe operator %(DoubleKeyframe a, Vector3D b)
+		{
+			a.Expression %= b;
+			return a;
+		}
+		public static DoubleKeyframe operator %(DoubleKeyframe a, Vector4D b)
+		{
+			a.Expression %= b;
 			return a;
 		}
 		public static DoubleKeyframe operator %(DoubleKeyframe a, AnimationSourceEnum b)
 		{
-			a.Values.Add(new DoubleValue(b, MathOperationEnum.MODULO));
+			a.Expression %= b;
+			return a;
+		}
+		public static DoubleKeyframe operator %(DoubleKeyframe a, AnimationExpression b)
+		{
+			a.Expression %= b;
 			return a;
 		}
 
 		public static DoubleKeyframe operator ^(DoubleKeyframe a, double b)
 		{
-			a.Values.Add(new DoubleValue(b, MathOperationEnum.POWER));
+			a.Expression ^= b;
+			return a;
+		}
+		public static DoubleKeyframe operator ^(DoubleKeyframe a, Vector3D b)
+		{
+			a.Expression ^= b;
+			return a;
+		}
+		public static DoubleKeyframe operator ^(DoubleKeyframe a, Vector4D b)
+		{
+			a.Expression ^= b;
 			return a;
 		}
 		public static DoubleKeyframe operator ^(DoubleKeyframe a, AnimationSourceEnum b)
 		{
-			a.Values.Add(new DoubleValue(b, MathOperationEnum.POWER));
+			a.Expression ^= b;
 			return a;
 		}
-		#endregion
-
-		#region Public Static Methods
-		public DoubleKeyframe Average(ushort position, double initial_value, EasingCurveEnum easing_curve = EasingCurveEnum.LINEAR, EasingTypeEnum easing_type = EasingTypeEnum.EASE_IN_OUT)
+		public static DoubleKeyframe operator ^(DoubleKeyframe a, AnimationExpression b)
 		{
-			DoubleKeyframe keyframe = new DoubleKeyframe(position, initial_value, easing_curve, easing_type);
-			keyframe.Values[0].Operation = MathOperationEnum.AVERAGE;
-			return keyframe;
-		}
-
-		public DoubleKeyframe Smallest(ushort position, double initial_value, EasingCurveEnum easing_curve = EasingCurveEnum.LINEAR, EasingTypeEnum easing_type = EasingTypeEnum.EASE_IN_OUT)
-		{
-			DoubleKeyframe keyframe = new DoubleKeyframe(position, initial_value, easing_curve, easing_type);
-			keyframe.Values[0].Operation = MathOperationEnum.SMALLEST;
-			return keyframe;
-		}
-
-		public DoubleKeyframe Largest(ushort position, double initial_value, EasingCurveEnum easing_curve = EasingCurveEnum.LINEAR, EasingTypeEnum easing_type = EasingTypeEnum.EASE_IN_OUT)
-		{
-			DoubleKeyframe keyframe = new DoubleKeyframe(position, initial_value, easing_curve, easing_type);
-			keyframe.Values[0].Operation = MathOperationEnum.LARGEST;
-			return keyframe;
+			a.Expression ^= b;
+			return a;
 		}
 		#endregion
 
@@ -942,7 +1543,7 @@ namespace IOTA.ModularJumpGates
 		public DoubleKeyframe(ushort position, double initial_value, EasingCurveEnum easing_curve = EasingCurveEnum.LINEAR, EasingTypeEnum easing_type = EasingTypeEnum.EASE_IN_OUT, RatioTypeEnum ratio_type = RatioTypeEnum.NONE, double? lower = null, double? upper = null)
 		{
 			this.Position = position;
-			this.Values = new List<DoubleValue>() { new DoubleValue(initial_value, MathOperationEnum.ADD, ratio_type, lower, upper) };
+			this.Expression = new AnimationExpression(initial_value, ratio_type, lower, upper);
 			this.EasingCurve = easing_curve;
 			this.EasingType = easing_type;
 		}
@@ -957,226 +1558,205 @@ namespace IOTA.ModularJumpGates
 		public DoubleKeyframe(ushort position, AnimationSourceEnum initial_value, EasingCurveEnum easing_curve = EasingCurveEnum.LINEAR, EasingTypeEnum easing_type = EasingTypeEnum.EASE_IN_OUT, RatioTypeEnum ratio_type = RatioTypeEnum.NONE, double? lower = null, double? upper = null)
 		{
 			this.Position = position;
-			this.Values = new List<DoubleValue>() { new DoubleValue(initial_value, MathOperationEnum.ADD, ratio_type, lower, upper) };
+			this.Expression = new AnimationExpression(initial_value, ratio_type, lower, upper);
 			this.EasingCurve = easing_curve;
 			this.EasingType = easing_type;
 		}
 		#endregion
 
 		#region Internal Methods
-		internal double GetValueFromStack(ushort current_tick, ushort total_duration, MyJumpGate jump_gate, MyJumpGate target_gate, List<MyJumpGateDrive> drives, List<MyEntity> entities, ref Vector3D endpoint, Vector3D? this_position, MyEntity this_entity)
+		internal double GetValueFromStack(AnimationExpression.ExpressionArguments arguments)
 		{
-			DoubleValue initial = this.Values[0];
-
-			if (initial.Operation == MathOperationEnum.AVERAGE)
-			{
-				double sum = 0;
-				foreach (DoubleValue value in this.Values) sum += value.GetValue(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position, this_entity);
-				return sum / this.Values.Count;
-			}
-			else if (initial.Operation == MathOperationEnum.SMALLEST)
-			{
-				double smallest = 0;
-				foreach (DoubleValue value in this.Values) smallest = Math.Min(smallest, value.GetValue(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position, this_entity));
-				return smallest;
-			}
-			else if (initial.Operation == MathOperationEnum.LARGEST)
-			{
-				double largest = 0;
-				foreach (DoubleValue value in this.Values) largest = Math.Max(largest, value.GetValue(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position, this_entity));
-				return largest;
-			}
-
-			double result = initial.GetValue(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position, this_entity);
-
-			foreach (DoubleValue value in this.Values.Skip(1))
-			{
-				double local_result = value.GetValue(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position, this_entity);
-
-				switch (value.Operation)
-				{
-					case MathOperationEnum.ADD:
-						result += local_result;
-						break;
-					case MathOperationEnum.SUBTRACT:
-						result -= local_result;
-						break;
-					case MathOperationEnum.MULTIPLY:
-						result *= local_result;
-						break;
-					case MathOperationEnum.DIVIDE:
-						result /= local_result;
-						break;
-					case MathOperationEnum.MODULO:
-						result %= local_result;
-						break;
-					case MathOperationEnum.POWER:
-						result = Math.Pow(result, local_result);
-						break;
-					default:
-						throw new InvalidOperationException($"Invalid operation on double value - {(byte) value.Operation}");
-				}
-			}
-
-			return result;
+			return this.Expression.Evaluate(arguments).AsDouble();
 		}
 		#endregion
 	}
 
-	[ProtoContract]
 	public class VectorKeyframe
 	{
 		#region Internal Variables
 		/// <summary>
 		/// The value of this keyframe
 		/// </summary>
-		[ProtoMember(1, IsRequired = true)]
-		internal List<VectorValue> Values;
+		internal AnimationExpression Expression;
 
 		/// <summary>
 		/// The position of this keyframe<br />
 		/// Relative to animation start
 		/// </summary>
-		[ProtoMember(2, IsRequired = true)]
 		internal ushort Position;
 
 		/// <summary>
 		/// The interpolation method from this keyframe to the next
 		/// </summary>
-		[ProtoMember(3, IsRequired = true)]
 		internal EasingCurveEnum EasingCurve = EasingCurveEnum.LINEAR;
 
 		/// <summary>
 		/// The easing method from this keyframe to the next
 		/// </summary>
-		[ProtoMember(4, IsRequired = true)]
 		internal EasingTypeEnum EasingType = EasingTypeEnum.EASE_IN_OUT;
 
 		/// <summary>
 		/// The ratio type used for ratioing/clamping values
 		/// </summary>
-		[ProtoMember(5, IsRequired = true)]
 		internal RatioTypeEnum RatioType = RatioTypeEnum.NONE;
 		#endregion
 
 		#region Operators
-		public static VectorKeyframe operator+ (VectorKeyframe a, double b)
+		public static VectorKeyframe operator +(VectorKeyframe a, double b)
 		{
-			a.Values.Add(new VectorValue(b, MathOperationEnum.ADD));
+			a.Expression += b;
 			return a;
 		}
-		public static VectorKeyframe operator+ (VectorKeyframe a, Vector4D b)
+		public static VectorKeyframe operator +(VectorKeyframe a, Vector3D b)
 		{
-			a.Values.Add(new VectorValue(b, MathOperationEnum.ADD));
+			a.Expression += b;
 			return a;
 		}
-		public static VectorKeyframe operator+ (VectorKeyframe a, AnimationSourceEnum b)
+		public static VectorKeyframe operator +(VectorKeyframe a, Vector4D b)
 		{
-			a.Values.Add(new VectorValue(b, MathOperationEnum.ADD));
+			a.Expression += b;
 			return a;
 		}
-
-		public static VectorKeyframe operator- (VectorKeyframe a, double b)
+		public static VectorKeyframe operator +(VectorKeyframe a, AnimationSourceEnum b)
 		{
-			a.Values.Add(new VectorValue(b, MathOperationEnum.SUBTRACT));
+			a.Expression += b;
 			return a;
 		}
-		public static VectorKeyframe operator- (VectorKeyframe a, Vector4D b)
+		public static VectorKeyframe operator +(VectorKeyframe a, AnimationExpression b)
 		{
-			a.Values.Add(new VectorValue(b, MathOperationEnum.SUBTRACT));
-			return a;
-		}
-		public static VectorKeyframe operator- (VectorKeyframe a, AnimationSourceEnum b)
-		{
-			a.Values.Add(new VectorValue(b, MathOperationEnum.SUBTRACT));
+			a.Expression += b;
 			return a;
 		}
 
-		public static VectorKeyframe operator* (VectorKeyframe a, double b)
+		public static VectorKeyframe operator -(VectorKeyframe a, double b)
 		{
-			a.Values.Add(new VectorValue(b, MathOperationEnum.MULTIPLY));
+			a.Expression -= b;
 			return a;
 		}
-		public static VectorKeyframe operator* (VectorKeyframe a, Vector4D b)
+		public static VectorKeyframe operator -(VectorKeyframe a, Vector3D b)
 		{
-			a.Values.Add(new VectorValue(b, MathOperationEnum.MULTIPLY));
+			a.Expression -= b;
 			return a;
 		}
-		public static VectorKeyframe operator* (VectorKeyframe a, AnimationSourceEnum b)
+		public static VectorKeyframe operator -(VectorKeyframe a, Vector4D b)
 		{
-			a.Values.Add(new VectorValue(b, MathOperationEnum.MULTIPLY));
+			a.Expression -= b;
 			return a;
 		}
-
-		public static VectorKeyframe operator/ (VectorKeyframe a, double b)
+		public static VectorKeyframe operator -(VectorKeyframe a, AnimationSourceEnum b)
 		{
-			a.Values.Add(new VectorValue(b, MathOperationEnum.DIVIDE));
+			a.Expression -= b;
 			return a;
 		}
-		public static VectorKeyframe operator/ (VectorKeyframe a, Vector4D b)
+		public static VectorKeyframe operator -(VectorKeyframe a, AnimationExpression b)
 		{
-			a.Values.Add(new VectorValue(b, MathOperationEnum.DIVIDE));
-			return a;
-		}
-		public static VectorKeyframe operator/ (VectorKeyframe a, AnimationSourceEnum b)
-		{
-			a.Values.Add(new VectorValue(b, MathOperationEnum.DIVIDE));
+			a.Expression -= b;
 			return a;
 		}
 
-		public static VectorKeyframe operator% (VectorKeyframe a, double b)
+		public static VectorKeyframe operator *(VectorKeyframe a, double b)
 		{
-			a.Values.Add(new VectorValue(b, MathOperationEnum.MODULO));
+			a.Expression *= b;
 			return a;
 		}
-		public static VectorKeyframe operator% (VectorKeyframe a, Vector4D b)
+		public static VectorKeyframe operator *(VectorKeyframe a, Vector3D b)
 		{
-			a.Values.Add(new VectorValue(b, MathOperationEnum.MODULO));
+			a.Expression *= b;
 			return a;
 		}
-		public static VectorKeyframe operator% (VectorKeyframe a, AnimationSourceEnum b)
+		public static VectorKeyframe operator *(VectorKeyframe a, Vector4D b)
 		{
-			a.Values.Add(new VectorValue(b, MathOperationEnum.MODULO));
+			a.Expression *= b;
+			return a;
+		}
+		public static VectorKeyframe operator *(VectorKeyframe a, AnimationSourceEnum b)
+		{
+			a.Expression *= b;
+			return a;
+		}
+		public static VectorKeyframe operator *(VectorKeyframe a, AnimationExpression b)
+		{
+			a.Expression *= b;
 			return a;
 		}
 
-		public static VectorKeyframe operator^ (VectorKeyframe a, double b)
+		public static VectorKeyframe operator /(VectorKeyframe a, double b)
 		{
-			a.Values.Add(new VectorValue(b, MathOperationEnum.POWER));
+			a.Expression /= b;
 			return a;
 		}
-		public static VectorKeyframe operator^ (VectorKeyframe a, Vector4D b)
+		public static VectorKeyframe operator /(VectorKeyframe a, Vector3D b)
 		{
-			a.Values.Add(new VectorValue(b, MathOperationEnum.POWER));
+			a.Expression /= b;
 			return a;
 		}
-		public static VectorKeyframe operator^ (VectorKeyframe a, AnimationSourceEnum b)
+		public static VectorKeyframe operator /(VectorKeyframe a, Vector4D b)
 		{
-			a.Values.Add(new VectorValue(b, MathOperationEnum.POWER));
+			a.Expression /= b;
 			return a;
 		}
-		#endregion
-
-		#region Public Static Methods
-		public VectorKeyframe Average(ushort position, Vector4D initial_value, EasingCurveEnum easing_curve = EasingCurveEnum.LINEAR, EasingTypeEnum easing_type = EasingTypeEnum.EASE_IN_OUT)
+		public static VectorKeyframe operator /(VectorKeyframe a, AnimationSourceEnum b)
 		{
-			VectorKeyframe keyframe = new VectorKeyframe(position, initial_value, easing_curve, easing_type);
-			keyframe.Values[0].Operation = MathOperationEnum.AVERAGE;
-			return keyframe;
+			a.Expression /= b;
+			return a;
+		}
+		public static VectorKeyframe operator /(VectorKeyframe a, AnimationExpression b)
+		{
+			a.Expression /= b;
+			return a;
 		}
 
-		public VectorKeyframe Smallest(ushort position, Vector4D initial_value, EasingCurveEnum easing_curve = EasingCurveEnum.LINEAR, EasingTypeEnum easing_type = EasingTypeEnum.EASE_IN_OUT)
+		public static VectorKeyframe operator %(VectorKeyframe a, double b)
 		{
-			VectorKeyframe keyframe = new VectorKeyframe(position, initial_value, easing_curve, easing_type);
-			keyframe.Values[0].Operation = MathOperationEnum.SMALLEST;
-			return keyframe;
+			a.Expression %= b;
+			return a;
+		}
+		public static VectorKeyframe operator %(VectorKeyframe a, Vector3D b)
+		{
+			a.Expression %= b;
+			return a;
+		}
+		public static VectorKeyframe operator %(VectorKeyframe a, Vector4D b)
+		{
+			a.Expression %= b;
+			return a;
+		}
+		public static VectorKeyframe operator %(VectorKeyframe a, AnimationSourceEnum b)
+		{
+			a.Expression %= b;
+			return a;
+		}
+		public static VectorKeyframe operator %(VectorKeyframe a, AnimationExpression b)
+		{
+			a.Expression %= b;
+			return a;
 		}
 
-		public VectorKeyframe Largest(ushort position, Vector4D initial_value, EasingCurveEnum easing_curve = EasingCurveEnum.LINEAR, EasingTypeEnum easing_type = EasingTypeEnum.EASE_IN_OUT)
+		public static VectorKeyframe operator ^(VectorKeyframe a, double b)
 		{
-			VectorKeyframe keyframe = new VectorKeyframe(position, initial_value, easing_curve, easing_type);
-			keyframe.Values[0].Operation = MathOperationEnum.LARGEST;
-			return keyframe;
+			a.Expression ^= b;
+			return a;
+		}
+		public static VectorKeyframe operator ^(VectorKeyframe a, Vector3D b)
+		{
+			a.Expression ^= b;
+			return a;
+		}
+		public static VectorKeyframe operator ^(VectorKeyframe a, Vector4D b)
+		{
+			a.Expression ^= b;
+			return a;
+		}
+		public static VectorKeyframe operator ^(VectorKeyframe a, AnimationSourceEnum b)
+		{
+			a.Expression ^= b;
+			return a;
+		}
+		public static VectorKeyframe operator ^(VectorKeyframe a, AnimationExpression b)
+		{
+			a.Expression ^= b;
+			return a;
 		}
 		#endregion
 
@@ -1196,7 +1776,7 @@ namespace IOTA.ModularJumpGates
 		public VectorKeyframe(ushort position, double initial_value, EasingCurveEnum easing_curve = EasingCurveEnum.LINEAR, EasingTypeEnum easing_type = EasingTypeEnum.EASE_IN_OUT, RatioTypeEnum ratio_type = RatioTypeEnum.NONE, Vector4D? lower = null, Vector4D? upper = null)
 		{
 			this.Position = position;
-			this.Values = new List<VectorValue>() { new VectorValue(initial_value, MathOperationEnum.ADD, ratio_type, lower, upper) };
+			this.Expression = new AnimationExpression(new Vector4D(initial_value), ratio_type, lower, upper);
 			this.EasingCurve = easing_curve;
 			this.EasingType = easing_type;
 		}
@@ -1211,7 +1791,7 @@ namespace IOTA.ModularJumpGates
 		public VectorKeyframe(ushort position, Vector4D initial_value, EasingCurveEnum easing_curve = EasingCurveEnum.LINEAR, EasingTypeEnum easing_type = EasingTypeEnum.EASE_IN_OUT, RatioTypeEnum ratio_type = RatioTypeEnum.NONE, Vector4D? lower = null, Vector4D? upper = null)
 		{
 			this.Position = position;
-			this.Values = new List<VectorValue>() { new VectorValue(initial_value, MathOperationEnum.ADD, ratio_type, lower, upper) };
+			this.Expression = new AnimationExpression(initial_value, ratio_type, lower, upper);
 			this.EasingCurve = easing_curve;
 			this.EasingType = easing_type;
 		}
@@ -1226,80 +1806,16 @@ namespace IOTA.ModularJumpGates
 		public VectorKeyframe(ushort position, AnimationSourceEnum initial_value, EasingCurveEnum easing_curve = EasingCurveEnum.LINEAR, EasingTypeEnum easing_type = EasingTypeEnum.EASE_IN_OUT, RatioTypeEnum ratio_type = RatioTypeEnum.NONE, Vector4D? lower = null, Vector4D? upper = null)
 		{
 			this.Position = position;
-			this.Values = new List<VectorValue>() { new VectorValue(initial_value, MathOperationEnum.ADD, ratio_type, lower, upper) };
+			this.Expression = new AnimationExpression(initial_value, ratio_type, lower, upper);
 			this.EasingCurve = easing_curve;
 			this.EasingType = easing_type;
 		}
 		#endregion
 
 		#region Internal Methods
-		internal Vector4D GetValueFromStack(ushort current_tick, ushort total_duration, MyJumpGate jump_gate, MyJumpGate target_gate, List<MyJumpGateDrive> drives, List<MyEntity> entities, ref Vector3D endpoint, Vector3D? this_position, MyEntity this_entity)
+		internal Vector4D GetValueFromStack(AnimationExpression.ExpressionArguments arguments)
 		{
-			VectorValue initial = this.Values[0];
-
-			if (initial.Operation == MathOperationEnum.AVERAGE)
-			{
-				Vector4D average = Vector4D.Zero;
-				foreach (VectorValue value in this.Values) average += value.GetValue(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position, this_entity);
-				return average / this.Values.Count;
-			}
-			else if (initial.Operation == MathOperationEnum.SMALLEST)
-			{
-				Vector4D smallest = this.Values[0].GetValue(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position, this_entity);
-
-				foreach (VectorValue value in this.Values)
-				{
-					Vector4D local = value.GetValue(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position, this_entity);
-					if (local.Length() < smallest.Length()) smallest = local;
-				}
-
-				return smallest;
-			}
-			else if (initial.Operation == MathOperationEnum.LARGEST)
-			{
-				Vector4D largest = this.Values[0].GetValue(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position, this_entity);
-
-				foreach (VectorValue value in this.Values)
-				{
-					Vector4D local = value.GetValue(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position, this_entity);
-					if (local.Length() > largest.Length()) largest = local;
-				}
-
-				return largest;
-			}
-
-			Vector4D result = initial.GetValue(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position, this_entity);
-
-			foreach (VectorValue value in this.Values.Skip(1))
-			{
-				Vector4D local_result = value.GetValue(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position, this_entity);
-
-				switch (value.Operation)
-				{
-					case MathOperationEnum.ADD:
-						result += local_result;
-						break;
-					case MathOperationEnum.SUBTRACT:
-						result -= local_result;
-						break;
-					case MathOperationEnum.MULTIPLY:
-						result *= local_result;
-						break;
-					case MathOperationEnum.DIVIDE:
-						result /= local_result;
-						break;
-					case MathOperationEnum.MODULO:
-						result = new Vector4D(result.X % local_result.X, result.Y % local_result.Y, result.Z % local_result.Z, result.W % local_result.W);
-						break;
-					case MathOperationEnum.POWER:
-						result = new Vector4D(Math.Pow(result.X, local_result.X), Math.Pow(result.Y, local_result.Y), Math.Pow(result.Z, local_result.Z), Math.Pow(result.W, local_result.W));
-						break;
-					default:
-						throw new InvalidOperationException($"Invalid operation on double value - {(byte) value.Operation}");
-				}
-			}
-
-			return result;
+			return this.Expression.Evaluate(arguments).AsVector();
 		}
 		#endregion
 	}
@@ -1309,20 +1825,17 @@ namespace IOTA.ModularJumpGates
 	/// <summary>
 	/// Definition defining a particle orientation
 	/// </summary>
-	[ProtoContract]
 	public class ParticleOrientationDef
 	{
 		#region Public Variables
 		/// <summary>
 		/// The particle's orientation
 		/// </summary>
-		[ProtoMember(1, IsRequired = true)]
 		public ParticleOrientationEnum ParticleOrientation = ParticleOrientationEnum.GATE_ENDPOINT_NORMAL;
 
 		/// <summary>
-		/// If fixed, the particle's world matrix
+		/// If fixed, the particle's world matrix otherwise, the particle's rotation offset
 		/// </summary>
-		[ProtoMember(2, IsRequired = true)]
 		public MatrixD WorldMatrix = MatrixD.CreateFromYawPitchRoll(0, 0, 0);
 		#endregion
 
@@ -1342,15 +1855,18 @@ namespace IOTA.ModularJumpGates
 			if (gate == null) throw new ArgumentNullException("MyJumpGate is null");
 			MatrixD matrix;
 			bool null_orientation = particle_orientation == null || particle_orientation.ParticleOrientation == ParticleOrientationEnum.GATE_ENDPOINT_NORMAL;
+			bool fixed_ = false;
+
 			if (null_orientation && is_anti_node && target_gate != null) target_gate.GetWorldMatrix(out matrix, true, true);
 			else if (null_orientation) gate.GetWorldMatrix(out matrix, true, (is_anti_node) ? target_gate != null : true);
 			else if (particle_orientation.ParticleOrientation == ParticleOrientationEnum.GATE_TRUE_ENDPOINT_NORMAL) gate.GetWorldMatrix(out matrix, true, false);
-			else if (particle_orientation.ParticleOrientation == ParticleOrientationEnum.GATE_DRIVE_NORMAL) matrix = particle_orientation.WorldMatrix * gate.GetWorldMatrix(false, false);
-			else if (particle_orientation.ParticleOrientation == ParticleOrientationEnum.ANTIGATE_DRIVE_NORMAL) matrix = particle_orientation.WorldMatrix * (target_gate?.GetWorldMatrix(true, true) ?? gate.GetWorldMatrix(true, false));
+			else if (particle_orientation.ParticleOrientation == ParticleOrientationEnum.GATE_DRIVE_NORMAL) gate.GetWorldMatrix(out matrix, false, false);
+			else if (particle_orientation.ParticleOrientation == ParticleOrientationEnum.ANTIGATE_DRIVE_NORMAL) matrix = (target_gate?.GetWorldMatrix(true, true) ?? gate.GetWorldMatrix(true, false));
 			else
 			{
 				matrix = particle_orientation.WorldMatrix;
 				matrix.Translation = gate.WorldJumpNode;
+				fixed_ = true;
 			}
 
 			if (is_anti_node)
@@ -1360,7 +1876,7 @@ namespace IOTA.ModularJumpGates
 				matrix.Translation = endpoint;
 			}
 
-			return matrix;
+			return (fixed_) ? matrix : ((particle_orientation == null) ? matrix : particle_orientation.WorldMatrix * matrix);
 		}
 		#endregion
 
@@ -1377,7 +1893,7 @@ namespace IOTA.ModularJumpGates
 		public ParticleOrientationDef(ParticleOrientationEnum particle_orientation)
 		{
 			this.ParticleOrientation = particle_orientation;
-			this.WorldMatrix = (particle_orientation == ParticleOrientationEnum.FIXED) ? MatrixD.Zero : MatrixD.CreateFromYawPitchRoll(0, 0, 0);
+			this.WorldMatrix = (particle_orientation == ParticleOrientationEnum.FIXED) ? MyJumpGateModSession.WorldMatrix : MatrixD.CreateFromYawPitchRoll(0, 0, 0);
 		}
 
 		/// <summary>
@@ -1397,32 +1913,27 @@ namespace IOTA.ModularJumpGates
 	/// Definition defining an animation predicate<br />
 	/// This animation will only show on controllers who's gate matches all contraints
 	/// </summary>
-	[ProtoContract]
 	public class AnimationConstraintDef
 	{
 		#region Public Variables
 		/// <summary>
 		/// The allowed range for a gate's jump space lateral radius
 		/// </summary>
-		[ProtoMember(1)]
 		public NumberRange<double> AllowedJumpGateRadius = NumberRange<double>.RangeII(0, double.PositiveInfinity);
 
 		/// <summary>
 		/// The allowed range for a gate's drive count
 		/// </summary>
-		[ProtoMember(2)]
 		public NumberRange<uint> AllowedJumpGateSize = NumberRange<uint>.RangeII(0, uint.MaxValue);
 
 		/// <summary>
 		/// The allowed range for a gate's working drive count
 		/// </summary>
-		[ProtoMember(3)]
 		public NumberRange<uint> AllowedJumpGateWorkingSize = NumberRange<uint>.RangeII(0, uint.MaxValue);
 
 		/// <summary>
 		/// The allowed range for a gate's jump node endpoint distance
 		/// </summary>
-		[ProtoMember(4)]
 		public NumberRange<double> AllowedJumpGateEndpointDistance = NumberRange<double>.RangeII(-1, double.PositiveInfinity);
 		#endregion
 
@@ -1448,20 +1959,19 @@ namespace IOTA.ModularJumpGates
 	/// <summary>
 	/// Definition defining an atribute being animated
 	/// </summary>
-	[ProtoContract]
 	public sealed class AttributeAnimationDef
 	{
-		internal static double GetAnimatedDoubleValue(DoubleKeyframe[] keyframes, ushort current_tick, ushort total_duration, MyJumpGate jump_gate, MyJumpGate target_gate, List <MyJumpGateDrive> drives, List <MyEntity> entities, ref Vector3D endpoint, Vector3D? this_position, MyEntity this_entity, double default_ = default(double))
+		internal static double GetAnimatedDoubleValue(DoubleKeyframe[] keyframes, AnimationExpression.ExpressionArguments arguments, double default_ = default(double))
 		{
 			if (keyframes == null || keyframes.Length == 0) return default_;
-			else if (keyframes.Length == 1) return keyframes[0].GetValueFromStack(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position, this_entity);
+			else if (keyframes.Length == 1) return keyframes[0].GetValueFromStack(arguments);
 			DoubleKeyframe last_keyframe = null;
 			DoubleKeyframe next_keyframe = null;
 
 			foreach (DoubleKeyframe keyframe in keyframes.OrderBy((frame) => frame.Position))
 			{
-				if (keyframe.Position == current_tick) return keyframe.GetValueFromStack(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position, this_entity);
-				else if (keyframe.Position > current_tick)
+				if (keyframe.Position == arguments.CurrentTick) return keyframe.GetValueFromStack(arguments);
+				else if (keyframe.Position > arguments.CurrentTick)
 				{
 					next_keyframe = keyframe;
 					break;
@@ -1470,30 +1980,30 @@ namespace IOTA.ModularJumpGates
 				last_keyframe = keyframe;
 			}
 
-			if (next_keyframe == null) return last_keyframe.GetValueFromStack(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position, this_entity);
-			else if (last_keyframe == null) return next_keyframe.GetValueFromStack(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position, this_entity);
+			if (next_keyframe == null) return last_keyframe.GetValueFromStack(arguments);
+			else if (last_keyframe == null) return next_keyframe.GetValueFromStack(arguments);
 
-			double curr = current_tick;
+			double curr = arguments.CurrentTick;
 			double last = last_keyframe.Position;
 			double next = next_keyframe.Position;
 			double ratio = MathHelper.Clamp((curr - last) / (next - last), 0, 1);
 			ratio = EasingFunctor.GetEaseResult(ratio, last_keyframe.EasingType, last_keyframe.EasingCurve);
-			last = last_keyframe.GetValueFromStack(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position, this_entity);
-			next = next_keyframe.GetValueFromStack(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position, this_entity);
+			last = last_keyframe.GetValueFromStack(arguments);
+			next = next_keyframe.GetValueFromStack(arguments);
 			return (next - last) * ratio + last;
 		}
 
-		internal static Vector4D GetAnimatedVectorValue(VectorKeyframe[] keyframes, ushort current_tick, ushort total_duration, MyJumpGate jump_gate, MyJumpGate target_gate, List<MyJumpGateDrive> drives, List<MyEntity> entities, ref Vector3D endpoint, Vector3D? this_position, MyEntity this_entity, Vector4D default_ = default(Vector4D))
+		internal static Vector4D GetAnimatedVectorValue(VectorKeyframe[] keyframes, AnimationExpression.ExpressionArguments arguments, Vector4D default_ = default(Vector4D))
 		{
 			if (keyframes == null || keyframes.Length == 0) return default_;
-			else if (keyframes.Length == 1) return keyframes[0].GetValueFromStack(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position, this_entity);
+			else if (keyframes.Length == 1) return keyframes[0].GetValueFromStack(arguments);
 			VectorKeyframe last_keyframe = null;
 			VectorKeyframe next_keyframe = null;
 
 			foreach (VectorKeyframe keyframe in keyframes.OrderBy((frame) => frame.Position))
 			{
-				if (keyframe.Position == current_tick) return keyframe.GetValueFromStack(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position, this_entity);
-				else if (keyframe.Position > current_tick)
+				if (keyframe.Position == arguments.CurrentTick) return keyframe.GetValueFromStack(arguments);
+				else if (keyframe.Position > arguments.CurrentTick)
 				{
 					next_keyframe = keyframe;
 					break;
@@ -1502,89 +2012,77 @@ namespace IOTA.ModularJumpGates
 				last_keyframe = keyframe;
 			}
 
-			if (next_keyframe == null) return last_keyframe.GetValueFromStack(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position, this_entity);
-			else if (last_keyframe == null) return next_keyframe.GetValueFromStack(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position, this_entity);
+			if (next_keyframe == null) return last_keyframe.GetValueFromStack(arguments);
+			else if (last_keyframe == null) return next_keyframe.GetValueFromStack(arguments);
 
-			double curr = current_tick;
+			double curr = arguments.CurrentTick;
 			double last = last_keyframe.Position;
 			double next = next_keyframe.Position;
 			double ratio = MathHelper.Clamp((curr - last) / (next - last), 0, 1);
 			ratio = EasingFunctor.GetEaseResult(ratio, last_keyframe.EasingType, last_keyframe.EasingCurve);
-			Vector4D last_value = last_keyframe.GetValueFromStack(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position, this_entity);
-			Vector4D next_value = next_keyframe.GetValueFromStack(current_tick, total_duration, jump_gate, target_gate, drives, entities, ref endpoint, this_position, this_entity);
+			Vector4D last_value = last_keyframe.GetValueFromStack(arguments);
+			Vector4D next_value = next_keyframe.GetValueFromStack(arguments);
 			return (next_value - last_value) * ratio + last_value;
 		}
 
 		/// <summary>
 		/// Modifies or animates a sound's volume
 		/// </summary>
-		[ProtoMember(1, IsRequired = true)]
 		public DoubleKeyframe[] SoundVolumeAnimation = null;
 
 		/// <summary>
 		/// Modifies or animates a sound's distance
 		/// </summary>
-		[ProtoMember(2, IsRequired = true)]
 		public DoubleKeyframe[] SoundDistanceAnimation = null;
 
 		/// <summary>
 		/// Modifies or animates a particle's birth multiplier
 		/// </summary>
-		[ProtoMember(3, IsRequired = true)]
 		public DoubleKeyframe[] ParticleBirthAnimation = null;
 
 		/// <summary>
 		/// Modifies or animates a particle's color intensity multiplier
 		/// </summary>
-		[ProtoMember(4, IsRequired = true)]
 		public DoubleKeyframe[] ParticleColorIntensityAnimation = null;
 
 		/// <summary>
 		/// Modifies or animates a particle's color multiplier
 		/// </summary>
-		[ProtoMember(5, IsRequired = true)]
 		public VectorKeyframe[] ParticleColorAnimation = null;
 
 		/// <summary>
 		/// Modifies or animates a particle's fade multiplier
 		/// </summary>
-		[ProtoMember(6, IsRequired = true)]
 		public DoubleKeyframe[] ParticleFadeAnimation = null;
 
 		/// <summary>
 		/// Modifies or animates a particle's life multiplier
 		/// </summary>
-		[ProtoMember(7, IsRequired = true)]
 		public DoubleKeyframe[] ParticleLifeAnimation = null;
 
 		/// <summary>
 		/// Modifies or animates a particle's radius multiplier
 		/// </summary>
-		[ProtoMember(8, IsRequired = true)]
 		public DoubleKeyframe[] ParticleRadiusAnimation = null;
 
 		/// <summary>
 		/// Modifies or animates a particle's scale multiplier
 		/// </summary>
-		[ProtoMember(9, IsRequired = true)]
 		public DoubleKeyframe[] ParticleScaleAnimation = null;
 
 		/// <summary>
 		/// Modifies or animates a particle's velocity multiplier
 		/// </summary>
-		[ProtoMember(10, IsRequired = true)]
 		public DoubleKeyframe[] ParticleVelocityAnimation = null;
 
 		/// <summary>
 		/// Modifies or animates a particle's rotation speed
 		/// </summary>
-		[ProtoMember(11, IsRequired = true)]
 		public VectorKeyframe[] ParticleRotationSpeedAnimation = null;
 
 		/// <summary>
 		/// Modifies or animates a particle's offset in meters
 		/// </summary>
-		[ProtoMember(12, IsRequired = true)]
 		public VectorKeyframe[] ParticleOffsetAnimation = null;
 
 		/// <summary>
@@ -1592,20 +2090,17 @@ namespace IOTA.ModularJumpGates
 		/// For a solid beam, set this to 0<br />
 		/// For a gradient, this value must not be 0
 		/// </summary>
-		[ProtoMember(13, IsRequired = true)]
 		public DoubleKeyframe[] BeamFrequencyAnimation = null;
 
 		/// <summary>
 		/// Modifies or animates a beam pulse's duty cycle<br />
 		/// For a gradient beam with no breaks, set this to 1
 		/// </summary>
-		[ProtoMember(14, IsRequired = true)]
 		public DoubleKeyframe[] BeamDutyCycleAnimation = null;
 
 		/// <summary>
 		/// Modifies or animates a beam pulse's offset
 		/// </summary>
-		[ProtoMember(15, IsRequired = true)]
 		public DoubleKeyframe[] BeamOffsetAnimation = null;
 
 		/// <summary>
@@ -1614,31 +2109,26 @@ namespace IOTA.ModularJumpGates
 		/// Positive values attract entities to jump node<br />
 		/// Negative values repel entities from jump node<br />
 		/// </summary>
-		[ProtoMember(16, IsRequired = true)]
 		public DoubleKeyframe[] PhysicsForceAnimation = null;
 
 		/// <summary>
 		/// Modifies or animates the jump space attractor force falloff
 		/// </summary>
-		[ProtoMember(17, IsRequired = true)]
 		public DoubleKeyframe[] PhysicsForceFalloffAnimation = null;
 
 		/// <summary>
 		/// Modifies or animates the jump space attractor force offset
 		/// </summary>
-		[ProtoMember(18, IsRequired = true)]
 		public VectorKeyframe[] PhysicsForceOffsetAnimation = null;
 
 		/// <summary>
 		/// Modifies or animates the jump space attractor force max allowed speed
 		/// </summary>
-		[ProtoMember(19, IsRequired = true)]
 		public DoubleKeyframe[] PhysicsForceMaxSpeedAnimation = null;
 
 		/// <summary>
 		/// Modifies or animates the jump space attractor force torque
 		/// </summary>
-		[ProtoMember(20, IsRequired = true)]
 		public VectorKeyframe[] PhysicsForceTorqueAnimation = null;
 
 		/// <summary>
@@ -1676,34 +2166,22 @@ namespace IOTA.ModularJumpGates
 	/// <summary>
 	/// The base class for an animatable definition
 	/// </summary>
-	[ProtoContract]
-	[ProtoInclude(100, typeof(ParticleDef))]
-	[ProtoInclude(200, typeof(SoundDef))]
-	[ProtoInclude(300, typeof(BeamPulseDef))]
-	[ProtoInclude(400, typeof(DriveEmissiveColorDef))]
-	[ProtoInclude(500, typeof(NodePhysicsDef))]
 	public class AnimatableDef
 	{
 		#region Public Variables
 		/// <summary>
 		/// The start time of this animation
 		/// </summary>
-		[ProtoMember(1, IsRequired = true)]
 		public ushort StartTime;
 
 		/// <summary>
 		/// The duraton of this animation in game ticks
 		/// </summary>
-		[ProtoMember(2, IsRequired = true)]
 		public ushort Duration;
 
 		/// <summary>
-		/// The attribute modifiers this animation contains
+		/// The keyframe holder for animations
 		/// </summary>
-		//[ProtoMember(3, IsRequired = true)]
-		//public AttributeModifier[] Animations = null;
-
-		[ProtoMember(3, IsRequired = true)]
 		public AttributeAnimationDef Animations = null;
 		#endregion
 	}
@@ -1711,7 +2189,6 @@ namespace IOTA.ModularJumpGates
 	/// <summary>
 	/// Definition defining particles
 	/// </summary>
-	[ProtoContract]
 	public class ParticleDef : AnimatableDef
 	{
 		#region Public Variables
@@ -1720,25 +2197,27 @@ namespace IOTA.ModularJumpGates
 		/// If false, effect is cleaned when entire gate animation is completed<br />
 		/// This will prevent particle rotations persisting through animation states
 		/// </summary>
-		[ProtoMember(5, IsRequired = true)]
 		public bool CleanOnEffectEnd = false;
+
+		/// <summary>
+		/// Whether this particle effect is marked dirty every tick<br />
+		/// Should be false for effects using internal timers
+		/// </summary>
+		public bool DirtifyEffect = false;
 
 		/// <summary>
 		/// The name of the particle to display
 		/// </summary>
-		[ProtoMember(6, IsRequired = true)]
 		public string[] ParticleNames = null;
 
 		/// <summary>
 		/// The local offset of this particle effect
 		/// </summary>
-		[ProtoMember(7, IsRequired = true)]
 		public Vector3D ParticleOffset = Vector3D.Zero;
 
 		/// <summary>
 		/// The particle's orientation definition
 		/// </summary>
-		[ProtoMember(8, IsRequired = true)]
 		public ParticleOrientationDef ParticleOrientation = null;
 
 		/// <summary>
@@ -1747,7 +2226,6 @@ namespace IOTA.ModularJumpGates
 		/// Must be higher than 0 to enable<br />
 		/// Particles will be matched with other particle definitions with the same ID
 		/// </summary>
-		[ProtoMember(9, IsRequired = true)]
 		public byte[] TransientIDs = null;
 		#endregion
 	}
@@ -1755,26 +2233,22 @@ namespace IOTA.ModularJumpGates
 	/// <summary>
 	/// Definition defining sounds
 	/// </summary>
-	[ProtoContract]
 	public class SoundDef : AnimatableDef
 	{
 		#region Public Variables
 		/// <summary>
 		/// The sound names to play
 		/// </summary>
-		[ProtoMember(5, IsRequired = true)]
 		public string[] SoundNames;
 
 		/// <summary>
 		/// The volume to play at
 		/// </summary>
-		[ProtoMember(6, IsRequired = true)]
 		public float Volume = 1;
 		
 		/// <summary>
 		/// The range this sound can be heard at
 		/// </summary>
-		[ProtoMember(7, IsRequired = true)]
 		public float? Distance = null;
 		#endregion
 	}
@@ -1782,38 +2256,32 @@ namespace IOTA.ModularJumpGates
 	/// <summary>
 	/// Definition defining the beam pulse
 	/// </summary>
-	[ProtoContract]
 	public class BeamPulseDef : AnimatableDef
 	{
 		#region Public Variables
 		/// <summary>
 		/// The time (in game ticks) this beam will take to travel from jump node to endpoint
 		/// </summary>
-		[ProtoMember(5, IsRequired = true)]
 		public ushort TravelTime = 0;
 
 		/// <summary>
 		/// The beam's color
 		/// </summary>
-		[ProtoMember(6, IsRequired = true)]
 		public Color BeamColor = Color.Transparent;
 
 		/// <summary>
 		/// The beam's maximum length
 		/// </summary>
-		[ProtoMember(7, IsRequired = true)]
 		public double BeamLength = -1;
 
 		/// <summary>
-		/// The beam's width (in meters?)
+		/// The beam's width (in meters)
 		/// </summary>
-		[ProtoMember(8, IsRequired = true)]
 		public double BeamWidth = 0;
 
 		/// <summary>
 		/// The beam's brightness
 		/// </summary>
-		[ProtoMember(9, IsRequired = true)]
 		public double BeamBrightness = 1;
 
 		/// <summary>
@@ -1821,7 +2289,6 @@ namespace IOTA.ModularJumpGates
 		/// Higher values result in smaller segments<br />
 		/// Set to 0 for a constant, unbroken beam
 		/// </summary>
-		[ProtoMember(10, IsRequired = true)]
 		public double BeamFrequency = 0;
 
 		/// <summary>
@@ -1830,19 +2297,16 @@ namespace IOTA.ModularJumpGates
 		/// Set to 1 for a segmented beam with no gaps<br />
 		/// Set to 0.5 for a segmented beam with equally spaced gaps
 		/// </summary>
-		[ProtoMember(11, IsRequired = true)]
 		public double BeamDutyCycle = 1;
 
 		/// <summary>
 		/// The beam's offset
 		/// </summary>
-		[ProtoMember(12, IsRequired = true)]
 		public double BeamOffset = 0;
 
 		/// <summary>
 		/// The beam's material
 		/// </summary>
-		[ProtoMember(13, IsRequired = true)]
 		public string Material = "WeaponLaser";
 		#endregion
 	}
@@ -1850,20 +2314,17 @@ namespace IOTA.ModularJumpGates
 	/// <summary>
 	/// Definition defining a gate's drive emitter emissive colors
 	/// </summary>
-	[ProtoContract]
 	public class DriveEmissiveColorDef : AnimatableDef
 	{
 		#region Public Variables
 		/// <summary>
 		/// The intended emissive color
 		/// </summary>
-		[ProtoMember(5, IsRequired = true)]
 		public Color EmissiveColor = Color.Black;
 
 		/// <summary>
 		/// The intended emissive color brightness
 		/// </summary>
-		[ProtoMember(6, IsRequired = true)]
 		public double Brightness = 1;
 		#endregion
 	}
@@ -1871,7 +2332,6 @@ namespace IOTA.ModularJumpGates
 	/// <summary>
 	/// Definition defining a gate's node attractor force
 	/// </summary>
-	[ProtoContract]
 	public class NodePhysicsDef : AnimatableDef
 	{
 		#region Public Variables
@@ -1880,32 +2340,27 @@ namespace IOTA.ModularJumpGates
 		/// Positive values attract entities towards jump node<br />
 		/// Negative values repel entities away from jump node
 		/// </summary>
-		[ProtoMember(5, IsRequired = true)]
 		public double AttractorForce = 0;
 
 		/// <summary>
 		/// The attractor force falloff
 		/// </summary>
-		[ProtoMember(6, IsRequired = true)]
 		public double AttractorForceFalloff = 0;
 
 		/// <summary>
 		/// The attractor force max speed<br />
 		/// Objects above or at this speed will not be affected by the attractor force
 		/// </summary>
-		[ProtoMember(7, IsRequired = true)]
 		public double MaxSpeed = 0;
 
 		/// <summary>
 		/// The attractor force offset
 		/// </summary>
-		[ProtoMember(8, IsRequired = true)]
 		public Vector3D ForceOffset = Vector3D.Zero;
 
 		/// <summary>
 		/// The attractor force torque
 		/// </summary>
-		[ProtoMember(9, IsRequired = true)]
 		public Vector3D AttractorTorque = Vector3D.Zero;
 		#endregion
 	}
@@ -1915,61 +2370,52 @@ namespace IOTA.ModularJumpGates
 	/// <summary>
 	/// Definition defining the "charging/jumping" phase animation
 	/// </summary>
-	[ProtoContract]
 	public class JumpGateJumpingAnimationDef
 	{
 		#region Public Variables
 		/// <summary>
 		/// The duration of the animaton in game ticks
 		/// </summary>
-		[ProtoMember(1, IsRequired = true)]
 		public ushort Duration = 0;
 
 		/// <summary>
 		/// The list of particle definitions for each drive<br />
 		/// These particles will each be played for every drive in the gate
 		/// </summary>
-		[ProtoMember(2, IsRequired = true)]
 		public ParticleDef[] PerDriveParticles = null;
 
 		/// <summary>
 		/// The list of particle definitions for each anti drive<br />
 		/// These particles will each be played for every drive in the targeted gate
 		/// </summary>
-		[ProtoMember(3, IsRequired = true)]
 		public ParticleDef[] PerAntiDriveParticles = null;
 
 		/// <summary>
 		/// The list of particle definitions for each jump space entity<br />
 		/// These particles will each be played for every entity in the gate's jump space
 		/// </summary>
-		[ProtoMember(4, IsRequired = true)]
 		public ParticleDef[] PerEntityParticles = null;
 
 		/// <summary>
 		/// The list of ParticleDef definitions for the gate's jump node<br />
 		/// These particles will be played once at the gate's jump node
 		/// </summary>
-		[ProtoMember(5, IsRequired = true)]
 		public ParticleDef[] NodeParticles = null;
 
 		/// <summary>
 		/// The list of SoundDef definitions<br />
 		/// These sounds will be played once at the gate's jump node
 		/// </summary>
-		[ProtoMember(6, IsRequired = true)]
 		public SoundDef[] NodeSounds = null;
 
 		/// <summary>
 		/// The DriveEmissiveColorDef defining the color for this gate's jump drive emitter emissives
 		/// </summary>
-		[ProtoMember(7, IsRequired = true)]
 		public DriveEmissiveColorDef DriveEmissiveColor = null;
 
 		/// <summary>
 		/// The NodePhysicsDef defining the attractor forces for this gate's jump node
 		/// </summary>
-		[ProtoMember(8, IsRequired = true)]
 		public NodePhysicsDef NodePhysics = null;
 
 		/// <summary>
@@ -1977,7 +2423,6 @@ namespace IOTA.ModularJumpGates
 		/// These particles will be played once at the gate's anti-node<br />
 		/// <i>The anti-node is the region at the endpoint of this gate</i>
 		/// </summary>
-		[ProtoMember(9, IsRequired = true)]
 		public ParticleDef[] AntiNodeParticles = null;
 
 		/// <summary>
@@ -1985,14 +2430,12 @@ namespace IOTA.ModularJumpGates
 		/// These sounds will be played once at the gate's anti-node<br />
 		/// <i>The anti-node is the region at the endpoint of this gate</i>
 		/// </summary>
-		[ProtoMember(10, IsRequired = true)]
 		public SoundDef[] AntiNodeSounds = null;
 
 		/// <summary>
 		/// The NodePhysicsDef defining the attractor forces for this gate's anti-ode<br />
 		/// <i>The anti-node is the region at the endpoint of this gate</i>
 		/// </summary>
-		[ProtoMember(11, IsRequired = true)]
 		public NodePhysicsDef AntiNodePhysics = null;
 		#endregion
 
@@ -2011,80 +2454,73 @@ namespace IOTA.ModularJumpGates
 	/// <summary>
 	/// Definition defining the "jumped" phase animation
 	/// </summary>
-	[ProtoContract]
 	public class JumpGateJumpedAnimationDef
 	{
 		#region Public Variables
 		/// <summary>
 		/// The duration of the animaton in game ticks
 		/// </summary>
-		[ProtoMember(1, IsRequired = true)]
 		public ushort Duration = 0;
+
+		/// <summary>
+		/// The duration of the travel warp in game ticks
+		/// </summary>
+		public ushort TravelTime = 0;
 
 		/// <summary>
 		/// The list of particle definitions for each drive<br />
 		/// These particles will each be played for every drive in the gate
 		/// </summary>
-		[ProtoMember(2, IsRequired = true)]
 		public ParticleDef[] PerDriveParticles = null;
 
 		/// <summary>
 		/// The list of particle definitions for each anti drive<br />
 		/// These particles will each be played for every drive in the targeted gate
 		/// </summary>
-		[ProtoMember(3, IsRequired = true)]
 		public ParticleDef[] PerAntiDriveParticles = null;
 
 		/// <summary>
 		/// The list of particle definitions for each jump space entity<br />
 		/// These particles will each be played for every entity in the gate's jump space
 		/// </summary>
-		[ProtoMember(4, IsRequired = true)]
 		public ParticleDef[] PerEntityParticles = null;
 
 		/// <summary>
 		/// The list of ParticleDef definitions for the gate's jump node<br />
 		/// These particles will be played once at the gate's jump node
 		/// </summary>
-		[ProtoMember(5, IsRequired = true)]
 		public ParticleDef[] NodeParticles = null;
 
 		/// <summary>
 		/// The travel particle effect shown to entities within the jump space
 		/// </summary>
-		[ProtoMember(6, IsRequired = true)]
 		public ParticleDef[] TravelEffects = null;
 
 		/// <summary>
 		/// The list of SoundDef definitions<br />
 		/// These sounds will be played once at the gate's jump node
 		/// </summary>
-		[ProtoMember(7, IsRequired = true)]
 		public SoundDef[] NodeSounds = null;
 
 		/// <summary>
 		/// The list of SoundDef definitions<br />
 		/// These sounds will be played once to entities currently being jumped
 		/// </summary>
-		[ProtoMember(8, IsRequired = true)]
 		public SoundDef[] TravelSounds = null;
 
 		/// <summary>
 		/// The BeamPulseDef defining the beam pulse for this gate
 		/// </summary>
-		[ProtoMember(9, IsRequired = true)]
 		public BeamPulseDef BeamPulse = null;
 
 		/// <summary>
 		/// The DriveEmissiveColorDef defining the color for this gate's jump drive emitter emissives
 		/// </summary>
-		[ProtoMember(10, IsRequired = true)]
 		public DriveEmissiveColorDef DriveEmissiveColor = null;
 
 		/// <summary>
 		/// The NodePhysicsDef defining the attractor forces for this gate's jump node
 		/// </summary>
-		[ProtoMember(11, IsRequired = true)]
 		public NodePhysicsDef NodePhysics = null;
 
 		/// <summary>
@@ -2092,7 +2528,6 @@ namespace IOTA.ModularJumpGates
 		/// These particles will be played once at the gate's anti-node<br />
 		/// <i>The anti-node is the region at the endpoint of this gate</i>
 		/// </summary>
-		[ProtoMember(12, IsRequired = true)]
 		public ParticleDef[] AntiNodeParticles = null;
 
 		/// <summary>
@@ -2100,14 +2535,12 @@ namespace IOTA.ModularJumpGates
 		/// These sounds will be played once at the gate's anti-node<br />
 		/// <i>The anti-node is the region at the endpoint of this gate</i>
 		/// </summary>
-		[ProtoMember(13, IsRequired = true)]
 		public SoundDef[] AntiNodeSounds = null;
 
 		/// <summary>
 		/// The NodePhysicsDef defining the attractor forces for this gate's anti-ode<br />
 		/// <i>The anti-node is the region at the endpoint of this gate</i>
 		/// </summary>
-		[ProtoMember(14, IsRequired = true)]
 		public NodePhysicsDef AntiNodePhysics = null;
 		#endregion
 
@@ -2126,61 +2559,52 @@ namespace IOTA.ModularJumpGates
 	/// <summary>
 	/// Definition defining the "failed" phase animation
 	/// </summary>
-	[ProtoContract]
 	public class JumpGateFailedAnimationDef
 	{
 		#region Public Variables
 		/// <summary>
 		/// The duration of the animaton in game ticks
 		/// </summary>
-		[ProtoMember(1, IsRequired = true)]
 		public ushort Duration = 0;
 
 		/// <summary>
 		/// The list of particle definitions for each drive<br />
 		/// These particles will each be played for every drive in the gate
 		/// </summary>
-		[ProtoMember(2, IsRequired = true)]
 		public ParticleDef[] PerDriveParticles = null;
 
 		/// <summary>
 		/// The list of particle definitions for each anti drive<br />
 		/// These particles will each be played for every drive in the targeted gate
 		/// </summary>
-		[ProtoMember(3, IsRequired = true)]
 		public ParticleDef[] PerAntiDriveParticles = null;
 
 		/// <summary>
 		/// The list of particle definitions for each jump space entity<br />
 		/// These particles will each be played for every entity in the gate's jump space
 		/// </summary>
-		[ProtoMember(4, IsRequired = true)]
 		public ParticleDef[] PerEntityParticles = null;
 
 		/// <summary>
 		/// The list of ParticleDef definitions for the gate's jump node<br />
 		/// These particles will be played once at the gate's jump node
 		/// </summary>
-		[ProtoMember(5, IsRequired = true)]
 		public ParticleDef[] NodeParticles = null;
 
 		/// <summary>
 		/// The list of SoundDef definitions<br />
 		/// These sounds will be played once at the gate's jump node
 		/// </summary>
-		[ProtoMember(6, IsRequired = true)]
 		public SoundDef[] NodeSounds = null;
 
 		/// <summary>
 		/// The DriveEmissiveColorDef defining the color for this gate's jump drive emitter emissives
 		/// </summary>
-		[ProtoMember(7, IsRequired = true)]
 		public DriveEmissiveColorDef DriveEmissiveColor = null;
 
 		/// <summary>
 		/// The NodePhysicsDef defining the attractor forces for this gate's jump node
 		/// </summary>
-		[ProtoMember(8, IsRequired = true)]
 		public NodePhysicsDef NodePhysics = null;
 
 		/// <summary>
@@ -2188,7 +2612,6 @@ namespace IOTA.ModularJumpGates
 		/// These particles will be played once at the gate's anti-node<br />
 		/// <i>The anti-node is the region at the endpoint of this gate</i>
 		/// </summary>
-		[ProtoMember(9, IsRequired = true)]
 		public ParticleDef[] AntiNodeParticles = null;
 
 		/// <summary>
@@ -2196,14 +2619,12 @@ namespace IOTA.ModularJumpGates
 		/// These sounds will be played once at the gate's anti-node<br />
 		/// <i>The anti-node is the region at the endpoint of this gate</i>
 		/// </summary>
-		[ProtoMember(10, IsRequired = true)]
 		public SoundDef[] AntiNodeSounds = null;
 
 		/// <summary>
 		/// The NodePhysicsDef defining the attractor forces for this gate's anti-ode<br />
 		/// <i>The anti-node is the region at the endpoint of this gate</i>
 		/// </summary>
-		[ProtoMember(11, IsRequired = true)]
 		public NodePhysicsDef AntiNodePhysics = null;
 		#endregion
 
@@ -2222,7 +2643,6 @@ namespace IOTA.ModularJumpGates
 	/// <summary>
 	/// Definition defining an entire gate animation
 	/// </summary>
-	[ProtoContract]
 	public class AnimationDef
 	{
 		#region Internal Variables
@@ -2248,50 +2668,42 @@ namespace IOTA.ModularJumpGates
 		/// Whether this animation is enabled<br />
 		/// Disabled animations are not shown in the controller list
 		/// </summary>
-		[ProtoMember(1, IsRequired = true)]
 		public bool Enabled = true;
 
 		/// <summary>
 		/// Whether this animation can be cancelled immediatly<br />
 		/// If false, animation in the jumping phase will cancel once complete
 		/// </summary>
-		[ProtoMember(2, IsRequired = true)]
 		public bool ImmediateCancel = true;
 
 		/// <summary>
 		/// The name of this animation
 		/// </summary>
-		[ProtoMember(3, IsRequired = true)]
 		public string AnimationName;
 
 		/// <summary>
 		/// The description of this animation
 		/// </summary>
-		[ProtoMember(4, IsRequired = true)]
 		public string Description;
 
 		/// <summary>
 		/// The JumpGateJumpingAnimationDef definition defining the jumping phase of this animation
 		/// </summary>
-		[ProtoMember(5, IsRequired = true)]
 		public JumpGateJumpingAnimationDef JumpingAnimationDef = null;
 
 		/// <summary>
 		/// The JumpGateJumpedAnimationDef definition defining the jumped phase of this animation
 		/// </summary>
-		[ProtoMember(6, IsRequired = true)]
 		public JumpGateJumpedAnimationDef JumpedAnimationDef = null;
 
 		/// <summary>
 		/// The JumpGateFailedAnimationDef definition defining the failed phase of this animation
 		/// </summary>
-		[ProtoMember(7, IsRequired = true)]
 		public JumpGateFailedAnimationDef FailedAnimationDef = null;
 
 		/// <summary>
 		/// The AnimationConstraintDef definition defining a jump gate constraint for this animation
 		/// </summary>
-		[ProtoMember(8, IsRequired = true)]
 		public AnimationConstraintDef AnimationContraint = null;
 		#endregion
 
@@ -2477,28 +2889,27 @@ namespace IOTA.ModularJumpGates
 			if (this.ParticleEffects == null || this.ParticleEffects.Count == 0) return;
 			else if (current_tick >= this.ParticleDefinition.StartTime && current_tick <= this.ParticleDefinition.StartTime + this.Duration)
 			{
-				if (current_tick >= this.ParticleDefinition.StartTime) foreach (MyParticleEffect effect in this.ParticleEffects) effect.Play();
-
 				ushort local_tick = (ushort) (current_tick - this.ParticleDefinition.StartTime);
 				Vector3D rotations_per_second = Vector3D.Zero;
 				Vector3D offset = this.ParticleDefinition.ParticleOffset;
 				Vector4D rps, off;
+				AnimationExpression.ExpressionArguments arguments = new AnimationExpression.ExpressionArguments(current_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, this_entity?.WorldMatrix.Translation, this_entity);
 
-				float birth_mp = (float) AttributeAnimationDef.GetAnimatedDoubleValue(this.ParticleDefinition.Animations?.ParticleBirthAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, this_entity?.WorldMatrix.Translation, this_entity, 1);
-				float color_intensity_mp = (float) AttributeAnimationDef.GetAnimatedDoubleValue(this.ParticleDefinition.Animations?.ParticleColorIntensityAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, this_entity?.WorldMatrix.Translation, this_entity, 1);
-				float fade_mp = (float) AttributeAnimationDef.GetAnimatedDoubleValue(this.ParticleDefinition.Animations?.ParticleFadeAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, this_entity?.WorldMatrix.Translation, this_entity, 1);
-				float life_mp = (float) AttributeAnimationDef.GetAnimatedDoubleValue(this.ParticleDefinition.Animations?.ParticleLifeAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, this_entity?.WorldMatrix.Translation, this_entity, 1);
-				float radius_mp = (float) AttributeAnimationDef.GetAnimatedDoubleValue(this.ParticleDefinition.Animations?.ParticleRadiusAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, this_entity?.WorldMatrix.Translation, this_entity, 1);
-				float scale_mp = (float) AttributeAnimationDef.GetAnimatedDoubleValue(this.ParticleDefinition.Animations?.ParticleScaleAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, this_entity?.WorldMatrix.Translation, this_entity, 1);
-				float velocity_mp = (float) AttributeAnimationDef.GetAnimatedDoubleValue(this.ParticleDefinition.Animations?.ParticleVelocityAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, this_entity?.WorldMatrix.Translation, this_entity, 1);
-
-				Vector4D color = AttributeAnimationDef.GetAnimatedVectorValue(this.ParticleDefinition.Animations?.ParticleColorAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, this_entity?.WorldMatrix.Translation, this_entity, Vector4D.One);
+				float birth_mp = (float) AttributeAnimationDef.GetAnimatedDoubleValue(this.ParticleDefinition.Animations?.ParticleBirthAnimation, arguments, 1);
+				float color_intensity_mp = (float) AttributeAnimationDef.GetAnimatedDoubleValue(this.ParticleDefinition.Animations?.ParticleColorIntensityAnimation, arguments, 1);
+				float fade_mp = (float) AttributeAnimationDef.GetAnimatedDoubleValue(this.ParticleDefinition.Animations?.ParticleFadeAnimation, arguments, 1);
+				float life_mp = (float) AttributeAnimationDef.GetAnimatedDoubleValue(this.ParticleDefinition.Animations?.ParticleLifeAnimation, arguments, 1);
+				float radius_mp = (float) AttributeAnimationDef.GetAnimatedDoubleValue(this.ParticleDefinition.Animations?.ParticleRadiusAnimation, arguments, 1);
+				float scale_mp = (float) AttributeAnimationDef.GetAnimatedDoubleValue(this.ParticleDefinition.Animations?.ParticleScaleAnimation, arguments, 1);
+				float velocity_mp = (float) AttributeAnimationDef.GetAnimatedDoubleValue(this.ParticleDefinition.Animations?.ParticleVelocityAnimation, arguments, 1);
+				
+				Vector4D color = AttributeAnimationDef.GetAnimatedVectorValue(this.ParticleDefinition.Animations?.ParticleColorAnimation, arguments, Vector4D.One);
 				color *= this.ControllerSettings?.JumpEffectAnimationColorShift().ToVector4D() ?? Vector4D.One;
 
-				rps = AttributeAnimationDef.GetAnimatedVectorValue(this.ParticleDefinition.Animations?.ParticleRotationSpeedAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, this_entity?.WorldMatrix.Translation, this_entity, Vector4D.Zero);
+				rps = AttributeAnimationDef.GetAnimatedVectorValue(this.ParticleDefinition.Animations?.ParticleRotationSpeedAnimation, arguments, Vector4D.Zero);
 				rotations_per_second = new Vector3D(rps.X, rps.Y, rps.Z) * 360d / 60d * (Math.PI / 180d);
 
-				off = AttributeAnimationDef.GetAnimatedVectorValue(this.ParticleDefinition.Animations?.ParticleOffsetAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, this_entity?.WorldMatrix.Translation, this_entity, new Vector4D(offset, 0));
+				off = AttributeAnimationDef.GetAnimatedVectorValue(this.ParticleDefinition.Animations?.ParticleOffsetAnimation, arguments, new Vector4D(offset, 0));
 				offset = new Vector3D(off.X, off.Y, off.Z);
 
 				MatrixD base_matrix = source ?? ParticleOrientationDef.GetJumpGateMatrix(this.JumpGate, this.TargetGate, this.IsAntiNode, ref endpoint, this.ParticleDefinition.ParticleOrientation);
@@ -2506,6 +2917,7 @@ namespace IOTA.ModularJumpGates
 				for (int i = 0; i < this.ParticleEffects.Count; ++i)
 				{
 					MyParticleEffect effect = this.ParticleEffects[i];
+					if (effect.IsEmittingStopped) effect.Play();
 					Vector3D rotation = this.ParticleRotations[i] + rotations_per_second;
 					MatrixD particle_matrix = MatrixD.CreateFromYawPitchRoll(rotation.Y, rotation.Z, rotation.X) * base_matrix;
 					particle_matrix.Translation += MyJumpGateModSession.LocalVectorToWorldVectorD(ref particle_matrix, offset);
@@ -2519,7 +2931,7 @@ namespace IOTA.ModularJumpGates
 					effect.UserVelocityMultiplier = velocity_mp;
 					effect.WorldMatrix = particle_matrix;
 					effect.UserColorMultiplier = color;
-					effect.SetDirty();
+					if (this.ParticleDefinition.DirtifyEffect) effect.SetDirty();
 				}
 			}
 			else if (current_tick > this.ParticleDefinition.StartTime + this.Duration)
@@ -2538,7 +2950,9 @@ namespace IOTA.ModularJumpGates
 			if (this.ParticleEffects == null) return;
 			foreach (MyParticleEffect effect in this.ParticleEffects) effect.Stop();
 			if (Particle.TransientParticles.ContainsKey(this.JumpGate))
-				foreach (TransientParticle effect in Particle.TransientParticles[this.JumpGate].Values) if (!effect.ParticleEffect.IsStopped) effect.ParticleEffect.Stop();
+				foreach (KeyValuePair<byte, TransientParticle> effect in Particle.TransientParticles[this.JumpGate])
+					if (!effect.Value.ParticleEffect.IsStopped)
+						effect.Value.ParticleEffect.Stop();
 			Particle.TransientParticles.Remove(this.JumpGate);
 			this.ParticleEffects.Clear();
 			this.ParticleTransientIDs.Clear();
@@ -2674,9 +3088,9 @@ namespace IOTA.ModularJumpGates
 
 				float volume = this.SoundDefinition.Volume;
 				float? distance = this.SoundDefinition.Distance;
-
-				volume = (float) AttributeAnimationDef.GetAnimatedDoubleValue(this.SoundDefinition.Animations?.SoundVolumeAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, source?.WorldMatrix.Translation, source, volume);
-				if (this.SoundDefinition.Animations?.SoundDistanceAnimation != null) distance = (float) AttributeAnimationDef.GetAnimatedDoubleValue(this.SoundDefinition.Animations?.SoundDistanceAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, source?.WorldMatrix.Translation, source);
+				AnimationExpression.ExpressionArguments arguments = new AnimationExpression.ExpressionArguments(local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, source?.WorldMatrix.Translation, source);
+				volume = (float) AttributeAnimationDef.GetAnimatedDoubleValue(this.SoundDefinition.Animations?.SoundVolumeAnimation, arguments, volume);
+				if (this.SoundDefinition.Animations?.SoundDistanceAnimation != null) distance = (float) AttributeAnimationDef.GetAnimatedDoubleValue(this.SoundDefinition.Animations?.SoundDistanceAnimation, arguments);
 
 				if (this.SoundEmitters == null)
 				{
@@ -2803,10 +3217,11 @@ namespace IOTA.ModularJumpGates
 				ushort local_tick = (ushort) (current_tick - this.BeamPulseDefinition.StartTime);
 				ushort travel_time = Math.Max((ushort) 0, this.BeamPulseDefinition.TravelTime);
 				double tick_ratio = (travel_time == 0) ? 1 : ((double) local_tick / travel_time);
-				double frequency = Math.Max(0, AttributeAnimationDef.GetAnimatedDoubleValue(this.BeamPulseDefinition.Animations?.BeamFrequencyAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, null, null, this.BeamPulseDefinition.BeamFrequency));
-				double beam_length = AttributeAnimationDef.GetAnimatedDoubleValue(this.BeamPulseDefinition.Animations?.ParticleLifeAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, null, null, this.BeamPulseDefinition.BeamLength);
-				double duty_cycle = MathHelper.Clamp(AttributeAnimationDef.GetAnimatedDoubleValue(this.BeamPulseDefinition.Animations?.BeamDutyCycleAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, null, null, this.BeamPulseDefinition.BeamDutyCycle), 0, 1);
-				double offset = AttributeAnimationDef.GetAnimatedDoubleValue(this.BeamPulseDefinition.Animations?.BeamOffsetAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, null, null, this.BeamPulseDefinition.BeamOffset);
+				AnimationExpression.ExpressionArguments arguments = new AnimationExpression.ExpressionArguments(local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, null, null);
+				double frequency = Math.Max(0, AttributeAnimationDef.GetAnimatedDoubleValue(this.BeamPulseDefinition.Animations?.BeamFrequencyAnimation, arguments, this.BeamPulseDefinition.BeamFrequency));
+				double beam_length = AttributeAnimationDef.GetAnimatedDoubleValue(this.BeamPulseDefinition.Animations?.ParticleLifeAnimation, arguments, this.BeamPulseDefinition.BeamLength);
+				double duty_cycle = MathHelper.Clamp(AttributeAnimationDef.GetAnimatedDoubleValue(this.BeamPulseDefinition.Animations?.BeamDutyCycleAnimation, arguments, this.BeamPulseDefinition.BeamDutyCycle), 0, 1);
+				double offset = AttributeAnimationDef.GetAnimatedDoubleValue(this.BeamPulseDefinition.Animations?.BeamOffsetAnimation, arguments, this.BeamPulseDefinition.BeamOffset);
 				
 				Vector3D beam_dir = endpoint - jump_node;
 				Vector3D beam_dir_n = beam_dir.Normalized();
@@ -2821,12 +3236,12 @@ namespace IOTA.ModularJumpGates
 
 				if (frequency == 0)
 				{
-					beam_width = Math.Abs(beam_width = AttributeAnimationDef.GetAnimatedDoubleValue(this.BeamPulseDefinition.Animations?.ParticleRadiusAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, null, null, this.BeamPulseDefinition.BeamWidth));
-					beam_color = AttributeAnimationDef.GetAnimatedVectorValue(this.BeamPulseDefinition.Animations?.ParticleColorAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, null, null, this.BeamPulseDefinition.BeamColor.ToVector4D()) * new Vector4D(new Vector3D(Math.Abs(this.BeamPulseDefinition.BeamBrightness)), 1) * (this.ControllerSettings?.JumpEffectAnimationColorShift().ToVector4D() ?? Vector4D.One);
+					beam_width = Math.Abs(beam_width = AttributeAnimationDef.GetAnimatedDoubleValue(this.BeamPulseDefinition.Animations?.ParticleRadiusAnimation, arguments, this.BeamPulseDefinition.BeamWidth));
+					beam_color = AttributeAnimationDef.GetAnimatedVectorValue(this.BeamPulseDefinition.Animations?.ParticleColorAnimation, arguments, this.BeamPulseDefinition.BeamColor.ToVector4D()) * new Vector4D(new Vector3D(Math.Abs(this.BeamPulseDefinition.BeamBrightness)), 1) * (this.ControllerSettings?.JumpEffectAnimationColorShift().ToVector4D() ?? Vector4D.One);
 					MySimpleObjectDraw.DrawLine(beam_start, beam_end, this.BeamMaterial, ref beam_color, (float) beam_width);
 					return;
 				}
-
+				
 				double beam_dir_length = beam_dir.Length();
 				double waveform = (beam_dir_length - (beam_dir_length - beam_length)) / frequency;
 				double w0 = waveform * duty_cycle;
@@ -2834,11 +3249,12 @@ namespace IOTA.ModularJumpGates
 				Vector3D delta = beam_dir_n * waveform;
 				Vector3D on_delta = beam_dir_n * w0;
 				beam_dir_length = 0;
-
+				
 				for (double i = 0; i < frequency; ++i)
 				{
-					beam_width = Math.Abs(beam_width = AttributeAnimationDef.GetAnimatedDoubleValue(this.BeamPulseDefinition.Animations?.ParticleRadiusAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, beam_start, null, this.BeamPulseDefinition.BeamWidth));
-					beam_color = AttributeAnimationDef.GetAnimatedVectorValue(this.BeamPulseDefinition.Animations?.ParticleColorAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, beam_start, null, this.BeamPulseDefinition.BeamColor.ToVector4D()) * new Vector4D(new Vector3D(Math.Abs(this.BeamPulseDefinition.BeamBrightness)), 1) * (this.ControllerSettings?.JumpEffectAnimationColorShift().ToVector4D() ?? Vector4D.One);
+					arguments.SetThis(beam_start);
+					beam_width = Math.Abs(AttributeAnimationDef.GetAnimatedDoubleValue(this.BeamPulseDefinition.Animations?.ParticleRadiusAnimation, arguments, this.BeamPulseDefinition.BeamWidth));
+					beam_color = AttributeAnimationDef.GetAnimatedVectorValue(this.BeamPulseDefinition.Animations?.ParticleColorAnimation, arguments, this.BeamPulseDefinition.BeamColor.ToVector4D()) * new Vector4D(new Vector3D(Math.Abs(this.BeamPulseDefinition.BeamBrightness)), 1) * (this.ControllerSettings?.JumpEffectAnimationColorShift().ToVector4D() ?? Vector4D.One);
 					beam_dir_length += waveform;
 					beam_end = beam_start + ((beam_dir_length > beam_length) ? (beam_dir_n * (waveform - (beam_dir_length - beam_length))) : on_delta);
 					MySimpleObjectDraw.DrawLine(beam_start, beam_end, this.BeamMaterial, ref beam_color, (float) beam_width);
@@ -2944,10 +3360,9 @@ namespace IOTA.ModularJumpGates
 					if (!this.InitialDriveColors.ContainsKey(drive.TerminalBlock.EntityId)) this.InitialDriveColors.Add(drive.TerminalBlock.EntityId, drive.DriveEmitterColor);
 					double brightness = this.DriveEmissiveColorDef.Brightness;
 					Vector4D color = this.DriveEmissiveColorDef.EmissiveColor.ToVector4D() * (this.ControllerSettings?.JumpEffectAnimationColorShift().ToVector4D() ?? Vector4D.One);
-
-					color = AttributeAnimationDef.GetAnimatedVectorValue(this.DriveEmissiveColorDef.Animations?.ParticleColorAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, null, null, color);
-					brightness = AttributeAnimationDef.GetAnimatedDoubleValue(this.DriveEmissiveColorDef.Animations?.ParticleColorIntensityAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, null, null, brightness);
-
+					AnimationExpression.ExpressionArguments arguments = new AnimationExpression.ExpressionArguments(local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, null, null);
+					color = AttributeAnimationDef.GetAnimatedVectorValue(this.DriveEmissiveColorDef.Animations?.ParticleColorAnimation, arguments, color);
+					brightness = AttributeAnimationDef.GetAnimatedDoubleValue(this.DriveEmissiveColorDef.Animations?.ParticleColorIntensityAnimation, arguments, brightness);
 					Vector4D start = this.InitialDriveColors[drive.TerminalBlock.EntityId].ToVector4();
 					Vector4D result = (color - start) * tick_ratio + start;
 					drive.EmitterEmissiveBrightness = brightness;
@@ -3044,13 +3459,14 @@ namespace IOTA.ModularJumpGates
 				Vector4D force_offset = new Vector4D(this.NodePhysicsDefinition.ForceOffset, 0);
 				double max_speed = this.NodePhysicsDefinition.MaxSpeed;
 				Vector4D torque = new Vector4D(this.NodePhysicsDefinition.AttractorTorque, 0);
+				AnimationExpression.ExpressionArguments arguments = new AnimationExpression.ExpressionArguments(local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, null, null);
 
-				attractor_force = AttributeAnimationDef.GetAnimatedDoubleValue(this.NodePhysicsDefinition.Animations?.PhysicsForceAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, null, null, attractor_force);
-				attractor_force_falloff = AttributeAnimationDef.GetAnimatedDoubleValue(this.NodePhysicsDefinition.Animations?.PhysicsForceFalloffAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, null, null, attractor_force_falloff);
-				max_speed = AttributeAnimationDef.GetAnimatedDoubleValue(this.NodePhysicsDefinition.Animations?.PhysicsForceMaxSpeedAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, null, null, max_speed);
+				attractor_force = AttributeAnimationDef.GetAnimatedDoubleValue(this.NodePhysicsDefinition.Animations?.PhysicsForceAnimation, arguments, attractor_force);
+				attractor_force_falloff = AttributeAnimationDef.GetAnimatedDoubleValue(this.NodePhysicsDefinition.Animations?.PhysicsForceFalloffAnimation, arguments, attractor_force_falloff);
+				max_speed = AttributeAnimationDef.GetAnimatedDoubleValue(this.NodePhysicsDefinition.Animations?.PhysicsForceMaxSpeedAnimation, arguments, max_speed);
 
-				force_offset = AttributeAnimationDef.GetAnimatedVectorValue(this.NodePhysicsDefinition.Animations?.PhysicsForceOffsetAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, null, null, force_offset);
-				torque = AttributeAnimationDef.GetAnimatedVectorValue(this.NodePhysicsDefinition.Animations?.PhysicsForceTorqueAnimation, local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, null, null, torque);
+				force_offset = AttributeAnimationDef.GetAnimatedVectorValue(this.NodePhysicsDefinition.Animations?.PhysicsForceOffsetAnimation, arguments, force_offset);
+				torque = AttributeAnimationDef.GetAnimatedVectorValue(this.NodePhysicsDefinition.Animations?.PhysicsForceTorqueAnimation, arguments, torque);
 
 				if (attractor_force != 0)
 				{
@@ -3259,9 +3675,33 @@ namespace IOTA.ModularJumpGates
 		/// <param name="full_close">Whether to fully clean all effects</param>
 		public virtual void Clean(bool full_close = true)
 		{
-			this.PerDriveParticles.Values.ToList().ForEach((list) => list.ForEach((particle) => particle.Stop()));
-			this.PerAntiDriveParticles.Values.ToList().ForEach((list) => list.ForEach((particle) => particle.Stop()));
-			this.PerEntityParticles.Values.ToList().ForEach((list) => list.ForEach((particle) => particle.Stop()));
+			foreach (KeyValuePair<MyJumpGateDrive, List<Particle>> pair in this.PerDriveParticles)
+			{
+				foreach (Particle particle in pair.Value)
+				{
+					particle.Stop();
+					if (full_close) particle.Clean();
+				}
+			}
+
+			foreach (KeyValuePair<MyJumpGateDrive, List<Particle>> pair in this.PerAntiDriveParticles)
+			{
+				foreach (Particle particle in pair.Value)
+				{
+					particle.Stop();
+					if (full_close) particle.Clean();
+				}
+			}
+
+			foreach (KeyValuePair<MyEntity, List<Particle>> pair in this.PerEntityParticles)
+			{
+				foreach (Particle particle in pair.Value)
+				{
+					particle.Stop();
+					if (full_close) particle.Clean();
+				}
+			}
+
 			this.NodeParticles.ForEach((particle) => particle.Stop());
 			this.AntiNodeParticles.ForEach((particle) => particle.Stop());
 			this.NodeSounds.ForEach((sound) => sound.Stop());
@@ -3279,9 +3719,6 @@ namespace IOTA.ModularJumpGates
 				}
 
 				this.DoCleanOnEnd = false;
-				this.PerDriveParticles.Values.ToList().ForEach((list) => list.ForEach((particle) => particle.Clean()));
-				this.PerAntiDriveParticles.Values.ToList().ForEach((list) => list.ForEach((particle) => particle.Clean()));
-				this.PerEntityParticles.Values.ToList().ForEach((list) => list.ForEach((particle) => particle.Clean()));
 				this.NodeParticles.ForEach((particle) => particle.Clean());
 				this.AntiNodeParticles.ForEach((particle) => particle.Clean());
 				this.NodeSounds.ForEach((sound) => sound.Clean());
@@ -3420,9 +3857,15 @@ namespace IOTA.ModularJumpGates
 					{
 						if (this.PerEntityParticles.ContainsKey(entity)) this.ClosedEntities.Remove(entity);
 						else this.PerEntityParticles.Add(entity, this.AnimationDefinition.PerEntityParticles.Select((particle) => new Particle(particle, this.AnimationDefinition.Duration, this.JumpGate, this.TargetGate, this.ControllerSettings, entity.WorldMatrix, entity.WorldMatrix.Translation, false)).ToList());
-						foreach (Particle particle in this.PerEntityParticles[entity]) particle.Tick(this.CurrentTick, entity.WorldMatrix, jump_gate_drives, jump_gate_entities, ref endpoint, entity);
+						
+						foreach (Particle particle in this.PerEntityParticles[entity])
+						{
+							MatrixD particle_matrix = ParticleOrientationDef.GetJumpGateMatrix(this.JumpGate, this.TargetGate, false, ref endpoint, particle.ParticleDefinition.ParticleOrientation);
+							particle_matrix.Translation = ((IMyEntity) entity).WorldVolume.Center;
+							particle.Tick(this.CurrentTick, particle_matrix, jump_gate_drives, jump_gate_entities, ref endpoint, entity);
+						}
 					}
-
+					
 					foreach (MyEntity entity in this.ClosedEntities)
 					{
 						foreach (Particle particle in this.PerEntityParticles[entity]) particle.Stop();
@@ -3587,7 +4030,13 @@ namespace IOTA.ModularJumpGates
 					{
 						if (this.PerEntityParticles.ContainsKey(entity)) this.ClosedEntities.Remove(entity);
 						else this.PerEntityParticles.Add(entity, this.AnimationDefinition.PerEntityParticles.Select((particle) => new Particle(particle, this.AnimationDefinition.Duration, this.JumpGate, this.TargetGate, this.ControllerSettings, entity.WorldMatrix, entity.WorldMatrix.Translation, false)).ToList());
-						foreach (Particle particle in this.PerEntityParticles[entity]) particle.Tick(this.CurrentTick, entity.WorldMatrix, jump_gate_drives, jump_gate_entities, ref endpoint, entity);
+
+						foreach (Particle particle in this.PerEntityParticles[entity])
+						{
+							MatrixD particle_matrix = ParticleOrientationDef.GetJumpGateMatrix(this.JumpGate, this.TargetGate, false, ref endpoint, particle.ParticleDefinition.ParticleOrientation);
+							particle_matrix.Translation = ((IMyEntity) entity).WorldVolume.Center;
+							particle.Tick(this.CurrentTick, particle_matrix, jump_gate_drives, jump_gate_entities, ref endpoint, entity);
+						}
 					}
 
 					foreach (MyEntity entity in this.ClosedEntities)
@@ -3806,7 +4255,13 @@ namespace IOTA.ModularJumpGates
 					{
 						if (this.PerEntityParticles.ContainsKey(entity)) this.ClosedEntities.Remove(entity);
 						else this.PerEntityParticles.Add(entity, this.AnimationDefinition.PerEntityParticles.Select((particle) => new Particle(particle, this.AnimationDefinition.Duration, this.JumpGate, this.TargetGate, this.ControllerSettings, entity.WorldMatrix, entity.WorldMatrix.Translation, false)).ToList());
-						foreach (Particle particle in this.PerEntityParticles[entity]) particle.Tick(this.CurrentTick, entity.WorldMatrix, jump_gate_drives, jump_gate_entities, ref endpoint, entity);
+
+						foreach (Particle particle in this.PerEntityParticles[entity])
+						{
+							MatrixD particle_matrix = ParticleOrientationDef.GetJumpGateMatrix(this.JumpGate, this.TargetGate, false, ref endpoint, particle.ParticleDefinition.ParticleOrientation);
+							particle_matrix.Translation = ((IMyEntity) entity).WorldVolume.Center;
+							particle.Tick(this.CurrentTick, particle_matrix, jump_gate_drives, jump_gate_entities, ref endpoint, entity);
+						}
 					}
 
 					foreach (MyEntity entity in this.ClosedEntities)
@@ -4119,6 +4574,7 @@ namespace IOTA.ModularJumpGates
 			if ((this.JumpGate?.Closed ?? true) || (this.JumpGate?.JumpGateGrid?.Closed ?? true)) return;
 			List<MyJumpGateDrive> drives = null;
 			this.JumpGate.GetJumpGateDrives(this.TEMP_JumpGateDrives);
+			this.JumpGate.GetEntitiesInJumpSpace(this.TEMP_JumpGateEntities, true);
 			this.TEMP_JumpGateEntitiesL.AddRange(this.TEMP_JumpGateEntities.Keys);
 			this.TEMP_JumpGateEntitiesL.AddRange(this.JumpGate.EntityBatches.Keys);
 			drives = this.TEMP_JumpGateDrives;
@@ -4352,6 +4808,7 @@ namespace IOTA.ModularJumpGates
 							{
 								try
 								{
+									Logger.Warn($"Animation serialization not yet supported: {mod.FriendlyName}::{animation_path} SKIPPED");
 									reader = MyAPIGateway.Utilities.ReadFileInModLocation(animation_path, mod);
 									string serialized_animation = reader.ReadToEnd();
 									reader.Close();
@@ -4428,6 +4885,7 @@ namespace IOTA.ModularJumpGates
 					
 					foreach (AnimationDef animation in pair.Value)
 					{
+						Logger.Warn($"Animation serialization not yet supported: {animation.AnimationName} SKIPPED");
 						if (animation.SourceMod != null || !animation.SerializeOnEnd) continue;
 						string out_file = $"{full_name}_{((animation.SubtypeID == null) ? "-1" : animation.SubtypeID.Value.ToString())}.xml";
 

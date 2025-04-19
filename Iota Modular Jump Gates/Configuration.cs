@@ -918,13 +918,15 @@ namespace IOTA.ModularJumpGates
 		/// <returns>The default configuration data</returns>
 		internal static Configuration Defaults()
 		{
-			return new Configuration {
+			Configuration defaults = new Configuration {
 				CapacitorConfiguration = new CapacitorConfigurationSchema(),
 				DriveConfiguration = new DriveConfigurationSchema(),
 				JumpGateConfiguration = new JumpGateConfigurationSchema(),
 				ConstructConfiguration = new ConstructConfigurationSchema(),
 				GeneralConfiguration = new GeneralConfigurationSchema(),
 			};
+			defaults.Validate();
+			return defaults;
 		}
 
 		/// <summary>

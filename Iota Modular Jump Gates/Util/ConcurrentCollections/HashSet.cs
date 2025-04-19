@@ -50,11 +50,12 @@ namespace IOTA.ModularJumpGates.Util.ConcurrentCollections
 		{
 			private LinkedNode Root;
 			private LinkedNode CurrentNode;
+			private T CurrentValue;
 
 			public ConcurrentLinkedHashSetIterator(ConcurrentLinkedHashSet<T> hashset)
 			{
 				if (hashset == null) throw new ArgumentNullException(nameof(hashset));
-				this.Root = hashset.FirstEntry?.CloneStack(null);
+				this.Root = new LinkedNode(default(T), -1, hashset.FirstEntry, null);
 				this.CurrentNode = this.Root;
 			}
 
@@ -62,7 +63,7 @@ namespace IOTA.ModularJumpGates.Util.ConcurrentCollections
 			{
 				get
 				{
-					return this.CurrentNode.Value;
+					return this.CurrentValue;
 				}
 			}
 
@@ -70,7 +71,7 @@ namespace IOTA.ModularJumpGates.Util.ConcurrentCollections
 			{
 				get
 				{
-					return this.CurrentNode.Value;
+					return this.CurrentValue;
 				}
 			}
 
@@ -83,6 +84,7 @@ namespace IOTA.ModularJumpGates.Util.ConcurrentCollections
 			public bool MoveNext()
 			{
 				this.CurrentNode = this.CurrentNode?.Next;
+				this.CurrentValue = (this.CurrentNode == null) ? default(T) : this.CurrentNode.Value;
 				return this.CurrentNode != null;
 			}
 

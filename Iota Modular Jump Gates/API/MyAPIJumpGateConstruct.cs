@@ -39,45 +39,51 @@ namespace IOTA.ModularJumpGates.API
 		/// <summary>
 		/// Whether this construct is closed
 		/// </summary>
-		public bool Closed { get { return this.Construct.Closed; } }
+		public bool Closed => this.Construct.Closed;
 
 		/// <summary>
 		/// Whether this construct is marked for close
 		/// </summary>
-		public bool MarkClosed { get { return this.Construct.MarkClosed; } }
+		public bool MarkClosed => this.Construct.MarkClosed;
 
 		/// <summary>
 		/// Whether this construct is suspended from updates<br />
 		/// Only used on muliplayer clients when grid is not in scene
 		/// </summary>
-		public bool IsSuspended { get { return this.Construct.IsSuspended; } }
+		public bool IsSuspended => this.Construct.IsSuspended;
 
 		/// <summary>
 		/// Whether to update jump gate intersections on next tick<br />
 		/// Gate drive intersections will be updated and gates reconstructed on next tick
 		/// </summary>
-		public bool MarkUpdateJumpGates { get { return this.Construct.MarkUpdateJumpGates; } }
+		public bool MarkUpdateJumpGates => this.Construct.MarkUpdateJumpGates;
 
 		/// <summary>
 		/// Whether this construct should be synced<br/>
 		/// If true, will be synced on next component tick
 		/// </summary>
-		public bool IsDirty { get { return this.Construct.IsDirty; } }
+		public bool IsDirty => this.Construct.IsDirty;
+
+		/// <summary>
+		/// Whether this construct is fully initialized<br />
+		/// True when all gates are constructed and resources initialized
+		/// </summary>
+		public bool FullyInitialized => this.Construct.FullyInitialized;
 
 		/// <summary>
 		/// The current ID of this construct's cube grid
 		/// </summary>
-		public long CubeGridID { get { return this.Construct.CubeGridID; } }
+		public long CubeGridID => this.Construct.CubeGridID;
 
 		/// <summary>
 		/// The custom name of this construct's primary cube grid
 		/// </summary>
-		public string PrimaryCubeGridCustomName { get { return this.Construct.PrimaryCubeGridCustomName; } }
+		public string PrimaryCubeGridCustomName => this.Construct.PrimaryCubeGridCustomName;
 
 		/// <summary>
 		/// The main cube grid for this construct
 		/// </summary>
-		public IMyCubeGrid CubeGrid { get { return this.Construct.CubeGrid; } }
+		public IMyCubeGrid CubeGrid => this.Construct.CubeGrid;
 		#endregion
 
 		#region Public API Methods

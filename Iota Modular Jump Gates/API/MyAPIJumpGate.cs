@@ -431,6 +431,42 @@ namespace IOTA.ModularJumpGates.API
 		}
 
 		/// <summary>
+		/// Registers a callback for when an entity enters or exits this gate's jump space<br />
+		/// Callback parameters:<br />
+		///  ... MyJumpGate - The colliding gate
+		///  ... MyEntity - The entity entering or leaving
+		///  ... bool - True if this entity is entering the jump space
+		/// </summary>
+		/// <param name="callback">The callback to call</param>
+		public void OnEntityCollision(Action<MyAPIJumpGate, MyEntity, bool> callback)
+		{
+			this.JumpGate.OffEntityCollision(callback);
+		}
+
+		/// <summary>
+		/// Unregisters a callback for when an entity enters or exits this gate's jump space<br />
+		/// Callback parameters:<br />
+		///  ... MyJumpGate - The colliding gate
+		///  ... MyEntity - The entity entering or leaving
+		///  ... bool - True if this entity is entering the jump space
+		/// </summary>
+		/// <param name="callback">The callback to call</param>
+		public void OffEntityCollision(Action<MyAPIJumpGate, MyEntity, bool> callback)
+		{
+			this.JumpGate.OffEntityCollision(callback);
+		}
+
+		/// <summary>
+		/// Checks if the specified callback is registered with this gate
+		/// </summary>
+		/// <param name="callback">The callback to check</param>
+		/// <returns>True if already registered</returns>
+		public bool IsEntityCollisionCallbackRegistered(Action<MyAPIJumpGate, MyEntity, bool> callback)
+		{
+			return this.JumpGate.IsEntityCollisionCallbackRegistered(callback);
+		}
+
+		/// <summary>
 		/// Checks if a point is within twice the distance of the largest jump ellipse radius or within 500 meters of the attached controller
 		/// </summary>
 		/// <param name="pos">The world position to check</param>
@@ -525,6 +561,17 @@ namespace IOTA.ModularJumpGates.API
 		public MyGateInvalidationReason GetInvalidationReason()
 		{
 			return this.JumpGate.GetInvalidationReason();
+		}
+
+		/// <summary>
+		/// Get the number of jump space entities matching the specified predicate or all entities if predicate is null
+		/// </summary>
+		/// <param name="filtered">Whether to filter entities based on controller settings</param>
+		/// <param name="filter">A predicate to filter entities by</param>
+		/// <returns>The number of matching entities</returns>
+		public int GetJumpSpaceEntityCount(bool filtered = false, Func<MyEntity, bool> filter = null)
+		{
+			return this.JumpGate.GetJumpSpaceEntityCount(filtered, filter);
 		}
 
 		/// <summary>

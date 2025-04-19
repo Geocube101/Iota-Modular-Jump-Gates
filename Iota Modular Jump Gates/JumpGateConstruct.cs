@@ -13,6 +13,7 @@ using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Threading;
+using VRage.Game;
 using VRage.Game.Components;
 using VRage.Game.Entity;
 using VRage.Game.ModAPI;
@@ -44,6 +45,21 @@ namespace IOTA.ModularJumpGates
 		/// Whether this grid has an outgoing unfulfilled beacon linked grids request
 		/// </summary>
 		private bool BeaconLinkedClientUpdate = false;
+
+		/// <summary>
+		/// Whether drive max raycast distances should be updated on next tick
+		/// </summary>
+		private bool UpdateDriveMaxRaycastDistances = false;
+
+		/// <summary>
+		/// Whether to update comm linked grids on next tick
+		/// </summary>
+		private bool UpdateCommLinkedGrids = false;
+
+		/// <summary>
+		/// Whether to update reachable beacons on next tick
+		/// </summary>
+		private bool UpdateBeaconLinkedBeacons = false;
 
 		/// <summary>
 		/// The next jump gate ID
@@ -197,6 +213,12 @@ namespace IOTA.ModularJumpGates
 		public bool IsDirty { get; private set; } = false;
 
 		/// <summary>
+		/// Whether this construct is fully initialized<br />
+		/// True when all gates are constructed and resources initialized
+		/// </summary>
+		public bool FullyInitialized { get; private set; } = false;
+
+		/// <summary>
 		/// The current ID of this construct's cube grid
 		/// </summary>
 		public long CubeGridID
@@ -231,7 +253,7 @@ namespace IOTA.ModularJumpGates
 			{
 				this.CheckClosed();
 				this.LastUpdateTime = (ulong) (value.ToUniversalTime() - DateTime.MinValue).Ticks;
-				foreach (MyJumpGate jump_gate in this.JumpGates.Values) if (!jump_gate.Closed) jump_gate.LastUpdateDateTimeUTC = value;
+				foreach (KeyValuePair<long, MyJumpGate> pair in this.JumpGates) if (!pair.Value.Closed) pair.Value.LastUpdateDateTimeUTC = value;
 			}
 		}
 
@@ -427,7 +449,7 @@ namespace IOTA.ModularJumpGates
 
 			if (MyNetworkInterface.IsMultiplayerServer && packet.PhaseFrame == 1)
 			{
-				if (payload.Value && this.CubeGrids.Values.Any((grid) => grid.Speed > 1e-3 || grid.Physics.AngularVelocity.Length() > 1e-3)) return;
+				if (payload.Value && this.CubeGrids.Any((pair) => pair.Value.Speed > 1e-3 || pair.Value.Physics.AngularVelocity.Length() > 1e-3)) return;
 				this.SetConstructStaticness(payload.Value);
 				MyNetworkInterface.Packet response = packet.Forward(packet.SenderID, true);
 				packet.Send();
@@ -469,7 +491,7 @@ namespace IOTA.ModularJumpGates
 			}
 
             this.IsDirty = false;
-            if (this.JumpGates != null) foreach (MyJumpGate jump_gate in this.JumpGates.Values) jump_gate.IsDirty = false;
+            if (this.JumpGates != null) foreach (KeyValuePair<long, MyJumpGate> pair in this.JumpGates) pair.Value.IsDirty = false;
 			Logger.Debug($"[{this.CubeGridID}]: Sent Network Grid Update", 4);
 		}
 
@@ -481,6 +503,7 @@ namespace IOTA.ModularJumpGates
 		{
 			if (this.MarkClosed || this.Closed) return;
 			this.GridBlocks?.Add(block);
+			this.UpdateDriveMaxRaycastDistances = true;
 			if (block.FatBlock == null || block.FatBlock.MarkedForClose || block.FatBlock.Closed) return;
 			
 			if (block.FatBlock is IMyRadioAntenna)
@@ -528,11 +551,11 @@ namespace IOTA.ModularJumpGates
 
 					lock (this.UpdateLock)
 					{
-						foreach (MyJumpGateDrive drive2 in this.JumpGateDrives.Values)
+						foreach (KeyValuePair<long, MyJumpGateDrive> pair in this.JumpGateDrives)
 						{
-							if (drive != drive2)
+							if (drive != pair.Value)
 							{
-								this.DriveCombinations.Add(new KeyValuePair<MyJumpGateDrive, MyJumpGateDrive>(drive, drive2));
+								this.DriveCombinations.Add(new KeyValuePair<MyJumpGateDrive, MyJumpGateDrive>(drive, pair.Value));
 							}
 						}
 					}
@@ -554,8 +577,9 @@ namespace IOTA.ModularJumpGates
 		/// </summary>
 		/// <param name="block">The removed block</param>
 		private void OnBlockRemoved(IMySlimBlock block)
-        {
-            if (block.FatBlock == null || this.MarkClosed || this.Closed) return;
+		{
+			this.UpdateDriveMaxRaycastDistances = true;
+			if (block.FatBlock == null || this.MarkClosed || this.Closed) return;
             this.RadioAntennas.Remove(block.FatBlock.EntityId);
             this.LaserAntennas.Remove(block.FatBlock.EntityId);
 			this.BeaconAntennas.Remove(block.FatBlock.EntityId);
@@ -628,12 +652,12 @@ namespace IOTA.ModularJumpGates
 			grid.OnGridMerge -= this.OnGridMerged;
 			grid.OnGridSplit -= this.OnGridSplit;
 
-            foreach (IMyRadioAntenna antenna in this.RadioAntennas.Values) if (antenna.CubeGrid == grid) this.RadioAntennas.Remove(antenna.EntityId);
-			foreach (IMyLaserAntenna antenna in this.LaserAntennas.Values) if (antenna.CubeGrid == grid) this.LaserAntennas.Remove(antenna.EntityId);
-			foreach (MyJumpGateCapacitor block in this.JumpGateCapacitors.Values) if (block.CubeGridID == grid.EntityId) this.JumpGateCapacitors.Remove(block.BlockID);
-			foreach (MyJumpGateController block in this.JumpGateControllers.Values) if (block.CubeGridID == grid.EntityId) this.JumpGateControllers.Remove(block.BlockID);
-			foreach (MyJumpGateDrive block in this.JumpGateDrives.Values) if (block.CubeGridID == grid.EntityId) this.JumpGateDrives.Remove(block.BlockID);
-			foreach (MyJumpGateServerAntenna block in this.JumpGateServerAntennas.Values) if (block.CubeGridID == grid.EntityId) this.JumpGateServerAntennas.Remove(block.BlockID);
+            foreach (KeyValuePair<long, IMyRadioAntenna> pair in this.RadioAntennas) if (pair.Value.CubeGrid == grid) this.RadioAntennas.Remove(pair.Value.EntityId);
+			foreach (KeyValuePair<long, IMyLaserAntenna> pair in this.LaserAntennas) if (pair.Value.CubeGrid == grid) this.LaserAntennas.Remove(pair.Value.EntityId);
+			foreach (KeyValuePair<long, MyJumpGateCapacitor> pair in this.JumpGateCapacitors) if (pair.Value.CubeGridID == grid.EntityId) this.JumpGateCapacitors.Remove(pair.Value.BlockID);
+			foreach (KeyValuePair<long, MyJumpGateController> pair in this.JumpGateControllers) if (pair.Value.CubeGridID == grid.EntityId) this.JumpGateControllers.Remove(pair.Value.BlockID);
+			foreach (KeyValuePair<long, MyJumpGateDrive> pair in this.JumpGateDrives) if (pair.Value.CubeGridID == grid.EntityId) this.JumpGateDrives.Remove(pair.Value.BlockID);
+			foreach (KeyValuePair<long, MyJumpGateServerAntenna> pair in this.JumpGateServerAntennas) if (pair.Value.CubeGridID == grid.EntityId) this.JumpGateServerAntennas.Remove(pair.Value.BlockID);
 
             MyJumpGateConstruct parent = MyJumpGateModSession.Instance.GetJumpGateGrid(grid);
             if (parent == null && (MyJumpGateModSession.SessionStatus == MySessionStatusEnum.LOADING || MyJumpGateModSession.SessionStatus == MySessionStatusEnum.RUNNING)) parent = MyJumpGateModSession.Instance.AddCubeGridToSession(grid);
@@ -654,7 +678,7 @@ namespace IOTA.ModularJumpGates
             {
                 this.CubeGrid = null;
                 if (this.CubeGrids == null) return;
-                foreach (IMyCubeGrid grid in this.CubeGrids.Values) this.OnGridRemoved(grid);
+                foreach (KeyValuePair<long, IMyCubeGrid> pair in this.CubeGrids) this.OnGridRemoved(pair.Value);
                 this.CubeGrids.Clear();
 				this.MarkClosed = true;
                 return;
@@ -684,6 +708,7 @@ namespace IOTA.ModularJumpGates
 			if (grids_updated)
             {
 				// Update connected blocks
+				this.UpdateDriveMaxRaycastDistances = true;
 				int drive_count = this.JumpGateDrives.Count;
 				this.GridBlocks.Clear();
 
@@ -695,9 +720,9 @@ namespace IOTA.ModularJumpGates
 				foreach (KeyValuePair<long, IMyRadioAntenna> pair in this.RadioAntennas) if (pair.Value.Closed || pair.Value.MarkedForClose || !this.HasCubeGrid(pair.Value.CubeGrid)) this.RadioAntennas.Remove(pair.Key);
 				foreach (KeyValuePair<long, IMyBeacon> pair in this.BeaconAntennas) if (pair.Value.Closed || pair.Value.MarkedForClose || !this.HasCubeGrid(pair.Value.CubeGrid)) this.BeaconAntennas.Remove(pair.Key);
 
-				foreach (IMyCubeGrid grid in this.CubeGrids.Values)
+				foreach (KeyValuePair<long, IMyCubeGrid> pair in this.CubeGrids)
 				{
-					foreach (IMyUpgradeModule block in grid.GetFatBlocks<IMyUpgradeModule>())
+					foreach (IMyUpgradeModule block in pair.Value.GetFatBlocks<IMyUpgradeModule>())
 					{
 						if (block.MarkedForClose || block.Closed) continue;
 						MyCubeBlockBase block_base;
@@ -707,14 +732,14 @@ namespace IOTA.ModularJumpGates
 						else if ((block_base = MyJumpGateModSession.GetBlockAsJumpGateServerAntenna(block)) != null) this.JumpGateServerAntennas.AddOrUpdate(block.EntityId, block_base as MyJumpGateServerAntenna, (_1, _2) => block_base as MyJumpGateServerAntenna);
 					}
 
-					foreach (IMyLaserAntenna antenna in grid.GetFatBlocks<IMyLaserAntenna>()) if (!antenna.MarkedForClose && !antenna.Closed) this.LaserAntennas.AddOrUpdate(antenna.EntityId, antenna, (_1, _2) => antenna);
-					foreach (IMyRadioAntenna antenna in grid.GetFatBlocks<IMyRadioAntenna>()) if (!antenna.MarkedForClose && !antenna.Closed) this.RadioAntennas.AddOrUpdate(antenna.EntityId, antenna, (_1, _2) => antenna);
-					foreach (IMyBeacon antenna in grid.GetFatBlocks<IMyBeacon>()) if (!antenna.MarkedForClose && !antenna.Closed) this.BeaconAntennas.AddOrUpdate(antenna.EntityId, antenna, (_1, _2) => antenna);
+					foreach (IMyLaserAntenna antenna in pair.Value.GetFatBlocks<IMyLaserAntenna>()) if (!antenna.MarkedForClose && !antenna.Closed) this.LaserAntennas.AddOrUpdate(antenna.EntityId, antenna, (_1, _2) => antenna);
+					foreach (IMyRadioAntenna antenna in pair.Value.GetFatBlocks<IMyRadioAntenna>()) if (!antenna.MarkedForClose && !antenna.Closed) this.RadioAntennas.AddOrUpdate(antenna.EntityId, antenna, (_1, _2) => antenna);
+					foreach (IMyBeacon antenna in pair.Value.GetFatBlocks<IMyBeacon>()) if (!antenna.MarkedForClose && !antenna.Closed) this.BeaconAntennas.AddOrUpdate(antenna.EntityId, antenna, (_1, _2) => antenna);
 
-					this.GridBlocks.AddRange(((MyCubeGrid) grid).CubeBlocks);
+					this.GridBlocks.AddRange(((MyCubeGrid) pair.Value).CubeBlocks);
 				}
 
-				if (drive_count != this.JumpGateDrives.Count || this.JumpGateDrives.Values.Any((drive) => drive.JumpGateGrid != this))
+				if (drive_count != this.JumpGateDrives.Count || this.JumpGateDrives.Any((pair) => pair.Value.JumpGateGrid != this))
 				{
 					this.MarkUpdateJumpGates = true;
 					this.DriveCombinations = null;
@@ -739,16 +764,16 @@ namespace IOTA.ModularJumpGates
 			GridInvalidationReason reason = this.GetInvalidationReason();
 			string name = this.CubeGrid?.CustomName ?? "N/A";
 
-			foreach (MyJumpGate jump_gate in this.JumpGates.Values)
+			foreach (KeyValuePair<long, MyJumpGate> pair in this.JumpGates)
 			{
-				if (!jump_gate.Closed)
+				if (!pair.Value.Closed)
 				{
-					jump_gate.Dispose();
-					MyJumpGateModSession.Instance.CloseGate(jump_gate);
+					pair.Value.Dispose();
+					MyJumpGateModSession.Instance.CloseGate(pair.Value);
 				}
 			}
 
-			foreach (IMyCubeGrid grid in this.CubeGrids.Values) this.OnGridRemoved(grid);
+			foreach (KeyValuePair<long, IMyCubeGrid> pair in this.CubeGrids) this.OnGridRemoved(pair.Value);
 			this.NextJumpGateID = 0;
 			this.Release();
 
@@ -867,15 +892,15 @@ namespace IOTA.ModularJumpGates
 				bool first_update = this.LocalGameTick == 0;
 				this.LocalGameTick = (this.LocalGameTick + 1) % 0xFFFFFFFFFFFFFFF0;
 				bool full_gate_update = this.MarkUpdateJumpGates || first_update;
-				bool gate_entity_update = this.LocalGameTick % 10 == 0;
+				bool gate_entity_update = this.LocalGameTick % 30 == 0;
 				this.MarkUpdateJumpGates = false;
 				bool is_dirty = this.IsDirty || full_gate_update;
 				
 				// Update drive combinations
 				if (this.DriveCombinations == null)
 				{
-					List<MyJumpGateDrive> indexable_large_drives = new List<MyJumpGateDrive>(this.JumpGateDrives.Values.Where((drive) => drive.IsLargeGrid));
-					List<MyJumpGateDrive> indexable_small_drives = new List<MyJumpGateDrive>(this.JumpGateDrives.Values.Where((drive) => drive.IsSmallGrid));
+					List<MyJumpGateDrive> indexable_large_drives = new List<MyJumpGateDrive>(this.JumpGateDrives.Select((pair) => pair.Value).Where((drive) => drive.IsLargeGrid));
+					List<MyJumpGateDrive> indexable_small_drives = new List<MyJumpGateDrive>(this.JumpGateDrives.Select((pair) => pair.Value).Where((drive) => drive.IsSmallGrid));
 					this.DriveCombinations = new List<KeyValuePair<MyJumpGateDrive, MyJumpGateDrive>>();
 
 					for (int i = 0; i < indexable_large_drives.Count - 1; ++i)
@@ -895,6 +920,38 @@ namespace IOTA.ModularJumpGates
 					}
 				}
 				
+				// Update drive max raycast distances
+				if (this.UpdateDriveMaxRaycastDistances && this.LocalGameTick % 30 == 0)
+				{
+					List<Vector3I> raycast_cells = new List<Vector3I>();
+					this.UpdateDriveMaxRaycastDistances = false;
+
+					foreach (KeyValuePair<long, MyJumpGateDrive> drive in this.JumpGateDrives)
+					{
+						double closest_distance = drive.Value.DriveConfiguration.DriveRaycastDistance;
+						Vector3D raycast_start = drive.Value.GetDriveRaycastStartpoint();
+						Vector3D raycast_end = drive.Value.GetDriveRaycastEndpoint(closest_distance);
+
+						foreach (KeyValuePair<long, IMyCubeGrid> grid in this.CubeGrids)
+						{
+							if (grid.Value.MarkedForClose) continue;
+							grid.Value.RayCastCells(raycast_start, raycast_end, raycast_cells);
+
+							foreach (Vector3I cell in raycast_cells)
+							{
+								IMySlimBlock block = grid.Value.GetCubeBlock(cell);
+								if (block == null || block.FatBlock == drive.Value.TerminalBlock) continue;
+								closest_distance = Math.Min(closest_distance, Vector3D.Distance(grid.Value.GridIntegerToWorld(cell), raycast_start));
+							}
+
+							raycast_cells.Clear();
+						}
+
+						this.MarkUpdateJumpGates = this.MarkUpdateJumpGates || drive.Value.MaxRaycastDistance != closest_distance;
+						drive.Value.MaxRaycastDistance = closest_distance;
+					}
+				}
+
 				// Rebuild all jump gates
 				if (MyNetworkInterface.IsServerLike && full_gate_update)
 				{
@@ -1018,10 +1075,10 @@ namespace IOTA.ModularJumpGates
 					uint gate_count = MyJumpGateModSession.Configuration.ConstructConfiguration.MaxTotalGatesPerConstruct;
 					uint large_gate_count = MyJumpGateModSession.Configuration.ConstructConfiguration.MaxLargeGatesPerConstruct;
 					uint small_gate_count = MyJumpGateModSession.Configuration.ConstructConfiguration.MaxSmallGatesPerConstruct;
-					List<MyJumpGateDrive> unmapped_drives = new List<MyJumpGateDrive>(this.JumpGateDrives.Values);
+					List<MyJumpGateDrive> unmapped_drives = new List<MyJumpGateDrive>(this.JumpGateDrives.Select((pair) => pair.Value));
 					List<long> mapped_gate_ids = new List<long>(this.JumpGates.Count);
 
-					foreach (IntersectionInfo intersection_info in intersecting_drives.Values.Distinct())
+					foreach (IntersectionInfo intersection_info in intersecting_drives.Select((pair) => pair.Value).Distinct())
 					{
 						List<MyJumpGateDrive> drive_group = intersection_info.IntersectingDrives.Distinct().ToList();
 						if (drive_group.Count < 2) continue;
@@ -1072,20 +1129,107 @@ namespace IOTA.ModularJumpGates
 						continue;
 					}
 
-					jump_gate.ConstructMatrix = this.CubeGrid.WorldMatrix;
 					jump_gate.Update(full_gate_update, gate_entity_update);
-
-					if (jump_gate.Closed)
-					{
-						this.ClosedJumpGateIDs.Enqueue(jump_gate_id);
-						this.JumpGates.Remove(jump_gate_id);
-					}
-					else if (!jump_gate.MarkClosed && !jump_gate.IsValid()) jump_gate.Dispose();
+					if (!jump_gate.MarkClosed && !jump_gate.IsValid()) jump_gate.Dispose();
 				}
 				
+				// Update comm linked grids
+				if (this.UpdateCommLinkedGrids)
+				{
+					using (this.CommLinkedLock.WithWriter())
+					{
+						int list_index = 0;
+						if (this.CommLinkedGrids == null) this.CommLinkedGrids = new List<MyJumpGateConstruct>();
+						else this.CommLinkedGrids.Clear();
+						this.CommLinkedGrids.Add(this);
+						List<MyEntity> broadcast_entities = new List<MyEntity>();
+
+						while (list_index < this.CommLinkedGrids.Count)
+						{
+							MyJumpGateConstruct grid = this.CommLinkedGrids[list_index++];
+							if (grid.Closed || grid.MarkClosed || (grid.LaserAntennas.Count == 0 && grid.RadioAntennas.Count == 0)) continue;
+
+							foreach (KeyValuePair<long, IMyLaserAntenna> pair in grid.LaserAntennas)
+							{
+								if (pair.Value.MarkedForClose || !pair.Value.IsWorking || pair.Value.Status != Sandbox.ModAPI.Ingame.MyLaserAntennaStatus.Connected) continue;
+								MyJumpGateConstruct other = MyJumpGateModSession.Instance.GetJumpGateGrid(pair.Value.Other.CubeGrid);
+								if (other != null && !this.CommLinkedGrids.Contains(other)) this.CommLinkedGrids.Add(other);
+							}
+
+							if (grid.RadioAntennas.Count == 0 || grid.RadioAntennas.All((pair) => pair.Value.MarkedForClose || !pair.Value.IsWorking || !pair.Value.IsBroadcasting)) continue;
+							BoundingBoxD world_aabb = grid.GetCombinedAABB();
+							BoundingSphereD broadcast_sphere = new BoundingSphereD(world_aabb.Center, 50000 + world_aabb.Extents.Max());
+							MyGamePruningStructure.GetAllTopMostEntitiesInSphere(ref broadcast_sphere, broadcast_entities);
+
+							foreach (KeyValuePair<long, IMyRadioAntenna> pair in grid.RadioAntennas)
+							{
+								if (pair.Value.MarkedForClose || !pair.Value.IsWorking || !pair.Value.IsBroadcasting) continue;
+
+								foreach (MyEntity entity in broadcast_entities)
+								{
+									IMyCubeGrid target = (entity is IMyCubeGrid) ? (MyCubeGrid) entity : null;
+									MyJumpGateConstruct target_grid = (target == null) ? null : MyJumpGateModSession.Instance.GetJumpGateGrid(target);
+									if (entity.Physics == null || target_grid == null || target_grid == this || this.CommLinkedGrids.Contains(target_grid)) continue;
+
+									foreach (KeyValuePair<long, IMyRadioAntenna> target_pair in grid.RadioAntennas)
+									{
+										if (target_pair.Value.IsWorking && target_pair.Value.IsBroadcasting && Vector3D.Distance(pair.Value.WorldMatrix.Translation, target_pair.Value.WorldMatrix.Translation) < Math.Min(pair.Value.Radius, target_pair.Value.Radius))
+										{
+											this.CommLinkedGrids.Add(target_grid);
+											break;
+										}
+									}
+								}
+							}
+
+							broadcast_entities.Clear();
+						}
+
+						this.LastCommLinkUpdate = DateTime.Now;
+						this.UpdateCommLinkedGrids = false;
+					}
+				}
+
+				// Update beacon linked beacons
+				if (this.UpdateBeaconLinkedBeacons)
+				{
+					using (this.BeaconLinkedLock.WithWriter())
+					{
+						if (this.RadioAntennas.Count > 0 && this.RadioAntennas.Any((pair) => !pair.Value.MarkedForClose && pair.Value.IsWorking && pair.Value.IsBroadcasting))
+						{
+							if (this.BeaconLinks == null) this.BeaconLinks = new List<MyBeaconLinkWrapper>();
+							else this.BeaconLinks.Clear();
+							List<MyEntity> broadcast_entities = new List<MyEntity>();
+							BoundingBoxD world_aabb = this.GetCombinedAABB();
+							BoundingSphereD broadcast_sphere = new BoundingSphereD(world_aabb.Center, 200000 + world_aabb.Extents.Max());
+							MyGamePruningStructure.GetAllTopMostEntitiesInSphere(ref broadcast_sphere, broadcast_entities);
+
+							foreach (MyEntity entity in broadcast_entities)
+							{
+								MyJumpGateConstruct target_grid;
+								if (!(entity is IMyCubeGrid) || entity.Physics == null || (target_grid = MyJumpGateModSession.Instance.GetJumpGateGrid(entity.EntityId)) == null || target_grid == this) continue;
+
+								foreach (KeyValuePair<long, IMyRadioAntenna> antenna_pair in this.RadioAntennas)
+								{
+									foreach (KeyValuePair<long, IMyBeacon> beacon_pair in target_grid.BeaconAntennas)
+									{
+										MyBeaconLinkWrapper wrapper;
+										if (beacon_pair.Value.MarkedForClose || !beacon_pair.Value.IsWorking || Vector3D.Distance(beacon_pair.Value.WorldMatrix.Translation, antenna_pair.Value.WorldMatrix.Translation) > beacon_pair.Value.Radius || this.BeaconLinks.Contains(wrapper = new MyBeaconLinkWrapper(beacon_pair.Value))) continue;
+										this.BeaconLinks.Add(wrapper);
+									}
+								}
+							}
+
+							this.LastCommLinkUpdate = DateTime.Now;
+							this.UpdateBeaconLinkedBeacons = false;
+						}
+					}
+				}
+
 				// Finalize update
 				if (MyJumpGateModSession.Network.Registered && (is_dirty || first_update)) this.SendNetworkGridUpdate();
 				if (first_update) Logger.Debug($"[{grid_id}] (MAIN.{this.GetMainCubeGrid()?.EntityId ?? -1})] - FIRST_UPDATE", 1);
+				this.FullyInitialized = this.FullyInitialized || first_update;
 			}
 			finally
 			{
@@ -1099,16 +1243,46 @@ namespace IOTA.ModularJumpGates
 
 		/// <summary>
 		/// Does one update of this construct's non-threadable attributes<br />
-		/// This will tick all jump gate power syphons, physics colliders, and sound emitters
+		/// This will tick all jump gate power syphons, physics colliders, and sound emitters<br />
+		/// <b>Must be called from game thread</b>
 		/// </summary>
 		public void UpdateNonThreadable()
 		{
 			this.CheckClosed();
-			foreach (MyJumpGate gate in this.JumpGates.Values)
+			foreach (KeyValuePair<long, MyJumpGate> pair in this.JumpGates)
 			{
-				if (!gate.Closed)
+				if (!pair.Value.Closed)
 				{
-					gate.UpdateNonThreadable();
+					pair.Value.UpdateNonThreadable();
+				}
+			}
+		}
+
+		/// <summary>
+		/// Remaps all jump gate IDs on this construct<br />
+		/// Ids will be compressed such that the highest ID is the number of jump gates - 1
+		/// </summary>
+		public void RemapJumpGateIDs()
+		{
+			long remapped_id = 0;
+			List<MyJumpGate> remapped_gates = new List<MyJumpGate>(this.JumpGates.Values);
+			List<MyJumpGate> all_gates = new List<MyJumpGate>();
+			MyJumpGateModSession.Instance.GetAllJumpGates(all_gates);
+			this.JumpGates.Clear();
+
+			foreach (MyJumpGate gate in remapped_gates)
+			{
+				JumpGateUUID old_uid = JumpGateUUID.FromJumpGate(gate);
+				gate.JumpGateID = remapped_id;
+				this.JumpGates[remapped_id++] = gate;
+				foreach (KeyValuePair<long, MyJumpGateDrive> pair in this.JumpGateDrives) if (pair.Value.JumpGateID == old_uid.GetJumpGate()) pair.Value.SetAttachedJumpGate(gate);
+				foreach (KeyValuePair<long, MyJumpGateController> pair in this.JumpGateControllers) if (pair.Value.BlockSettings.JumpGateID() == old_uid.GetJumpGate()) pair.Value.AttachedJumpGate(gate);
+
+				foreach (MyJumpGate source in all_gates)
+				{
+					MyJumpGateWaypoint dest = source.Controller?.BlockSettings.SelectedWaypoint();
+					if (source.Controller == null || dest == null || dest.WaypointType != MyWaypointType.JUMP_GATE || JumpGateUUID.FromGuid(dest.JumpGate) != old_uid) continue;
+					source.Controller.BlockSettings.SelectedWaypoint(new MyJumpGateWaypoint(gate));
 				}
 			}
 		}
@@ -1121,7 +1295,7 @@ namespace IOTA.ModularJumpGates
 			this.CheckClosed();
 			if (MyNetworkInterface.IsStandaloneMultiplayerClient) return;
 			this.MarkClosed = true;
-			foreach (MyJumpGate gate in this.JumpGates.Values) gate.Dispose();
+			foreach (KeyValuePair<long, MyJumpGate> pair in this.JumpGates) pair.Value.Dispose();
 			if (MyJumpGateModSession.SessionStatus == MySessionStatusEnum.UNLOADING) MyJumpGateModSession.Instance.CloseGrid(this);
 		}
 
@@ -1131,7 +1305,7 @@ namespace IOTA.ModularJumpGates
 		public void Destroy()
 		{
 			this.CheckClosed();
-			foreach (IMyCubeGrid grid in this.CubeGrids.Values) grid.Close();
+			foreach (KeyValuePair<long, IMyCubeGrid> pair in this.CubeGrids) pair.Value.Close();
 		}
 
 		/// <summary>
@@ -1218,11 +1392,11 @@ namespace IOTA.ModularJumpGates
 		{
 			this.CheckClosed();
 
-			foreach (IMyCubeGrid grid in this.CubeGrids.Values)
+			foreach (KeyValuePair<long, IMyCubeGrid> pair in this.CubeGrids)
 			{
-				grid.Physics.AngularVelocity = Vector3.Zero;
-				grid.Physics.LinearVelocity = Vector3.Zero;
-				grid.IsStatic = is_static;
+				pair.Value.Physics.AngularVelocity = Vector3.Zero;
+				pair.Value.Physics.LinearVelocity = Vector3.Zero;
+				pair.Value.IsStatic = is_static;
 			}
 		}
 
@@ -1234,8 +1408,8 @@ namespace IOTA.ModularJumpGates
 		public void GetAttachedJumpGateControllers(List<MyJumpGateController> controllers, Func<MyJumpGateController, bool> filter = null)
 		{
 			if (this.Closed) return;
-			if (filter == null) controllers.AddRange(this.JumpGateControllers.Values);
-			else controllers.AddRange(this.JumpGateControllers.Values.Where(filter));
+			if (filter == null) controllers.AddRange(this.JumpGateControllers.Select((pair) => pair.Value));
+			else controllers.AddRange(this.JumpGateControllers.Select((pair) => pair.Value).Where(filter));
 		}
 
 		/// <summary>
@@ -1247,8 +1421,8 @@ namespace IOTA.ModularJumpGates
 		public void GetAttachedJumpGateControllers<T>(List<T> controllers, Func<MyJumpGateController, T> transformer, Func<MyJumpGateController, bool> filter = null)
 		{
 			if (this.Closed) return;
-			if (filter == null) controllers.AddRange(this.JumpGateControllers.Values.Select(transformer));
-			else controllers.AddRange(this.JumpGateControllers.Values.Where(filter).Select(transformer));
+			if (filter == null) controllers.AddRange(this.JumpGateControllers.Select((pair) => transformer(pair.Value)));
+			else controllers.AddRange(this.JumpGateControllers.Select((pair) => pair.Value).Where(filter).Select(transformer));
 		}
 
 		/// <summary>
@@ -1259,8 +1433,8 @@ namespace IOTA.ModularJumpGates
 		public void GetAttachedJumpGateDrives(List<MyJumpGateDrive> drives, Func<MyJumpGateDrive, bool> filter = null)
 		{
 			if (this.Closed) return;
-			if (filter == null) drives.AddRange(this.JumpGateDrives.Values);
-			else drives.AddRange(this.JumpGateDrives.Values.Where(filter));
+			if (filter == null) drives.AddRange(this.JumpGateDrives.Select((pair) => pair.Value));
+			else drives.AddRange(this.JumpGateDrives.Select((pair) => pair.Value).Where(filter));
 		}
 
 		/// <summary>
@@ -1272,8 +1446,8 @@ namespace IOTA.ModularJumpGates
 		public void GetAttachedJumpGateDrives<T>(List<T> drives, Func<MyJumpGateDrive, T> transformer, Func<MyJumpGateDrive, bool> filter = null)
 		{
 			if (this.Closed) return;
-			if (filter == null) drives.AddRange(this.JumpGateDrives.Values.Select(transformer));
-			else drives.AddRange(this.JumpGateDrives.Values.Where(filter).Select(transformer));
+			if (filter == null) drives.AddRange(this.JumpGateDrives.Select((pair) => transformer(pair.Value)));
+			else drives.AddRange(this.JumpGateDrives.Select((pair) => pair.Value).Where(filter).Select(transformer));
 		}
 
 		/// <summary>
@@ -1284,7 +1458,7 @@ namespace IOTA.ModularJumpGates
 		public void GetAttachedUnassociatedJumpGateDrives(List<MyJumpGateDrive> drives, Func<MyJumpGateDrive, bool> filter = null)
 		{
 			if (this.Closed) return;
-			foreach (MyJumpGateDrive drive in this.JumpGateDrives.Values) if (drive.JumpGateID == -1 && (filter == null || filter(drive))) drives.Add(drive);
+			foreach (KeyValuePair<long, MyJumpGateDrive> pair in this.JumpGateDrives) if (pair.Value.JumpGateID == -1 && (filter == null || filter(pair.Value))) drives.Add(pair.Value);
 		}
 
 		/// <summary>
@@ -1296,7 +1470,7 @@ namespace IOTA.ModularJumpGates
 		public void GetAttachedUnassociatedJumpGateDrives<T>(List<T> drives, Func<MyJumpGateDrive, T> transformer, Func<MyJumpGateDrive, bool> filter = null)
 		{
 			if (this.Closed) return;
-			foreach (MyJumpGateDrive drive in this.JumpGateDrives.Values) if (drive.JumpGateID == -1 && (filter == null || filter(drive))) drives.Add(transformer(drive));
+			foreach (KeyValuePair<long, MyJumpGateDrive> pair in this.JumpGateDrives) if (pair.Value.JumpGateID == -1 && (filter == null || filter(pair.Value))) drives.Add(transformer(pair.Value));
 		}
 
 		/// <summary>
@@ -1307,8 +1481,8 @@ namespace IOTA.ModularJumpGates
 		public void GetAttachedJumpGateCapacitors(List<MyJumpGateCapacitor> capacitors, Func<MyJumpGateCapacitor, bool> filter = null)
 		{
 			if (this.Closed) return;
-			if (filter == null) capacitors.AddRange(this.JumpGateCapacitors.Values);
-			else capacitors.AddRange(this.JumpGateCapacitors.Values.Where(filter));
+			if (filter == null) capacitors.AddRange(this.JumpGateCapacitors.Select((pair) => pair.Value));
+			else capacitors.AddRange(this.JumpGateCapacitors.Select((pair) => pair.Value).Where(filter));
 		}
 
 		/// <summary>
@@ -1320,8 +1494,8 @@ namespace IOTA.ModularJumpGates
 		public void GetAttachedJumpGateCapacitors<T>(List<T> capacitors, Func<MyJumpGateCapacitor, T> transformer, Func<MyJumpGateCapacitor, bool> filter = null)
 		{
 			if (this.Closed) return;
-			if (filter == null) capacitors.AddRange(this.JumpGateCapacitors.Values.Select(transformer));
-			else capacitors.AddRange(this.JumpGateCapacitors.Values.Where(filter).Select(transformer));
+			if (filter == null) capacitors.AddRange(this.JumpGateCapacitors.Select((pair) => transformer(pair.Value)));
+			else capacitors.AddRange(this.JumpGateCapacitors.Select((pair) => pair.Value).Where(filter).Select(transformer));
 		}
 
 		/// <summary>
@@ -1332,8 +1506,8 @@ namespace IOTA.ModularJumpGates
 		public void GetAttachedLaserAntennas(List<IMyLaserAntenna> laser_antennas, Func<IMyLaserAntenna, bool> filter = null)
 		{
 			if (this.Closed) return;
-			if (filter == null) laser_antennas.AddRange(this.LaserAntennas.Values);
-			else laser_antennas.AddRange(this.LaserAntennas.Values.Where(filter));
+			if (filter == null) laser_antennas.AddRange(this.LaserAntennas.Select((pair) => pair.Value));
+			else laser_antennas.AddRange(this.LaserAntennas.Select((pair) => pair.Value).Where(filter));
 		}
 
 		/// <summary>
@@ -1345,8 +1519,8 @@ namespace IOTA.ModularJumpGates
 		public void GetAttachedLaserAntennas<T>(List<T> laser_antennas, Func<IMyLaserAntenna, T> transformer, Func<IMyLaserAntenna, bool> filter = null)
 		{
 			if (this.Closed) return;
-			if (filter == null) laser_antennas.AddRange(this.LaserAntennas.Values.Select(transformer));
-			else laser_antennas.AddRange(this.LaserAntennas.Values.Where(filter).Select(transformer));
+			if (filter == null) laser_antennas.AddRange(this.LaserAntennas.Select((pair) => transformer(pair.Value)));
+			else laser_antennas.AddRange(this.LaserAntennas.Select((pair) => pair.Value).Where(filter).Select(transformer));
 		}
 
 		/// <summary>
@@ -1357,8 +1531,8 @@ namespace IOTA.ModularJumpGates
 		public void GetAttachedRadioAntennas(List<IMyRadioAntenna> radio_antennas, Func<IMyRadioAntenna, bool> filter = null)
 		{
 			if (this.Closed) return;
-			if (filter == null) radio_antennas.AddRange(this.RadioAntennas.Values);
-			else radio_antennas.AddRange(this.RadioAntennas.Values.Where(filter));
+			if (filter == null) radio_antennas.AddRange(this.RadioAntennas.Select((pair) => pair.Value));
+			else radio_antennas.AddRange(this.RadioAntennas.Select((pair) => pair.Value).Where(filter));
 		}
 
 		/// <summary>
@@ -1370,8 +1544,8 @@ namespace IOTA.ModularJumpGates
 		public void GetAttachedRadioAntennas<T>(List<T> radio_antennas, Func<IMyRadioAntenna, T> transformer, Func<IMyRadioAntenna, bool> filter = null)
 		{
 			if (this.Closed) return;
-			if (filter == null) radio_antennas.AddRange(this.RadioAntennas.Values.Select(transformer));
-			else radio_antennas.AddRange(this.RadioAntennas.Values.Where(filter).Select(transformer));
+			if (filter == null) radio_antennas.AddRange(this.RadioAntennas.Select((pair) => transformer(pair.Value)));
+			else radio_antennas.AddRange(this.RadioAntennas.Select((pair) => pair.Value).Where(filter).Select(transformer));
 		}
 
 		/// <summary>
@@ -1382,8 +1556,8 @@ namespace IOTA.ModularJumpGates
 		public void GetAttachedBeacons(List<IMyBeacon> beacons, Func<IMyBeacon, bool> filter = null)
 		{
 			if (this.Closed) return;
-			if (filter == null) beacons.AddRange(this.BeaconAntennas.Values);
-			else beacons.AddRange(this.BeaconAntennas.Values.Where(filter));
+			if (filter == null) beacons.AddRange(this.BeaconAntennas.Select((pair) => pair.Value));
+			else beacons.AddRange(this.BeaconAntennas.Select((pair) => pair.Value).Where(filter));
 		}
 
 		/// <summary>
@@ -1395,8 +1569,8 @@ namespace IOTA.ModularJumpGates
 		public void GetAttachedBeacons<T>(List<T> beacons, Func<IMyBeacon, T> transformer, Func<IMyBeacon, bool> filter = null)
 		{
 			if (this.Closed) return;
-			if (filter == null) beacons.AddRange(this.BeaconAntennas.Values.Select(transformer));
-			else beacons.AddRange(this.BeaconAntennas.Values.Where(filter).Select(transformer));
+			if (filter == null) beacons.AddRange(this.BeaconAntennas.Select((pair) => transformer(pair.Value)));
+			else beacons.AddRange(this.BeaconAntennas.Select((pair) => pair.Value).Where(filter).Select(transformer));
 		}
 
 		/// <summary>
@@ -1407,8 +1581,8 @@ namespace IOTA.ModularJumpGates
 		public void GetJumpGates(List<MyJumpGate> jump_gates, Func<MyJumpGate, bool> filter = null)
 		{
 			if (this.Closed) return;
-			if (filter == null) jump_gates.AddRange(this.JumpGates.Values);
-			else jump_gates.AddRange(this.JumpGates.Values.Where(filter));
+			if (filter == null) jump_gates.AddRange(this.JumpGates.Select((pair) => pair.Value));
+			else jump_gates.AddRange(this.JumpGates.Select((pair) => pair.Value).Where(filter));
 		}
 
 		/// <summary>
@@ -1420,8 +1594,8 @@ namespace IOTA.ModularJumpGates
 		public void GetJumpGates<T>(List<T> jump_gates, Func<MyJumpGate, T> transformer, Func<MyJumpGate, bool> filter = null)
 		{
 			if (this.Closed) return;
-			if (filter == null) jump_gates.AddRange(this.JumpGates.Values.Select(transformer));
-			else jump_gates.AddRange(this.JumpGates.Values.Where(filter).Select(transformer));
+			if (filter == null) jump_gates.AddRange(this.JumpGates.Select((pair) => transformer(pair.Value)));
+			else jump_gates.AddRange(this.JumpGates.Select((pair) => pair.Value).Where(filter).Select(transformer));
 		}
 
 		/// <summary>
@@ -1432,8 +1606,8 @@ namespace IOTA.ModularJumpGates
 		public void GetCubeGrids(List<IMyCubeGrid> grids, Func<IMyCubeGrid, bool> filter = null)
 		{
 			if (this.Closed) return;
-			if (filter == null) grids.AddRange(this.CubeGrids.Values);
-			else foreach (IMyCubeGrid grid in this.CubeGrids.Values) if (filter(grid)) grids.Add(grid);
+			if (filter == null) grids.AddRange(this.CubeGrids.Select((pair) => pair.Value));
+			else foreach (IMyCubeGrid grid in this.CubeGrids.Select((pair) => pair.Value)) if (filter(grid)) grids.Add(grid);
 		}
 
 		/// <summary>
@@ -1445,8 +1619,8 @@ namespace IOTA.ModularJumpGates
 		public void GetCubeGrids<T>(List<T> grids, Func<IMyCubeGrid, T> transformer, Func<IMyCubeGrid, bool> filter = null)
 		{
 			if (this.Closed) return;
-			if (filter == null) grids.AddRange(this.CubeGrids.Values.Select(transformer));
-			else grids.AddRange(this.CubeGrids.Values.Where(filter).Select(transformer));
+			if (filter == null) grids.AddRange(this.CubeGrids.Select((pair) => transformer(pair.Value)));
+			else grids.AddRange(this.CubeGrids.Select((pair) => pair.Value).Where(filter).Select(transformer));
 		}
 
 		/// <summary>
@@ -1457,29 +1631,20 @@ namespace IOTA.ModularJumpGates
 		public void GetCommLinkedJumpGateGrids(List<MyJumpGateConstruct> comm_linked_grids, Func<MyJumpGateConstruct, bool> filter = null)
 		{
 			if (this.Closed) return;
-			else if (this.CommLinkedGrids != null && (DateTime.Now - this.LastCommLinkUpdate).TotalMilliseconds < MyJumpGateConstruct.CommLinkedUpdateDelay)
+			bool timedout = this.CommLinkedGrids == null || (DateTime.Now - this.LastCommLinkUpdate).TotalMilliseconds < MyJumpGateConstruct.CommLinkedUpdateDelay;
+
+			if (comm_linked_grids != null && this.CommLinkedGrids != null)
 			{
-				if (comm_linked_grids == null) return;
-				
 				using (this.CommLinkedLock.WithReader())
 				{
 					if (filter == null) comm_linked_grids.AddList(this.CommLinkedGrids);
 					else comm_linked_grids.AddRange(this.CommLinkedGrids.Where(filter));
-					return;
 				}
 			}
-			else if (MyNetworkInterface.IsStandaloneMultiplayerClient)
-			{
-				if (this.CommLinkedGrids != null && comm_linked_grids != null)
-				{
-					using (this.CommLinkedLock.WithReader())
-					{
-						if (filter == null) comm_linked_grids.AddList(this.CommLinkedGrids);
-						else comm_linked_grids.AddRange(this.CommLinkedGrids.Where(filter));
-					}
-				}
 
-				if (this.CommLinkedClientUpdate) return;
+			if (timedout && MyNetworkInterface.IsServerLike) this.UpdateCommLinkedGrids = true;
+			else if (timedout && MyNetworkInterface.IsStandaloneMultiplayerClient && !this.CommLinkedClientUpdate)
+			{
 				this.CommLinkedClientUpdate = true;
 				MyNetworkInterface.Packet packet = new MyNetworkInterface.Packet {
 					PacketType = MyPacketTypeEnum.COMM_LINKED,
@@ -1488,62 +1653,6 @@ namespace IOTA.ModularJumpGates
 				};
 				packet.Payload(this.CubeGridID);
 				packet.Send();
-				return;
-			}
-
-			using (this.CommLinkedLock.WithWriter())
-			{
-				int list_index = 0;
-				if (this.CommLinkedGrids == null) this.CommLinkedGrids = new List<MyJumpGateConstruct>();
-				else this.CommLinkedGrids.Clear();
-				this.CommLinkedGrids.Add(this);
-				List<MyEntity> broadcast_entities = new List<MyEntity>();
-
-				while (list_index < this.CommLinkedGrids.Count)
-				{
-					MyJumpGateConstruct grid = this.CommLinkedGrids[list_index++];
-					if (grid.Closed || grid.MarkClosed || (grid.LaserAntennas.Count == 0 && grid.RadioAntennas.Count == 0)) continue;
-
-					foreach (IMyLaserAntenna antenna in grid.LaserAntennas.Values)
-					{
-						if (antenna.MarkedForClose || !antenna.IsWorking || antenna.Status != Sandbox.ModAPI.Ingame.MyLaserAntennaStatus.Connected) continue;
-						MyJumpGateConstruct other = MyJumpGateModSession.Instance.GetJumpGateGrid(antenna.Other.CubeGrid);
-						if (other != null && !this.CommLinkedGrids.Contains(other)) this.CommLinkedGrids.Add(other);
-					}
-
-					if (grid.RadioAntennas.Count == 0) continue;
-					BoundingBoxD world_aabb = grid.GetCombinedAABB();
-					BoundingSphereD broadcast_sphere = new BoundingSphereD(world_aabb.Center, 50000 + world_aabb.Extents.Max());
-					MyGamePruningStructure.GetAllTopMostEntitiesInSphere(ref broadcast_sphere, broadcast_entities);
-
-					foreach (IMyRadioAntenna antenna in grid.RadioAntennas.Values)
-					{
-						if (antenna.MarkedForClose || !antenna.IsWorking || !antenna.IsBroadcasting) continue;
-
-						foreach (MyEntity entity in broadcast_entities)
-						{
-							IMyCubeGrid target = (entity is IMyCubeGrid) ? (MyCubeGrid) entity : null;
-							MyJumpGateConstruct target_grid = (target == null) ? null : MyJumpGateModSession.Instance.GetJumpGateGrid(target);
-							if (entity.Physics == null || target_grid == null || target_grid == this || this.CommLinkedGrids.Contains(target_grid)) continue;
-
-							foreach (IMyRadioAntenna target_antenna in grid.RadioAntennas.Values)
-							{
-								if (target_antenna.IsWorking && target_antenna.IsBroadcasting && Vector3D.Distance(antenna.WorldMatrix.Translation, target_antenna.WorldMatrix.Translation) < Math.Min(antenna.Radius, target_antenna.Radius))
-								{
-									this.CommLinkedGrids.Add(target_grid);
-									break;
-								}
-							}
-						}
-					}
-
-					broadcast_entities.Clear();
-				}
-
-				this.LastCommLinkUpdate = DateTime.Now;
-				if (comm_linked_grids == null) return;
-				if (filter == null) comm_linked_grids.AddList(this.CommLinkedGrids);
-				else comm_linked_grids.AddRange(this.CommLinkedGrids.Where(filter));
 			}
 		}
 
@@ -1554,30 +1663,21 @@ namespace IOTA.ModularJumpGates
 		/// <param name="filter">A predicate to match beacons against</param>
 		public void GetBeaconsWithinReverseBroadcastSphere(List<MyBeaconLinkWrapper> beacons, Func<MyBeaconLinkWrapper, bool> filter = null)
 		{
-			if (this.Closed) return;
-			else if (this.BeaconLinks != null && (DateTime.Now - this.LastBeaconLinkUpdate).TotalMilliseconds < MyJumpGateConstruct.CommLinkedUpdateDelay)
+			if (this.Closed || this.BeaconLinks == null) return;
+			bool timedout = this.BeaconLinks == null || (DateTime.Now - this.LastBeaconLinkUpdate).TotalMilliseconds < MyJumpGateConstruct.CommLinkedUpdateDelay;
+
+			if (beacons != null && this.BeaconLinks != null)
 			{
-				if (beacons == null) return;
-				
 				using (this.BeaconLinkedLock.WithReader())
 				{
 					if (filter == null) beacons.AddList(this.BeaconLinks);
 					else beacons.AddRange(this.BeaconLinks.Where(filter));
-					return;
 				}
 			}
-			else if (MyNetworkInterface.IsStandaloneMultiplayerClient)
+			
+			if (timedout && MyNetworkInterface.IsServerLike) this.UpdateCommLinkedGrids = true;
+			else if (timedout && MyNetworkInterface.IsStandaloneMultiplayerClient && !this.BeaconLinkedClientUpdate)
 			{
-				if (this.BeaconLinks != null && beacons != null)
-				{
-					using (this.BeaconLinkedLock.WithReader())
-					{
-						if (filter == null) beacons.AddList(this.BeaconLinks);
-						else beacons.AddRange(this.BeaconLinks.Where(filter));
-					}
-				}
-
-				if (this.BeaconLinkedClientUpdate) return;
 				this.BeaconLinkedClientUpdate = true;
 				MyNetworkInterface.Packet packet = new MyNetworkInterface.Packet {
 					PacketType = MyPacketTypeEnum.BEACON_LINKED,
@@ -1586,38 +1686,6 @@ namespace IOTA.ModularJumpGates
 				};
 				packet.Payload(this.CubeGridID);
 				packet.Send();
-				return;
-			}
-
-			using (this.BeaconLinkedLock.WithWriter())
-			{
-				if (this.BeaconLinks == null) this.BeaconLinks = new List<MyBeaconLinkWrapper>();
-				else this.BeaconLinks.Clear();
-				List<MyEntity> broadcast_entities = new List<MyEntity>();
-				BoundingBoxD world_aabb = this.GetCombinedAABB();
-				BoundingSphereD broadcast_sphere = new BoundingSphereD(world_aabb.Center, 200000 + world_aabb.Extents.Max());
-				MyGamePruningStructure.GetAllTopMostEntitiesInSphere(ref broadcast_sphere, broadcast_entities);
-
-				foreach (MyEntity entity in broadcast_entities)
-				{
-					MyJumpGateConstruct target_grid;
-					if (!(entity is IMyCubeGrid) || entity.Physics == null || (target_grid = MyJumpGateModSession.Instance.GetJumpGateGrid(entity.EntityId)) == null || target_grid == this) continue;
-
-					foreach (IMyRadioAntenna antenna in this.RadioAntennas.Values)
-					{
-						foreach (IMyBeacon beacon in target_grid.BeaconAntennas.Values)
-						{
-							MyBeaconLinkWrapper wrapper;
-							if (beacon.MarkedForClose || !beacon.IsWorking || Vector3D.Distance(beacon.WorldMatrix.Translation, antenna.WorldMatrix.Translation) > beacon.Radius || this.BeaconLinks.Contains(wrapper = new MyBeaconLinkWrapper(beacon))) continue;
-							this.BeaconLinks.Add(wrapper);
-						}
-					}
-				}
-
-				this.LastCommLinkUpdate = DateTime.Now;
-				if (beacons == null) return;
-				if (filter == null) beacons.AddList(this.BeaconLinks);
-				else beacons.AddRange(this.BeaconLinks.Where(filter));
 			}
 		}
 
@@ -1805,7 +1873,7 @@ namespace IOTA.ModularJumpGates
 		public bool IsStatic()
 		{
 			this.CheckClosed();
-			foreach (IMyCubeGrid grid in this.CubeGrids.Values) if (grid.IsStatic) return true;
+			foreach (KeyValuePair<long, IMyCubeGrid> pair in this.CubeGrids) if (pair.Value.IsStatic) return true;
 			return false;
 		}
 
@@ -1815,8 +1883,8 @@ namespace IOTA.ModularJumpGates
         public bool HasCommLink()
         {
             this.CheckClosed();
-			foreach (IMyRadioAntenna antenna in this.RadioAntennas.Values) if (antenna.IsWorking) return true;
-			foreach (IMyLaserAntenna antenna in this.LaserAntennas.Values) if (antenna.IsWorking) return true;
+			foreach (KeyValuePair<long, IMyRadioAntenna> pair in this.RadioAntennas) if (pair.Value.IsWorking) return true;
+			foreach (KeyValuePair<long, IMyLaserAntenna> pair in this.LaserAntennas) if (pair.Value.IsWorking) return true;
 			return false;
         }
 
@@ -1825,8 +1893,7 @@ namespace IOTA.ModularJumpGates
         /// <returns>True if this construct completed at least one tick</returns>
         public bool AtLeastOneUpdate()
         {
-            this.CheckClosed();
-            return this.UpdateTimeTicks.Count > 0;
+            return (this.UpdateTimeTicks?.Count ?? 0) > 0;
         }
 
         /// <summary>
@@ -1881,6 +1948,18 @@ namespace IOTA.ModularJumpGates
 		}
 
 		/// <summary>
+		/// Checks whether thie construct intersects the specified ellipsoid
+		/// </summary>
+		/// <param name="ellipsoid">The ellipsoid to check against</param>
+		/// <returns>Whether at least 4 bounding box vertices are contained</returns>
+		public bool IsConstructWithinBoundingEllipsoid(ref BoundingEllipsoidD ellipsoid)
+		{
+			this.CheckClosed();
+			foreach (IMySlimBlock block in this.GridBlocks) if (ellipsoid.IsPointInEllipse(MyJumpGateModSession.LocalVectorToWorldVectorP(block.CubeGrid.WorldMatrix, block.Position * block.CubeGrid.GridSize))) return true;
+			return false;
+		}
+
+		/// <summary>
 		/// Gets the number of controllers matching the specified predicate<br />
 		/// Gets the number of all controllers if predicate is null
 		/// </summary>
@@ -1889,7 +1968,7 @@ namespace IOTA.ModularJumpGates
 		public int GetControllerCount(Func<MyJumpGateController, bool> predicate = null)
 		{
 			this.CheckClosed();
-			return (predicate == null) ? this.JumpGateControllers.Count : this.JumpGateControllers.Values.Where(predicate).Count();
+			return (predicate == null) ? this.JumpGateControllers.Count : this.JumpGateControllers.Select((pair) => pair.Value).Count(predicate);
 		}
 
 		/// <summary>
@@ -1901,7 +1980,7 @@ namespace IOTA.ModularJumpGates
 		public int GetDriveCount(Func<MyJumpGateDrive, bool> predicate = null)
 		{
 			this.CheckClosed();
-			return (predicate == null) ? this.JumpGateDrives.Count : this.JumpGateDrives.Values.Count(predicate);
+			return (predicate == null) ? this.JumpGateDrives.Count : this.JumpGateDrives.Select((pair) => pair.Value).Count(predicate);
 		}
 
 		/// <summary>
@@ -1913,7 +1992,7 @@ namespace IOTA.ModularJumpGates
 		public int GetCapacitorCount(Func<MyJumpGateCapacitor, bool> predicate = null)
 		{
 			this.CheckClosed();
-			return (predicate == null) ? this.JumpGateCapacitors.Count : this.JumpGateCapacitors.Values.Where(predicate).Count();
+			return (predicate == null) ? this.JumpGateCapacitors.Count : this.JumpGateCapacitors.Select((pair) => pair.Value).Count(predicate);
 		}
 
 		/// <summary>
@@ -1925,7 +2004,7 @@ namespace IOTA.ModularJumpGates
 		public int GetLaserAntennaCount(Func<IMyLaserAntenna, bool> predicate = null)
 		{
 			this.CheckClosed();
-			return (predicate == null) ? this.LaserAntennas.Count : this.LaserAntennas.Values.Where(predicate).Count();
+			return (predicate == null) ? this.LaserAntennas.Count : this.LaserAntennas.Select((pair) => pair.Value).Count(predicate);
 		}
 
 		/// <summary>
@@ -1937,7 +2016,7 @@ namespace IOTA.ModularJumpGates
 		public int GetRadioAntennaCount(Func<IMyRadioAntenna, bool> predicate = null)
 		{
 			this.CheckClosed();
-			return (predicate == null) ? this.RadioAntennas.Count : this.RadioAntennas.Values.Where(predicate).Count();
+			return (predicate == null) ? this.RadioAntennas.Count : this.RadioAntennas.Select((pair) => pair.Value).Count(predicate);
 		}
 
 		/// <summary>
@@ -1949,7 +2028,7 @@ namespace IOTA.ModularJumpGates
 		public int GetBeaconCount(Func<IMyBeacon, bool> predicate = null)
 		{
 			this.CheckClosed();
-			return (predicate == null) ? this.BeaconAntennas.Count : this.BeaconAntennas.Values.Where(predicate).Count();
+			return (predicate == null) ? this.BeaconAntennas.Count : this.BeaconAntennas.Select((pair) => pair.Value).Count(predicate);
 		}
 
 		/// <summary>
@@ -1961,7 +2040,7 @@ namespace IOTA.ModularJumpGates
 		public int GetCubeGridCount(Func<IMyCubeGrid, bool> predicate = null)
 		{
 			this.CheckClosed();
-			return (predicate == null) ? this.CubeGrids.Count : this.CubeGrids.Values.Where(predicate).Count();
+			return (predicate == null) ? this.CubeGrids.Count : this.CubeGrids.Select((pair) => pair.Value).Count(predicate);
 		}
 
 		/// <summary>
@@ -1973,7 +2052,7 @@ namespace IOTA.ModularJumpGates
 		public int GetJumpGateCount(Func<MyJumpGate, bool> predicate = null)
 		{
 			this.CheckClosed();
-			return (predicate == null) ? this.JumpGates.Count : this.JumpGates.Values.Where(predicate).Count();
+			return (predicate == null) ? this.JumpGates.Count : this.JumpGates.Select((pair) => pair.Value).Count(predicate);
 		}
 
 		/// <summary>
@@ -1985,7 +2064,7 @@ namespace IOTA.ModularJumpGates
 		public int GetConstructBlockCount(Func<IMySlimBlock, bool> predicate = null)
 		{
 			this.CheckClosed();
-			return (predicate == null) ? this.GridBlocks.Count : this.GridBlocks.Where(predicate).Count();
+			return (predicate == null) ? this.GridBlocks.Count : this.GridBlocks.Count(predicate);
 		}
 
 		/// <summary>
@@ -2012,7 +2091,7 @@ namespace IOTA.ModularJumpGates
 			this.CheckClosed();
 			if (this.IsSuspended) return 0;
 			double mass = 0;
-			foreach (IMyCubeGrid grid in this.CubeGrids.Values) mass += (double) (grid.Physics?.Mass ?? 0);
+			foreach (KeyValuePair<long, IMyCubeGrid> pair in this.CubeGrids) mass += (double) (pair.Value.Physics?.Mass ?? 0);
 			return mass;
 		}
 
@@ -2026,7 +2105,7 @@ namespace IOTA.ModularJumpGates
 			this.CheckClosed();
 			if (power_mw <= 0) return 0;
 			List<MyJumpGateCapacitor> capacitors = new List<MyJumpGateCapacitor>();
-			foreach (MyJumpGateCapacitor capacitor in this.JumpGateCapacitors.Values) if (capacitor.IsWorking() && capacitor.StoredChargeMW > 0 && capacitor.BlockSettings.RechargeEnabled) capacitors.Add(capacitor);
+			foreach (KeyValuePair<long, MyJumpGateCapacitor> pair in this.JumpGateCapacitors) if (pair.Value.IsWorking() && pair.Value.StoredChargeMW > 0 && pair.Value.BlockSettings.RechargeEnabled) capacitors.Add(pair.Value);
 			if (capacitors.Count == 0) return power_mw;
 			double power_per = power_mw / capacitors.Count;
 			power_mw = 0;
@@ -2063,8 +2142,8 @@ namespace IOTA.ModularJumpGates
 		{
 			this.CheckClosed();
 			double total_power = 0;
-			foreach (MyJumpGateDrive drive in this.JumpGateDrives.Values) if (drive.JumpGateID == jump_gate_id && drive.IsWorking()) total_power += drive.StoredChargeMW;
-			foreach (MyJumpGateCapacitor capacitor in this.JumpGateCapacitors.Values) if (capacitor.IsWorking() && capacitor.BlockSettings.RechargeEnabled) total_power += capacitor.StoredChargeMW;
+			foreach (KeyValuePair<long, MyJumpGateDrive> pair in this.JumpGateDrives) if (pair.Value.JumpGateID == jump_gate_id && pair.Value.IsWorking()) total_power += pair.Value.StoredChargeMW;
+			foreach (KeyValuePair<long, MyJumpGateCapacitor> pair in this.JumpGateCapacitors) if (pair.Value.IsWorking() && pair.Value.BlockSettings.RechargeEnabled) total_power += pair.Value.StoredChargeMW;
 			return total_power;
 		}
 
@@ -2077,8 +2156,8 @@ namespace IOTA.ModularJumpGates
 		{
 			this.CheckClosed();
 			double total_power = 0;
-			foreach (MyJumpGateDrive drive in this.JumpGateDrives.Values) if (drive.JumpGateID == jump_gate_id && drive.IsWorking()) total_power += drive.DriveConfiguration.MaxDriveChargeMW;
-			foreach (MyJumpGateCapacitor capacitor in this.JumpGateCapacitors.Values) if (capacitor.IsWorking() && capacitor.BlockSettings.RechargeEnabled) total_power += capacitor.CapacitorConfiguration.MaxCapacitorChargeMW;
+			foreach (KeyValuePair<long, MyJumpGateDrive> pair in this.JumpGateDrives) if (pair.Value.JumpGateID == jump_gate_id && pair.Value.IsWorking()) total_power += pair.Value.DriveConfiguration.MaxDriveChargeMW;
+			foreach (KeyValuePair<long, MyJumpGateCapacitor> pair in this.JumpGateCapacitors) if (pair.Value.IsWorking() && pair.Value.BlockSettings.RechargeEnabled) total_power += pair.Value.CapacitorConfiguration.MaxCapacitorChargeMW;
 			return total_power;
 		}
 
@@ -2092,8 +2171,8 @@ namespace IOTA.ModularJumpGates
 		{
 			this.CheckClosed();
 			double total_power = 0;
-			foreach (MyJumpGateDrive drive in this.JumpGateDrives.Values) if (drive.JumpGateID == jump_gate_id) total_power += drive.DriveConfiguration.MaxDriveChargeMW;
-			foreach (MyJumpGateCapacitor capacitor in this.JumpGateCapacitors.Values) total_power += capacitor.CapacitorConfiguration.MaxCapacitorChargeMW;
+			foreach (KeyValuePair<long, MyJumpGateDrive> pair in this.JumpGateDrives) if (pair.Value.JumpGateID == jump_gate_id) total_power += pair.Value.DriveConfiguration.MaxDriveChargeMW;
+			foreach (KeyValuePair<long, MyJumpGateCapacitor> pair in this.JumpGateCapacitors) total_power += pair.Value.CapacitorConfiguration.MaxCapacitorChargeMW;
 			return total_power;
 		}
 
@@ -2118,7 +2197,7 @@ namespace IOTA.ModularJumpGates
 			this.CheckClosed();
 			if (this.IsSuspended) return Vector3D.Zero;
 			Vector3D sum = Vector3D.Zero;
-			foreach (IMyCubeGrid grid in this.CubeGrids.Values) sum += grid.Physics.CenterOfMassWorld;
+			foreach (KeyValuePair<long, IMyCubeGrid> pair in this.CubeGrids) sum += pair.Value.Physics.CenterOfMassWorld;
 			return sum / this.CubeGrids.Count;
 		}
 
@@ -2131,7 +2210,7 @@ namespace IOTA.ModularJumpGates
 		public IMyCubeGrid IsPositionInsideAnySubgrid(Vector3D world_position)
 		{
 			this.CheckClosed();
-			foreach (IMyCubeGrid grid in this.CubeGrids.Values) if (MyJumpGateModSession.IsPositionInsideGrid(grid, world_position)) return grid;
+			foreach (KeyValuePair<long, IMyCubeGrid> pair in this.CubeGrids) if (MyJumpGateModSession.IsPositionInsideGrid(pair.Value, world_position)) return pair.Value;
 			return null;
 		}
 
@@ -2144,12 +2223,12 @@ namespace IOTA.ModularJumpGates
 			int highest = 0;
 			IMyCubeGrid largest_grid = null;
 
-			foreach (IMyCubeGrid grid in this.CubeGrids.Values)
+			foreach (KeyValuePair<long, IMyCubeGrid> pair in this.CubeGrids)
 			{
-				int count = ((MyCubeGrid) grid).BlocksCount;
-				if (count == 0 || count < highest || (count == highest && largest_grid.EntityId < grid.EntityId)) continue;
+				int count = ((MyCubeGrid) pair.Value).BlocksCount;
+				if (count == 0 || count < highest || (count == highest && largest_grid.EntityId < pair.Value.EntityId)) continue;
 				highest = count;
-				largest_grid = grid;
+				largest_grid = pair.Value;
 			}
 
             return largest_grid;
@@ -2176,9 +2255,7 @@ namespace IOTA.ModularJumpGates
 		public IMyCubeGrid GetFirstCubeGrid(Func<IMyCubeGrid, bool> predicate = null, IMyCubeGrid default_ = default(IMyCubeGrid))
 		{
 			this.CheckClosed();
-			if (predicate == null) return this.CubeGrids.Values.First();
-			foreach (IMyCubeGrid grid in this.CubeGrids.Values) if (predicate(grid)) return grid;
-			return default_;
+			return (predicate == null) ? this.CubeGrids.First().Value : (this.CubeGrids.Select((pair) => pair.Value).FirstOrDefault(predicate) ?? default_);
 		}
 
 		/// <summary>
@@ -2217,9 +2294,7 @@ namespace IOTA.ModularJumpGates
 		public IMyLaserAntenna GetFirstLaserAntenna(Func<IMyLaserAntenna, bool> predicate = null, IMyLaserAntenna default_ = default(IMyLaserAntenna))
 		{
 			this.CheckClosed();
-			if (predicate == null) return this.LaserAntennas.Values.First();
-			foreach (IMyLaserAntenna antenna in this.LaserAntennas.Values) if (predicate(antenna)) return antenna;
-			return default_;
+			return (predicate == null) ? this.LaserAntennas.First().Value : (this.LaserAntennas.Select((pair) => pair.Value).FirstOrDefault(predicate) ?? default_);
 		}
 
 		/// <summary>
@@ -2243,9 +2318,7 @@ namespace IOTA.ModularJumpGates
 		public IMyRadioAntenna GetFirstRadioAntenna(Func<IMyRadioAntenna, bool> predicate = null, IMyRadioAntenna default_ = default(IMyRadioAntenna))
 		{
 			this.CheckClosed();
-			if (predicate == null) return this.RadioAntennas.Values.First();
-			foreach (IMyRadioAntenna antenna in this.RadioAntennas.Values) if (predicate(antenna)) return antenna;
-			return default_;
+			return (predicate == null) ? this.RadioAntennas.First().Value : (this.RadioAntennas.Select((pair) => pair.Value).FirstOrDefault(predicate) ?? default_);
 		}
 
 		/// <summary>
@@ -2269,9 +2342,7 @@ namespace IOTA.ModularJumpGates
 		public IMyBeacon GetFirstBeacon(Func<IMyBeacon, bool> predicate = null, IMyBeacon default_ = default(IMyBeacon))
 		{
 			this.CheckClosed();
-			if (predicate == null) return this.BeaconAntennas.Values.First();
-			foreach (IMyBeacon beacon in this.BeaconAntennas.Values) if (predicate(beacon)) return beacon;
-			return default_;
+			return (predicate == null) ? this.BeaconAntennas.First().Value : (this.BeaconAntennas.Select((pair) => pair.Value).FirstOrDefault(predicate) ?? default_);
 		}
 
 		/// <summary>
@@ -2293,7 +2364,7 @@ namespace IOTA.ModularJumpGates
 			this.CheckClosed();
 			if (this.IsSuspended) return BoundingBoxD.CreateInvalid();
 			List<Vector3D> points = new List<Vector3D>(8 * this.CubeGrids.Count);
-			foreach (IMyCubeGrid grid in this.CubeGrids.Values) for (int i = 0; i < 8; ++i) points.Add(grid.WorldAABB.GetCorner(i));
+			foreach (KeyValuePair<long, IMyCubeGrid> pair in this.CubeGrids) for (int i = 0; i < 8; ++i) points.Add(pair.Value.WorldAABB.GetCorner(i));
 			return BoundingBoxD.CreateFromPoints(points);
 		}
 
@@ -2318,9 +2389,7 @@ namespace IOTA.ModularJumpGates
 		public MyJumpGate GetFirstJumpGate(Func<MyJumpGate, bool> predicate = null, MyJumpGate default_ = default(MyJumpGate))
 		{
 			this.CheckClosed();
-			if (predicate == null) return this.JumpGates.Values.First();
-			foreach (MyJumpGate gate in this.JumpGates.Values) if (predicate(gate)) return gate;
-			return default_;
+			return (predicate == null) ? this.JumpGates.First().Value : (this.JumpGates.Select((pair) => pair.Value).FirstOrDefault(predicate) ?? default_);
 		}
 
 		/// <summary>
@@ -2344,9 +2413,7 @@ namespace IOTA.ModularJumpGates
 		public MyJumpGateCapacitor GetFirstCapacitor(Func<MyJumpGateCapacitor, bool> predicate = null, MyJumpGateCapacitor default_ = default(MyJumpGateCapacitor))
 		{
 			this.CheckClosed();
-			if (predicate == null) return this.JumpGateCapacitors.Values.First();
-			foreach (MyJumpGateCapacitor capacitor in this.JumpGateCapacitors.Values) if (predicate(capacitor)) return capacitor;
-			return default_;
+			return (predicate == null) ? this.JumpGateCapacitors.First().Value : (this.JumpGateCapacitors.Select((pair) => pair.Value).FirstOrDefault(predicate) ?? default_);
 		}
 
 		/// <summary>
@@ -2370,9 +2437,7 @@ namespace IOTA.ModularJumpGates
 		public MyJumpGateDrive GetFirstDrive(Func<MyJumpGateDrive, bool> predicate = null, MyJumpGateDrive default_ = default(MyJumpGateDrive))
 		{
 			this.CheckClosed();
-			if (predicate == null) return this.JumpGateDrives.Values.First();
-			foreach (MyJumpGateDrive drive in this.JumpGateDrives.Values) if (predicate(drive)) return drive;
-			return default_;
+			return (predicate == null) ? this.JumpGateDrives.First().Value : (this.JumpGateDrives.Select((pair) => pair.Value).FirstOrDefault(predicate) ?? default_);
 		}
 
 		/// <summary>
@@ -2396,9 +2461,7 @@ namespace IOTA.ModularJumpGates
 		public MyJumpGateServerAntenna GetFirstServerAntenna(Func<MyJumpGateServerAntenna, bool> predicate = null, MyJumpGateServerAntenna default_ = default(MyJumpGateServerAntenna))
 		{
 			this.CheckClosed();
-			if (predicate == null) return this.JumpGateServerAntennas.Values.First();
-			foreach (MyJumpGateServerAntenna antenna in this.JumpGateServerAntennas.Values) if (predicate(antenna)) return antenna;
-			return default_;
+			return (predicate == null) ? this.JumpGateServerAntennas.First().Value : (this.JumpGateServerAntennas.Select((pair) => pair.Value).FirstOrDefault(predicate) ?? default_);
 		}
 
 		/// <summary>
@@ -2422,9 +2485,7 @@ namespace IOTA.ModularJumpGates
 		public MyJumpGateController GetFirstController(Func<MyJumpGateController, bool> predicate = null, MyJumpGateController default_ = default(MyJumpGateController))
 		{
 			this.CheckClosed();
-			if (predicate == null) return this.JumpGateControllers.Values.First();
-			foreach (MyJumpGateController controller in this.JumpGateControllers.Values) if (predicate(controller)) return controller;
-			return default_;
+			return (predicate == null) ? this.JumpGateControllers.First().Value : (this.JumpGateControllers.Select((pair) => pair.Value).FirstOrDefault(predicate) ?? default_);
 		}
 
 		/// <summary>
@@ -2434,7 +2495,7 @@ namespace IOTA.ModularJumpGates
 		public MyPhysicsComponentBase GetCubeGridPhysics()
 		{
 			if (this.Closed) return null;
-			foreach (IMyCubeGrid grid in this.CubeGrids.Values) if (grid.Physics != null) return grid.Physics;
+			foreach (KeyValuePair<long, IMyCubeGrid> pair in this.CubeGrids) if (pair.Value.Physics != null) return pair.Value.Physics;
 			return null;
 		}
 
@@ -2457,14 +2518,14 @@ namespace IOTA.ModularJumpGates
 				return new MySerializedJumpGateConstruct
 				{
 					UUID = JumpGateUUID.FromJumpGateGrid(this).ToGuid(),
-					JumpGates = (this.MarkClosed) ? null : this.JumpGates.Values.Select((gate) => gate.ToSerialized(false)).ToList(),
-					JumpGateDrives = (this.MarkClosed) ? null : this.JumpGateDrives.Values.Select((drive) => drive.ToSerialized(false)).ToList(),
-					JumpGateControllers = (this.MarkClosed) ? null : this.JumpGateControllers.Values.Select((controller) => controller.ToSerialized(false)).ToList(),
-					JumpGateCapacitors = (this.MarkClosed) ? null : this.JumpGateCapacitors.Values.Select((capacitor) => capacitor.ToSerialized(false)).ToList(),
-					JumpGateServerAntennas = (this.MarkClosed) ? null : this.JumpGateServerAntennas.Values.Select((antenna) => antenna.ToSerialized(false)).ToList(),
-					LaserAntennas = (this.MarkClosed) ? null : this.LaserAntennas.Values.Select((antenna) => antenna.EntityId).ToList(),
-					RadioAntennas = (this.MarkClosed) ? null : this.RadioAntennas.Values.Select((antenna) => antenna.EntityId).ToList(),
-					CubeGrids = (this.MarkClosed) ? null : this.CubeGrids.Values.Select((grid) => grid.EntityId).ToList(),
+					JumpGates = (this.MarkClosed) ? null : this.JumpGates.Select((pair) => pair.Value.ToSerialized(false)).ToList(),
+					JumpGateDrives = (this.MarkClosed) ? null : this.JumpGateDrives.Select((pair) => pair.Value.ToSerialized(false)).ToList(),
+					JumpGateControllers = (this.MarkClosed) ? null : this.JumpGateControllers.Select((pair) => pair.Value.ToSerialized(false)).ToList(),
+					JumpGateCapacitors = (this.MarkClosed) ? null : this.JumpGateCapacitors.Select((pair) => pair.Value.ToSerialized(false)).ToList(),
+					JumpGateServerAntennas = (this.MarkClosed) ? null : this.JumpGateServerAntennas.Select((pair) => pair.Value.ToSerialized(false)).ToList(),
+					LaserAntennas = (this.MarkClosed) ? null : this.LaserAntennas.Select((pair) => pair.Value.EntityId).ToList(),
+					RadioAntennas = (this.MarkClosed) ? null : this.RadioAntennas.Select((pair) => pair.Value.EntityId).ToList(),
+					CubeGrids = (this.MarkClosed) ? null : this.CubeGrids.Select((pair) => pair.Value.EntityId).ToList(),
 					ConstructName = (this.MarkClosed) ? null : this.PrimaryCubeGridCustomName,
 					IsClientRequest = false,
 				};

@@ -232,9 +232,9 @@ namespace IOTA.ModularJumpGates.Util
 				Vector3D dim31 = MyJumpGateModSession.LocalVectorToWorldVectorP(ref this.WorldMatrix, new Vector3D(0, y1, z1));
 				Vector3D dim32 = MyJumpGateModSession.LocalVectorToWorldVectorP(ref this.WorldMatrix, new Vector3D(0, y2, z2));
 
-				MySimpleObjectDraw.DrawLine(dim11, dim12, material, ref color_v4, thickness);
-				MySimpleObjectDraw.DrawLine(dim21, dim22, material, ref color_v4, thickness);
-				MySimpleObjectDraw.DrawLine(dim31, dim32, material, ref color_v4, thickness);
+				MyJumpGateModSession.DrawTransparentLine(dim11, dim12, material, ref color_v4, thickness);
+				MyJumpGateModSession.DrawTransparentLine(dim21, dim22, material, ref color_v4, thickness);
+				MyJumpGateModSession.DrawTransparentLine(dim31, dim32, material, ref color_v4, thickness);
 			}
 		}
 
@@ -248,43 +248,58 @@ namespace IOTA.ModularJumpGates.Util
 		/// <param name="intensity">The line color intensity</param>
 		public void Draw2(Color color, int wire_divide_ratio, float thickness, MyStringId? material = null, float intensity = 1)
 		{
-			Vector4 color_v4 = color.ToVector4() * intensity;
-			double angle_steps = 2 * Math.PI / wire_divide_ratio;
-			List<List<Vector3D>> points = new List<List<Vector3D>>();
+			this.Draw2(color, wire_divide_ratio, wire_divide_ratio, thickness, material, intensity);
+		}
 
-			for (double i = 0; i < 2 * Math.PI; i += angle_steps)
+		/// <summary>
+		/// Draws the full ellipsoid (without faces)
+		/// </summary>
+		/// <param name="color">The line color</param>
+		/// <param name="theta_divide_ratio">The number of lateral angle divisions<br />Higher values are more accurate but have higher time complexity</param>
+		/// <param name="phi_divide_ratio">The number of vertical angle divisions<br />Higher values are more accurate but have higher time complexity</param>
+		/// <param name="thickness">The line thickness (in meters?)</param>
+		/// <param name="material">The line material</param>
+		/// <param name="intensity">The line color intensity</param>
+		public void Draw2(Color color, int theta_divide_ratio, int phi_divide_ratio, float thickness, MyStringId? material = null, float intensity = 1)
+		{
+			double theta_step = 2 * Math.PI / theta_divide_ratio;
+			double phi_step = 2 * Math.PI / phi_divide_ratio;
+			int theta_count = (int) Math.Ceiling(2f * Math.PI / theta_step) + 1;
+			int phi_count = (int) Math.Ceiling(Math.PI / phi_step) + 1;
+			Vector4 color_v = color.ToVector4() * new Vector4(intensity, intensity, intensity, 1);
+			Vector3D[,] vertices = new Vector3D[phi_count, theta_count];
+
+			// Generate vertices
+			for (int i = 0; i < phi_count; i++)
 			{
-				List<Vector3D> _points = new List<Vector3D>();
+				double phi = i * phi_step;
 
-				for (double j = 0; j < 2 * Math.PI; j += angle_steps)
+				for (int j = 0; j < theta_count; j++)
 				{
-					double x1 = this.Radii.X * Math.Sin(j) * Math.Cos(i);
-					double y1 = this.Radii.Y * Math.Sin(j) * Math.Sin(i);
-					double z1 = this.Radii.Z * Math.Cos(j);
+					double theta = j * theta_step;
 
-					double _j = j + angle_steps;
+					double x = this.Radii.X * Math.Sin(phi) * Math.Cos(theta);
+					double y = this.Radii.Y * Math.Sin(phi) * Math.Sin(theta);
+					double z = this.Radii.Z * Math.Cos(phi);
 
-					double x2 = this.Radii.X * Math.Sin(_j) * Math.Cos(i);
-					double y2 = this.Radii.Y * Math.Sin(_j) * Math.Sin(i);
-					double z2 = this.Radii.Z * Math.Cos(_j);
-
-					Vector3D pos1 = MyJumpGateModSession.LocalVectorToWorldVectorP(ref this.WorldMatrix, new Vector3D(x1, y1, z1));
-					Vector3D pos2 = MyJumpGateModSession.LocalVectorToWorldVectorP(ref this.WorldMatrix, new Vector3D(x2, y2, z2));
-					_points.Add(pos1);
-					MySimpleObjectDraw.DrawLine(pos1, pos2, material, ref color_v4, thickness);
+					vertices[i, j] = MyJumpGateModSession.LocalVectorToWorldVectorP(ref this.WorldMatrix, new Vector3D(x, y, z));
 				}
-
-				points.Add(_points);
 			}
 
-			if (points.Count == 0) return;
-
-			for (int i = 0; i < points[0].Count; ++i)
+			// Draw lines
+			for (int i = 0; i < phi_count; i++)
 			{
-				List<Vector3D> subpoints = points.Select((_points) => _points[i]).ToList();
-				int count = subpoints.Count - 1;
-				for (int a = 0; a < count; ++a) MySimpleObjectDraw.DrawLine(subpoints[a], subpoints[a + 1], material, ref color_v4, thickness);
-				MySimpleObjectDraw.DrawLine(subpoints[0], subpoints[count], material, ref color_v4, thickness);
+				for (int j = 0; j < theta_count; j++)
+				{
+					Vector3D current = vertices[i, j];
+					int next_j = (j + 1) % theta_count;
+
+					// Draw horizontal line (same latitude)
+					MyJumpGateModSession.DrawTransparentLine(current, vertices[i, next_j], MyJumpGateModSession.MyMaterialsHolder.WeaponLaser, ref color_v, thickness);
+
+					// Draw vertical line (next latitude)
+					if (i + 1 < phi_count) MyJumpGateModSession.DrawTransparentLine(current, vertices[i + 1, j], MyJumpGateModSession.MyMaterialsHolder.WeaponLaser, ref color_v, thickness);
+				}
 			}
 		}
 
@@ -315,7 +330,10 @@ namespace IOTA.ModularJumpGates.Util
 		/// <returns>True if point is inside</returns>
 		public bool IsLocalPointInEllipse(ref Vector3D local_coord)
 		{
-			return Math.Pow(local_coord.X / this.Radii.X, 2) + Math.Pow(local_coord.Y / this.Radii.Y, 2) + Math.Pow(local_coord.Z / this.Radii.Z, 2) <= 1;
+			double frac_x = local_coord.X / this.Radii.X;
+			double frac_y = local_coord.Y / this.Radii.Y;
+			double frac_z = local_coord.Z / this.Radii.Z;
+			return (frac_x * frac_x) + (frac_y * frac_y) + (frac_z * frac_z) <= 1;
 		}
 
 		/// <summary>
@@ -325,7 +343,10 @@ namespace IOTA.ModularJumpGates.Util
 		/// <returns>True if point is inside</returns>
 		public bool IsLocalPointInEllipse(Vector3D local_coord)
 		{
-			return Math.Pow(local_coord.X / this.Radii.X, 2) + Math.Pow(local_coord.Y / this.Radii.Y, 2) + Math.Pow(local_coord.Z / this.Radii.Z, 2) <= 1;
+			double frac_x = local_coord.X / this.Radii.X;
+			double frac_y = local_coord.Y / this.Radii.Y;
+			double frac_z = local_coord.Z / this.Radii.Z;
+			return (frac_x * frac_x) + (frac_y * frac_y) + (frac_z * frac_z) <= 1;
 		}
 
 		/// <summary>
@@ -399,9 +420,11 @@ namespace IOTA.ModularJumpGates.Util
 		/// <returns>A world-aligned ellipse</returns>
 		public BoundingEllipsoidD ToWorldSpace(ref MatrixD world_matrix)
 		{
-			BoundingEllipsoidD ellipse = new BoundingEllipsoidD(this.Radii * world_matrix.Scale, ref world_matrix);
-			ellipse.WorldMatrix.Translation = MyJumpGateModSession.LocalVectorToWorldVectorP(ref world_matrix, this.WorldMatrix.Translation);
-			return ellipse;
+			Vector3D forward, up, translation;
+			forward = MyJumpGateModSession.LocalVectorToWorldVectorD(ref world_matrix, this.WorldMatrix.Forward);
+			up = MyJumpGateModSession.LocalVectorToWorldVectorD(ref world_matrix, this.WorldMatrix.Up);
+			translation = MyJumpGateModSession.LocalVectorToWorldVectorP(ref world_matrix, this.WorldMatrix.Translation);
+			return new BoundingEllipsoidD(this.Radii * world_matrix.Scale, MatrixD.CreateWorld(translation, forward, up));
 		}
 
 		/// <summary>
@@ -411,9 +434,11 @@ namespace IOTA.ModularJumpGates.Util
 		/// <returns>A local-aligned ellipse</returns>
 		public BoundingEllipsoidD ToLocalSpace(ref MatrixD world_matrix)
 		{
-			BoundingEllipsoidD ellipse = new BoundingEllipsoidD(this.Radii * world_matrix.Scale, ref world_matrix);
-			ellipse.WorldMatrix.Translation = MyJumpGateModSession.WorldVectorToLocalVectorP(ref world_matrix, this.WorldMatrix.Translation);
-			return ellipse;
+			Vector3D forward, up, translation;
+			forward = MyJumpGateModSession.WorldVectorToLocalVectorD(ref world_matrix, this.WorldMatrix.Forward);
+			up = MyJumpGateModSession.WorldVectorToLocalVectorD(ref world_matrix, this.WorldMatrix.Up);
+			translation = MyJumpGateModSession.WorldVectorToLocalVectorP(ref world_matrix, this.WorldMatrix.Translation);
+			return new BoundingEllipsoidD(this.Radii * world_matrix.Scale, MatrixD.CreateWorld(translation, forward, up));
 		}
 
 		/// <summary>

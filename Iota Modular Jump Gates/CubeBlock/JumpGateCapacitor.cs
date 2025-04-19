@@ -241,7 +241,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			else if (this.TerminalBlock.IsFunctional && this.TerminalBlock.Enabled && !this.BlockSettings.RechargeEnabled && this.ResourceSink != null && this.ResourceSource != null)
 			{
 				double capacity_ratio = MathHelperD.Clamp(this.StoredChargeMW / this.CapacitorConfiguration.MaxCapacitorChargeMW, 0, 1);
-				float discharge_rate = (float) (this.CapacitorConfiguration.MaxCapacitorChargeRateMW * (capacity_ratio));
+				float discharge_rate = (float) (this.CapacitorConfiguration.MaxCapacitorChargeRateMW * capacity_ratio);
 
 				this.ResourceSource.SetRemainingCapacityByType(MyResourceDistributorComponent.ElectricityId, (float) this.StoredChargeMW);
 				this.ResourceSource.SetMaxOutputByType(MyResourceDistributorComponent.ElectricityId, discharge_rate);
