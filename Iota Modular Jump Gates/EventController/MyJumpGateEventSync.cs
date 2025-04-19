@@ -1,7 +1,6 @@
 ﻿using ProtoBuf;
 using Sandbox.Game.EntityComponents;
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -21,6 +20,7 @@ namespace IOTA.ModularJumpGates.EventController
 		}
 
 		private bool NetworkRegistered = false;
+		private ulong LastUpdateTimeEpoch = 0;
 		protected bool IsDirty = false;
 
 		private void OnNetworkUpdate(MyNetworkInterface.Packet packet)
@@ -28,7 +28,14 @@ namespace IOTA.ModularJumpGates.EventController
 			MySerializedJumpGateEventInfo info = packet?.Payload<MySerializedJumpGateEventInfo>();
 			if (info == null || info.EntityID != this.Entity.EntityId) return;
 
-			if ((MyNetworkInterface.IsMultiplayerServer && packet.PhaseFrame == 1) || (MyNetworkInterface.IsStandaloneMultiplayerClient && (packet.PhaseFrame == 1 || packet.PhaseFrame == 2)))
+			if (MyNetworkInterface.IsMultiplayerServer && packet.PhaseFrame == 1)
+			{
+				if (packet.EpochTime < this.LastUpdateTimeEpoch) return;
+				this.Deserialize(info.SerializedEvent);
+				this.IsDirty = false;
+				packet.Forward(0, true).Send();
+			}
+			else if (MyNetworkInterface.IsStandaloneMultiplayerClient && (packet.PhaseFrame == 1 || packet.PhaseFrame == 2))
 			{
 				this.Deserialize(info.SerializedEvent);
 				this.IsDirty = false;
@@ -56,7 +63,7 @@ namespace IOTA.ModularJumpGates.EventController
 			MyNetworkInterface.Packet packet = new MyNetworkInterface.Packet {
 				PacketType = MyPacketTypeEnum.UPDATE_EVENT_CONTROLLER_EVENT,
 				TargetID = 0,
-				Broadcast = true,
+				Broadcast = false,
 			};
 
 			packet.Payload(new MySerializedJumpGateEventInfo {
@@ -70,6 +77,7 @@ namespace IOTA.ModularJumpGates.EventController
 		public void SetDirty()
 		{
 			this.IsDirty = true;
+			this.LastUpdateTimeEpoch = (ulong) (DateTime.UtcNow - DateTime.MinValue).Ticks;
 		}
 
 		public override void OnAddedToContainer()

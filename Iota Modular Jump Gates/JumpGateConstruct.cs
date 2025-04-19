@@ -351,7 +351,7 @@ namespace IOTA.ModularJumpGates
 					packet.Payload(this.ToSerialized(false));
 					packet.Send();
 				}
-                else if (this.FromSerialized(serialized))
+				else if (packet.EpochTime >= this.LastUpdateTime && this.FromSerialized(serialized))
 				{
 					this.LastUpdateTime = packet.EpochTime;
 					this.IsDirty = false;
@@ -1382,6 +1382,7 @@ namespace IOTA.ModularJumpGates
 		{
 			this.CheckClosed();
 			this.IsDirty = true;
+			this.LastUpdateTime = (ulong) (DateTime.UtcNow - DateTime.MinValue).Ticks;
 		}
 
 		/// <summary>
