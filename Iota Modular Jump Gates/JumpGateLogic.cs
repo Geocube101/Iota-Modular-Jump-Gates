@@ -21,7 +21,6 @@ using SpaceEngineers.Game.ModAPI;
 using System.Text;
 using IOTA.ModularJumpGates.Util.ConcurrentCollections;
 using IOTA.ModularJumpGates.API;
-using static VRage.Library.Utils.MyEnum<T>;
 
 namespace IOTA.ModularJumpGates
 {
