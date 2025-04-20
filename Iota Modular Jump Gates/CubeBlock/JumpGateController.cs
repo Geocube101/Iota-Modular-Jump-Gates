@@ -979,7 +979,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 							Vector3D pos = MyJumpGateModSession.WorldVectorToLocalVectorP(ref jump_ellipse.WorldMatrix, drive.WorldMatrix.Translation);
 							drive_matrix.Translation = MyJumpGateModSession.LocalVectorToWorldVectorP(ref scaled_matrix, pos);
 							BoundingBoxD drive_box = BoundingBoxD.CreateFromSphere(new BoundingSphereD(Vector3D.Zero, (this.IsLargeGrid) ? 10 : 2));
-							MySimpleObjectDraw.DrawTransparentBox(ref drive_matrix, ref drive_box, ref color, MySimpleObjectRasterizer.Wireframe, 1, 0.000125f, null, MyJumpGateModSession.MyMaterialsHolder.WeaponLaser, intensity: 10);
+							MySimpleObjectDraw.DrawTransparentBox(ref drive_matrix, ref drive_box, ref color, MySimpleObjectRasterizer.Wireframe, 1, 0.00025f, null, MyJumpGateModSession.MyMaterialsHolder.WeaponLaser, intensity: 10);
 						}
 
 						foreach (KeyValuePair<MyEntity, float> pair in this.TEMP_JumpGateEntities)
@@ -1004,7 +1004,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 									Vector3D pos = MyJumpGateModSession.WorldVectorToLocalVectorP(ref jump_ellipse.WorldMatrix, subgrid.WorldMatrix.Translation);
 									subgrid_matrix.Translation = MyJumpGateModSession.LocalVectorToWorldVectorP(ref scaled_matrix, pos);
 									BoundingBoxD grid_box = subgrid.LocalAABB;
-									MySimpleObjectDraw.DrawTransparentBox(ref subgrid_matrix, ref grid_box, ref red, MySimpleObjectRasterizer.Wireframe, 1, 0.000125f, null, MyJumpGateModSession.MyMaterialsHolder.WeaponLaser, intensity: 10);
+									MySimpleObjectDraw.DrawTransparentBox(ref subgrid_matrix, ref grid_box, ref red, MySimpleObjectRasterizer.Wireframe, 1, 0.00025f, null, MyJumpGateModSession.MyMaterialsHolder.WeaponLaser, intensity: 10);
 								}
 
 								subgrids.Clear();

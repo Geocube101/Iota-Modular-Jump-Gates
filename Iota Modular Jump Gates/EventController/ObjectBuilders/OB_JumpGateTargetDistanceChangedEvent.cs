@@ -6,7 +6,7 @@ namespace IOTA.ModularJumpGates.EventController.ObjectBuilders
 {
 	[ProtoContract]
 	[MyObjectBuilderDefinition]
-	public class MyObjectBuilder_EventJumpGateEntityEntered : MyObjectBuilder_ComponentBase
+	public class MyObjectBuilder_EventJumpGateTargetDistanceChanged : MyObjectBuilder_ComponentBase
 	{
 	}
 }

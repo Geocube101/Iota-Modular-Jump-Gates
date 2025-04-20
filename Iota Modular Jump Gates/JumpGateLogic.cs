@@ -514,7 +514,7 @@ namespace IOTA.ModularJumpGates
 		public Vector3D? TrueEndpoint;
 
 		/// <summary>
-		/// A direction vector indicating the velocity of this gate's jump node
+		/// A direction vector indicating the velocity of this gate's jump node in m/s
 		/// </summary>
 		public Vector3D JumpNodeVelocity { get; private set; }
 
@@ -1409,6 +1409,7 @@ namespace IOTA.ModularJumpGates
 						}
 
 						this.Phase = MyJumpGatePhase.JUMPING;
+						if (target_gate != null) target_gate.Phase = MyJumpGatePhase.JUMPING;
 						this.GetEntitiesInJumpSpace(jump_space_entities, true);
 						entities_to_jump = jump_space_entities.Keys.Select((entity) => new KeyValuePair<MyEntity, bool>(entity, entity.Render.Visible)).ToList();
 						jump_space_entities.Clear();
@@ -2379,6 +2380,8 @@ namespace IOTA.ModularJumpGates
 			Action<MyJumpFailReason, bool, string> SendJumpResponse = (reason, result_status, override_message) => {
 				this.JumpFailureReason = new KeyValuePair<MyJumpFailReason, bool>((result_status) ? MyJumpFailReason.SUCCESS : reason, is_init);
 				string message = override_message ?? MyJumpGate.GetFailureDescription(this.JumpFailureReason.Key);
+				this.Status = MyJumpGateStatus.SWITCHING;
+				this.Phase = MyJumpGatePhase.RESETING;
 
 				// Is server, broadcast jump results
 				if (MyNetworkInterface.IsMultiplayerServer)
@@ -2406,7 +2409,6 @@ namespace IOTA.ModularJumpGates
 					if (entities_to_jump != null) foreach (KeyValuePair<MyEntity, bool> entity in entities_to_jump) entity.Key.Render.Visible = entity.Value;
 				};
 
-				this.Status = MyJumpGateStatus.SWITCHING;
 				if (gate_animation != null) MyJumpGateModSession.Instance.PlayAnimation(gate_animation, (result_status) ? MyJumpGateAnimation.AnimationTypeEnum.JUMPED : MyJumpGateAnimation.AnimationTypeEnum.FAILED, null, onend);
 				else onend(null);
 				--MyJumpGateModSession.Instance.ConcurrentJumpsCounter;
@@ -2498,7 +2500,7 @@ namespace IOTA.ModularJumpGates
 
 				// Update gate status
 				this.Status = MyJumpGateStatus.OUTBOUND;
-				this.Phase = MyJumpGatePhase.JUMPING;
+				this.Phase = MyJumpGatePhase.CHARGING;
 				is_init = false;
 				MyJumpGateModSession.Instance.RedrawAllTerminalControls();
 				Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} VOIDJUMP_CHARGE", 3);
@@ -2573,6 +2575,7 @@ namespace IOTA.ModularJumpGates
 						hud_notification.Hide();
 						cancel_request_notificiation?.Hide();
 						this.ShearBlocksWarning?.Hide();
+						this.Phase = MyJumpGatePhase.JUMPING;
 
 						if (result != MyJumpFailReason.NONE)
 						{
@@ -2617,7 +2620,6 @@ namespace IOTA.ModularJumpGates
 							List<MyEntity> subentities = new List<MyEntity>();
 							List<IMySlimBlock> destroyed = new List<IMySlimBlock>();
 							List<IMyCubeGrid> grids = new List<IMyCubeGrid>();
-							this.Phase = MyJumpGatePhase.JUMPING;
 							MatrixD this_matrix = this.TrueWorldJumpEllipse.WorldMatrix;
 
 							// Jump entities
@@ -2751,6 +2753,8 @@ namespace IOTA.ModularJumpGates
 			Action<MyJumpFailReason, bool, string> SendJumpResponse = (reason, result_status, override_message) => {
 				this.JumpFailureReason = new KeyValuePair<MyJumpFailReason, bool>((result_status) ? MyJumpFailReason.SUCCESS : reason, is_init);
 				string message = override_message ?? MyJumpGate.GetFailureDescription(this.JumpFailureReason.Key);
+				this.Status = MyJumpGateStatus.SWITCHING;
+				this.Phase = MyJumpGatePhase.RESETING;
 
 				// Is server, broadcast jump results
 				if (MyNetworkInterface.IsMultiplayerServer)
@@ -2779,7 +2783,6 @@ namespace IOTA.ModularJumpGates
 					if (!this.Closed) this.Reset();
 				};
 
-				this.Status = MyJumpGateStatus.SWITCHING;
 				if (gate_animation != null) MyJumpGateModSession.Instance.PlayAnimation(gate_animation, (result_status) ? MyJumpGateAnimation.AnimationTypeEnum.JUMPED : MyJumpGateAnimation.AnimationTypeEnum.FAILED, null, onend);
 				else onend(null);
 				--MyJumpGateModSession.Instance.ConcurrentJumpsCounter;
@@ -2853,7 +2856,7 @@ namespace IOTA.ModularJumpGates
 
 				// Update gate status
 				this.Status = MyJumpGateStatus.INBOUND;
-				this.Phase = MyJumpGatePhase.JUMPING;
+				this.Phase = MyJumpGatePhase.CHARGING;
 				is_init = false;
 				MyJumpGateModSession.Instance.RedrawAllTerminalControls();
 				Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} VOIDJUMP_CHARGE", 3);
@@ -3508,7 +3511,7 @@ namespace IOTA.ModularJumpGates
 			else if (this.IsIdle())
 			{
 				this.Status = MyJumpGateStatus.INBOUND;
-				this.Phase = MyJumpGatePhase.JUMPING;
+				this.Phase = MyJumpGatePhase.CHARGING;
 				this.SenderGate = source;
 			}
 			else throw new InvalidOperationException("Failed to set inbound");
