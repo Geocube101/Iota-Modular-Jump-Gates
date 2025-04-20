@@ -1,14 +1,11 @@
 ﻿using IOTA.ModularJumpGates.EventController.ObjectBuilders;
 using ProtoBuf;
 using Sandbox.Game.Entities;
-using Sandbox.Game.EntityComponents;
 using Sandbox.ModAPI;
 using Sandbox.ModAPI.Interfaces.Terminal;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using VRage.Game.Components;
 using VRage.Game.Entity;
 using VRage.Game.ObjectBuilders.ComponentSystem;
@@ -118,16 +115,26 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 				this.DeserializedInfo = null;
 			}
 
-			Dictionary<MyJumpGate, bool> updated_callbacks = new Dictionary<MyJumpGate, bool>(this.TargetedJumpGates.Count);
+			Dictionary<MyJumpGate, bool?> updated_callbacks = new Dictionary<MyJumpGate, bool?>(this.TargetedJumpGates.Count);
 
 			foreach (KeyValuePair<MyJumpGate, bool> pair in this.TargetedJumpGates)
 			{
+				if (pair.Key == null || pair.Key.Closed)
+				{
+					updated_callbacks[pair.Key] = null;
+					continue;
+				}
+
 				if (pair.Value) continue;
 				updated_callbacks[pair.Key] = true;
 				pair.Key.OnEntityCollision(this.OnEntityCollision);
 			}
 
-			foreach (KeyValuePair<MyJumpGate, bool> pair in updated_callbacks) this.TargetedJumpGates[pair.Key] = pair.Value;
+			foreach (KeyValuePair<MyJumpGate, bool?> pair in updated_callbacks)
+			{
+				if (pair.Value == null) this.TargetedJumpGates.Remove(pair.Key);
+				else this.TargetedJumpGates[pair.Key] = pair.Value.Value;
+			}
 
 			if (this.TriggerIndex != null)
 			{

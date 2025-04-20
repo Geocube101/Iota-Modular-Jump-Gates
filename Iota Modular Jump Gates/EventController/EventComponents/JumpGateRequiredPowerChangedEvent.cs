@@ -6,10 +6,7 @@ using Sandbox.ModAPI.Interfaces.Terminal;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using VRage.Game.Components;
-using VRage.Game.Entity;
 using VRage.Game.ObjectBuilders.ComponentSystem;
 using VRage.ModAPI;
 using VRage.Utils;
@@ -88,13 +85,20 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 				this.DeserializedInfo = null;
 			}
 
-			Dictionary<MyJumpGate, double> power_updates = new Dictionary<MyJumpGate, double>(this.TargetedJumpGates.Count);
+			Dictionary<MyJumpGate, double?> power_updates = new Dictionary<MyJumpGate, double?>(this.TargetedJumpGates.Count);
 
 			foreach (KeyValuePair<MyJumpGate, double> pair in this.TargetedJumpGates)
 			{
 				MyJumpGate jump_gate = pair.Key;
-				double power = jump_gate?.CalculateTotalRequiredPower() ?? 0;
-				if (jump_gate == null || jump_gate.Closed || power == pair.Value) continue;
+
+				if (jump_gate == null || jump_gate.Closed)
+				{
+					power_updates[jump_gate] = null;
+					continue;
+				}
+
+				double power = jump_gate.CalculateTotalRequiredPower();
+				if (power == pair.Value) continue;
 				power_updates[pair.Key] = power;
 				if (event_controller.IsLowerOrEqualCondition && power <= this.TargetRequiredPower && pair.Value > this.TargetRequiredPower) event_controller.TriggerAction(0);
 				else if (event_controller.IsLowerOrEqualCondition && power > this.TargetRequiredPower && pair.Value <= this.TargetRequiredPower) event_controller.TriggerAction(1);
@@ -102,7 +106,11 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 				else if (!event_controller.IsLowerOrEqualCondition && power < this.TargetRequiredPower && pair.Value >= this.TargetRequiredPower) event_controller.TriggerAction(1);
 			}
 
-			foreach (KeyValuePair<MyJumpGate, double> pair in power_updates) this.TargetedJumpGates[pair.Key] = pair.Value;
+			foreach (KeyValuePair<MyJumpGate, double?> pair in power_updates)
+			{
+				if (pair.Value == null) this.TargetedJumpGates.Remove(pair.Key);
+				else this.TargetedJumpGates[pair.Key] = pair.Value.Value;
+			}
 		}
 
 		public void AddBlocks(List<IMyTerminalBlock> blocks)

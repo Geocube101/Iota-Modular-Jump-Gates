@@ -20,78 +20,78 @@ namespace IOTA.ModularJumpGates.API.CubeBlock
 		/// Whether this block should be synced<br/>
 		/// If true, will be synced on next component tick
 		/// </summary>
-		public bool IsDirty { get { return this.CubeBlock.IsDirty; } }
+		public bool IsDirty => this.CubeBlock.IsDirty;
 
 		/// <summary>
 		/// Whether this block is large grid
 		/// </summary>
-		public bool IsLargeGrid { get { return this.CubeBlock.IsLargeGrid; } }
+		public bool IsLargeGrid => this.CubeBlock.IsLargeGrid;
 
 		/// <summary>
 		/// Whether this block is small grid
 		/// </summary>
-		public bool IsSmallGrid { get { return this.CubeBlock.IsSmallGrid; } }
+		public bool IsSmallGrid => this.CubeBlock.IsSmallGrid;
 
 		/// <summary>
 		/// Whether this is a wrapper around a block that isn't initialized<br />
 		/// Always false on singleplayer or server
 		/// </summary>
-		public bool IsNullWrapper { get { return this.CubeBlock.IsNullWrapper; } }
+		public bool IsNullWrapper => this.CubeBlock.IsNullWrapper;
 
 		/// <summary>
 		/// The block ID of this block
 		/// </summary>
-		public long BlockID { get { return this.CubeBlock.BlockID; } }
+		public long BlockID => this.CubeBlock.BlockID;
 
 		/// <summary>
 		/// The cube grid ID of this block
 		/// </summary>
-		public long CubeGridID { get { return this.CubeBlock.CubeGridID; } }
+		public long CubeGridID => this.CubeBlock.CubeGridID;
 
 		/// <summary>
 		/// The construct ID of this block
 		/// </summary>
-		public long ConstructID { get { return this.CubeBlock.ConstructID; } }
+		public long ConstructID => this.CubeBlock.ConstructID;
 
 		/// <summary>
 		/// The player ID of this block's owner
 		/// </summary>
-		public long OwnerID { get { return this.CubeBlock.OwnerID; } }
+		public long OwnerID => this.CubeBlock.OwnerID;
 
 		/// <summary>
 		/// The steam ID of this block's owner
 		/// </summary>
-		public ulong OwnerSteamID { get { return this.CubeBlock.OwnerSteamID; } }
+		public ulong OwnerSteamID => this.CubeBlock.OwnerSteamID;
 
 		/// <summary>
 		/// The block local game tick
 		/// </summary>
-		public ulong LocalGameTick { get { return this.CubeBlock.LocalGameTick; } }
+		public ulong LocalGameTick => this.CubeBlock.LocalGameTick;
 
 		/// <summary>
 		/// The grid size of this block
 		/// </summary>
-		public MyCubeSize CubeGridSize { get { return this.CubeBlock.CubeGridSize; } }
+		public MyCubeSize CubeGridSize => this.CubeBlock.CubeGridSize;
 
 		/// <summary>
 		/// The terminal block this component is bound to
 		/// </summary>
-		public IMyUpgradeModule TerminalBlock { get { return this.CubeBlock.TerminalBlock; } }
+		public IMyUpgradeModule TerminalBlock => this.CubeBlock.TerminalBlock;
 
 		/// <summary>
 		/// The UTC date time representation of CubeBlockBase.LastUpdateTime
 		/// </summary>
-		public DateTime LastUpdateDateTimeUTC { get { return this.CubeBlock.LastUpdateDateTimeUTC; } }
+		public DateTime LastUpdateDateTimeUTC => this.CubeBlock.LastUpdateDateTimeUTC;
 
 		/// <summary>
 		/// The world matrix of this block
 		/// </summary>
-		public MatrixD WorldMatrix { get { return this.CubeBlock.WorldMatrix; } }
+		public MatrixD WorldMatrix => this.CubeBlock.WorldMatrix;
 
 		/// <summary>
 		/// The jump gate grid this component is bound to
 		/// </summary>
-		public MyAPIJumpGateConstruct JumpGateGrid { get { return MyAPISession.GetNewConstruct(this.CubeBlock.JumpGateGrid); } }
+		public MyAPIJumpGateConstruct JumpGateGrid => MyAPISession.GetNewConstruct(this.CubeBlock.JumpGateGrid);
 		#endregion
 
 		#region Public API Methods

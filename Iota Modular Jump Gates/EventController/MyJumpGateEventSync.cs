@@ -1,9 +1,6 @@
 ﻿using ProtoBuf;
 using Sandbox.Game.EntityComponents;
 using System;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using VRage.Game.ObjectBuilders.ComponentSystem;
 
 namespace IOTA.ModularJumpGates.EventController

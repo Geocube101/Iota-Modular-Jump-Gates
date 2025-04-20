@@ -1,16 +1,15 @@
-﻿using Sandbox.Common.ObjectBuilders;
+﻿using IOTA.ModularJumpGates.Util;
+using ProtoBuf;
+using Sandbox.Common.ObjectBuilders;
 using Sandbox.Game.EntityComponents;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Text;
 using VRage.Game.Components;
+using VRage.Game.ModAPI;
 using VRage.ModAPI;
 using VRage.ObjectBuilders;
 using VRageMath;
-using IOTA.ModularJumpGates.Util;
-using ProtoBuf;
-using VRage.Game.ModAPI;
 
 namespace IOTA.ModularJumpGates.CubeBlock
 {
@@ -350,6 +349,12 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		{
 			base.MarkForClose();
 			if (MyJumpGateModSession.Network.Registered) MyJumpGateModSession.Network.Off(MyPacketTypeEnum.UPDATE_CAPACITOR, this.OnNetworkBlockUpdate);
+		}
+
+		protected override void OnConstructChanged()
+		{
+			base.OnConstructChanged();
+			this.JumpGateGrid?.MarkGatesForUpdate();
 		}
 
 		/// <summary>

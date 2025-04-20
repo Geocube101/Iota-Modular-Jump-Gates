@@ -5,9 +5,6 @@ using Sandbox.ModAPI;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using VRage.Game.ModAPI;
 using VRageMath;
 
@@ -44,23 +41,23 @@ namespace IOTA.ModularJumpGates.API
 		/// Whether all entities in session are loaded<br />
 		/// <i>Always false on client</i>
 		/// </summary>
-		public static bool AllSessionEntitiesLoaded { get { return MyJumpGateModSession.Instance.AllSessionEntitiesLoaded; } }
+		public static bool AllSessionEntitiesLoaded => MyJumpGateModSession.Instance.AllSessionEntitiesLoaded;
 
 		/// <summary>
 		/// For server like: Whether all constructs have had at least one tick<br />
 		/// For client like: Whether session has begun ticking
 		/// </summary>
-		public static bool ModFullyInitialized { get { return MyJumpGateModSession.Instance.InitializationComplete; } }
+		public static bool ModFullyInitialized => MyJumpGateModSession.Instance.InitializationComplete;
 
 		/// <summary>
 		/// The current, session local game tick
 		/// </summary>
-		public static ulong GameTick { get { return MyJumpGateModSession.GameTick; } }
+		public static ulong GameTick => MyJumpGateModSession.GameTick;
 
 		/// <summary>
 		/// The current session component status
 		/// </summary>
-		public static MySessionStatusEnum SessionStatus { get { return MyJumpGateModSession.SessionStatus; } }
+		public static MySessionStatusEnum SessionStatus => MyJumpGateModSession.SessionStatus;
 
 		/// <summary>
 		/// The world's world matrix
@@ -70,7 +67,7 @@ namespace IOTA.ModularJumpGates.API
 		/// <summary>
 		/// Configuration variables as loaded from file or recieved from server
 		/// </summary>
-		public static Configuration Configuration { get { return MyJumpGateModSession.Configuration; } }
+		public static Configuration Configuration => MyJumpGateModSession.Configuration;
 		#endregion
 
 		#region Public Static API Methods

@@ -6,8 +6,6 @@ using Sandbox.ModAPI.Interfaces.Terminal;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using VRage.Game.Components;
 using VRage.Game.Entity;
 using VRage.Game.ObjectBuilders.ComponentSystem;
@@ -96,15 +94,22 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 				this.DeserializedInfo = null;
 			}
 
-			Dictionary<MyJumpGate, double> mass_updates = new Dictionary<MyJumpGate, double>(this.TargetedJumpGates.Count);
+			Dictionary<MyJumpGate, double?> mass_updates = new Dictionary<MyJumpGate, double?>(this.TargetedJumpGates.Count);
 
 			foreach (KeyValuePair<MyJumpGate, double> pair in this.TargetedJumpGates)
 			{
 				MyJumpGate jump_gate = pair.Key;
-				jump_gate?.GetEntitiesInJumpSpace(this.TEMP_JumpGateEntities, this.IsControllerFiltered);
+
+				if (jump_gate == null || jump_gate.Closed)
+				{
+					mass_updates[jump_gate] = null;
+					continue;
+				}
+
+				jump_gate.GetEntitiesInJumpSpace(this.TEMP_JumpGateEntities, this.IsControllerFiltered);
 				double mass = this.TEMP_JumpGateEntities.Sum((_pair) => (double) _pair.Value);
 				this.TEMP_JumpGateEntities.Clear();
-				if (jump_gate == null || jump_gate.Closed || mass == pair.Value) continue;
+				if (mass == pair.Value) continue;
 				mass_updates[pair.Key] = mass;
 				if (event_controller.IsLowerOrEqualCondition && mass <= this.TargetEntityMass && pair.Value > this.TargetEntityMass) event_controller.TriggerAction(0);
 				else if (event_controller.IsLowerOrEqualCondition && mass > this.TargetEntityMass && pair.Value <=  this.TargetEntityMass) event_controller.TriggerAction(1);
@@ -112,7 +117,11 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 				else if (!event_controller.IsLowerOrEqualCondition && mass < this.TargetEntityMass && pair.Value >= this.TargetEntityMass) event_controller.TriggerAction(1);
 			}
 
-			foreach (KeyValuePair<MyJumpGate, double> pair in mass_updates) this.TargetedJumpGates[pair.Key] = pair.Value;
+			foreach (KeyValuePair<MyJumpGate, double?> pair in mass_updates)
+			{
+				if (pair.Value == null) this.TargetedJumpGates.Remove(pair.Key);
+				else this.TargetedJumpGates[pair.Key] = pair.Value.Value;
+			}
 		}
 
 		public void AddBlocks(List<IMyTerminalBlock> blocks)

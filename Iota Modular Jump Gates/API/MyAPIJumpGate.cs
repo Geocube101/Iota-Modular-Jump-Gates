@@ -1,17 +1,11 @@
 ﻿using IOTA.ModularJumpGates.API.CubeBlock;
-using IOTA.ModularJumpGates.CubeBlock;
 using IOTA.ModularJumpGates.Util;
-using Sandbox.Game.Entities;
-using Sandbox.ModAPI;
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using VRage.Game;
 using VRage.Game.Entity;
 using VRage.Game.ModAPI;
 using VRageMath;
-using static IOTA.ModularJumpGates.MyJumpGate;
 
 namespace IOTA.ModularJumpGates.API
 {
@@ -78,101 +72,101 @@ namespace IOTA.ModularJumpGates.API
 		/// <summary>
 		/// Whether this gate is marked for close
 		/// </summary>
-		public bool MarkClosed { get { return this.JumpGate.MarkClosed; } }
+		public bool MarkClosed => this.JumpGate.MarkClosed;
 
 		/// <summary>
 		/// Whether this gate is closed
 		/// </summary>
-		public bool Closed { get { return this.JumpGate.Closed; } }
+		public bool Closed => this.JumpGate.Closed;
 
 		/// <summary>
 		/// Whether this jump gate should be synced<br/>
 		/// If true, will be synced on next component tick
 		/// </summary>
-		public bool IsDirty { get { return this.JumpGate.IsDirty; } }
+		public bool IsDirty => this.JumpGate.IsDirty;
 
 		/// <summary>
 		/// The status of this gate
 		/// </summary>
-		public MyJumpGateStatus Status { get { return this.JumpGate.Status; } }
+		public MyJumpGateStatus Status => this.JumpGate.Status;
 
 		/// <summary>
 		/// The jump phase of this gate
 		/// </summary>
-		public MyJumpGatePhase Phase { get { return this.JumpGate.Phase; } }
+		public MyJumpGatePhase Phase => this.JumpGate.Phase;
 
 		/// <summary>
 		/// The reason this gate's last jump failed or SUCCESS if successfull or NONE if unset and whether failure was during INIT phase
 		/// </summary>
-		public KeyValuePair<MyJumpFailReason, bool> LastFailureReason { get { return this.JumpGate.JumpFailureReason; } }
+		public KeyValuePair<MyJumpFailReason, bool> LastFailureReason => this.JumpGate.JumpFailureReason;
 
 		/// <summary>
 		/// This gate's ID
 		/// </summary>
-		public long JumpGateID { get { return this.JumpGate.JumpGateID; } }
+		public long JumpGateID => this.JumpGate.JumpGateID;
 
 		/// <summary>
 		/// The construct-local coordinate of this gate's jump node (the center of the jump space)
 		/// </summary>
-		public Vector3D LocalJumpNode { get { return this.JumpGate.LocalJumpNode; } }
+		public Vector3D LocalJumpNode => this.JumpGate.LocalJumpNode;
 
 		/// <summary>
 		/// The world coordinate of this gate's jump node (the center of the jump space)
 		/// </summary>
-		public Vector3D WorldJumpNode { get { return this.JumpGate.WorldJumpNode; } }
+		public Vector3D WorldJumpNode => this.JumpGate.WorldJumpNode;
 
 		/// <summary>
 		/// The true endpoint of this jump gate<br />
 		/// Only non-null when this gate is outbound
 		/// </summary>
-		public Vector3D? TrueEndpoint { get { return this.JumpGate.TrueEndpoint; } }
+		public Vector3D? TrueEndpoint => this.JumpGate.TrueEndpoint;
 
 		/// <summary>
 		/// A direction vector indicating the velocity of this gate's jump node
 		/// </summary>
-		public Vector3D JumpNodeVelocity { get { return this.JumpGate.JumpNodeVelocity; } }
+		public Vector3D JumpNodeVelocity => this.JumpGate.JumpNodeVelocity;
 
 		/// <summary>
 		/// The world matrix of this gate's jump gate grid's main cube grid
 		/// </summary>
-		public MatrixD ConstructMatrix { get { return this.JumpGate.ConstructMatrix; } }
+		public MatrixD ConstructMatrix => this.JumpGate.ConstructMatrix;
 
 		/// <summary>
 		/// This gate's attached controller or null
 		/// </summary>
-		public MyAPIJumpGateController Controller { get { return MyAPISession.GetNewBlock(this.JumpGate.Controller); } }
+		public MyAPIJumpGateController Controller => MyAPISession.GetNewBlock(this.JumpGate.Controller);
 
 		/// <summary>
 		/// This gate's attached server antenna or null
 		/// </summary>
-		public MyAPIJumpGateServerAntenna ServerAntenna { get { return MyAPISession.GetNewBlock(this.JumpGate.ServerAntenna); } }
+		public MyAPIJumpGateServerAntenna ServerAntenna => MyAPISession.GetNewBlock(this.JumpGate.ServerAntenna);
 
 		/// <summary>
 		/// The gate jumping to this one or null
 		/// </summary>
-		public MyAPIJumpGate SenderGate { get { return MyAPISession.GetNewJumpGate(this.JumpGate.SenderGate); } }
+		public MyAPIJumpGate SenderGate => MyAPISession.GetNewJumpGate(this.JumpGate.SenderGate);
 
 		/// <summary>
 		/// This gate's MyJumpGateConstruct construct
 		/// </summary>
-		public MyAPIJumpGateConstruct JumpGateGrid { get { return MyAPISession.GetNewConstruct(this.JumpGate.JumpGateGrid); } }
+		public MyAPIJumpGateConstruct JumpGateGrid => MyAPISession.GetNewConstruct(this.JumpGate.JumpGateGrid);
 
 		/// <summary>
 		/// This gate's configuration variables
 		/// </summary>
-		public Configuration.LocalJumpGateConfiguration Configuration { get { return this.JumpGate.JumpGateConfiguration; } }
+		public Configuration.LocalJumpGateConfiguration Configuration => this.JumpGate.JumpGateConfiguration;
 
 		/// <summary>
 		/// Gets this gate's world-aligned artifical JumpEllipse using the associated controller
 		/// </summary>
-		public BoundingEllipsoidD JumpEllipse { get { return this.JumpGate.JumpEllipse; } }
+		public BoundingEllipsoidD JumpEllipse => this.JumpGate.JumpEllipse;
 
 		/// <summary>
 		/// Gets this gate's world-aligned shearing ellipse<br />
 		/// This ellipse is used to calculate grid shearing<br />
 		/// This ellipse is the jump ellipse padded by 2.5 meters
 		/// </summary>
-		public BoundingEllipsoidD ShearEllipse { get { return this.JumpGate.ShearEllipse; } }
+		public BoundingEllipsoidD ShearEllipse => this.JumpGate.ShearEllipse;
 		#endregion
 
 		#region "object" Methods

@@ -1,22 +1,20 @@
 ﻿using IOTA.ModularJumpGates.Animations;
 using IOTA.ModularJumpGates.CubeBlock;
+using IOTA.ModularJumpGates.Extensions;
 using IOTA.ModularJumpGates.Util;
-using ProtoBuf;
+using Sandbox.Engine.Physics;
+using Sandbox.Game.Entities;
 using Sandbox.ModAPI;
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.IO;
+using System.Linq;
 using VRage.Game;
+using VRage.Game.Components;
 using VRage.Game.Entity;
+using VRage.ModAPI;
 using VRage.Utils;
 using VRageMath;
-using Sandbox.Game.Entities;
-using Sandbox.Engine.Physics;
-using VRage.Game.Components;
-using IOTA.ModularJumpGates.Extensions;
-using VRage.ModAPI;
 
 namespace IOTA.ModularJumpGates.Animations
 {

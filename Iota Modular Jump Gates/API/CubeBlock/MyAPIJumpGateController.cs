@@ -1,13 +1,6 @@
 ﻿using IOTA.ModularJumpGates.CubeBlock;
 using IOTA.ModularJumpGates.Util;
-using ProtoBuf;
-using Sandbox.ModAPI;
-using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using VRage.Game;
 using VRageMath;
 
 namespace IOTA.ModularJumpGates.API.CubeBlock
@@ -22,7 +15,7 @@ namespace IOTA.ModularJumpGates.API.CubeBlock
 			/// <summary>
 			/// Whether this controller can automatically activate the attached jump gate
 			/// </summary>
-			public bool CanAutoActivate { get { return this.BlockSettings.CanAutoActivate(); } }
+			public bool CanAutoActivate { get { return this.BlockSettings.CanAutoActivate(); } set { this.BlockSettings.CanAutoActivate(value); } }
 
 			/// <summary>
 			/// Whether this controller can accept inbound connections
@@ -238,12 +231,12 @@ namespace IOTA.ModularJumpGates.API.CubeBlock
 		/// <summary>
 		/// IMyTextSurfaceProvider Property
 		/// </summary>
-		public bool UseGenericLcd { get { return this.CubeBlock.UseGenericLcd; } }
+		public bool UseGenericLcd => this.CubeBlock.UseGenericLcd;
 
 		/// <summary>
 		/// IMyTextSurfaceProvider Property
 		/// </summary>
-		public int SurfaceCount { get { return this.CubeBlock.SurfaceCount; } }
+		public int SurfaceCount => this.CubeBlock.SurfaceCount;
 
 		/// <summary>
 		/// Gets a surface by ID

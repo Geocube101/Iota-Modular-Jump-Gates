@@ -1,11 +1,9 @@
 ﻿using Sandbox.ModAPI;
-using System;
-using System.IO;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
-using System.Text;
-using VRage.Game.Components;
 using VRage;
+using VRage.Game.Components;
 
 namespace IOTA.ModularJumpGates.Util
 {

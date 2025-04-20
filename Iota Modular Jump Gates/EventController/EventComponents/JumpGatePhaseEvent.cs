@@ -1,14 +1,11 @@
 ﻿using IOTA.ModularJumpGates.EventController.ObjectBuilders;
 using ProtoBuf;
 using Sandbox.Game.Entities;
-using Sandbox.Game.EntityComponents;
 using Sandbox.ModAPI;
 using Sandbox.ModAPI.Interfaces.Terminal;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using VRage.Game.Components;
 using VRage.Game.ObjectBuilders.ComponentSystem;
 using VRage.ModAPI;
@@ -103,18 +100,29 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 				this.DeserializedInfo = null;
 			}
 
-			Dictionary<MyJumpGate, MyJumpGatePhase> phase_updates = new Dictionary<MyJumpGate, MyJumpGatePhase>(this.TargetedJumpGates.Count);
+			Dictionary<MyJumpGate, MyJumpGatePhase?> phase_updates = new Dictionary<MyJumpGate, MyJumpGatePhase?>(this.TargetedJumpGates.Count);
 
 			foreach (KeyValuePair<MyJumpGate, MyJumpGatePhase> pair in this.TargetedJumpGates)
 			{
 				MyJumpGate jump_gate = pair.Key;
-				if (jump_gate == null || jump_gate.Closed || jump_gate.Phase == pair.Value) continue;
+
+				if (jump_gate == null || jump_gate.Closed)
+				{
+					phase_updates[jump_gate] = null;
+					continue;
+				}
+
+				if (jump_gate.Phase == pair.Value) continue;
 				phase_updates[pair.Key] = jump_gate.Phase;
 				if (jump_gate.Phase == this.SelectedGatePhase) event_controller.TriggerAction(0);
 				else if (pair.Value == this.SelectedGatePhase) event_controller.TriggerAction(1);
 			}
 
-			foreach (KeyValuePair<MyJumpGate, MyJumpGatePhase> pair in phase_updates) this.TargetedJumpGates[pair.Key] = pair.Value;
+			foreach (KeyValuePair<MyJumpGate, MyJumpGatePhase?> pair in phase_updates)
+			{
+				if (pair.Value == null) this.TargetedJumpGates.Remove(pair.Key);
+				else this.TargetedJumpGates[pair.Key] = pair.Value.Value;
+			}
 		}
 
 		public void AddBlocks(List<IMyTerminalBlock> blocks)

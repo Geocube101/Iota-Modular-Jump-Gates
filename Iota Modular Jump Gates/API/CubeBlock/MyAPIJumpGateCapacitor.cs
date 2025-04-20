@@ -1,9 +1,4 @@
 ﻿using IOTA.ModularJumpGates.CubeBlock;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using VRageMath;
 
 namespace IOTA.ModularJumpGates.API.CubeBlock
@@ -33,12 +28,12 @@ namespace IOTA.ModularJumpGates.API.CubeBlock
 		/// <summary>
 		/// This capacitor's stored charge in MegaWatts
 		/// </summary>
-		public double StoredChargeMW { get { return this.CubeBlock.StoredChargeMW; } }
+		public double StoredChargeMW => this.CubeBlock.StoredChargeMW;
 
 		/// <summary>
 		/// This capacitor's configuration variables
 		/// </summary>
-		public Configuration.LocalCapacitorConfiguration Configuration { get { return this.CubeBlock.CapacitorConfiguration; } }
+		public Configuration.LocalCapacitorConfiguration Configuration => this.CubeBlock.CapacitorConfiguration;
 		#endregion
 
 		#region Public API Methods

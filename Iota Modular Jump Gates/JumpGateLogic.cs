@@ -1,26 +1,24 @@
-﻿using IOTA.ModularJumpGates.CubeBlock;
+﻿using IOTA.ModularJumpGates.API;
+using IOTA.ModularJumpGates.CubeBlock;
 using IOTA.ModularJumpGates.Util;
+using IOTA.ModularJumpGates.Util.ConcurrentCollections;
+using ProtoBuf;
+using Sandbox.Game.Entities;
 using Sandbox.ModAPI;
+using SpaceEngineers.Game.ModAPI;
 using System;
-using System.IO;
-using System.Linq;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Linq;
+using System.Text;
+using System.Threading;
 using VRage.Game;
+using VRage.Game.Entity;
 using VRage.Game.ModAPI;
 using VRage.ModAPI;
 using VRage.Utils;
 using VRageMath;
-using ProtoBuf;
-using VRage.Game.Entity;
-using Sandbox.Game.Entities;
-using System.Diagnostics;
-using System.Threading;
-using SpaceEngineers.Game.ModAPI;
-using System.Text;
-using IOTA.ModularJumpGates.Util.ConcurrentCollections;
-using IOTA.ModularJumpGates.API;
 
 namespace IOTA.ModularJumpGates
 {
@@ -2125,7 +2123,7 @@ namespace IOTA.ModularJumpGates
 		/// <param name="is_entering">Whether the entity is entering</param>
 		private void OnEntityCollision(IMyEntity entity, bool is_entering)
 		{
-			this.CheckClosed();
+			if (this.Closed) return;
 			MyEntity topmost = (MyEntity) entity.GetTopMostParent();
 			MyJumpGateConstruct parent = null;
 			if (topmost is MyCubeGrid && (parent = MyJumpGateModSession.Instance.GetUnclosedJumpGateGrid(topmost.EntityId)) != null) topmost = (MyCubeGrid) parent.CubeGrid;
@@ -2219,6 +2217,12 @@ namespace IOTA.ModularJumpGates
 			lock (this.DriveIntersectNodesMutex) this.InnerDriveIntersectNodes.Clear();
 			this.Closed = true;
 
+			foreach (KeyValuePair<long, float> pair in this.JumpSpaceEntities)
+			{
+				MyEntity entity = (MyEntity) MyAPIGateway.Entities.GetEntityById(pair.Key);
+				if (entity != null) this.OnEntityJumpSpaceLeave(entity);
+			}
+
 			if (this.JumpSpaceCollisionDetector != null)
 			{
 				this.JumpSpaceCollisionDetector.Close();
@@ -2238,6 +2242,9 @@ namespace IOTA.ModularJumpGates
 				update_packet.Payload(this.ToSerialized(false));
 				update_packet.Send();
 			}
+
+			lock (this.EntityEnterCallbacks) this.EntityEnterCallbacks.Clear();
+			lock (this.APIEntityEnterCallbacks) this.APIEntityEnterCallbacks.Clear();
 
 			this.SoundEmitters.Clear();
 			this.JumpSpaceEntities.Clear();

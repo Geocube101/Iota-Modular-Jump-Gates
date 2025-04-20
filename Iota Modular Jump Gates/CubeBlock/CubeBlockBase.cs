@@ -7,16 +7,12 @@ using Sandbox.ModAPI;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
 using System.Text;
 using VRage.Game;
 using VRage.Game.Components;
-using VRage.Game.ModAPI;
 using VRage.ModAPI;
 using VRage.ObjectBuilders;
 using VRageMath;
-using static VRage.Game.MyObjectBuilder_ControllerSchemaDefinition;
 
 namespace IOTA.ModularJumpGates.CubeBlock
 {
@@ -265,7 +261,13 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			base.UpdateBeforeSimulation();
 			if (this.TerminalBlock == null || this.TerminalBlock?.CubeGrid?.Physics == null) return;
 			this.ResourceSink?.Update();
-			this.JumpGateGrid = (!MyJumpGateModSession.Instance.IsJumpGateGridMultiplayerValid(this.JumpGateGrid) && !this.IsClosed()) ? MyJumpGateModSession.Instance.GetJumpGateGrid(this.TerminalBlock.CubeGrid) : this.JumpGateGrid;
+
+			if (!this.IsClosed() && (this.JumpGateGrid == null || !MyJumpGateModSession.Instance.IsJumpGateGridMultiplayerValid(this.JumpGateGrid) || !this.JumpGateGrid.HasCubeGrid(this.TerminalBlock.CubeGrid)))
+			{
+				MyJumpGateConstruct new_construct = MyJumpGateModSession.Instance.GetUnclosedJumpGateGrid(this.TerminalBlock.CubeGrid);
+				if (new_construct != this.JumpGateGrid) this.OnConstructChanged();
+				this.JumpGateGrid = new_construct;
+			}
 		}
 
 		/// <summary>
@@ -542,6 +544,12 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			this.TerminalBlock.Init();
 			MyCubeBlockBase.Instances.TryAdd(this.TerminalBlock.EntityId, this);
 		}
+
+		/// <summary>
+		/// Overridable<br />
+		/// Called when this block's cube grid changes
+		/// </summary>
+		protected virtual void OnConstructChanged() { }
 		#endregion
 
 		#region Public Methods

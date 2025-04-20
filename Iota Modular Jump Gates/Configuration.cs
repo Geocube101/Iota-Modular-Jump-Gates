@@ -1,13 +1,11 @@
-﻿using ProtoBuf;
+﻿using IOTA.ModularJumpGates.CubeBlock;
+using IOTA.ModularJumpGates.Util;
+using ProtoBuf;
 using Sandbox.ModAPI;
 using System;
-using System.IO;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
+using System.IO;
 using VRageMath;
-using IOTA.ModularJumpGates.CubeBlock;
-using IOTA.ModularJumpGates.Util;
 
 namespace IOTA.ModularJumpGates
 {

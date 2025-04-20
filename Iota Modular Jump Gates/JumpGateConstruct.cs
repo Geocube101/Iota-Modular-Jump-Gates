@@ -2,7 +2,6 @@
 using IOTA.ModularJumpGates.Util;
 using IOTA.ModularJumpGates.Util.ConcurrentCollections;
 using ProtoBuf;
-using Sandbox.Common.ObjectBuilders;
 using Sandbox.Game.Entities;
 using Sandbox.ModAPI;
 using System;
@@ -11,9 +10,7 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Linq;
-using System.Text;
 using System.Threading;
-using VRage.Game;
 using VRage.Game.Components;
 using VRage.Game.Entity;
 using VRage.Game.ModAPI;
@@ -684,7 +681,7 @@ namespace IOTA.ModularJumpGates
                 return;
             }
 			
-			if (construct.Count == 0) this.CubeGrid.GetGridGroup(GridLinkTypeEnum.Logical | GridLinkTypeEnum.Mechanical).GetGrids(construct);
+			if (construct.Count == 0) this.CubeGrid.GetGridGroup(GridLinkTypeEnum.Logical).GetGrids(construct);
             bool grids_updated = false;
 			
 			foreach (IMyCubeGrid grid in construct)
@@ -699,8 +696,7 @@ namespace IOTA.ModularJumpGates
 			foreach (KeyValuePair<long, IMyCubeGrid> closed in this.CubeGrids)
             {
 				if (construct.Contains(closed.Value)) continue;
-                IMyCubeGrid grid = closed.Value;
-                this.OnGridRemoved(grid);
+                this.OnGridRemoved(closed.Value);
                 this.CubeGrids.Remove(closed.Key);
                 grids_updated = true;
 			}
@@ -712,13 +708,13 @@ namespace IOTA.ModularJumpGates
 				int drive_count = this.JumpGateDrives.Count;
 				this.GridBlocks.Clear();
 
-				foreach (KeyValuePair<long, MyJumpGateController> pair in this.JumpGateControllers) if (pair.Value.IsClosed() || !this.HasCubeGrid(pair.Value.CubeGridID)) this.JumpGateControllers.Remove(pair.Key);
-				foreach (KeyValuePair<long, MyJumpGateCapacitor> pair in this.JumpGateCapacitors) if (pair.Value.IsClosed() || !this.HasCubeGrid(pair.Value.CubeGridID)) this.JumpGateCapacitors.Remove(pair.Key);
-				foreach (KeyValuePair<long, MyJumpGateDrive> pair in this.JumpGateDrives) if (pair.Value.IsClosed() || !this.HasCubeGrid(pair.Value.CubeGridID)) this.JumpGateDrives.Remove(pair.Key);
-				foreach (KeyValuePair<long, MyJumpGateServerAntenna> pair in this.JumpGateServerAntennas) if (pair.Value.IsClosed() || !this.HasCubeGrid(pair.Value.CubeGridID)) this.JumpGateServerAntennas.Remove(pair.Key);
-				foreach (KeyValuePair<long, IMyLaserAntenna> pair in this.LaserAntennas) if (pair.Value.Closed || pair.Value.MarkedForClose || !this.HasCubeGrid(pair.Value.CubeGrid)) this.LaserAntennas.Remove(pair.Key);
-				foreach (KeyValuePair<long, IMyRadioAntenna> pair in this.RadioAntennas) if (pair.Value.Closed || pair.Value.MarkedForClose || !this.HasCubeGrid(pair.Value.CubeGrid)) this.RadioAntennas.Remove(pair.Key);
-				foreach (KeyValuePair<long, IMyBeacon> pair in this.BeaconAntennas) if (pair.Value.Closed || pair.Value.MarkedForClose || !this.HasCubeGrid(pair.Value.CubeGrid)) this.BeaconAntennas.Remove(pair.Key);
+				foreach (KeyValuePair<long, MyJumpGateController> pair in this.JumpGateControllers) if (pair.Value.IsClosed() || !this.CubeGrids.ContainsKey(pair.Value.CubeGridID)) this.JumpGateControllers.Remove(pair.Key);
+				foreach (KeyValuePair<long, MyJumpGateCapacitor> pair in this.JumpGateCapacitors) if (pair.Value.IsClosed() || !this.CubeGrids.ContainsKey(pair.Value.CubeGridID)) this.JumpGateCapacitors.Remove(pair.Key);
+				foreach (KeyValuePair<long, MyJumpGateDrive> pair in this.JumpGateDrives) if (pair.Value.IsClosed() || !this.CubeGrids.ContainsKey(pair.Value.CubeGridID)) this.JumpGateDrives.Remove(pair.Key);
+				foreach (KeyValuePair<long, MyJumpGateServerAntenna> pair in this.JumpGateServerAntennas) if (pair.Value.IsClosed() || !this.CubeGrids.ContainsKey(pair.Value.CubeGridID)) this.JumpGateServerAntennas.Remove(pair.Key);
+				foreach (KeyValuePair<long, IMyLaserAntenna> pair in this.LaserAntennas) if (pair.Value.Closed || pair.Value.MarkedForClose || !this.CubeGrids.ContainsKey(pair.Value.CubeGrid.EntityId)) this.LaserAntennas.Remove(pair.Key);
+				foreach (KeyValuePair<long, IMyRadioAntenna> pair in this.RadioAntennas) if (pair.Value.Closed || pair.Value.MarkedForClose || !this.CubeGrids.ContainsKey(pair.Value.CubeGrid.EntityId)) this.RadioAntennas.Remove(pair.Key);
+				foreach (KeyValuePair<long, IMyBeacon> pair in this.BeaconAntennas) if (pair.Value.Closed || pair.Value.MarkedForClose || !this.CubeGrids.ContainsKey(pair.Value.CubeGrid.EntityId)) this.BeaconAntennas.Remove(pair.Key);
 
 				foreach (KeyValuePair<long, IMyCubeGrid> pair in this.CubeGrids)
 				{

@@ -6,8 +6,6 @@ using Sandbox.ModAPI.Interfaces.Terminal;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using VRage.Game.Components;
 using VRage.Game.ObjectBuilders.ComponentSystem;
 using VRage.ModAPI;
@@ -91,13 +89,20 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 				this.DeserializedInfo = null;
 			}
 
-			Dictionary<MyJumpGate, int> count_updates = new Dictionary<MyJumpGate, int>(this.TargetedJumpGates.Count);
+			Dictionary<MyJumpGate, int?> count_updates = new Dictionary<MyJumpGate, int?>(this.TargetedJumpGates.Count);
 
 			foreach (KeyValuePair<MyJumpGate, int> pair in this.TargetedJumpGates)
 			{
 				MyJumpGate jump_gate = pair.Key;
-				int count = jump_gate?.GetJumpSpaceEntityCount() ?? 0;
-				if (jump_gate == null || jump_gate.Closed || count == pair.Value) continue;
+
+				if (jump_gate == null || jump_gate.Closed)
+				{
+					count_updates[jump_gate] = null;
+					continue;
+				}
+
+				int count = jump_gate.GetJumpSpaceEntityCount();
+				if (count == pair.Value) continue;
 				count_updates[pair.Key] = count;
 				if (event_controller.IsLowerOrEqualCondition && count <= this.TargetEntityCount && pair.Value > this.TargetEntityCount) event_controller.TriggerAction(0);
 				else if (event_controller.IsLowerOrEqualCondition && count > this.TargetEntityCount && pair.Value <=  this.TargetEntityCount) event_controller.TriggerAction(1);
@@ -105,7 +110,11 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 				else if (!event_controller.IsLowerOrEqualCondition && count < this.TargetEntityCount && pair.Value >= this.TargetEntityCount) event_controller.TriggerAction(1);
 			}
 
-			foreach (KeyValuePair<MyJumpGate, int> pair in count_updates) this.TargetedJumpGates[pair.Key] = pair.Value;
+			foreach (KeyValuePair<MyJumpGate, int?> pair in count_updates)
+			{
+				if (pair.Value == null) this.TargetedJumpGates.Remove(pair.Key);
+				else this.TargetedJumpGates[pair.Key] = pair.Value.Value;
+			}
 		}
 
 		public void AddBlocks(List<IMyTerminalBlock> blocks)

@@ -1,13 +1,5 @@
 ﻿using IOTA.ModularJumpGates.CubeBlock;
-using IOTA.ModularJumpGates.Util;
-using Sandbox.Game.EntityComponents;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using VRageMath;
-using static IOTA.ModularJumpGates.API.CubeBlock.MyAPIJumpGateCapacitor;
 
 namespace IOTA.ModularJumpGates.API.CubeBlock
 {
@@ -24,33 +16,33 @@ namespace IOTA.ModularJumpGates.API.CubeBlock
 		/// <summary>
 		/// The stored drive charge in MegaWatts
 		/// </summary>
-		public double StoredChargeMW { get { return this.CubeBlock.StoredChargeMW; } }
+		public double StoredChargeMW => this.CubeBlock.StoredChargeMW;
 
 		/// <summary>
 		/// The maximum possible distance this drive can raycast<br />
 		/// This takes into account construct obstructions
 		/// </summary>
-		public double MaxRaycastDistance { get { return this.CubeBlock.MaxRaycastDistance; } }
+		public double MaxRaycastDistance => this.CubeBlock.MaxRaycastDistance;
 
 		/// <summary>
 		/// The current wattage override or 0 if no override is set
 		/// </summary>
-		public double WattageSinkOverride { get { return this.CubeBlock.GetWattageSinkOverride(); } }
+		public double WattageSinkOverride => this.CubeBlock.GetWattageSinkOverride();
 
 		/// <summary>
 		/// The ID of the jump gate this drive is linked to or -1 if not linked
 		/// </summary>
-		public long JumpGateID { get { return this.CubeBlock.JumpGateID; } }
+		public long JumpGateID => this.CubeBlock.JumpGateID;
 
 		/// <summary>
 		/// The color of the emitter emissives
 		/// </summary>
-		public Color DriveEmitterColor { get { return this.CubeBlock.DriveEmitterColor; } }
+		public Color DriveEmitterColor => this.CubeBlock.DriveEmitterColor;
 
 		/// <summary>
 		/// This drive's configuration variables
 		/// </summary>
-		public Configuration.LocalDriveConfiguration Configuration { get { return this.CubeBlock.DriveConfiguration; } }
+		public Configuration.LocalDriveConfiguration Configuration => this.CubeBlock.DriveConfiguration;
 		#endregion
 
 		#region Public API Methods

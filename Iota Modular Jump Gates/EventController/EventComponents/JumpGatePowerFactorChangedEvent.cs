@@ -6,10 +6,7 @@ using Sandbox.ModAPI.Interfaces.Terminal;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using VRage.Game.Components;
-using VRage.Game.Entity;
 using VRage.Game.ObjectBuilders.ComponentSystem;
 using VRage.ModAPI;
 using VRage.Utils;
@@ -102,12 +99,19 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 				this.DeserializedInfo = null;
 			}
 
-			Dictionary<MyJumpGate, double> factor_updates = new Dictionary<MyJumpGate, double>(this.TargetedJumpGates.Count);
+			Dictionary<MyJumpGate, double?> factor_updates = new Dictionary<MyJumpGate, double?>(this.TargetedJumpGates.Count);
 
 			foreach (KeyValuePair<MyJumpGate, double> pair in this.TargetedJumpGates)
 			{
 				MyJumpGate jump_gate = pair.Key;
-				Vector3D? endpoint = jump_gate?.Controller?.BlockSettings.SelectedWaypoint()?.GetEndpoint();
+
+				if (jump_gate == null || jump_gate.Closed)
+				{
+					factor_updates[jump_gate] = null;
+					continue;
+				}
+
+				Vector3D? endpoint = jump_gate.Controller?.BlockSettings.SelectedWaypoint()?.GetEndpoint();
 				double factor = 0;
 
 				if (endpoint != null)
@@ -116,8 +120,7 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 					factor = jump_gate.CalculatePowerFactorFromDistanceRatio(jump_gate.CalculateDistanceRatio(ref _endpoint));
 				}
 
-
-				if (jump_gate == null || jump_gate.Closed || factor == pair.Value) continue;
+				if (factor == pair.Value) continue;
 				factor_updates[pair.Key] = factor;
 				if (event_controller.IsLowerOrEqualCondition && factor <= this.TargetPowerFactor && pair.Value > this.TargetPowerFactor) event_controller.TriggerAction(0);
 				else if (event_controller.IsLowerOrEqualCondition && factor > this.TargetPowerFactor && pair.Value <= this.TargetPowerFactor) event_controller.TriggerAction(1);
@@ -125,7 +128,11 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 				else if (!event_controller.IsLowerOrEqualCondition && factor < this.TargetPowerFactor && pair.Value >= this.TargetPowerFactor) event_controller.TriggerAction(1);
 			}
 
-			foreach (KeyValuePair<MyJumpGate, double> pair in factor_updates) this.TargetedJumpGates[pair.Key] = pair.Value;
+			foreach (KeyValuePair<MyJumpGate, double?> pair in factor_updates)
+			{
+				if (pair.Value == null) this.TargetedJumpGates.Remove(pair.Key);
+				else this.TargetedJumpGates[pair.Key] = pair.Value.Value;
+			}
 		}
 
 		public void AddBlocks(List<IMyTerminalBlock> blocks)

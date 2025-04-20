@@ -1,19 +1,18 @@
 ﻿using IOTA.ModularJumpGates.CubeBlock;
-using Sandbox.ModAPI.Interfaces.Terminal;
+using IOTA.ModularJumpGates.ProgramScripting.CubeBlock;
+using IOTA.ModularJumpGates.Util;
 using Sandbox.ModAPI;
+using Sandbox.ModAPI.Interfaces.Terminal;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using VRage.Utils;
-using VRage.Game.ModAPI;
-using VRageMath;
-using IOTA.ModularJumpGates.Util;
-using VRage.ModAPI;
 using VRage.Game;
 using VRage.Game.Entity;
-using IOTA.ModularJumpGates.API.CubeBlock;
-using IOTA.ModularJumpGates.ProgramScripting.CubeBlock;
+using VRage.Game.ModAPI;
+using VRage.ModAPI;
+using VRage.Utils;
+using VRageMath;
 
 namespace IOTA.ModularJumpGates.Terminal
 {

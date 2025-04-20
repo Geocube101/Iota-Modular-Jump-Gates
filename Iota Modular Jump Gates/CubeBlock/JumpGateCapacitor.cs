@@ -1,13 +1,10 @@
-﻿using IOTA.ModularJumpGates.API.CubeBlock;
-using IOTA.ModularJumpGates.CubeBlock;
-using IOTA.ModularJumpGates.Util;
+﻿using IOTA.ModularJumpGates.Util;
 using ProtoBuf;
 using Sandbox.Common.ObjectBuilders;
 using Sandbox.Game.EntityComponents;
 using Sandbox.ModAPI;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Text;
 using VRage.Game.Components;
 using VRage.ObjectBuilders;

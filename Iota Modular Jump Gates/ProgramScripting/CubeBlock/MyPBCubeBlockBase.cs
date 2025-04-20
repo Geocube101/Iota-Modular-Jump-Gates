@@ -1,15 +1,11 @@
-﻿using IOTA.ModularJumpGates.Terminal;
-using Sandbox.ModAPI.Interfaces.Terminal;
+﻿using IOTA.ModularJumpGates.CubeBlock;
+using IOTA.ModularJumpGates.Terminal;
+using IOTA.ModularJumpGates.Util;
 using Sandbox.ModAPI;
+using Sandbox.ModAPI.Interfaces.Terminal;
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using IOTA.ModularJumpGates.CubeBlock;
-using IOTA.ModularJumpGates.Util;
 using VRageMath;
-using VRage.Game.ModAPI;
 
 namespace IOTA.ModularJumpGates.ProgramScripting.CubeBlock
 {
@@ -272,6 +268,18 @@ namespace IOTA.ModularJumpGates.ProgramScripting.CubeBlock
 				MyCubeBlockBase block_base = MyJumpGateModSession.GetBlockAsCubeBlockBase(block);
 				if (block_base == null) throw new InvalidBlockTypeException("Specified block is not a jump gate block");
 				return block_base.JumpGateGrid.ConstructMassCenter();
+			};
+			property.Setter = (block, value) => { throw new InvalidOperationException("Specified property is readonly"); };
+			MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(property);
+		}
+
+		private static void SetupConstructFullyInitializedTerminalAction()
+		{
+			IMyTerminalControlProperty<bool> property = MyAPIGateway.TerminalControls.CreateProperty<bool, IMyUpgradeModule>(MyCubeBlockTerminal.MODID_PREFIX + "GetConstructFullyInitialized");
+			property.Getter = (block) => {
+				MyCubeBlockBase block_base = MyJumpGateModSession.GetBlockAsCubeBlockBase(block);
+				if (block_base == null) throw new InvalidBlockTypeException("Specified block is not a jump gate block");
+				return block_base.JumpGateGrid.FullyInitialized;
 			};
 			property.Setter = (block, value) => { throw new InvalidOperationException("Specified property is readonly"); };
 			MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(property);
@@ -823,6 +831,7 @@ namespace IOTA.ModularJumpGates.ProgramScripting.CubeBlock
 			MyPBCubeBlockBase.SetupConstructMassUpdateTerminalAction();
 			MyPBCubeBlockBase.SetupConstructVolumeCenterUpdateTerminalAction();
 			MyPBCubeBlockBase.SetupConstructMassCenterUpdateTerminalAction();
+			MyPBCubeBlockBase.SetupConstructFullyInitializedTerminalAction();
 
 			MyPBCubeBlockBase.SetupConstructMarkGatesTerminalAction();
 			MyPBCubeBlockBase.SetupConstructSetDirtyTerminalAction();

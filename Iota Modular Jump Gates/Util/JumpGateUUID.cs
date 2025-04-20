@@ -1,11 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
-using System.Text;
-using IOTA.ModularJumpGates.API;
+﻿using IOTA.ModularJumpGates.API;
 using IOTA.ModularJumpGates.API.CubeBlock;
 using IOTA.ModularJumpGates.CubeBlock;
+using System;
 
 namespace IOTA.ModularJumpGates.Util
 {
