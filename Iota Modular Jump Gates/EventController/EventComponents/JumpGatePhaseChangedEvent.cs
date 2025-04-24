@@ -15,6 +15,7 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 	internal class JumpGatePhaseChangedEvent : MyJumpGateEventBase<byte>
 	{
 		private static List<MyTerminalControlComboBoxItem> ComboBoxItems = null;
+		private static readonly object ComboBoxLock = new object();
 
 		public override bool IsThresholdUsed => false;
 		public override bool IsConditionSelectionUsed => false;
@@ -25,18 +26,23 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 
 		public JumpGatePhaseChangedEvent() : base()
 		{
-			if (JumpGatePhaseChangedEvent.ComboBoxItems != null) return;
-			JumpGatePhaseChangedEvent.ComboBoxItems = new List<MyTerminalControlComboBoxItem>();
-
-			foreach (MyJumpGatePhase phase in Enum.GetValues(typeof(MyJumpGatePhase)))
+			lock (JumpGatePhaseChangedEvent.ComboBoxLock)
 			{
-				char[] name = Enum.GetName(typeof(MyJumpGatePhase), phase).ToLower().ToCharArray();
-				name[0] = Char.ToUpper(name[0]);
-				MyTerminalControlComboBoxItem item = new MyTerminalControlComboBoxItem {
-					Key = (byte) phase,
-					Value = MyStringId.GetOrCompute(string.Join("", name)),
-				};
-				JumpGatePhaseChangedEvent.ComboBoxItems.Add(item);
+				if (JumpGatePhaseChangedEvent.ComboBoxItems != null) return;
+				JumpGatePhaseChangedEvent.ComboBoxItems = new List<MyTerminalControlComboBoxItem>();
+
+				foreach (MyJumpGatePhase phase in Enum.GetValues(typeof(MyJumpGatePhase)))
+				{
+					if (phase == MyJumpGatePhase.NONE || phase == MyJumpGatePhase.INVALID) continue;
+					char[] name = Enum.GetName(typeof(MyJumpGatePhase), phase).ToLower().ToCharArray();
+					name[0] = Char.ToUpper(name[0]);
+					MyTerminalControlComboBoxItem item = new MyTerminalControlComboBoxItem
+					{
+						Key = (byte) phase,
+						Value = MyStringId.GetOrCompute(string.Join("", name)),
+					};
+					JumpGatePhaseChangedEvent.ComboBoxItems.Add(item);
+				}
 			}
 		}
 
@@ -61,8 +67,10 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 				phase_cb.ComboBoxContent = (content) => content.AddList(JumpGatePhaseChangedEvent.ComboBoxItems);
 				phase_cb.Getter = (block) => block.Components.Get<JumpGatePhaseChangedEvent>()?.TargetValue ?? 0xFF;
 				phase_cb.Setter = (block, value) => {
-					block.Components.Get<JumpGatePhaseChangedEvent>().TargetValue = (byte) value;
+					JumpGatePhaseChangedEvent event_block = block.Components.Get<JumpGatePhaseChangedEvent>();
+					event_block.TargetValue = (byte) value;
 					this.Poll(true);
+					event_block.SetDirty();
 				};
 				phase_cb.Visible = block => block.Components.Get<JumpGatePhaseChangedEvent>()?.IsSelected ?? false;
 				MyAPIGateway.TerminalControls.AddControl<T>(phase_cb);

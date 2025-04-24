@@ -62,7 +62,11 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 				is_controller_filtered.SupportsMultipleBlocks = false;
 				is_controller_filtered.Visible = block => block.Components.Get<JumpGateEntityCountChangedEvent>()?.IsSelected ?? false;
 				is_controller_filtered.Getter = block => block.Components.Get<JumpGateEntityCountChangedEvent>().IsControllerFiltered;
-				is_controller_filtered.Setter = (block, value) => block.Components.Get<JumpGateEntityCountChangedEvent>().IsControllerFiltered = value;
+				is_controller_filtered.Setter = (block, value) => {
+					JumpGateEntityCountChangedEvent event_block = block.Components.Get<JumpGateEntityCountChangedEvent>();
+					event_block.IsControllerFiltered = value;
+					event_block.SetDirty();
+				};
 				MyAPIGateway.TerminalControls.AddControl<T>(is_controller_filtered);
 			}
 
@@ -75,7 +79,11 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 				entity_count_sdr.SetLimits(0f, uint.MaxValue);
 				entity_count_sdr.Writer = (block, string_builder) => string_builder.Append(MyJumpGateModSession.AutoconvertSciNotUnits(block.Components.Get<JumpGateEntityCountChangedEvent>().TargetValue, 0));
 				entity_count_sdr.Getter = (block) => block.Components.Get<JumpGateEntityCountChangedEvent>().TargetValue;
-				entity_count_sdr.Setter = (block, value) => block.Components.Get<JumpGateEntityCountChangedEvent>().TargetValue = (int) value;
+				entity_count_sdr.Setter = (block, value) => {
+					JumpGateEntityCountChangedEvent event_block = block.Components.Get<JumpGateEntityCountChangedEvent>();
+					event_block.TargetValue = (int) value;
+					event_block.SetDirty();
+				};
 				MyAPIGateway.TerminalControls.AddControl<T>(entity_count_sdr);
 			}
 

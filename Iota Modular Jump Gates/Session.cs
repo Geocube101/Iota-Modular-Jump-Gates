@@ -1304,10 +1304,10 @@ namespace IOTA.ModularJumpGates
 		/// <param name="dest_matrix">The ending location of the batch's parent</param>
 		/// <param name="time">The duration in game ticks</param>
 		/// <param name="callback">A callback called when the warp is complete</param>
-		public void WarpEntityBatchOverTime(MyJumpGate jump_gate, List<MyEntity> entity_batch, ref MatrixD source_matrix, ref MatrixD dest_matrix, ushort time, Action<List<MyEntity>> callback = null)
+		public void WarpEntityBatchOverTime(MyJumpGate jump_gate, List<MyEntity> entity_batch, ref MatrixD source_matrix, ref MatrixD dest_matrix, ushort time, double max_safe_speed, Action<List<MyEntity>> callback = null)
 		{
 			if (MyNetworkInterface.IsStandaloneMultiplayerClient) return;
-			this.EntityWarps.TryAdd(entity_batch[0].EntityId, new EntityWarpInfo(jump_gate, ref source_matrix, ref dest_matrix, entity_batch, time, callback));
+			this.EntityWarps.TryAdd(entity_batch[0].EntityId, new EntityWarpInfo(jump_gate, ref source_matrix, ref dest_matrix, entity_batch, time, max_safe_speed, callback));
 		}
 
 		/// <summary>

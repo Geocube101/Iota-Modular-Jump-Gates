@@ -1,4 +1,5 @@
-﻿using ProtoBuf;
+﻿using IOTA.ModularJumpGates.Util;
+using ProtoBuf;
 using Sandbox.Game.Entities;
 using Sandbox.Game.EntityComponents;
 using Sandbox.ModAPI;
@@ -110,12 +111,16 @@ namespace IOTA.ModularJumpGates.EventController
 				if (packet.EpochTime < this.LastUpdateTimeEpoch) return;
 				this.Deserialize(info.SerializedEvent);
 				this.IsDirty = false;
+				this.LastUpdateTimeEpoch = packet.EpochTime;
 				packet.Forward(0, true).Send();
+				Logger.Debug($"Updated event controller event \"{this.EventDisplayName}\" @ {this.Entity.EntityId}", 4);
 			}
 			else if (MyNetworkInterface.IsStandaloneMultiplayerClient && (packet.PhaseFrame == 1 || packet.PhaseFrame == 2))
 			{
 				this.Deserialize(info.SerializedEvent);
 				this.IsDirty = false;
+				this.LastUpdateTimeEpoch = packet.EpochTime;
+				Logger.Debug($"Updated event controller event \"{this.EventDisplayName}\" @ {this.Entity.EntityId}", 4);
 			}
 		}
 
@@ -168,11 +173,21 @@ namespace IOTA.ModularJumpGates.EventController
 
 				if (this.DeserializedInfo.SelectedJumpGates != null)
 				{
+					List<MyJumpGate> closed_gates = new List<MyJumpGate>(this.TargetedJumpGates.Keys);
+
 					foreach (long gateid in this.DeserializedInfo.SelectedJumpGates)
 					{
 						MyJumpGate gate = construct.GetJumpGate(gateid);
 						if (gate == null || gate.Closed) continue;
+						if (!this.TargetedJumpGates.ContainsKey(gate)) this.OnJumpGateAdded(gate);
+						closed_gates.Remove(gate);
 						this.TargetedJumpGates[gate] = this.GetValueFromJumpGate(gate);
+					}
+
+					foreach (MyJumpGate gate in closed_gates)
+					{
+						this.OnJumpGateRemoved(gate);
+						this.TargetedJumpGates.Remove(gate);
 					}
 				}
 
@@ -197,12 +212,12 @@ namespace IOTA.ModularJumpGates.EventController
 				}
 			}
 
-			if (this.IsDirty && MyJumpGateModSession.Network.Registered)
+			if (this.IsDirty && MyJumpGateModSession.Network.Registered && this.IsSelected)
 			{
 				MyNetworkInterface.Packet packet = new MyNetworkInterface.Packet {
 					PacketType = MyPacketTypeEnum.UPDATE_EVENT_CONTROLLER_EVENT,
 					TargetID = 0,
-					Broadcast = false,
+					Broadcast = MyNetworkInterface.IsMultiplayerServer,
 				};
 
 				packet.Payload(new MySerializedJumpGateEvent {
@@ -223,7 +238,7 @@ namespace IOTA.ModularJumpGates.EventController
 		protected void Poll(bool force_check)
 		{
 			IMyEventControllerBlock event_controller = this.EventController;
-			if (event_controller == null || event_controller.MarkedForClose) return;
+			if (MyNetworkInterface.IsStandaloneMultiplayerClient || event_controller == null || event_controller.MarkedForClose) return;
 			List<MyJumpGate> closed = new List<MyJumpGate>();
 			Dictionary<MyJumpGate, TargetedGateValueType> updates = new Dictionary<MyJumpGate, TargetedGateValueType>(this.TargetedJumpGates.Count);
 
@@ -317,6 +332,7 @@ namespace IOTA.ModularJumpGates.EventController
 					}
 
 					this.Poll(true);
+					this.SetDirty();
 				};
 
 				MyAPIGateway.TerminalControls.AddControl<T>(choose_jump_gate_lb);
@@ -367,6 +383,11 @@ namespace IOTA.ModularJumpGates.EventController
 			{
 				this.TargetedJumpGates[jump_gate] = value;
 			}
+		}
+
+		public MyJumpGateEventBase()
+		{
+			this.Init();
 		}
 
 		public void SetDirty()

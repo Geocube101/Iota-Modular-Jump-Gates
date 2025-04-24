@@ -69,7 +69,11 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 				is_controller_filtered.SupportsMultipleBlocks = false;
 				is_controller_filtered.Visible = block => block.Components.Get<JumpGateEntityMassChangedEvent>()?.IsSelected ?? false;
 				is_controller_filtered.Getter = block => block.Components.Get<JumpGateEntityMassChangedEvent>().IsControllerFiltered;
-				is_controller_filtered.Setter = (block, value) => block.Components.Get<JumpGateEntityMassChangedEvent>().IsControllerFiltered = value;
+				is_controller_filtered.Setter = (block, value) => {
+					JumpGateEntityMassChangedEvent event_block = block.Components.Get<JumpGateEntityMassChangedEvent>();
+					event_block.IsControllerFiltered = value;
+					event_block.SetDirty();
+				};
 				MyAPIGateway.TerminalControls.AddControl<T>(is_controller_filtered);
 			}
 
@@ -82,7 +86,11 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 				entity_mass_sdr.SetLimits(0f, 1e24f);
 				entity_mass_sdr.Writer = (block, string_builder) => string_builder.Append(MyJumpGateModSession.AutoconvertMetricUnits(block.Components.Get<JumpGateEntityMassChangedEvent>().TargetValue * 1e3, "g", 4));
 				entity_mass_sdr.Getter = (block) => (float) (block.Components.Get<JumpGateEntityMassChangedEvent>().TargetValue);
-				entity_mass_sdr.Setter = (block, value) => block.Components.Get<JumpGateEntityMassChangedEvent>().TargetValue = value;
+				entity_mass_sdr.Setter = (block, value) => {
+					JumpGateEntityMassChangedEvent event_block = block.Components.Get<JumpGateEntityMassChangedEvent>();
+					event_block.TargetValue = value;
+					event_block.SetDirty();
+				};
 				MyAPIGateway.TerminalControls.AddControl<T>(entity_mass_sdr);
 			}
 

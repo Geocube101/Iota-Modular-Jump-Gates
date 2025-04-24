@@ -5,7 +5,6 @@ using Sandbox.ModAPI;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using VRage.Game.Components;
 using VRage.Game.Entity;
 using VRage.Game.ModAPI;
 using VRageMath;
@@ -68,33 +67,42 @@ namespace IOTA.ModularJumpGates.Util
 		private sealed class SerializedEntityWarpInfo
 		{
 			[ProtoMember(1)]
-			public Vector3D[] Endpoint;
+			public Vector3D StartPos;
 			[ProtoMember(2)]
-			public Vector3D[] StartPoint;
+			public Vector3D EndPos;
 			[ProtoMember(3)]
-			public Vector3D[] CurrentPosition;
+			public Vector3D[] FinalPos;
 			[ProtoMember(4)]
 			public List<long> EntityBatch;
 			[ProtoMember(5)]
 			public List<string> RelativeEntityOffsets;
 			[ProtoMember(6)]
-			public Guid JumpGate;
+			public List<Vector3> EntityStartingAngularVelocities;
 			[ProtoMember(7)]
-			public ushort Duration;
+			public Guid JumpGate;
 			[ProtoMember(8)]
+			public ushort Duration;
+			[ProtoMember(9)]
 			public ushort CurrentTick;
+			[ProtoMember(10)]
+			public double MaxSafeSpeed;
 		}
 
-		private MatrixD Endpoint;
-		private MatrixD StartPoint;
-		private MatrixD CurrentPos;
+		private static readonly ushort GlobalMaxSpeedCooldownTime = 30;
+
+		private bool IsComplete = false;
+		private ushort MaxSpeedCooldownTime = 0;
+		private Vector3D StartPos;
+		private Vector3D EndPos;
+		private MatrixD FinalPos;
 		private readonly List<MyEntity> EntityBatch;
-		private readonly List<Vector3D[]> RelativeEntityOffsets;
-		private readonly List<MyPhysicsComponentBase> EntityPhysics;
+		private readonly List<MatrixD> RelativeEntityOffsets;
+		private readonly List<Vector3> EntityStartingAngularVelocities;
 		private readonly Action<List<MyEntity>> Callback;
 
 		public readonly MyJumpGate JumpGate;
 		public readonly ushort Duration;
+		public readonly double MaxSafeSpeed;
 		public ushort CurrentTick { get; private set; }
 
 		public MyEntity Parent
@@ -108,69 +116,72 @@ namespace IOTA.ModularJumpGates.Util
 		public static EntityWarpInfo FromSerialized(string serialized_warp_info, Action<List<MyEntity>> callback)
 		{
 			SerializedEntityWarpInfo serialized = MyAPIGateway.Utilities.SerializeFromBinary<SerializedEntityWarpInfo>(Convert.FromBase64String(serialized_warp_info));
-			MatrixD endpoint, startpoint, current_pos;
-			MatrixD.CreateWorld(ref serialized.Endpoint[0], ref serialized.Endpoint[1], ref serialized.Endpoint[2], out endpoint);
-			MatrixD.CreateWorld(ref serialized.StartPoint[0], ref serialized.StartPoint[1], ref serialized.StartPoint[2], out startpoint);
-			MatrixD.CreateWorld(ref serialized.CurrentPosition[0], ref serialized.CurrentPosition[1], ref serialized.CurrentPosition[2], out current_pos);
+			MatrixD final_pos = MatrixD.CreateWorld(serialized.FinalPos[0], serialized.FinalPos[1], serialized.FinalPos[2]);
 			List<MyEntity> batch_entities = serialized.EntityBatch?.Select((id) => (MyEntity) MyAPIGateway.Entities.GetEntityById(id))?.Where((entity) => entity != null)?.ToList() ?? new List<MyEntity>();
-			List<Vector3D[]> relative_entity_offsets = serialized.RelativeEntityOffsets?.Select((offsets) => MyAPIGateway.Utilities.SerializeFromBinary<Vector3D[]>(Convert.FromBase64String(offsets)))?.ToList() ?? new List<Vector3D[]>();
+			List<MatrixD> relative_entity_offsets = serialized.RelativeEntityOffsets.Select((matrix) => {
+				double[] doubles = MyAPIGateway.Utilities.SerializeFromBinary<double[]>(Convert.FromBase64String(matrix));
+				return new MatrixD(
+					doubles[0], doubles[1], doubles[2], doubles[3],
+					doubles[4], doubles[5], doubles[6], doubles[7],
+					doubles[8], doubles[9], doubles[10], doubles[11],
+					doubles[12], doubles[13], doubles[14], doubles[15]
+				);
+			}).ToList();
 			MyJumpGate jump_gate = MyJumpGateModSession.Instance.GetJumpGate(JumpGateUUID.FromGuid(serialized.JumpGate));
 			if (jump_gate == null || batch_entities.Count == 0) return null;
-			return new EntityWarpInfo(ref endpoint, ref startpoint, ref current_pos, batch_entities, relative_entity_offsets, jump_gate, serialized.Duration, serialized.CurrentTick, callback);
+			return new EntityWarpInfo(ref serialized.StartPos, ref serialized.EndPos, ref final_pos, batch_entities, relative_entity_offsets, serialized.EntityStartingAngularVelocities, jump_gate, serialized.Duration, serialized.CurrentTick, serialized.MaxSafeSpeed, callback);
 		}
 
-		private EntityWarpInfo(ref MatrixD endpoint, ref MatrixD startpoint, ref MatrixD current_position, List<MyEntity> batch_entities, List<Vector3D[]> relative_offsets, MyJumpGate jump_gate, ushort duration, ushort current_tick, Action<List<MyEntity>> callback)
+		private EntityWarpInfo(ref Vector3D startpos, ref Vector3D endpos, ref MatrixD final_pos, List<MyEntity> batch_entities, List<MatrixD> relative_offsets, List<Vector3> starting_angular_velocities, MyJumpGate jump_gate, ushort duration, ushort current_tick, double max_safe_speed, Action<List<MyEntity>> callback)
 		{
 			MyEntity parent = batch_entities[0];
 			this.JumpGate = jump_gate;
-			this.Endpoint = endpoint;
-			this.StartPoint = startpoint;
-			this.CurrentPos = current_position;
-			this.EntityBatch = new List<MyEntity>();
-			this.RelativeEntityOffsets = new List<Vector3D[]>();
-			this.EntityPhysics = new List<MyPhysicsComponentBase>() { parent.Physics };
+			this.StartPos = startpos;
+			this.EndPos = endpos;
+			this.FinalPos = final_pos;
+			this.EntityBatch = batch_entities;
+			this.RelativeEntityOffsets = relative_offsets;
+			this.EntityStartingAngularVelocities = starting_angular_velocities;
 			this.Duration = duration;
 			this.CurrentTick = current_tick;
+			this.MaxSafeSpeed = max_safe_speed;
 			this.Callback = callback;
+			parent.Physics.Deactivate();
 
 			for (int i = 1; i < batch_entities.Count; ++i)
 			{
 				MyEntity entity = batch_entities[i];
-				if (entity == null || entity.MarkedForClose) continue;
+				if (entity == null || entity.MarkedForClose || entity.Physics == null) continue;
 				MyJumpGateConstruct construct = (entity is MyCubeGrid) ? MyJumpGateModSession.Instance.GetJumpGateGrid(entity.EntityId) : null;
 				if (construct != null) construct.BatchingGate = jump_gate;
-				this.RelativeEntityOffsets.Add(relative_offsets[i - 1]);
-				this.EntityPhysics.Add(entity.Physics);
+				entity.Physics.Deactivate();
 			}
 		}
 
-		public EntityWarpInfo(MyJumpGate jump_gate, ref MatrixD current_position, ref MatrixD target_position, List<MyEntity> entity_batch, ushort time, Action<List<MyEntity>> callback)
+		public EntityWarpInfo(MyJumpGate jump_gate, ref MatrixD current_position, ref MatrixD target_position, List<MyEntity> entity_batch, ushort time, double max_safe_speed, Action<List<MyEntity>> callback)
 		{
 			MyEntity parent = entity_batch[0];
 			this.JumpGate = jump_gate;
 			this.Duration = time;
 			this.CurrentTick = 0;
 			this.EntityBatch = entity_batch;
-			this.Endpoint = target_position;
-			this.StartPoint = current_position;
-			this.CurrentPos = current_position;
-			this.RelativeEntityOffsets = new List<Vector3D[]>();
+			this.StartPos = current_position.Translation;
+			this.EndPos = target_position.Translation;
+			this.FinalPos = target_position;
+			this.RelativeEntityOffsets = new List<MatrixD>();
+			this.EntityStartingAngularVelocities = new List<Vector3>() { parent.Physics.AngularVelocity };
+			this.MaxSafeSpeed = max_safe_speed;
 			this.Callback = callback;
-			this.EntityPhysics = new List<MyPhysicsComponentBase>() { parent.Physics };
-			
+			parent.Physics.Deactivate();
+			MatrixD parent_inv = MatrixD.Invert(parent.WorldMatrix);
+
 			foreach (MyEntity entity in entity_batch.Skip(1))
 			{
-				this.RelativeEntityOffsets.Add(new Vector3D[3] {
-					MyJumpGateModSession.WorldVectorToLocalVectorP(ref current_position, entity.WorldMatrix.Translation),
-					MyJumpGateModSession.WorldVectorToLocalVectorD(ref current_position, entity.WorldMatrix.Forward),
-					MyJumpGateModSession.WorldVectorToLocalVectorD(ref current_position, entity.WorldMatrix.Up),
-				});
-
+				this.RelativeEntityOffsets.Add(entity.WorldMatrix * parent_inv);
+				this.EntityStartingAngularVelocities.Add(entity.Physics.AngularVelocity);
 				MyJumpGateConstruct construct = (entity is MyCubeGrid) ? MyJumpGateModSession.Instance.GetJumpGateGrid(entity.EntityId) : null;
 				if (construct != null) construct.BatchingGate = jump_gate;
-				this.EntityPhysics.Add(entity.Physics);
-				entity.Physics.Enabled = false;
-				entity.Physics = null;
+				entity.Physics.Deactivate();
 			}
 		}
 
@@ -178,76 +189,91 @@ namespace IOTA.ModularJumpGates.Util
 		{
 			++this.CurrentTick;
 			bool complete = this.CurrentTick >= this.Duration;
-			double tick_ratio = (double) this.CurrentTick / this.Duration;
 			MyEntity parent = this.EntityBatch[0];
-			MatrixD world_matrix;
-			MatrixD.Lerp(ref this.StartPoint, ref this.Endpoint, tick_ratio, out this.CurrentPos);
-			
-			if (!parent.MarkedForClose && parent is IMyPlayer)
+
+			if (parent.Closed)
 			{
-				world_matrix = parent.WorldMatrix;
-				world_matrix.Translation = this.CurrentPos.Translation;
-				parent.Teleport(world_matrix);
+				Logger.Debug($"Batch parent @ {parent.EntityId} closed");
+				return true;
 			}
-			else if (!parent.MarkedForClose)
+			else if (this.IsComplete)
 			{
-				parent.Teleport(this.CurrentPos);
-				parent.WorldMatrix = MatrixD.Normalize(this.CurrentPos);
+				for (int i = 0; i < this.EntityBatch.Count; ++i)
+				{
+					MyEntity entity = this.EntityBatch[i];
+					if (entity.MarkedForClose || entity.Physics == null) continue;
+					Vector3D velocity = new Vector3D(entity.Physics.LinearVelocity);
+					entity.Physics.LinearVelocity = (velocity.LengthSquared() <= this.MaxSafeSpeed * this.MaxSafeSpeed) ? velocity : (velocity.Normalized() * this.MaxSafeSpeed);
+					entity.Physics.AngularVelocity = this.EntityStartingAngularVelocities[i];
+				}
+
+				return ++this.MaxSpeedCooldownTime < EntityWarpInfo.GlobalMaxSpeedCooldownTime;
+			}
+			else if (complete && parent is IMyPlayer)
+			{
+				MatrixD parent_matrix = parent.WorldMatrix;
+				parent_matrix.Translation = this.FinalPos.Translation;
+				parent.Teleport(parent_matrix);
+			}
+			else if (complete) parent.Teleport(this.FinalPos);
+			else
+			{
+				double tick_ratio = (double) this.CurrentTick / this.Duration;
+				Vector3D current_pos;
+				Vector3D.Lerp(ref this.StartPos, ref this.EndPos, tick_ratio, out current_pos);
+				MatrixD parent_matrix = parent.WorldMatrix;
+				parent_matrix.Translation = current_pos;
+				parent.Teleport(parent_matrix);
 			}
 
 			for (int i = 0; i < this.EntityBatch.Count - 1; ++i)
 			{
 				MyEntity entity = this.EntityBatch[i + 1];
 				if (entity.MarkedForClose) continue;
-				Vector3D[] relative_offsets = this.RelativeEntityOffsets[i];
-				Vector3D translation = MyJumpGateModSession.LocalVectorToWorldVectorP(ref this.CurrentPos, relative_offsets[0]);
-				
-				if (entity is IMyPlayer)
-				{
-					world_matrix = entity.WorldMatrix;
-					world_matrix.Translation = translation;
-					entity.Teleport(world_matrix);
-				}
-				else
-				{
-					Vector3D forward = MyJumpGateModSession.LocalVectorToWorldVectorD(ref this.CurrentPos, relative_offsets[1]);
-					Vector3D up = MyJumpGateModSession.LocalVectorToWorldVectorD(ref this.CurrentPos, relative_offsets[2]);
-					forward.Normalize();
-					up.Normalize();
-					MatrixD.CreateWorld(ref translation, ref forward, ref up, out world_matrix);
-					entity.Teleport(world_matrix);
-					entity.WorldMatrix = world_matrix;
-				}
+				MatrixD relative_offsets = this.RelativeEntityOffsets[i];
+				MatrixD result = relative_offsets * parent.WorldMatrix;
+				if (!complete || entity is IMyPlayer) result.SetRotationAndScale(entity.WorldMatrix);
+				entity.Teleport(result);
 			}
 
 			if (complete)
 			{
+				parent.Physics?.Activate();
+
 				for (int i = 0; i < this.EntityBatch.Count; ++i)
 				{
 					MyEntity entity = this.EntityBatch[i];
-					entity.Physics = this.EntityPhysics[i];
-					if (entity.Physics != null) entity.Physics.Enabled = true;
+					if (entity.MarkedForClose || entity.Physics == null) continue;
+					entity.Physics.Activate();
 					MyJumpGateConstruct construct = (entity is MyCubeGrid) ? MyJumpGateModSession.Instance.GetJumpGateGrid(entity.EntityId) : null;
 					if (construct != null) construct.BatchingGate = null;
 				}
 
 				if (this.Callback != null) this.Callback(this.EntityBatch);
+				this.IsComplete = true;
 			}
 
-			return complete;
+			return false;
 		}
 
 		public string ToSerialized()
 		{
 			return Convert.ToBase64String(MyAPIGateway.Utilities.SerializeToBinary(new SerializedEntityWarpInfo {
-				Endpoint = new Vector3D[3] { this.Endpoint.Translation, this.Endpoint.Forward, this.Endpoint.Up },
-				StartPoint = new Vector3D[3] { this.StartPoint.Translation, this.StartPoint.Forward, this.StartPoint.Up },
-				CurrentPosition = new Vector3D[3] { this.CurrentPos.Translation, this.CurrentPos.Forward, this.CurrentPos.Up },
+				StartPos = this.StartPos,
+				EndPos = this.EndPos,
+				FinalPos = new Vector3D[3] { this.FinalPos.Translation, this.FinalPos.Forward, this.FinalPos.Up },
 				EntityBatch = this.EntityBatch.Select((entity) => entity.EntityId).ToList(),
-				RelativeEntityOffsets = this.RelativeEntityOffsets.Select((offsets) => Convert.ToBase64String(MyAPIGateway.Utilities.SerializeToBinary(offsets))).ToList(),
+				RelativeEntityOffsets = this.RelativeEntityOffsets.Select((offsets) => Convert.ToBase64String(MyAPIGateway.Utilities.SerializeToBinary(new double[16] {
+					offsets.M11, offsets.M12, offsets.M13, offsets.M14,
+					offsets.M21, offsets.M22, offsets.M23, offsets.M24,
+					offsets.M31, offsets.M32, offsets.M33, offsets.M34,
+					offsets.M41, offsets.M42, offsets.M43, offsets.M44
+				}))).ToList(),
+				EntityStartingAngularVelocities = this.EntityStartingAngularVelocities,
 				JumpGate = JumpGateUUID.FromJumpGate(this.JumpGate).ToGuid(),
 				Duration = this.Duration,
 				CurrentTick = this.CurrentTick,
+				MaxSafeSpeed = this.MaxSafeSpeed,
 			}));
 		}
 	}

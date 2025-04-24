@@ -49,7 +49,11 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 				node_velocity_sdr.SetLimits(0, 1e6f);
 				node_velocity_sdr.Writer = (block, string_builder) => string_builder.Append(MyJumpGateModSession.AutoconvertMetricUnits(block.Components.Get<JumpGateNodeVelocityChangedEvent>().TargetValue, "m/s", 4));
 				node_velocity_sdr.Getter = (block) => (float) block.Components.Get<JumpGateNodeVelocityChangedEvent>().TargetValue;
-				node_velocity_sdr.Setter = (block, value) => block.Components.Get<JumpGateNodeVelocityChangedEvent>().TargetValue = value;
+				node_velocity_sdr.Setter = (block, value) => {
+					JumpGateNodeVelocityChangedEvent event_block = block.Components.Get<JumpGateNodeVelocityChangedEvent>();
+					event_block.TargetValue = value;
+					event_block.SetDirty();
+				};
 				MyAPIGateway.TerminalControls.AddControl<T>(node_velocity_sdr);
 			}
 

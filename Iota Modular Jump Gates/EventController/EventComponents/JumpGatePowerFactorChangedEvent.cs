@@ -53,7 +53,11 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 				power_factor_sdr.SetLimits(0f, float.MaxValue);
 				power_factor_sdr.Writer = (block, string_builder) => string_builder.Append(MyJumpGateModSession.AutoconvertSciNotUnits(block.Components.Get<JumpGatePowerFactorChangedEvent>().TargetValue, 4));
 				power_factor_sdr.Getter = (block) => (float) (block.Components.Get<JumpGatePowerFactorChangedEvent>().TargetValue);
-				power_factor_sdr.Setter = (block, value) => block.Components.Get<JumpGatePowerFactorChangedEvent>().TargetValue = value;
+				power_factor_sdr.Setter = (block, value) => {
+					JumpGatePowerFactorChangedEvent event_block = block.Components.Get<JumpGatePowerFactorChangedEvent>();
+					event_block.TargetValue = value;
+					event_block.SetDirty();
+				};
 				MyAPIGateway.TerminalControls.AddControl<T>(power_factor_sdr);
 			}
 

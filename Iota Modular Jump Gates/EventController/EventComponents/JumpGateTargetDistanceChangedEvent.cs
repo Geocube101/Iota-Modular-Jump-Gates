@@ -50,7 +50,11 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 				target_distance_sdr.SetLimits(0, 1e24f);
 				target_distance_sdr.Writer = (block, string_builder) => string_builder.Append(MyJumpGateModSession.AutoconvertMetricUnits(block.Components.Get<JumpGateTargetDistanceChangedEvent>().TargetValue * 1e3, "m", 4));
 				target_distance_sdr.Getter = (block) => (float) block.Components.Get<JumpGateTargetDistanceChangedEvent>().TargetValue;
-				target_distance_sdr.Setter = (block, value) => block.Components.Get<JumpGateTargetDistanceChangedEvent>().TargetValue = value;
+				target_distance_sdr.Setter = (block, value) => {
+					JumpGateTargetDistanceChangedEvent event_block = block.Components.Get<JumpGateTargetDistanceChangedEvent>();
+					event_block.TargetValue = value;
+					event_block.SetDirty();
+				};
 				MyAPIGateway.TerminalControls.AddControl<T>(target_distance_sdr);
 			}
 

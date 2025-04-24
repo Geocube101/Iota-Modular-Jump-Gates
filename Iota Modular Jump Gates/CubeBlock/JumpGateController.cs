@@ -866,7 +866,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			{
 				long player_identity = MyAPIGateway.Players.TryGetIdentityId(MyAPIGateway.Multiplayer.MyId);
 				double distance;
-				if (MyJumpGateModSession.Configuration.ConstructConfiguration.RequireGridCommLink) this.JumpGateGrid?.GetCommLinkedJumpGateGrids(this.TEMP_CommLinkedGrids);
+				if (MyJumpGateModSession.Configuration.ConstructConfiguration.RequireGridCommLink) this.JumpGateGrid.GetCommLinkedJumpGateGrids(this.TEMP_CommLinkedGrids);
 				else MyJumpGateModSession.Instance.GetAllJumpGateGrids(this.TEMP_CommLinkedGrids);
 				Vector3D jump_node = jump_gate.WorldJumpNode;
 				this.JumpGateGrid.GetBeaconsWithinReverseBroadcastSphere(this.TEMP_BeaconLinkedGrids, (beacon) => (distance = Vector3D.Distance(jump_node, beacon.BeaconPosition)) >= jump_gate.JumpGateConfiguration.MinimumJumpDistance && distance <= jump_gate.JumpGateConfiguration.MaximumJumpDistance);
@@ -879,13 +879,13 @@ namespace IOTA.ModularJumpGates.CubeBlock
 
 				foreach (MyJumpGateConstruct connected_grid in this.TEMP_CommLinkedGrids)
 				{
-					if (connected_grid == this.JumpGateGrid || !connected_grid.IsValid()) continue;
+					if (connected_grid == this.JumpGateGrid || !MyJumpGateModSession.Instance.IsJumpGateGridMultiplayerValid(connected_grid)) continue;
 					connected_grid.GetAttachedJumpGateControllers(this.TEMP_ConstructControllers);
 
 					foreach (MyJumpGateController controller in this.TEMP_ConstructControllers)
 					{
 						MyJumpGate other_gate = controller.AttachedJumpGate();
-						if (other_gate == null || other_gate.MarkClosed || !controller.IsWorking()) continue;
+						if (other_gate == null || other_gate.MarkClosed) continue;
 						distance = Vector3D.Distance(jump_node, other_gate.WorldJumpNode);
 						if (distance < jump_gate.JumpGateConfiguration.MinimumJumpDistance || distance > jump_gate.JumpGateConfiguration.MaximumJumpDistance || !controller.IsFactionRelationValid(player_identity)) continue;
 						lock (this.WaypointsListMutex) this.WaypointsList.Add(new MyJumpGateWaypoint(other_gate));
@@ -949,9 +949,12 @@ namespace IOTA.ModularJumpGates.CubeBlock
 						jump_gate?.GetEntitiesInJumpSpace(this.TEMP_JumpGateEntities, true);
 						jump_gate?.GetUninitializedEntititesInJumpSpace(this.TEMP_UnconfirmedJumpGateEntities, true);
 
-						double max_distance = (jump_gate_valid) ? Math.Sqrt(this.AttachedJumpGateDrives.Max((drive) => Vector3D.DistanceSquared(drive.WorldMatrix.Translation, jump_ellipse.WorldMatrix.Translation))) : 0;
-						this.HoloDisplayScale = 0.75 / max_distance;
-						this.HoloDisplayScalar = MatrixD.CreateScale(this.HoloDisplayScale);
+						if (this.AttachedJumpGateDrives.Count > 0)
+						{
+							double max_distance = (jump_gate_valid) ? Math.Sqrt(this.AttachedJumpGateDrives.Max((drive) => Vector3D.DistanceSquared(drive.WorldMatrix.Translation, jump_ellipse.WorldMatrix.Translation))) : 0;
+							this.HoloDisplayScale = 0.75 / max_distance;
+							this.HoloDisplayScalar = MatrixD.CreateScale(this.HoloDisplayScale);
+						}
 					}
 
 					if (jump_gate_valid && this.AttachedJumpGateDrives.Count((drive) => drive.IsWorking()) >= 2)

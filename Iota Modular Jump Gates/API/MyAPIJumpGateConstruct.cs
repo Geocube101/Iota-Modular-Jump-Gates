@@ -416,6 +416,17 @@ namespace IOTA.ModularJumpGates.API
 		}
 
 		/// <summary>
+		/// Gets all blocks inheriting from the specified type
+		/// </summary>
+		/// <typeparam name="T">The block type</typeparam>
+		/// <param name="blocks">A list of blocks to popuplate<br/> List will not be cleared</param>
+		/// <param name="filter">A predicate to match blocks against</param>
+		public void GetAllBlocksOfType<T>(List<T> blocks, Func<T, bool> filter = null) where T : IMySlimBlock
+		{
+			this.Construct.GetAllBlocksOfType<T>(blocks, filter);
+		}
+
+		/// <summary>
 		/// Whether this grid is valid
 		/// </summary>
 		/// <returns>True if valid</returns>

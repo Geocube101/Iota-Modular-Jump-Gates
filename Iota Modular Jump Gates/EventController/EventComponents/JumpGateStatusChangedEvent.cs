@@ -16,6 +16,8 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 	{
 		private static List<MyTerminalControlComboBoxItem> ComboBoxItems = null;
 
+		private static readonly object ComboBoxLock = new object();
+
 		public override bool IsThresholdUsed => false;
 		public override bool IsConditionSelectionUsed => false;
 		public override bool IsBlocksListUsed => false;
@@ -25,18 +27,23 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 
 		public JumpGateStatusChangedEvent() : base()
 		{
-			if (JumpGateStatusChangedEvent.ComboBoxItems != null) return;
-			JumpGateStatusChangedEvent.ComboBoxItems = new List<MyTerminalControlComboBoxItem>();
-
-			foreach (MyJumpGateStatus phase in Enum.GetValues(typeof(MyJumpGateStatus)))
+			lock (JumpGateStatusChangedEvent.ComboBoxLock)
 			{
-				char[] name = Enum.GetName(typeof(MyJumpGateStatus), phase).ToLower().ToCharArray();
-				name[0] = Char.ToUpper(name[0]);
-				MyTerminalControlComboBoxItem item = new MyTerminalControlComboBoxItem {
-					Key = (byte) phase,
-					Value = MyStringId.GetOrCompute(string.Join("", name)),
-				};
-				JumpGateStatusChangedEvent.ComboBoxItems.Add(item);
+				if (JumpGateStatusChangedEvent.ComboBoxItems != null) return;
+				JumpGateStatusChangedEvent.ComboBoxItems = new List<MyTerminalControlComboBoxItem>();
+
+				foreach (MyJumpGateStatus status in Enum.GetValues(typeof(MyJumpGateStatus)))
+				{
+					if (status == MyJumpGateStatus.NONE || status == MyJumpGateStatus.INVALID) continue;
+					char[] name = Enum.GetName(typeof(MyJumpGateStatus), status).ToLower().ToCharArray();
+					name[0] = Char.ToUpper(name[0]);
+					MyTerminalControlComboBoxItem item = new MyTerminalControlComboBoxItem
+					{
+						Key = (byte) status,
+						Value = MyStringId.GetOrCompute(string.Join("", name)),
+					};
+					JumpGateStatusChangedEvent.ComboBoxItems.Add(item);
+				}
 			}
 		}
 
@@ -61,8 +68,10 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 				status_cb.ComboBoxContent = (content) => content.AddList(JumpGateStatusChangedEvent.ComboBoxItems);
 				status_cb.Getter = (block) => block.Components.Get<JumpGateStatusChangedEvent>()?.TargetValue ?? 0xFF;
 				status_cb.Setter = (block, value) => {
-					block.Components.Get<JumpGateStatusChangedEvent>().TargetValue = (byte) value;
+					JumpGateStatusChangedEvent event_block = block.Components.Get<JumpGateStatusChangedEvent>();
+					event_block.TargetValue = (byte) value;
 					this.Poll(true);
+					event_block.SetDirty();
 				};
 				status_cb.Visible = block => block.Components.Get<JumpGateStatusChangedEvent>()?.IsSelected ?? false;
 				MyAPIGateway.TerminalControls.AddControl<T>(status_cb);

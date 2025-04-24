@@ -64,7 +64,11 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 				is_working_only.SupportsMultipleBlocks = false;
 				is_working_only.Visible = block => block.Components.Get<JumpGateDriveCountChangedEvent>()?.IsSelected ?? false;
 				is_working_only.Getter = block => block.Components.Get<JumpGateDriveCountChangedEvent>().IsWorkingOnly;
-				is_working_only.Setter = (block, value) => block.Components.Get<JumpGateDriveCountChangedEvent>().IsWorkingOnly = value;
+				is_working_only.Setter = (block, value) => {
+					JumpGateDriveCountChangedEvent event_block = block.Components.Get<JumpGateDriveCountChangedEvent>();
+					event_block.IsWorkingOnly = value;
+					event_block.SetDirty();
+				};
 				MyAPIGateway.TerminalControls.AddControl<T>(is_working_only);
 			}
 
@@ -77,7 +81,11 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 				drive_count_sdr.SetLimits(0f, 1e24f);
 				drive_count_sdr.Writer = (block, string_builder) => string_builder.Append(MyJumpGateModSession.AutoconvertSciNotUnits(block.Components.Get<JumpGateDriveCountChangedEvent>().TargetValue, 0));
 				drive_count_sdr.Getter = (block) => block.Components.Get<JumpGateDriveCountChangedEvent>().TargetValue;
-				drive_count_sdr.Setter = (block, value) => block.Components.Get<JumpGateDriveCountChangedEvent>().TargetValue = (int) value;
+				drive_count_sdr.Setter = (block, value) => {
+					JumpGateDriveCountChangedEvent event_block = block.Components.Get<JumpGateDriveCountChangedEvent>();
+					event_block.TargetValue = (int) value;
+					event_block.SetDirty();
+				};
 				MyAPIGateway.TerminalControls.AddControl<T>(drive_count_sdr);
 			}
 

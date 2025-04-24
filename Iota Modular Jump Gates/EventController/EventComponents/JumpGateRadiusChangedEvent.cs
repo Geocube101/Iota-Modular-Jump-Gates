@@ -49,7 +49,11 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 				radius_sdr.SetLimits((block) => 0, (block) => (float) Math.Round(Math.Max(MyJumpGateModSession.Configuration.DriveConfiguration.LargeDriveRaycastDistance, MyJumpGateModSession.Configuration.DriveConfiguration.SmallDriveRaycastDistance) * 1.5));
 				radius_sdr.Writer = (block, string_builder) => string_builder.Append(MyJumpGateModSession.AutoconvertMetricUnits(block.Components.Get<JumpGateRadiusChangedEvent>().TargetValue, "m", 4));
 				radius_sdr.Getter = (block) => (float) block.Components.Get<JumpGateRadiusChangedEvent>().TargetValue;
-				radius_sdr.Setter = (block, value) => block.Components.Get<JumpGateRadiusChangedEvent>().TargetValue = value;
+				radius_sdr.Setter = (block, value) => {
+					JumpGateRadiusChangedEvent event_block = block.Components.Get<JumpGateRadiusChangedEvent>();
+					event_block.TargetValue = value;
+					event_block.SetDirty();
+				};
 				MyAPIGateway.TerminalControls.AddControl<T>(radius_sdr);
 			}
 
