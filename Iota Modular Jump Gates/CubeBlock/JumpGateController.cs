@@ -86,6 +86,12 @@ namespace IOTA.ModularJumpGates.CubeBlock
 
 			private readonly object WriterLock = new object();
 
+			public MyControllerBlockSettingsStruct() { }
+			public MyControllerBlockSettingsStruct(MyJumpGateController controller, Dictionary<string, object> mapping)
+			{
+				this.FromDictionary(controller, mapping);
+			}
+
 			public void AcquireLock()
 			{
 				Monitor.Enter(this.WriterLock);
@@ -554,12 +560,12 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// <summary>
 		/// IMyTextSurfaceProvider Property
 		/// </summary>
-		public bool UseGenericLcd { get { return this.MultiPanelComponent.UseGenericLcd; } }
+		public bool UseGenericLcd => this.MultiPanelComponent.UseGenericLcd;
 
 		/// <summary>
 		/// IMyTextSurfaceProvider Property
 		/// </summary>
-		public int SurfaceCount { get { return this.MultiPanelComponent.SurfaceCount; } }
+		public int SurfaceCount => this.MultiPanelComponent.SurfaceCount;
 
 		/// <summary>
 		/// The block data for this block
@@ -605,7 +611,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				if (this.LocalGameTick % 30 == 0)
 				{
 					this.TEMP_DetailedInfoConstructsList.Clear();
-					this_grid?.GetCubeGrids(this.TEMP_DetailedInfoConstructsList);
+					if (this_grid != null) this.TEMP_DetailedInfoConstructsList.AddRange(this_grid.GetCubeGrids());
 				}
 
 				double distance = (jump_node == null) ? -1 : Vector3D.Distance(endpoint, jump_node.Value);
@@ -624,7 +630,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				sb.Append($"\n[color=#FF78FFFB]--- Jump Gate Info ---[/color][color=#FF5ABFBC]\n");
 				sb.Append($" - Status: {jump_gate?.Status.ToString() ?? "N/A"}\n");
 				sb.Append($" - Phase: {jump_gate?.Phase.ToString() ?? "N/A"}\n");
-				sb.Append($" - Drive Count: {this_grid?.GetDriveCount((drive) => drive.JumpGateID == jump_gate?.JumpGateID).ToString() ?? "N/A"}\n");
+				sb.Append($" - Drive Count: {jump_gate?.GetWorkingJumpGateDrives().Count().ToString() ?? "N/A"}\n");
 				sb.Append($" - Grid Size Type: {jump_gate?.CubeGridSize().ToString() ?? "N/A"}\n");
 				sb.Append($" - Radius: {((jump_gate == null) ? "N/A" : MyJumpGateModSession.AutoconvertMetricUnits(jump_ellipse.Value.Radii.X, "m", 4))}\n");
 				sb.Append($" - Effective Radius: {((jump_gate == null) ? "N/A" : MyJumpGateModSession.AutoconvertMetricUnits(jump_ellipse.Value.Radii.X, "m", 4))}\n");
@@ -687,8 +693,8 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				sb.Append($"\n[color=#FF78FFFB]--- Construct Info ---[/color][color=#FF5ABFBC]\n");
 				sb.Append($" - Main Grid: {(this_grid?.CubeGridID.ToString() ?? "N/A")}\n");
 				sb.Append($" - Static Grids: {((this_grid == null) ? "N/A" : $"{this.TEMP_DetailedInfoConstructsList.Count((grid) => grid.IsStatic)}")}/{this.TEMP_DetailedInfoConstructsList.Count}\n");
-				sb.Append($" - Total Grid Drives: {(this_grid?.GetDriveCount().ToString() ?? "N/A")}\n");
-				sb.Append($" - Total Grid Gates: {(this_grid?.GetJumpGateCount().ToString() ?? "N/A")}[/color]\n");
+				sb.Append($" - Total Grid Drives: {(this_grid?.GetAttachedJumpGateDrives().Count().ToString() ?? "N/A")}\n");
+				sb.Append($" - Total Grid Gates: {(this_grid?.GetJumpGates().Count().ToString() ?? "N/A")}[/color]\n");
 
 				if (MyJumpGateModSession.DebugMode)
 				{
@@ -866,10 +872,10 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			{
 				long player_identity = MyAPIGateway.Players.TryGetIdentityId(MyAPIGateway.Multiplayer.MyId);
 				double distance;
-				if (MyJumpGateModSession.Configuration.ConstructConfiguration.RequireGridCommLink) this.JumpGateGrid.GetCommLinkedJumpGateGrids(this.TEMP_CommLinkedGrids);
-				else MyJumpGateModSession.Instance.GetAllJumpGateGrids(this.TEMP_CommLinkedGrids);
+				if (MyJumpGateModSession.Configuration.ConstructConfiguration.RequireGridCommLink) this.TEMP_CommLinkedGrids.AddRange(this.JumpGateGrid.GetCommLinkedJumpGateGrids());
+				else this.TEMP_CommLinkedGrids.AddRange(MyJumpGateModSession.Instance.GetAllJumpGateGrids());
 				Vector3D jump_node = jump_gate.WorldJumpNode;
-				this.JumpGateGrid.GetBeaconsWithinReverseBroadcastSphere(this.TEMP_BeaconLinkedGrids, (beacon) => (distance = Vector3D.Distance(jump_node, beacon.BeaconPosition)) >= jump_gate.JumpGateConfiguration.MinimumJumpDistance && distance <= jump_gate.JumpGateConfiguration.MaximumJumpDistance);
+				this.TEMP_BeaconLinkedGrids.AddRange(this.JumpGateGrid.GetBeaconsWithinReverseBroadcastSphere().Where((beacon) => (distance = Vector3D.Distance(jump_node, beacon.BeaconPosition)) >= jump_gate.JumpGateConfiguration.MinimumJumpDistance && distance <= jump_gate.JumpGateConfiguration.MaximumJumpDistance));
 				lock (this.WaypointsListMutex) this.WaypointsList.Clear();
 
 				if (jump_gate.ServerAntenna != null)
@@ -880,7 +886,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				foreach (MyJumpGateConstruct connected_grid in this.TEMP_CommLinkedGrids)
 				{
 					if (connected_grid == this.JumpGateGrid || !MyJumpGateModSession.Instance.IsJumpGateGridMultiplayerValid(connected_grid)) continue;
-					connected_grid.GetAttachedJumpGateControllers(this.TEMP_ConstructControllers);
+					this.TEMP_ConstructControllers.AddRange(connected_grid.GetAttachedJumpGateControllers());
 
 					foreach (MyJumpGateController controller in this.TEMP_ConstructControllers)
 					{
@@ -945,9 +951,9 @@ namespace IOTA.ModularJumpGates.CubeBlock
 						this.AttachedJumpGateDrives.Clear();
 						this.TEMP_JumpGateEntities.Clear();
 						this.TEMP_UnconfirmedJumpGateEntities.Clear();
-						jump_gate?.GetJumpGateDrives(this.AttachedJumpGateDrives);
-						jump_gate?.GetEntitiesInJumpSpace(this.TEMP_JumpGateEntities, true);
-						jump_gate?.GetUninitializedEntititesInJumpSpace(this.TEMP_UnconfirmedJumpGateEntities, true);
+						this.AttachedJumpGateDrives.AddRange(jump_gate.GetJumpGateDrives());
+						jump_gate.GetEntitiesInJumpSpace(this.TEMP_JumpGateEntities, true);
+						jump_gate.GetUninitializedEntititesInJumpSpace(this.TEMP_UnconfirmedJumpGateEntities, true);
 
 						if (this.AttachedJumpGateDrives.Count > 0)
 						{
@@ -973,8 +979,6 @@ namespace IOTA.ModularJumpGates.CubeBlock
 						draw_ellipse.WorldMatrix.Up = holo_matrix.Forward;
 						draw_ellipse.Draw2(aqua, 20, 16, 0.00125f, MyJumpGateModSession.MyMaterialsHolder.WeaponLaser, 10);
 
-						List<IMyCubeGrid> subgrids = new List<IMyCubeGrid>();
-
 						foreach (MyJumpGateDrive drive in this.AttachedJumpGateDrives)
 						{
 							Color color = (drive.IsWorking()) ? aqua : red;
@@ -999,9 +1003,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 							}
 							else
 							{
-								construct.GetCubeGrids(subgrids);
-
-								foreach (IMyCubeGrid subgrid in subgrids)
+								foreach (IMyCubeGrid subgrid in construct.GetCubeGrids())
 								{
 									MatrixD subgrid_matrix = this.HoloDisplayScalar * subgrid.WorldMatrix;
 									Vector3D pos = MyJumpGateModSession.WorldVectorToLocalVectorP(ref jump_ellipse.WorldMatrix, subgrid.WorldMatrix.Translation);
@@ -1009,8 +1011,6 @@ namespace IOTA.ModularJumpGates.CubeBlock
 									BoundingBoxD grid_box = subgrid.LocalAABB;
 									MySimpleObjectDraw.DrawTransparentBox(ref subgrid_matrix, ref grid_box, ref red, MySimpleObjectRasterizer.Wireframe, 1, 0.00025f, null, MyJumpGateModSession.MyMaterialsHolder.WeaponLaser, intensity: 10);
 								}
-
-								subgrids.Clear();
 							}
 						}
 					}
@@ -1235,7 +1235,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 
 		/// <summary>
 		/// </summary>
-		/// <param name="steam_id">The player's identiy to check</param>
+		/// <param name="player_identity">The player's identiy to check</param>
 		/// <returns>True if the caller's faction can jump to this gate</returns>
 		public bool IsFactionRelationValid(long player_identity)
 		{
@@ -1260,6 +1260,17 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		}
 
 		/// <summary>
+		/// Gets the jump gate this controller is attached to
+		/// </summary>
+		/// <returns>The attached gate or null if none attached</returns>
+		public MyJumpGate AttachedJumpGate()
+		{
+			long gate_id = this.BlockSettings?.JumpGateID() ?? -1;
+			if (gate_id < 0 || this.JumpGateGrid == null || this.JumpGateGrid.Closed) return null;
+			return this.JumpGateGrid.GetJumpGate(gate_id);
+		}
+
+		/// <summary>
 		/// Serializes this block's data
 		/// </summary>
 		/// <param name="as_client_request">If true, this will be an update request to server</param>
@@ -1271,17 +1282,6 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			serialized.SerializedBlockSettings = Convert.ToBase64String(MyAPIGateway.Utilities.SerializeToBinary(this.BlockSettings));
 			serialized.SerializedPanelInfo = this.MultiPanelComponent?.Serialize(true);
 			return serialized;
-		}
-
-		/// <summary>
-		/// Gets the jump gate this controller is attached to
-		/// </summary>
-		/// <returns>The attached gate or null if none attached</returns>
-		public MyJumpGate AttachedJumpGate()
-		{
-			long gate_id = this.BlockSettings?.JumpGateID() ?? -1;
-			if (gate_id < 0 || this.JumpGateGrid == null || this.JumpGateGrid.Closed) return null;
-			return this.JumpGateGrid.GetJumpGate(gate_id);
 		}
 		#endregion
 	}

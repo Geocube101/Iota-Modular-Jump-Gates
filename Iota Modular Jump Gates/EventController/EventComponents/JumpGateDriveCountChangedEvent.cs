@@ -46,8 +46,8 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 
 		protected override int GetValueFromJumpGate(MyJumpGate jump_gate)
 		{
-			if (this.IsWorkingOnly) jump_gate.GetWorkingJumpGateDrives(this.JumpGateDrives);
-			else jump_gate.GetJumpGateDrives(this.JumpGateDrives);
+			if (this.IsWorkingOnly) this.JumpGateDrives.AddRange(jump_gate.GetWorkingJumpGateDrives());
+			else this.JumpGateDrives.AddRange(jump_gate.GetJumpGateDrives());
 			int count = this.JumpGateDrives.Count;
 			this.JumpGateDrives.Clear();
 			return count;

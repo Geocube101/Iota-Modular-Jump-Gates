@@ -109,68 +109,32 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// Whether this is a wrapper around a block that isn't initialized<br />
 		/// Always false on singleplayer or server
 		/// </summary>
-		public bool IsNullWrapper
-		{
-			get
-			{
-				return this.TerminalBlock == null;
-			}
-		}
+		public bool IsNullWrapper => this.TerminalBlock == null;
 
 		/// <summary>
 		/// The block ID of this block
 		/// </summary>
-		public long BlockID
-		{
-			get
-			{
-				return this.TerminalBlock?.EntityId ?? this.SuspendedTerminalBlockID;
-			}
-		}
+		public long BlockID => this.TerminalBlock?.EntityId ?? this.SuspendedTerminalBlockID;
 
 		/// <summary>
 		/// The cube grid ID of this block
 		/// </summary>
-		public long CubeGridID
-		{
-			get
-			{
-				return this.TerminalBlock?.CubeGrid.EntityId ?? this.SerializedWrapperInfo?.CubeGridID ?? -1;
-			}
-		}
+		public long CubeGridID => this.TerminalBlock?.CubeGrid.EntityId ?? this.SerializedWrapperInfo?.CubeGridID ?? -1;
 
 		/// <summary>
 		/// The construct ID of this block
 		/// </summary>
-		public long ConstructID
-		{
-			get
-			{
-				return this.JumpGateGrid?.CubeGridID ?? this.SerializedWrapperInfo?.JumpGateGridID ?? -1;
-			}
-		}
+		public long ConstructID => this.JumpGateGrid?.CubeGridID ?? this.SerializedWrapperInfo?.JumpGateGridID ?? -1;
 
 		/// <summary>
 		/// The player ID of this block's owner
 		/// </summary>
-		public long OwnerID
-		{
-			get
-			{
-				return this.TerminalBlock?.OwnerId ?? this.SerializedWrapperInfo?.OwnerID ?? -1;
-			}
-		}
+		public long OwnerID => this.TerminalBlock?.OwnerId ?? this.SerializedWrapperInfo?.OwnerID ?? -1;
 
 		/// <summary>
 		/// The steam ID of this block's owner
 		/// </summary>
-		public ulong OwnerSteamID
-		{
-			get
-			{
-				return (this.TerminalBlock == null) ? (this.SerializedWrapperInfo?.SteamOwnerID ?? 0) : MyAPIGateway.Players.TryGetSteamId(this.TerminalBlock.OwnerId);
-			}
-		}
+		public ulong OwnerSteamID => (this.TerminalBlock == null) ? (this.SerializedWrapperInfo?.SteamOwnerID ?? 0) : MyAPIGateway.Players.TryGetSteamId(this.TerminalBlock.OwnerId);
 
 		/// <summary>
 		/// The block local game tick
@@ -206,13 +170,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// <summary>
 		/// The world matrix of this block
 		/// </summary>
-		public MatrixD WorldMatrix
-		{
-			get
-			{
-				return this.TerminalBlock?.WorldMatrix ?? this.BlockWorldMatrix;
-			}
-		}
+		public MatrixD WorldMatrix => this.TerminalBlock?.WorldMatrix ?? this.BlockWorldMatrix;
 
 		/// <summary>
 		/// The jump gate grid this component is bound to

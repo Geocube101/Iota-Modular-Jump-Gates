@@ -18,7 +18,7 @@ using VRageMath;
 
 namespace IOTA.ModularJumpGates
 {
-	public enum GridInvalidationReason : byte { NONE, CLOSED, NULL_GRID, INSUFFICIENT_GRIDS, NULL_PHYSICS };
+	public enum MyGridInvalidationReason : byte { NONE, CLOSED, NULL_GRID, INSUFFICIENT_GRIDS, NULL_PHYSICS };
 
 	/// <summary>
 	/// Class representing a grid-group construct
@@ -306,6 +306,11 @@ namespace IOTA.ModularJumpGates
 		#endregion
 
 		#region "object" Methods
+		public override bool Equals(object other)
+		{
+			return other != null && other is MyJumpGateConstruct && this.CubeGridID == ((MyJumpGateConstruct) other).CubeGridID;
+		}
+
 		/// <summary>
 		/// The hashcode for this object
 		/// </summary>
@@ -757,7 +762,7 @@ namespace IOTA.ModularJumpGates
 		public void Close(bool override_client = false)
 		{
 			if (this.Closed || (!override_client && MyNetworkInterface.IsStandaloneMultiplayerClient && this.CubeGrid != null && MyJumpGateModSession.Instance.HasCubeGrid(this.CubeGridID))) return;
-			GridInvalidationReason reason = this.GetInvalidationReason();
+			MyGridInvalidationReason reason = this.GetInvalidationReason();
 			this.SendNetworkGridUpdate(true);
 			string name = this.CubeGrid?.CustomName ?? "N/A";
 
@@ -813,7 +818,7 @@ namespace IOTA.ModularJumpGates
 		public void Update()
 		{
 			if (this.Closed) return;
-			GridInvalidationReason reason;
+			MyGridInvalidationReason reason;
 
 			// Check update validity
 			if (this.IsSuspended && this.CubeGrid != null)
@@ -839,7 +844,7 @@ namespace IOTA.ModularJumpGates
 					Logger.Debug($"[{grid_id}]] - Session is not running ({MyJumpGateModSession.SessionStatus}); CLOSED", 2);
 					return;
 				}
-				else if ((reason = this.GetInvalidationReason()) != GridInvalidationReason.NONE)
+				else if ((reason = this.GetInvalidationReason()) != MyGridInvalidationReason.NONE)
 				{
 					MyJumpGateModSession.Instance.CloseGrid(this);
 					this.SendNetworkGridUpdate();
@@ -1269,8 +1274,7 @@ namespace IOTA.ModularJumpGates
 			if (this.Closed) return;
 			long remapped_id = 0;
 			List<MyJumpGate> remapped_gates = new List<MyJumpGate>(this.JumpGates.Values);
-			List<MyJumpGate> all_gates = new List<MyJumpGate>();
-			MyJumpGateModSession.Instance.GetAllJumpGates(all_gates);
+			List<MyJumpGate> all_gates = MyJumpGateModSession.Instance.GetAllJumpGates().ToList();
 			this.JumpGates.Clear();
 
 			foreach (MyJumpGate gate in remapped_gates)
@@ -1397,295 +1401,6 @@ namespace IOTA.ModularJumpGates
 				pair.Value.Physics.AngularVelocity = Vector3.Zero;
 				pair.Value.Physics.LinearVelocity = Vector3.Zero;
 				pair.Value.IsStatic = is_static;
-			}
-		}
-
-		/// <summary>
-		/// Gets all jump gate controllers in this construct
-		/// </summary>
-		/// <param name="controllers">All attached controllers<br />List will not be cleared</param>
-		/// <param name="filter">A predicate to match controllers against</param>
-		public void GetAttachedJumpGateControllers(List<MyJumpGateController> controllers, Func<MyJumpGateController, bool> filter = null)
-		{
-			if (this.Closed) return;
-			if (filter == null) controllers.AddRange(this.JumpGateControllers.Select((pair) => pair.Value));
-			else controllers.AddRange(this.JumpGateControllers.Select((pair) => pair.Value).Where(filter));
-		}
-
-		/// <summary>
-		/// Gets all jump gate controllers in this construct as the specified type
-		/// </summary>
-		/// <param name="controllers">All attached controllers<br />List will not be cleared</param>
-		/// <param name="transformer">A transformer converting a controller to the specified type</param>
-		/// <param name="filter">A predicate to match controllers against</param>
-		public void GetAttachedJumpGateControllers<T>(List<T> controllers, Func<MyJumpGateController, T> transformer, Func<MyJumpGateController, bool> filter = null)
-		{
-			if (this.Closed) return;
-			if (filter == null) controllers.AddRange(this.JumpGateControllers.Select((pair) => transformer(pair.Value)));
-			else controllers.AddRange(this.JumpGateControllers.Select((pair) => pair.Value).Where(filter).Select(transformer));
-		}
-
-		/// <summary>
-		/// All jump gate drives in this construct
-		/// </summary>
-		/// <param name="drives">All attached drives<br />List will not be cleared</param>
-		/// <param name="filter">A predicate to match jump gate drives against</param>
-		public void GetAttachedJumpGateDrives(List<MyJumpGateDrive> drives, Func<MyJumpGateDrive, bool> filter = null)
-		{
-			if (this.Closed) return;
-			if (filter == null) drives.AddRange(this.JumpGateDrives.Select((pair) => pair.Value));
-			else drives.AddRange(this.JumpGateDrives.Select((pair) => pair.Value).Where(filter));
-		}
-
-		/// <summary>
-		/// All jump gate drives in this construct as the specified type
-		/// </summary>
-		/// <param name="drives">All attached drives<br />List will not be cleared</param>
-		///	<param name="transformer">A transformer converting a drive to the specified type</param>
-		/// <param name="filter">A predicate to match jump gate drives against</param>
-		public void GetAttachedJumpGateDrives<T>(List<T> drives, Func<MyJumpGateDrive, T> transformer, Func<MyJumpGateDrive, bool> filter = null)
-		{
-			if (this.Closed) return;
-			if (filter == null) drives.AddRange(this.JumpGateDrives.Select((pair) => transformer(pair.Value)));
-			else drives.AddRange(this.JumpGateDrives.Select((pair) => pair.Value).Where(filter).Select(transformer));
-		}
-
-		/// <summary>
-		/// Gets all jump gate drives in this construct not bound to a jump gate
-		/// </summary>
-		/// <param name="drives">All attached unassociated drives<br />List will not be cleared</param>
-		/// <param name="filter">A predicate to match jump gate drives against</param>
-		public void GetAttachedUnassociatedJumpGateDrives(List<MyJumpGateDrive> drives, Func<MyJumpGateDrive, bool> filter = null)
-		{
-			if (this.Closed) return;
-			foreach (KeyValuePair<long, MyJumpGateDrive> pair in this.JumpGateDrives) if (pair.Value.JumpGateID == -1 && (filter == null || filter(pair.Value))) drives.Add(pair.Value);
-		}
-
-		/// <summary>
-		/// All jump gate drives in this construct as the specified type
-		/// </summary>
-		/// <param name="drives">All attached unassociated drives<br />List will not be cleared</param>
-		///	<param name="transformer">A transformer converting a drive to the specified type</param>
-		/// <param name="filter">A predicate to match jump gate drives against</param>
-		public void GetAttachedUnassociatedJumpGateDrives<T>(List<T> drives, Func<MyJumpGateDrive, T> transformer, Func<MyJumpGateDrive, bool> filter = null)
-		{
-			if (this.Closed) return;
-			foreach (KeyValuePair<long, MyJumpGateDrive> pair in this.JumpGateDrives) if (pair.Value.JumpGateID == -1 && (filter == null || filter(pair.Value))) drives.Add(transformer(pair.Value));
-		}
-
-		/// <summary>
-		/// Gets all jump gate capacitors in this construct
-		/// </summary>
-		/// <param name="capacitors">All attached capacitors<br />List will not be cleared</param>
-		/// <param name="filter">A predicate to match capacitors against</param>
-		public void GetAttachedJumpGateCapacitors(List<MyJumpGateCapacitor> capacitors, Func<MyJumpGateCapacitor, bool> filter = null)
-		{
-			if (this.Closed) return;
-			if (filter == null) capacitors.AddRange(this.JumpGateCapacitors.Select((pair) => pair.Value));
-			else capacitors.AddRange(this.JumpGateCapacitors.Select((pair) => pair.Value).Where(filter));
-		}
-
-		/// <summary>
-		/// All jump gate capacitors in this construct as the specified type
-		/// </summary>
-		/// <param name="capacitors">All attached capacitors<br />List will not be cleared</param>
-		///	<param name="transformer">A transformer converting a capacitor to the specified type</param>
-		/// <param name="filter">A predicate to match jump gate capacitors against</param>
-		public void GetAttachedJumpGateCapacitors<T>(List<T> capacitors, Func<MyJumpGateCapacitor, T> transformer, Func<MyJumpGateCapacitor, bool> filter = null)
-		{
-			if (this.Closed) return;
-			if (filter == null) capacitors.AddRange(this.JumpGateCapacitors.Select((pair) => transformer(pair.Value)));
-			else capacitors.AddRange(this.JumpGateCapacitors.Select((pair) => pair.Value).Where(filter).Select(transformer));
-		}
-
-		/// <summary>
-		/// Gets all laser antennas in this construct
-		/// </summary>
-		/// <param name="laser_antennas">All attached laser antennas<br />List will not be cleared</param>
-		/// <param name="filter">A predicate to match laser antennas against</param>
-		public void GetAttachedLaserAntennas(List<IMyLaserAntenna> laser_antennas, Func<IMyLaserAntenna, bool> filter = null)
-		{
-			if (this.Closed) return;
-			if (filter == null) laser_antennas.AddRange(this.LaserAntennas.Select((pair) => pair.Value));
-			else laser_antennas.AddRange(this.LaserAntennas.Select((pair) => pair.Value).Where(filter));
-		}
-
-		/// <summary>
-		/// Gets all laser antennas in this construct as the specified type
-		/// </summary>
-		/// <param name="laser_antennas">All attached laser antennas<br />List will not be cleared</param>
-		/// <param name="transformer">A transformer converting a laser antenna to the specified type</param>
-		/// <param name="filter">A predicate to match laser antennas against</param>
-		public void GetAttachedLaserAntennas<T>(List<T> laser_antennas, Func<IMyLaserAntenna, T> transformer, Func<IMyLaserAntenna, bool> filter = null)
-		{
-			if (this.Closed) return;
-			if (filter == null) laser_antennas.AddRange(this.LaserAntennas.Select((pair) => transformer(pair.Value)));
-			else laser_antennas.AddRange(this.LaserAntennas.Select((pair) => pair.Value).Where(filter).Select(transformer));
-		}
-
-		/// <summary>
-		/// Gets all radio antennas in this construct
-		/// </summary>
-		/// <param name="radio_antennas">All attached radio antennas<br />List will not be cleared</param>
-		/// <param name="filter">A predicate to match radio antennas against</param>
-		public void GetAttachedRadioAntennas(List<IMyRadioAntenna> radio_antennas, Func<IMyRadioAntenna, bool> filter = null)
-		{
-			if (this.Closed) return;
-			if (filter == null) radio_antennas.AddRange(this.RadioAntennas.Select((pair) => pair.Value));
-			else radio_antennas.AddRange(this.RadioAntennas.Select((pair) => pair.Value).Where(filter));
-		}
-
-		/// <summary>
-		/// Gets all radio antennas in this construct as the specified type
-		/// </summary>
-		/// <param name="radio_antennas">All attached radio antennas<br />List will not be cleared</param>
-		/// <param name="transformer">A transformer converting a radio antenna to the specified type</param>
-		/// <param name="filter">A predicate to match radio antennas against</param>
-		public void GetAttachedRadioAntennas<T>(List<T> radio_antennas, Func<IMyRadioAntenna, T> transformer, Func<IMyRadioAntenna, bool> filter = null)
-		{
-			if (this.Closed) return;
-			if (filter == null) radio_antennas.AddRange(this.RadioAntennas.Select((pair) => transformer(pair.Value)));
-			else radio_antennas.AddRange(this.RadioAntennas.Select((pair) => pair.Value).Where(filter).Select(transformer));
-		}
-
-		/// <summary>
-		/// Gets all beacons in this construct
-		/// </summary>
-		/// <param name="beacons">All attached beacons<br />List will not be cleared</param>
-		/// <param name="filter">A predicate to match beacons against</param>
-		public void GetAttachedBeacons(List<IMyBeacon> beacons, Func<IMyBeacon, bool> filter = null)
-		{
-			if (this.Closed) return;
-			if (filter == null) beacons.AddRange(this.BeaconAntennas.Select((pair) => pair.Value));
-			else beacons.AddRange(this.BeaconAntennas.Select((pair) => pair.Value).Where(filter));
-		}
-
-		/// <summary>
-		/// Gets all beacons in this construct as the specified type
-		/// </summary>
-		/// <param name="beacons">All attached beacons<br />List will not be cleared</param>
-		/// <param name="transformer">A transformer converting a beacons to the specified type</param>
-		/// <param name="filter">A predicate to match beacons against</param>
-		public void GetAttachedBeacons<T>(List<T> beacons, Func<IMyBeacon, T> transformer, Func<IMyBeacon, bool> filter = null)
-		{
-			if (this.Closed) return;
-			if (filter == null) beacons.AddRange(this.BeaconAntennas.Select((pair) => transformer(pair.Value)));
-			else beacons.AddRange(this.BeaconAntennas.Select((pair) => pair.Value).Where(filter).Select(transformer));
-		}
-
-		/// <summary>
-		/// Gets all jump gates in this construct
-		/// </summary>
-		/// <param name="jump_gates">All attached jump gates<br />List will not be cleared</param>
-		/// <param name="filter">A predicate to match jump gates against</param>
-		public void GetJumpGates(List<MyJumpGate> jump_gates, Func<MyJumpGate, bool> filter = null)
-		{
-			if (this.Closed) return;
-			if (filter == null) jump_gates.AddRange(this.JumpGates.Select((pair) => pair.Value));
-			else jump_gates.AddRange(this.JumpGates.Select((pair) => pair.Value).Where(filter));
-		}
-
-		/// <summary>
-		/// Gets all jump gates in this construct as the specified type
-		/// </summary>
-		/// <param name="jump_gates">All attached jump gates<br />List will not be cleared</param>
-		/// <param name="transformer">A transformer converting a jump gate to the specified type</param>
-		/// <param name="filter">A predicate to match jump gates against</param>
-		public void GetJumpGates<T>(List<T> jump_gates, Func<MyJumpGate, T> transformer, Func<MyJumpGate, bool> filter = null)
-		{
-			if (this.Closed) return;
-			if (filter == null) jump_gates.AddRange(this.JumpGates.Select((pair) => transformer(pair.Value)));
-			else jump_gates.AddRange(this.JumpGates.Select((pair) => pair.Value).Where(filter).Select(transformer));
-		}
-
-		/// <summary>
-		/// Gets all cube grids in this construct
-		/// </summary>
-		/// <param name="grids">All attached cube grids<br />List will not be cleared</param>
-		/// <param name="filter">A predicate to match cube grids against</param>
-		public void GetCubeGrids(List<IMyCubeGrid> grids, Func<IMyCubeGrid, bool> filter = null)
-		{
-			if (this.Closed) return;
-			if (filter == null) grids.AddRange(this.CubeGrids.Select((pair) => pair.Value));
-			else foreach (IMyCubeGrid grid in this.CubeGrids.Select((pair) => pair.Value)) if (filter(grid)) grids.Add(grid);
-		}
-
-		/// <summary>
-		/// Gets all cube grids in this construct as the specified type
-		/// </summary>
-		/// <param name="grids">All attached cube grids<br />List will not be cleared</param>
-		/// <param name="transformer">A transformer converting a cube grid to the specified type</param>
-		/// <param name="filter">A predicate to matchcube grids against</param>
-		public void GetCubeGrids<T>(List<T> grids, Func<IMyCubeGrid, T> transformer, Func<IMyCubeGrid, bool> filter = null)
-		{
-			if (this.Closed) return;
-			if (filter == null) grids.AddRange(this.CubeGrids.Select((pair) => transformer(pair.Value)));
-			else grids.AddRange(this.CubeGrids.Select((pair) => pair.Value).Where(filter).Select(transformer));
-		}
-
-		/// <summary>
-		/// Does a BFS search of all constructs accessible to this one via antennas
-		/// </summary>
-		/// <param name="comm_linked_grids">A list of grids to populate or null to update only<br />List will not be cleared</param>
-		/// <param name="filter">A predicate to match jump gate constructs against</param>
-		public void GetCommLinkedJumpGateGrids(List<MyJumpGateConstruct> comm_linked_grids, Func<MyJumpGateConstruct, bool> filter = null)
-		{
-			if (this.Closed) return;
-			bool timedout = this.CommLinkedGrids == null || (DateTime.Now - this.LastCommLinkUpdate).TotalMilliseconds >= MyJumpGateConstruct.CommLinkedUpdateDelay;
-
-			if (comm_linked_grids != null && this.CommLinkedGrids != null)
-			{
-				using (this.CommLinkedLock.WithReader())
-				{
-					if (filter == null) comm_linked_grids.AddList(this.CommLinkedGrids);
-					else comm_linked_grids.AddRange(this.CommLinkedGrids.Where(filter));
-				}
-			}
-
-			if (timedout && MyNetworkInterface.IsServerLike) this.UpdateCommLinkedGrids = true;
-			else if (timedout && MyNetworkInterface.IsStandaloneMultiplayerClient && !this.CommLinkedClientUpdate)
-			{
-				this.CommLinkedClientUpdate = true;
-				MyNetworkInterface.Packet packet = new MyNetworkInterface.Packet {
-					PacketType = MyPacketTypeEnum.COMM_LINKED,
-					TargetID = 0,
-					Broadcast = false,
-				};
-				packet.Payload(this.CubeGridID);
-				packet.Send();
-			}
-		}
-
-		/// <summary>
-		/// Does a search for all beacons that this grid can see
-		/// </summary>
-		/// <param name="beacons">A list of beacons to populate or null to update only<br />List will not be cleared</param>
-		/// <param name="filter">A predicate to match beacons against</param>
-		public void GetBeaconsWithinReverseBroadcastSphere(List<MyBeaconLinkWrapper> beacons, Func<MyBeaconLinkWrapper, bool> filter = null)
-		{
-			if (this.Closed || this.BeaconLinks == null) return;
-			bool timedout = this.BeaconLinks == null || (DateTime.Now - this.LastBeaconLinkUpdate).TotalMilliseconds >= MyJumpGateConstruct.CommLinkedUpdateDelay;
-
-			if (beacons != null && this.BeaconLinks != null)
-			{
-				using (this.BeaconLinkedLock.WithReader())
-				{
-					if (filter == null) beacons.AddList(this.BeaconLinks);
-					else beacons.AddRange(this.BeaconLinks.Where(filter));
-				}
-			}
-			
-			if (timedout && MyNetworkInterface.IsServerLike) this.UpdateCommLinkedGrids = true;
-			else if (timedout && MyNetworkInterface.IsStandaloneMultiplayerClient && !this.BeaconLinkedClientUpdate)
-			{
-				this.BeaconLinkedClientUpdate = true;
-				MyNetworkInterface.Packet packet = new MyNetworkInterface.Packet {
-					PacketType = MyPacketTypeEnum.BEACON_LINKED,
-					TargetID = 0,
-					Broadcast = false,
-				};
-				packet.Payload(this.CubeGridID);
-				packet.Send();
 			}
 		}
 
@@ -1878,7 +1593,7 @@ namespace IOTA.ModularJumpGates
 		/// <returns>True if valid</returns>
 		public bool IsValid()
         {
-            return this.GetInvalidationReason() == GridInvalidationReason.NONE;
+            return this.GetInvalidationReason() == MyGridInvalidationReason.NONE;
         }
 
 		/// <summary>
@@ -1935,10 +1650,9 @@ namespace IOTA.ModularJumpGates
 		/// <param name="grid">The target grid</param>
 		/// <param name="update">If true, requests update to internal list</param>
 		/// <returns>Whether target grid is comm linked</returns>
-		public bool IsConstructCommLinked(MyJumpGateConstruct grid, bool update)
+		public bool IsConstructCommLinked(MyJumpGateConstruct grid)
 		{
-			if (this.Closed) return false;
-			if (update) this.GetCommLinkedJumpGateGrids(null);
+			if (this.Closed || grid == null) return false;
 			this.CommLinkedLock.AcquireReader();
 			try { return this.CommLinkedGrids?.Contains(grid) ?? false; }
 			finally { this.CommLinkedLock.ReleaseReader(); }
@@ -1951,10 +1665,9 @@ namespace IOTA.ModularJumpGates
 		/// <param name="beacon">The target beacon</param>
 		/// <param name="update">If true, requests update to internal list</param>
 		/// <returns>Whether target beacon is beacon linked</returns>
-		public bool IsBeaconWithinReverseBroadcastSphere(MyBeaconLinkWrapper beacon, bool update)
+		public bool IsBeaconWithinReverseBroadcastSphere(MyBeaconLinkWrapper beacon)
 		{
-			if (this.Closed) return false;
-			if (update) this.GetBeaconsWithinReverseBroadcastSphere(null);
+			if (this.Closed || beacon == null) return false;
 			this.BeaconLinkedLock.AcquireReader();
 			try { return this.BeaconLinks?.Contains(beacon) ?? false; }
 			finally { this.BeaconLinkedLock.ReleaseReader(); }
@@ -1973,102 +1686,6 @@ namespace IOTA.ModularJumpGates
 		}
 
 		/// <summary>
-		/// Gets the number of controllers matching the specified predicate<br />
-		/// Gets the number of all controllers if predicate is null
-		/// </summary>
-		/// <param name="predicate">The predicate to filter controllers by</param>
-		/// <returns>The number of matching controllers</returns>
-		public int GetControllerCount(Func<MyJumpGateController, bool> predicate = null)
-		{
-			if (this.Closed) return 0;
-			return (predicate == null) ? this.JumpGateControllers.Count : this.JumpGateControllers.Select((pair) => pair.Value).Count(predicate);
-		}
-
-		/// <summary>
-		/// Gets the number of drives matching the specified predicate<br />
-		/// Gets the number of all drives if predicate is null
-		/// </summary>
-		/// <param name="predicate">The predicate to filter drives by</param>
-		/// <returns>The number of matching drives</returns>
-		public int GetDriveCount(Func<MyJumpGateDrive, bool> predicate = null)
-		{
-			if (this.Closed) return 0;
-			return (predicate == null) ? this.JumpGateDrives.Count : this.JumpGateDrives.Select((pair) => pair.Value).Count(predicate);
-		}
-
-		/// <summary>
-		/// Gets the number of capacitors matching the specified predicate<br />
-		/// Gets the number of all capacitors if predicate is null
-		/// </summary>
-		/// <param name="predicate">The predicate to filter capacitors by</param>
-		/// <returns>The number of matching capacitors</returns>
-		public int GetCapacitorCount(Func<MyJumpGateCapacitor, bool> predicate = null)
-		{
-			if (this.Closed) return 0;
-			return (predicate == null) ? this.JumpGateCapacitors.Count : this.JumpGateCapacitors.Select((pair) => pair.Value).Count(predicate);
-		}
-
-		/// <summary>
-		/// Gets the number of laser antennas matching the specified predicate<br />
-		/// Gets the number of all laser antennas if predicate is null
-		/// </summary>
-		/// <param name="predicate">The predicate to filter laser antennas by</param>
-		/// <returns>The number of matching laser antennas</returns>
-		public int GetLaserAntennaCount(Func<IMyLaserAntenna, bool> predicate = null)
-		{
-			if (this.Closed) return 0;
-			return (predicate == null) ? this.LaserAntennas.Count : this.LaserAntennas.Select((pair) => pair.Value).Count(predicate);
-		}
-
-		/// <summary>
-		/// Gets the number of radio antennas matching the specified predicate<br />
-		/// Gets the number of all radio antennas if predicate is null
-		/// </summary>
-		/// <param name="predicate">The predicate to filter radio antennas by</param>
-		/// <returns>The number of matching radio antennas</returns>
-		public int GetRadioAntennaCount(Func<IMyRadioAntenna, bool> predicate = null)
-		{
-			if (this.Closed) return 0;
-			return (predicate == null) ? this.RadioAntennas.Count : this.RadioAntennas.Select((pair) => pair.Value).Count(predicate);
-		}
-
-		/// <summary>
-		/// Gets the number of beacons matching the specified predicate<br />
-		/// Gets the number of all beacons if predicate is null
-		/// </summary>
-		/// <param name="predicate">The predicate to filter beacons by</param>
-		/// <returns>The number of matching beacons</returns>
-		public int GetBeaconCount(Func<IMyBeacon, bool> predicate = null)
-		{
-			if (this.Closed) return 0;
-			return (predicate == null) ? this.BeaconAntennas.Count : this.BeaconAntennas.Select((pair) => pair.Value).Count(predicate);
-		}
-
-		/// <summary>
-		/// Gets the number of cube grids matching the specified predicate<br />
-		/// Gets the number of all cube grids if predicate is null
-		/// </summary>
-		/// <param name="predicate">The predicate to filter cube grids by</param>
-		/// <returns>The number of matching cube grids</returns>
-		public int GetCubeGridCount(Func<IMyCubeGrid, bool> predicate = null)
-		{
-			if (this.Closed) return 0;
-			return (predicate == null) ? this.CubeGrids.Count : this.CubeGrids.Select((pair) => pair.Value).Count(predicate);
-		}
-
-		/// <summary>
-		/// Gets the number of jump gates matching the specified predicate<br />
-		/// Gets the number of all jump gates if predicate is null
-		/// </summary>
-		/// <param name="predicate">The predicate to filter jump gates by</param>
-		/// <returns>The number of matching jump gates</returns>
-		public int GetJumpGateCount(Func<MyJumpGate, bool> predicate = null)
-		{
-			if (this.Closed) return 0;
-			return (predicate == null) ? this.JumpGates.Count : this.JumpGates.Select((pair) => pair.Value).Count(predicate);
-		}
-
-		/// <summary>
 		/// Gets the number of blocks matching the specified predicate<br />
 		/// Gets the number of all blocks if predicate is null
 		/// </summary>
@@ -2084,13 +1701,13 @@ namespace IOTA.ModularJumpGates
 		/// Gets the reason this construct is invalid
 		/// </summary>
 		/// <returns>The invalidation reason or InvalidationReason.NONE</returns>
-		public GridInvalidationReason GetInvalidationReason()
+		public MyGridInvalidationReason GetInvalidationReason()
         {
-            if (this.Closed || this.MarkClosed) return GridInvalidationReason.CLOSED;
-            else if (this.CubeGrid == null) return (this.IsSuspended) ? GridInvalidationReason.NONE : GridInvalidationReason.NULL_GRID;
-            else if (this.CubeGrids.Count == 0) return GridInvalidationReason.INSUFFICIENT_GRIDS;
-            else if (this.BatchingGate == null && this.GetCubeGridPhysics() == null) return GridInvalidationReason.NULL_PHYSICS;
-            else return GridInvalidationReason.NONE;
+            if (this.Closed || this.MarkClosed) return MyGridInvalidationReason.CLOSED;
+            else if (this.CubeGrid == null) return (this.IsSuspended) ? MyGridInvalidationReason.NONE : MyGridInvalidationReason.NULL_GRID;
+            else if (this.CubeGrids.Count == 0) return MyGridInvalidationReason.INSUFFICIENT_GRIDS;
+            else if (this.BatchingGate == null && this.GetCubeGridPhysics() == null) return MyGridInvalidationReason.NULL_PHYSICS;
+            else return MyGridInvalidationReason.NONE;
 		}
 
 		/// <summary>
@@ -2255,19 +1872,6 @@ namespace IOTA.ModularJumpGates
 		}
 
 		/// <summary>
-		/// Gets the first cube grid to match the specified predicate<br />
-		/// Gets the first cube grid if predicate is null
-		/// </summary>
-		/// <param name="predicate">The predicate to filter cube grids by</param>
-		/// <param name="default_">The default value if no cube grid matches</param>
-		/// <returns>The first matching cube grid</returns>
-		public IMyCubeGrid GetFirstCubeGrid(Func<IMyCubeGrid, bool> predicate = null, IMyCubeGrid default_ = default(IMyCubeGrid))
-		{
-			if (this.Closed) return null;
-			return (predicate == null) ? this.CubeGrids.First().Value : (this.CubeGrids.Select((pair) => pair.Value).FirstOrDefault(predicate) ?? default_);
-		}
-
-		/// <summary>
 		/// Splits a grid of this construct<br />
 		/// The section to discard will be returned and the section to keep will update this construct<br />
 		/// If any argument is null, this is not server, or the grid is not contained, result will be null
@@ -2292,19 +1896,6 @@ namespace IOTA.ModularJumpGates
 		}
 
 		/// <summary>
-		/// Gets the first laser antenna to match the specified predicate<br />
-		/// Gets the first laser antenna if predicate is null
-		/// </summary>
-		/// <param name="predicate">The predicate to filter laser antennas by</param>
-		/// <param name="default_">The default value if no laser antenna matches</param>
-		/// <returns>The first matching laser antenna</returns>
-		public IMyLaserAntenna GetFirstLaserAntenna(Func<IMyLaserAntenna, bool> predicate = null, IMyLaserAntenna default_ = default(IMyLaserAntenna))
-		{
-			if (this.Closed) return null;
-			return (predicate == null) ? this.LaserAntennas.First().Value : (this.LaserAntennas.Select((pair) => pair.Value).FirstOrDefault(predicate) ?? default_);
-		}
-
-		/// <summary>
 		/// Gets a radio antenna by it's terminal block entity ID
 		/// </summary>
 		/// <param name="id">The radio antenna's ID</param>
@@ -2315,19 +1906,6 @@ namespace IOTA.ModularJumpGates
 		}
 
 		/// <summary>
-		/// Gets the first radio antenna to match the specified predicate<br />
-		/// Gets the first radio antenna if predicate is null
-		/// </summary>
-		/// <param name="predicate">The predicate to filter radio antennas by</param>
-		/// <param name="default_">The default value if no radio antenna matches</param>
-		/// <returns>The first matching radio antenna</returns>
-		public IMyRadioAntenna GetFirstRadioAntenna(Func<IMyRadioAntenna, bool> predicate = null, IMyRadioAntenna default_ = default(IMyRadioAntenna))
-		{
-			if (this.Closed) return null;
-			return (predicate == null) ? this.RadioAntennas.First().Value : (this.RadioAntennas.Select((pair) => pair.Value).FirstOrDefault(predicate) ?? default_);
-		}
-
-		/// <summary>
 		/// Gets a beacon by it's terminal block entity ID
 		/// </summary>
 		/// <param name="id">The beacon's ID</param>
@@ -2335,19 +1913,6 @@ namespace IOTA.ModularJumpGates
 		public IMyBeacon GetBeacon(long id)
 		{
 			return this.BeaconAntennas?.GetValueOrDefault(id, null);
-		}
-
-		/// <summary>
-		/// Gets the first beacon to match the specified predicate<br />
-		/// Gets the first beacon if predicate is null
-		/// </summary>
-		/// <param name="predicate">The predicate to filter beacon by</param>
-		/// <param name="default_">The default value if no beacon matches</param>
-		/// <returns>The first matching beacon</returns>
-		public IMyBeacon GetFirstBeacon(Func<IMyBeacon, bool> predicate = null, IMyBeacon default_ = default(IMyBeacon))
-		{
-			if (this.Closed) return null;
-			return (predicate == null) ? this.BeaconAntennas.First().Value : (this.BeaconAntennas.Select((pair) => pair.Value).FirstOrDefault(predicate) ?? default_);
 		}
 
 		/// <summary>
@@ -2382,19 +1947,6 @@ namespace IOTA.ModularJumpGates
 		}
 
 		/// <summary>
-		/// Gets the first jump gate to match the specified predicate<br />
-		/// Gets the first jump gate if predicate is null
-		/// </summary>
-		/// <param name="predicate">The predicate to filter jump gates by</param>
-		/// <param name="default_">The default value if no jump gate matches</param>
-		/// <returns>The first matching jump gate</returns>
-		public MyJumpGate GetFirstJumpGate(Func<MyJumpGate, bool> predicate = null, MyJumpGate default_ = default(MyJumpGate))
-		{
-			if (this.Closed) return null;
-			return (predicate == null) ? this.JumpGates.First().Value : (this.JumpGates.Select((pair) => pair.Value).FirstOrDefault(predicate) ?? default_);
-		}
-
-		/// <summary>
 		/// Gets a capacitor by it's terminal block entity ID
 		/// </summary>
 		/// <param name="id">The capacitor's ID</param>
@@ -2402,19 +1954,6 @@ namespace IOTA.ModularJumpGates
 		public MyJumpGateCapacitor GetCapacitor(long id)
 		{
 			return this.JumpGateCapacitors?.GetValueOrDefault(id, null);
-		}
-
-		/// <summary>
-		/// Gets the first capacitor to match the specified predicate<br />
-		/// Gets the first capacitor if predicate is null
-		/// </summary>
-		/// <param name="predicate">The predicate to filter capacitors by</param>
-		/// <param name="default_">The default value if no capacitor matches</param>
-		/// <returns>The first matching capacitor</returns>
-		public MyJumpGateCapacitor GetFirstCapacitor(Func<MyJumpGateCapacitor, bool> predicate = null, MyJumpGateCapacitor default_ = default(MyJumpGateCapacitor))
-		{
-			if (this.Closed) return null;
-			return (predicate == null) ? this.JumpGateCapacitors.First().Value : (this.JumpGateCapacitors.Select((pair) => pair.Value).FirstOrDefault(predicate) ?? default_);
 		}
 
 		/// <summary>
@@ -2428,19 +1967,6 @@ namespace IOTA.ModularJumpGates
 		}
 
 		/// <summary>
-		/// Gets the first drive to match the specified predicate<br />
-		/// Gets the first drive if predicate is null
-		/// </summary>
-		/// <param name="predicate">The predicate to filter drives by</param>
-		/// <param name="default_">The default value if no drive matches</param>
-		/// <returns>The first matching drive</returns>
-		public MyJumpGateDrive GetFirstDrive(Func<MyJumpGateDrive, bool> predicate = null, MyJumpGateDrive default_ = default(MyJumpGateDrive))
-		{
-			if (this.Closed) return null;
-			return (predicate == null) ? this.JumpGateDrives.First().Value : (this.JumpGateDrives.Select((pair) => pair.Value).FirstOrDefault(predicate) ?? default_);
-		}
-
-		/// <summary>
 		/// Gets a server antenna by it's terminal block entity ID
 		/// </summary>
 		/// <param name="id">The server antenna's ID</param>
@@ -2448,19 +1974,6 @@ namespace IOTA.ModularJumpGates
 		public MyJumpGateServerAntenna GetServerAntenna(long id)
 		{
 			return this.JumpGateServerAntennas?.GetValueOrDefault(id, null);
-		}
-
-		/// <summary>
-		/// Gets the first jump gate to match the specified predicate<br />
-		/// Gets the first jump gate if predicate is null
-		/// </summary>
-		/// <param name="predicate">The predicate to filter jump gates by</param>
-		/// <param name="default_">The default value if no jump gate matches</param>
-		/// <returns>The first matching jump gate</returns>
-		public MyJumpGateServerAntenna GetFirstServerAntenna(Func<MyJumpGateServerAntenna, bool> predicate = null, MyJumpGateServerAntenna default_ = default(MyJumpGateServerAntenna))
-		{
-			if (this.Closed) return null;
-			return (predicate == null) ? this.JumpGateServerAntennas.First().Value : (this.JumpGateServerAntennas.Select((pair) => pair.Value).FirstOrDefault(predicate) ?? default_);
 		}
 
 		/// <summary>
@@ -2474,19 +1987,6 @@ namespace IOTA.ModularJumpGates
 		}
 
 		/// <summary>
-		/// Gets the first jump gate to match the specified predicate<br />
-		/// Gets the first jump gate if predicate is null
-		/// </summary>
-		/// <param name="predicate">The predicate to filter jump gates by</param>
-		/// <param name="default_">The default value if no jump gate matches</param>
-		/// <returns>The first matching jump gate</returns>
-		public MyJumpGateController GetFirstController(Func<MyJumpGateController, bool> predicate = null, MyJumpGateController default_ = default(MyJumpGateController))
-		{
-			if (this.Closed) return null;
-			return (predicate == null) ? this.JumpGateControllers.First().Value : (this.JumpGateControllers.Select((pair) => pair.Value).FirstOrDefault(predicate) ?? default_);
-		}
-
-		/// <summary>
 		/// Gets the first physics component from this construct's cube grids
 		/// </summary>
 		/// <returns></returns>
@@ -2495,6 +1995,164 @@ namespace IOTA.ModularJumpGates
 			if (this.Closed) return null;
 			foreach (KeyValuePair<long, IMyCubeGrid> pair in this.CubeGrids) if (pair.Value.Physics != null) return pair.Value.Physics;
 			return null;
+		}
+
+		/// <summary>
+		/// Gets all jump gate controllers in this construct
+		/// </summary>
+		/// <returns>An IEnumerable referencing all controllers</returns>
+		public IEnumerable<MyJumpGateController> GetAttachedJumpGateControllers()
+		{
+			return this.JumpGateControllers?.Values.AsEnumerable() ?? Enumerable.Empty<MyJumpGateController>();
+		}
+
+		/// <summary>
+		/// All jump gate drives in this construct
+		/// </summary>
+		/// <returns>An IEnumerable referencing all drives</returns>
+		public IEnumerable<MyJumpGateDrive> GetAttachedJumpGateDrives()
+		{
+			return this.JumpGateDrives?.Values.AsEnumerable() ?? Enumerable.Empty<MyJumpGateDrive>();
+		}
+
+		/// <summary>
+		/// Gets all jump gate drives in this construct not bound to a jump gate
+		/// </summary>
+		/// <returns>An IEnumerable referencing all unassociated drives</returns>
+		public IEnumerable<MyJumpGateDrive> GetAttachedUnassociatedJumpGateDrives()
+		{
+			return this.JumpGateDrives?.Values.Where((drive) => drive.JumpGateID == -1) ?? Enumerable.Empty<MyJumpGateDrive>();
+		}
+
+		/// <summary>
+		/// Gets all jump gate capacitors in this construct
+		/// </summary>
+		/// <returns>An IEnumerable referencing all capacitors</returns>
+		public IEnumerable<MyJumpGateCapacitor> GetAttachedJumpGateCapacitors()
+		{
+			return this.JumpGateCapacitors?.Values.AsEnumerable() ?? Enumerable.Empty<MyJumpGateCapacitor>();
+		}
+
+		/// <summary>
+		/// Gets all jump gate server antennas in this construct
+		/// </summary>
+		/// <returns>An IEnumerable referencing all server antennas</returns>
+		public IEnumerable<MyJumpGateServerAntenna> GetAttachedJumpGateServerAntennas()
+		{
+			return this.JumpGateServerAntennas?.Values.AsEnumerable() ?? Enumerable.Empty<MyJumpGateServerAntenna>();
+		}
+
+		/// <summary>
+		/// Gets all laser antennas in this construct
+		/// </summary>
+		/// <returns>An IEnumerable referencing all laser antennas</returns>
+		public IEnumerable<IMyLaserAntenna> GetAttachedLaserAntennas()
+		{
+			return this.LaserAntennas?.Values.AsEnumerable() ?? Enumerable.Empty<IMyLaserAntenna>();
+		}
+
+		/// <summary>
+		/// Gets all radio antennas in this construct
+		/// </summary>
+		/// <returns>An IEnumerable referencing all radio antennas</returns>
+		public IEnumerable<IMyRadioAntenna> GetAttachedRadioAntennas()
+		{
+			return this.RadioAntennas?.Values.AsEnumerable() ?? Enumerable.Empty<IMyRadioAntenna>();
+		}
+
+		/// <summary>
+		/// Gets all beacons in this construct
+		/// </summary>
+		/// <returns>An IEnumerable referencing all beacons</returns>
+		public IEnumerable<IMyBeacon> GetAttachedBeacons()
+		{
+			return this.BeaconAntennas?.Values.AsEnumerable() ?? Enumerable.Empty<IMyBeacon>();
+		}
+
+		/// <summary>
+		/// Gets all jump gates in this construct
+		/// </summary>
+		/// <returns>An IEnumerable referencing all jump gates</returns>
+		public IEnumerable<MyJumpGate> GetJumpGates()
+		{
+			return this.JumpGates?.Values.AsEnumerable() ?? Enumerable.Empty<MyJumpGate>();
+		}
+
+		/// <summary>
+		/// Gets all cube grids in this construct
+		/// </summary>
+		/// <returns>An IEnumerable referencing all grids</returns>
+		public IEnumerable<IMyCubeGrid> GetCubeGrids()
+		{
+			return this.CubeGrids?.Values.AsEnumerable() ?? Enumerable.Empty<IMyCubeGrid>();
+		}
+
+		/// <summary>
+		/// Does a BFS search of all constructs accessible to this one via antennas
+		/// </summary>
+		/// <returns>An IEnumerable referencing all comm-linked constructs</returns>
+		public IEnumerable<MyJumpGateConstruct> GetCommLinkedJumpGateGrids()
+		{
+			if (this.Closed) return Enumerable.Empty<MyJumpGateConstruct>();
+			bool timedout = this.CommLinkedGrids == null || (DateTime.Now - this.LastCommLinkUpdate).TotalMilliseconds >= MyJumpGateConstruct.CommLinkedUpdateDelay;
+			IEnumerable<MyJumpGateConstruct> comm_linked_grids = Enumerable.Empty<MyJumpGateConstruct>();
+
+			if (this.CommLinkedGrids != null)
+			{
+				using (this.CommLinkedLock.WithReader())
+				{
+					comm_linked_grids = this.CommLinkedGrids.AsEnumerable();
+				}
+			}
+
+			if (timedout && MyNetworkInterface.IsServerLike) this.UpdateCommLinkedGrids = true;
+			else if (timedout && MyNetworkInterface.IsStandaloneMultiplayerClient && !this.CommLinkedClientUpdate)
+			{
+				this.CommLinkedClientUpdate = true;
+				MyNetworkInterface.Packet packet = new MyNetworkInterface.Packet {
+					PacketType = MyPacketTypeEnum.COMM_LINKED,
+					TargetID = 0,
+					Broadcast = false,
+				};
+				packet.Payload(this.CubeGridID);
+				packet.Send();
+			}
+
+			return comm_linked_grids;
+		}
+
+		/// <summary>
+		/// Does a search for all beacons that this grid can see
+		/// </summary>
+		/// <returns>An IEnumerable referencing all beacon-linked beacons</returns>
+		public IEnumerable<MyBeaconLinkWrapper> GetBeaconsWithinReverseBroadcastSphere()
+		{
+			if (this.Closed || this.BeaconLinks == null) return Enumerable.Empty<MyBeaconLinkWrapper>();
+			bool timedout = this.BeaconLinks == null || (DateTime.Now - this.LastBeaconLinkUpdate).TotalMilliseconds >= MyJumpGateConstruct.CommLinkedUpdateDelay;
+			IEnumerable<MyBeaconLinkWrapper> beacon_links = Enumerable.Empty<MyBeaconLinkWrapper>();
+
+			if (this.BeaconLinks != null)
+			{
+				using (this.BeaconLinkedLock.WithReader())
+				{
+					beacon_links = this.BeaconLinks.AsEnumerable();
+				}
+			}
+
+			if (timedout && MyNetworkInterface.IsServerLike) this.UpdateCommLinkedGrids = true;
+			else if (timedout && MyNetworkInterface.IsStandaloneMultiplayerClient && !this.BeaconLinkedClientUpdate)
+			{
+				this.BeaconLinkedClientUpdate = true;
+				MyNetworkInterface.Packet packet = new MyNetworkInterface.Packet {
+					PacketType = MyPacketTypeEnum.BEACON_LINKED,
+					TargetID = 0,
+					Broadcast = false,
+				};
+				packet.Payload(this.CubeGridID);
+				packet.Send();
+			}
+
+			return beacon_links;
 		}
 
 		/// <summary>

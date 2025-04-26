@@ -57,8 +57,6 @@ namespace IOTA.ModularJumpGates.EventController
 			}
 		}
 
-		private static readonly List<MyJumpGate> TEMP_JumpGates = new List<MyJumpGate>();
-
 		private bool _IsSelected = false;
 		private bool NetworkRegistered = false;
 		private ulong LastUpdateTimeEpoch = 0;
@@ -293,19 +291,16 @@ namespace IOTA.ModularJumpGates.EventController
 					IMyEventControllerBlock event_controller = event_block?.EventController;
 					MyJumpGateConstruct construct;
 					if (event_controller == null || event_controller.MarkedForClose || (construct = MyJumpGateModSession.Instance.GetJumpGateGrid(event_controller.CubeGrid)) == null) return;
-					construct.GetJumpGates(MyJumpGateEventBase<TargetedGateValueType>.TEMP_JumpGates);
 
-					foreach (MyJumpGate jump_gate in MyJumpGateEventBase<TargetedGateValueType>.TEMP_JumpGates.OrderBy((gate) => gate.JumpGateID))
+					foreach (MyJumpGate jump_gate in construct.GetJumpGates().OrderBy((gate) => gate.JumpGateID))
 					{
 						if (!jump_gate.Closed && this.IsJumpGateValidForList(jump_gate))
 						{
-							MyTerminalControlListBoxItem item = new MyTerminalControlListBoxItem(MyStringId.GetOrCompute($"{jump_gate.GetPrintableName()}"), MyStringId.GetOrCompute($"Jump Gate with {jump_gate.JumpGateGrid.GetDriveCount((drive) => drive.JumpGateID == jump_gate.JumpGateID)} drives\nJump Gate ID: {jump_gate.JumpGateID}"), jump_gate.JumpGateID);
+							MyTerminalControlListBoxItem item = new MyTerminalControlListBoxItem(MyStringId.GetOrCompute($"{jump_gate.GetPrintableName()}"), MyStringId.GetOrCompute($"Jump Gate with {jump_gate.GetJumpGateDrives().Count()} drives\nJump Gate ID: {jump_gate.JumpGateID}"), jump_gate.JumpGateID);
 							content_list.Add(item);
 							if (event_block.TargetedJumpGates.ContainsKey(jump_gate)) preselect_list.Add(item);
 						}
 					}
-
-					MyJumpGateEventBase<TargetedGateValueType>.TEMP_JumpGates.Clear();
 				};
 
 				choose_jump_gate_lb.ItemSelected = (block, selected) => {

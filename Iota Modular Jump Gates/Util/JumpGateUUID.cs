@@ -1,6 +1,4 @@
-﻿using IOTA.ModularJumpGates.API;
-using IOTA.ModularJumpGates.API.CubeBlock;
-using IOTA.ModularJumpGates.CubeBlock;
+﻿using IOTA.ModularJumpGates.CubeBlock;
 using System;
 
 namespace IOTA.ModularJumpGates.Util
@@ -86,36 +84,6 @@ namespace IOTA.ModularJumpGates.Util
 		#endregion
 
 		#region Public Static Methods
-		/// <summary>
-		/// Creates a JumpGateUUID from a MyJumpGateConstruct
-		/// </summary>
-		/// <param name="cube_grid">The non-null grid construct</param>
-		/// <returns>The associated UUID</returns>
-		public static JumpGateUUID FromJumpGateGrid(MyAPIJumpGateConstruct cube_grid)
-		{
-			return JumpGateUUID.FromJumpGateGrid(cube_grid.Construct);
-		}
-
-		/// <summary>
-		/// Creates a JumpGateUUID from a MyJumpGate
-		/// </summary>
-		/// <param name="jump_gate">The non-null jump gate</param>
-		/// <returns>The associated UUID</returns>
-		public static JumpGateUUID FromJumpGate(MyAPIJumpGate jump_gate)
-		{
-			return JumpGateUUID.FromJumpGate(jump_gate.JumpGate);
-		}
-
-		/// <summary>
-		/// Creates a JumpGateUUID from a CubeBlockBase logic component
-		/// </summary>
-		/// <param name="jump_gate">The non-null logic component</param>
-		/// <returns>The associated UUID</returns>
-		public static JumpGateUUID FromBlock(MyAPICubeBlockBase block)
-		{
-			return JumpGateUUID.FromBlock(block.CubeBlock);
-		}
-
 		/// <summary>
 		/// Creates a JumpGateUUID from a Guid
 		/// </summary>

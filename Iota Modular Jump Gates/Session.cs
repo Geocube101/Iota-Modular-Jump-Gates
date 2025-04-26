@@ -22,7 +22,7 @@ using VRageRender;
 
 namespace IOTA.ModularJumpGates
 {
-	public enum MySessionStatusEnum { OFFLINE, LOADING, RUNNING, UNLOADING };
+	public enum MySessionStatusEnum : byte { OFFLINE, LOADING, RUNNING, UNLOADING };
 
 	[MySessionComponentDescriptor(MyUpdateOrder.AfterSimulation | MyUpdateOrder.BeforeSimulation)]
 	internal class MyJumpGateModSession : MySessionComponentBase
@@ -133,6 +133,11 @@ namespace IOTA.ModularJumpGates
 		private object ClosureQueueMapIteratorLock = new object();
 
 		/// <summary>
+		/// Interface for handling API requests
+		/// </summary>
+		private MyModAPIInterface ModAPIInterface = new MyModAPIInterface();
+
+		/// <summary>
 		/// A list of the last 60 update times
 		/// </summary>
 		private ConcurrentSpinQueue<double> GridUpdateTimeTicks = new ConcurrentSpinQueue<double>(60);
@@ -194,13 +199,7 @@ namespace IOTA.ModularJumpGates
 		/// Whether all entities in session are loaded<br />
 		/// <i>Always false on client</i>
 		/// </summary>
-		public bool AllSessionEntitiesLoaded
-		{
-			get
-			{
-				return MyNetworkInterface.IsServerLike && this.EntityLoadedDelayTicks == 0;
-			}
-		}
+		public bool AllSessionEntitiesLoaded => MyNetworkInterface.IsServerLike && this.EntityLoadedDelayTicks == 0;
 
 		/// <summary>
 		/// Whether the session has loaded completely
@@ -443,7 +442,7 @@ namespace IOTA.ModularJumpGates
 		/// </summary>
 		/// <param name="block">The block to convert</param>
 		/// <returns>The "CubeBlockBase" game logic component or null</returns>
-		internal static MyCubeBlockBase GetBlockAsCubeBlockBase(IMyTerminalBlock block)
+		public static MyCubeBlockBase GetBlockAsCubeBlockBase(IMyTerminalBlock block)
 		{
 			return block?.GameLogic?.GetAs<MyCubeBlockBase>();
 		}
@@ -500,7 +499,7 @@ namespace IOTA.ModularJumpGates
 			MyJumpGateModSession.SessionStatus = MySessionStatusEnum.UNLOADING;
 			Logger.Log("Closing...");
 			base.UnloadData();
-			MyAPISession.Dispose();
+			this.ModAPIInterface.Close();
 			MyAnimationHandler.Unload();
 
 			if (MyJumpGateModSession.Network != null && MyJumpGateModSession.Network.Registered)
@@ -535,6 +534,7 @@ namespace IOTA.ModularJumpGates
 			this.EntityWarps.Clear();
 			this.PartialSuspendedGridsQueue.Clear();
 
+			this.ModAPIInterface = null;
 			this.GridUpdateTimeTicks = null;
 			this.SessionUpdateTimeTicks = null;
 			this.GridCloseRequests = null;
@@ -601,7 +601,7 @@ namespace IOTA.ModularJumpGates
 			if (MyNetworkInterface.IsDedicatedMultiplayerServer) MyInterServerCommunication.Register(0, 0, null);
 			MyAPIGateway.Entities.OnEntityAdd += this.OnEntityAdd;
 			MyAPIGateway.Entities.OnEntityRemove += this.OnEntityRemove;
-			MyAPISession.Init();
+			this.ModAPIInterface.Init();
 			Logger.Log("PREINIT - Loaded.");
 		}
 
@@ -813,8 +813,8 @@ namespace IOTA.ModularJumpGates
 				{
 					MyJumpGateConstruct jump_grid = pair.Value;
 					if (jump_grid.IsSuspended || jump_grid.CubeGrid == null || !jump_grid.IsValid() || !jump_grid.AtLeastOneUpdate()) continue;
-					jump_grid.GetJumpGates(jump_gates);
-					jump_grid.GetAttachedJumpGateDrives(jump_drives);
+					jump_gates.AddRange(jump_grid.GetJumpGates());
+					jump_drives.AddRange(jump_grid.GetAttachedJumpGateDrives());
 					color4 = Color.Violet.ToVector4() * 20;
 					foreach (MyJumpGate gate in jump_gates) if (gate.TrueEndpoint != null) MySimpleObjectDraw.DrawLine(gate.WorldJumpNode, gate.TrueEndpoint.Value, line_material, ref color4, 10);
 
@@ -1037,8 +1037,7 @@ namespace IOTA.ModularJumpGates
 			if (packet == null || !MyNetworkInterface.IsMultiplayerServer || packet.PhaseFrame != 1) return;
 			long construct_id = packet.Payload<long>();
 			MyJumpGateConstruct target = this.GridMap.GetValueOrDefault(construct_id, null);
-			List<MyJumpGateConstruct> comm_linked = (target == null) ? null : new List<MyJumpGateConstruct>();
-			target?.GetCommLinkedJumpGateGrids(comm_linked);
+			List<MyJumpGateConstruct> comm_linked = target?.GetCommLinkedJumpGateGrids().ToList();
 			packet = packet.Forward(packet.SenderID, false);
 			packet.Payload(new KeyValuePair<long, List<long>>(construct_id, comm_linked?.Select((grid) => grid.CubeGridID)?.ToList()));
 			packet.Send();
@@ -1054,8 +1053,7 @@ namespace IOTA.ModularJumpGates
 			if (packet == null || !MyNetworkInterface.IsMultiplayerServer || packet.PhaseFrame != 1) return;
 			long construct_id = packet.Payload<long>();
 			MyJumpGateConstruct target = this.GridMap.GetValueOrDefault(construct_id, null);
-			List<MyBeaconLinkWrapper> beacon_linked = (target == null) ? null : new List<MyBeaconLinkWrapper>();
-			target?.GetBeaconsWithinReverseBroadcastSphere(beacon_linked);
+			List<MyBeaconLinkWrapper> beacon_linked = target?.GetBeaconsWithinReverseBroadcastSphere().ToList();
 			packet = packet.Forward(packet.SenderID, false);
 			packet.Payload(new KeyValuePair<long, List<MyBeaconLinkWrapper>>(construct_id, beacon_linked));
 			packet.Send();
@@ -1233,30 +1231,6 @@ namespace IOTA.ModularJumpGates
 		}
 
 		/// <summary>
-		/// Gets all valid jump gates stored by all grids in this session
-		/// </summary>
-		/// <param name="filter">A predicate to match jump gates against</param>
-		/// <param name="jump_gates">All attached jump gates<br />List will not be cleared</param>
-		public void GetAllJumpGates(List<MyJumpGate> jump_gates, Func<MyJumpGate, bool> filter = null)
-		{
-			foreach (KeyValuePair<long, MyJumpGateConstruct> pair in this.GridMap)
-				if (pair.Value.IsValid())
-					pair.Value.GetJumpGates(jump_gates, (gate) => gate.IsValid() && (filter == null || filter(gate)));
-		}
-
-		/// <summary>
-		/// Gets all valid jump gate grids stored in this session
-		/// </summary>
-		/// <param name="filter">A predicate to match jump gate grids against</param>
-		/// <param name="grids">All jump gate grid constructs<br />List will be cleared</param>
-		public void GetAllJumpGateGrids(List<MyJumpGateConstruct> grids, Func<MyJumpGateConstruct, bool> filter = null)
-		{
-			grids.Clear();
-			foreach (KeyValuePair<long, MyJumpGateConstruct> pair in this.GridMap)
-				if (pair.Value.IsValid() && (filter == null || filter(pair.Value))) grids.Add(pair.Value);
-		}
-
-		/// <summary>
 		/// Requests a download of the specified construct from server<br />
 		/// Does nothing if not standalone multiplayer client
 		/// </summary>
@@ -1370,9 +1344,7 @@ namespace IOTA.ModularJumpGates
 		/// <returns>True if this grid has a duplicate construct</returns>
 		public bool HasDuplicateGrid(MyJumpGateConstruct grid)
 		{
-			List<IMyCubeGrid> grids = new List<IMyCubeGrid>();
-			grid.GetCubeGrids(grids);
-			foreach (IMyCubeGrid subgrid in grids) if (subgrid.EntityId != grid.CubeGridID && this.GridMap.ContainsKey(subgrid.EntityId)) return true;
+			foreach (IMyCubeGrid subgrid in grid.GetCubeGrids()) if (subgrid.EntityId != grid.CubeGridID && this.GridMap.ContainsKey(subgrid.EntityId)) return true;
 			return false;
 		}
 
@@ -1547,6 +1519,32 @@ namespace IOTA.ModularJumpGates
 			if (uuid == null) return null;
 			MyJumpGateConstruct grid = this.GetJumpGateGrid(uuid);
 			return grid?.GetJumpGate(uuid.GetJumpGate());
+		}
+
+		/// <summary>
+		/// Gets all valid jump gates stored by all grids in this session
+		/// </summary>
+		public IEnumerable<MyJumpGate> GetAllJumpGates()
+		{
+			IEnumerable<MyJumpGate> all_jump_gates = Enumerable.Empty<MyJumpGate>();
+
+			foreach (KeyValuePair<long, MyJumpGateConstruct> pair in this.GridMap)
+			{
+				if (!this.IsJumpGateGridMultiplayerValid(pair.Value)) continue;
+				all_jump_gates = all_jump_gates.Concat(pair.Value.GetJumpGates().Where((gate) => gate.IsValid()));
+			}
+
+			return all_jump_gates;
+		}
+
+		/// <summary>
+		/// Gets all valid jump gate grids stored in this session
+		/// </summary>
+		/// <param name="filter">A predicate to match jump gate grids against</param>
+		/// <param name="grids">All jump gate grid constructs<br />List will be cleared</param>
+		public IEnumerable<MyJumpGateConstruct> GetAllJumpGateGrids()
+		{
+			return this.GridMap?.Select((pair) => pair.Value).Where(this.IsJumpGateGridMultiplayerValid) ?? Enumerable.Empty<MyJumpGateConstruct>();
 		}
 		#endregion
 	}

@@ -1947,8 +1947,8 @@ namespace IOTA.ModularJumpGates
 			Vector3D? endpoint = jump_gate.Controller?.BlockSettings?.SelectedWaypoint()?.GetEndpoint();
 			double distance = (endpoint == null) ? -1 : Vector3D.Distance(endpoint.Value, jump_gate.WorldJumpNode);
 			return this.AllowedJumpGateRadius.Match(jump_gate.JumpNodeRadius())
-				&& this.AllowedJumpGateSize.Match((uint) jump_gate.JumpGateGrid.GetDriveCount((drive) => drive.JumpGateID == jump_gate.JumpGateID))
-				&& this.AllowedJumpGateWorkingSize.Match((uint) jump_gate.JumpGateGrid.GetDriveCount((drive) => drive.JumpGateID == jump_gate.JumpGateID && drive.IsWorking()))
+				&& this.AllowedJumpGateSize.Match((uint) jump_gate.GetJumpGateDrives().Count())
+				&& this.AllowedJumpGateWorkingSize.Match((uint) jump_gate.GetWorkingJumpGateDrives().Count())
 				&& this.AllowedJumpGateEndpointDistance.Match(distance);
 		}
 		#endregion
@@ -3710,11 +3710,7 @@ namespace IOTA.ModularJumpGates
 			if (full_close)
 			{
 				if (this.JumpGate != null && !this.JumpGate.Closed)
-				{
-					List<MyJumpGateDrive> drives = new List<MyJumpGateDrive>();
-					this.JumpGate.GetJumpGateDrives(drives);
-					foreach (MyJumpGateDrive drive in drives) drive.CycleDriveEmitter(drive.DriveEmitterColor, Color.Black, 300);
-				}
+					foreach (MyJumpGateDrive drive in this.JumpGate.GetJumpGateDrives()) drive.CycleDriveEmitter(drive.DriveEmitterColor, Color.Black, 300);
 
 				this.DoCleanOnEnd = false;
 				this.NodeParticles.ForEach((particle) => particle.Clean());
@@ -4571,7 +4567,7 @@ namespace IOTA.ModularJumpGates
 			this.ActiveAnimationIndex = index;
 			if ((this.JumpGate?.Closed ?? true) || (this.JumpGate?.JumpGateGrid?.Closed ?? true)) return;
 			List<MyJumpGateDrive> drives = null;
-			this.JumpGate.GetJumpGateDrives(this.TEMP_JumpGateDrives);
+			this.TEMP_JumpGateDrives.AddRange(this.JumpGate.GetJumpGateDrives());
 			this.JumpGate.GetEntitiesInJumpSpace(this.TEMP_JumpGateEntities, true);
 			this.TEMP_JumpGateEntitiesL.AddRange(this.TEMP_JumpGateEntities.Keys);
 			this.TEMP_JumpGateEntitiesL.AddRange(this.JumpGate.EntityBatches.Keys);
@@ -4586,7 +4582,7 @@ namespace IOTA.ModularJumpGates
 			}
 			else if (this.TargetGate != null && !this.TargetGate.Closed && !(this.TargetGate.JumpGateGrid?.Closed ?? true))
 			{
-				this.TargetGate.GetJumpGateDrives(this.TEMP_JumpGateAntiDrives);
+				this.TEMP_JumpGateAntiDrives.AddRange(this.TargetGate.GetJumpGateDrives());
 				anti_drives = this.TEMP_JumpGateAntiDrives;
 			}
 

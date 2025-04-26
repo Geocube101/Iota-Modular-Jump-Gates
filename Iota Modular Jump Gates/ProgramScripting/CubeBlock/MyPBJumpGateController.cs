@@ -5,6 +5,7 @@ using Sandbox.ModAPI;
 using Sandbox.ModAPI.Interfaces.Terminal;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using VRage.Game;
 using VRage.Game.Entity;
 using VRage.Game.ModAPI;
@@ -78,7 +79,7 @@ namespace IOTA.ModularJumpGates.ProgramScripting.CubeBlock
 						IMyBeacon beacon = grid?.GetBeacon(buffer[1]);
 						if (beacon == null) throw new InvalidGuuidException($"Invalid Beacon Block ID - {buffer[0]}/{buffer[1]}");
 						MyBeaconLinkWrapper wrapper = new MyBeaconLinkWrapper(beacon);
-						if (controller.JumpGateGrid.IsBeaconWithinReverseBroadcastSphere(wrapper, false)) waypoint = new MyJumpGateWaypoint(wrapper);
+						if (controller.JumpGateGrid.IsBeaconWithinReverseBroadcastSphere(wrapper)) waypoint = new MyJumpGateWaypoint(wrapper);
 						break;
 					}
 					case MyWaypointType.SERVER:
@@ -585,13 +586,13 @@ namespace IOTA.ModularJumpGates.ProgramScripting.CubeBlock
 
 		private static void SetupGateJumpGateDrivesTerminalAction()
 		{
-			IMyTerminalControlProperty<Action<List<Sandbox.ModAPI.Ingame.IMyUpgradeModule>, Func<Sandbox.ModAPI.Ingame.IMyUpgradeModule, bool>>> property = MyAPIGateway.TerminalControls.CreateProperty<Action<List<Sandbox.ModAPI.Ingame.IMyUpgradeModule>, Func<Sandbox.ModAPI.Ingame.IMyUpgradeModule, bool>>, IMyUpgradeModule>(MyJumpGateControllerTerminal.MODID_PREFIX + "GetGateDrives");
+			IMyTerminalControlProperty<Func<IEnumerable<Sandbox.ModAPI.Ingame.IMyUpgradeModule>>> property = MyAPIGateway.TerminalControls.CreateProperty<Func<IEnumerable<Sandbox.ModAPI.Ingame.IMyUpgradeModule>>, IMyUpgradeModule>(MyJumpGateControllerTerminal.MODID_PREFIX + "GetGateDrives");
 			property.Getter = (block) => {
 				MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 				MyJumpGate jump_gate = controller?.AttachedJumpGate();
 				if (controller == null) throw new InvalidBlockTypeException("Specified block is not a jump gate controller");
 				else if (jump_gate == null) throw new InvalidOperationException("No jump gate attached");
-				return (drives, filter) => jump_gate.GetJumpGateDrives(drives, (drive) => drive.TerminalBlock, (drive) => filter == null || filter(drive.TerminalBlock));
+				return () => jump_gate.GetJumpGateDrives().Select((tblock) => tblock.TerminalBlock);
 			};
 			property.Setter = (block, value) => { throw new InvalidOperationException("Specified property is readonly"); };
 			MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(property);
@@ -599,13 +600,13 @@ namespace IOTA.ModularJumpGates.ProgramScripting.CubeBlock
 
 		private static void SetupGateJumpGateWorkingDrivesTerminalAction()
 		{
-			IMyTerminalControlProperty<Action<List<Sandbox.ModAPI.Ingame.IMyUpgradeModule>, Func<Sandbox.ModAPI.Ingame.IMyUpgradeModule, bool>>> property = MyAPIGateway.TerminalControls.CreateProperty<Action<List<Sandbox.ModAPI.Ingame.IMyUpgradeModule>, Func<Sandbox.ModAPI.Ingame.IMyUpgradeModule, bool>>, IMyUpgradeModule>(MyJumpGateControllerTerminal.MODID_PREFIX + "GetWorkingGateDrives");
+			IMyTerminalControlProperty<Func<IEnumerable<Sandbox.ModAPI.Ingame.IMyUpgradeModule>>> property = MyAPIGateway.TerminalControls.CreateProperty<Func<IEnumerable<Sandbox.ModAPI.Ingame.IMyUpgradeModule>>, IMyUpgradeModule>(MyJumpGateControllerTerminal.MODID_PREFIX + "GetWorkingGateDrives");
 			property.Getter = (block) => {
 				MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 				MyJumpGate jump_gate = controller?.AttachedJumpGate();
 				if (controller == null) throw new InvalidBlockTypeException("Specified block is not a jump gate controller");
 				else if (jump_gate == null) throw new InvalidOperationException("No jump gate attached");
-				return (drives, filter) => jump_gate.GetWorkingJumpGateDrives(drives, (drive) => drive.TerminalBlock, (drive) => filter == null || filter(drive.TerminalBlock));
+				return () => jump_gate.GetWorkingJumpGateDrives().Select((tblock) => tblock.TerminalBlock);
 			};
 			property.Setter = (block, value) => { throw new InvalidOperationException("Specified property is readonly"); };
 			MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(property);

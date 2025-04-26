@@ -1,12 +1,11 @@
-﻿using IOTA.ModularJumpGates.API;
-using ProtoBuf;
+﻿using ProtoBuf;
 using System;
 using VRage.Game.ModAPI;
 using VRageMath;
 
 namespace IOTA.ModularJumpGates.Util
 {
-    public enum MyWaypointType { NONE, JUMP_GATE, GPS, BEACON, SERVER };
+    public enum MyWaypointType : byte { NONE, JUMP_GATE, GPS, BEACON, SERVER };
 
     /// <summary>
     /// Serializable wrapper for GPSs
@@ -96,7 +95,7 @@ namespace IOTA.ModularJumpGates.Util
 		/// <returns>Equality</returns>
 		public override bool Equals(object obj)
         {
-            return this.Equals(obj as MyJumpGateWaypoint);
+            return this.Equals(obj as MyGpsWrapper);
         }
 
 		/// <summary>
@@ -125,7 +124,7 @@ namespace IOTA.ModularJumpGates.Util
 	}
 
 	[ProtoContract]
-    public class MyServerJumpGate
+    public class MyServerJumpGate : IEquatable<MyServerJumpGate>
     {
 		#region Public Variables
         /// <summary>
@@ -311,16 +310,6 @@ namespace IOTA.ModularJumpGates.Util
 		}
 
 		/// <summary>
-		/// Creates a new waypoint targeting the specified jump gate
-		/// </summary>
-		/// <param name="jump_gate">The non-null jump gate</param>
-		public MyJumpGateWaypoint(MyAPIJumpGate jump_gate)
-		{
-			this.JumpGate = JumpGateUUID.FromJumpGate(jump_gate.JumpGate).ToGuid();
-			this.WaypointType = MyWaypointType.JUMP_GATE;
-		}
-
-		/// <summary>
 		/// Creates a new waypoint targeting the specified GPS
 		/// </summary>
 		/// <param name="gps">The non-null GPS</param>
@@ -460,36 +449,6 @@ namespace IOTA.ModularJumpGates.Util
 					throw new InvalidOperationException("Waypoint is invalid");
 			}
         }
-
-		/// <summary>
-		/// Gets the endpoint of this waypoint in world coordinates
-		/// </summary>
-		/// <param name="target_jump_gate">The targeted jump gate or null if target is not a jump gate</param>
-		/// <returns>The target's world coordinates<br />null if this waypoint is None<br />Vector3D.Zero if this waypoint targets a server</returns>
-		/// <exception cref="InvalidOperationException"></exception>
-		public Vector3D? GetEndpoint(out MyAPIJumpGate target_jump_gate)
-        {
-            target_jump_gate = null;
-
-			switch (this.WaypointType)
-			{
-				case MyWaypointType.NONE:
-					return null;
-				case MyWaypointType.JUMP_GATE:
-					target_jump_gate = MyAPISession.Instance.GetJumpGate(JumpGateUUID.FromGuid(this.JumpGate));
-					if (target_jump_gate == null || !target_jump_gate.IsValid()) return null;
-					return target_jump_gate.WorldJumpNode;
-				case MyWaypointType.GPS:
-					return this.GPS?.Coords;
-				case MyWaypointType.BEACON:
-					return this.Beacon?.BeaconPosition;
-				case MyWaypointType.SERVER:
-					if (this.ServerJumpGate == null) return null;
-					return Vector3D.Zero;
-				default:
-					throw new InvalidOperationException("Waypoint is invalid");
-			}
-		}
 		#endregion
 	}
 }

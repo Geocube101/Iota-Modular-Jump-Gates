@@ -1,5 +1,4 @@
-﻿using IOTA.ModularJumpGates.API;
-using IOTA.ModularJumpGates.CubeBlock;
+﻿using IOTA.ModularJumpGates.CubeBlock;
 using IOTA.ModularJumpGates.Util;
 using IOTA.ModularJumpGates.Util.ConcurrentCollections;
 using ProtoBuf;
@@ -31,8 +30,8 @@ namespace IOTA.ModularJumpGates
 		DST_UNAVAILABLE, DST_ROUTING_DISABLED, DST_OUTBOUND_ONLY, DST_FORBIDDEN, DST_DISABLED, DST_NOT_CONFIGURED, DST_BUSY, DST_RADIO_CONNECTION_INTERRUPTED, DST_BEACON_CONNECTION_INTERRUPTED, DST_ROUTING_CHANGED, DST_VOIDED,
 		INVALID = 0xFF
 	}
-	public enum MyGateColliderStatus { NONE, ATTACHED, CLOSED };
-	public enum MyJumpTypeEnum { STANDARD, INBOUND_VOID, OUTBOUND_VOID }
+	public enum MyGateColliderStatus : byte { NONE, ATTACHED, CLOSED };
+	public enum MyJumpTypeEnum : byte { STANDARD, INBOUND_VOID, OUTBOUND_VOID }
 
 	internal class MyJumpGate : IEquatable<MyJumpGate>
 	{
@@ -212,7 +211,7 @@ namespace IOTA.ModularJumpGates
 					return;
 				}
 
-				this.JumpGate.GetWorkingJumpGateDrives(this.JumpGateDrives);
+				this.JumpGateDrives.AddRange(this.JumpGate.GetWorkingJumpGateDrives());
 				double power_per_drive = power_mw / this.JumpGateDrives.Count;
 				power_mw = (syphon_grid_only) ? power_mw : this.JumpGateDrives.Select((drive) => drive.DrainStoredCharge(power_per_drive)).Sum();
 
@@ -246,7 +245,7 @@ namespace IOTA.ModularJumpGates
 			public void Tick()
 			{
 				if (this.SyphonPower <= 0 || !this.IsValid()) return;
-				this.JumpGate.GetJumpGateDrives(this.JumpGateDrives);
+				this.JumpGateDrives.AddRange(this.JumpGate.GetJumpGateDrives());
 				this.WorkingDrivesCount = 0;
 				double aquired_power = 0;
 
@@ -408,11 +407,6 @@ namespace IOTA.ModularJumpGates
 		/// List of callbacks for entity enter/exit
 		/// </summary>
 		private List<Action<MyJumpGate, MyEntity, bool>> EntityEnterCallbacks = new List<Action<MyJumpGate, MyEntity, bool>>();
-
-		/// <summary>
-		/// List of API callbacks for entity enter/exit
-		/// </summary>
-		private List<Action<MyAPIJumpGate, MyEntity, bool>> APIEntityEnterCallbacks = new List<Action<MyAPIJumpGate, MyEntity, bool>>();
 
 		/// <summary>
 		/// A list of all blocks to be destroyed during jump
@@ -587,15 +581,9 @@ namespace IOTA.ModularJumpGates
 		/// <summary>
 		/// Gets this gate's world-aligned shearing ellipse<br />
 		/// This ellipse is used to calculate grid shearing<br />
-		/// This ellipse is the jump ellipse padded by 2.5 meters
+		/// This ellipse is the jump ellipse padded by 5 meters
 		/// </summary>
-		public BoundingEllipsoidD ShearEllipse
-		{
-			get
-			{
-				return this.JumpEllipse + 5;
-			}
-		}
+		public BoundingEllipsoidD ShearEllipse => this.JumpEllipse + 5;
 
 		/// <summary>
 		/// Gets the list of construct-local space drive ray-cast intersections for this jump gate
@@ -1177,7 +1165,7 @@ namespace IOTA.ModularJumpGates
 
 				if (!this.IsValid()) result = MyJumpFailReason.SRC_INVALID;
 				else if (!this.IsComplete() || !this.Controller.IsWorking()) result = MyJumpFailReason.CONTROLLER_NOT_CONNECTED;
-				else if (this.JumpGateGrid.GetDriveCount(working_src_drive_filter) < 2) result = MyJumpFailReason.SRC_DISABLED;
+				else if (this.JumpGateGrid.GetAttachedJumpGateDrives().Count(working_src_drive_filter) < 2) result = MyJumpFailReason.SRC_DISABLED;
 				else if (this.Status == MyJumpGateStatus.NONE) result = MyJumpFailReason.SRC_NOT_CONFIGURED;
 				else if (!this.IsIdle()) result = MyJumpFailReason.SRC_BUSY;
 				else if (!controller_settings.CanBeInbound() && !controller_settings.CanBeOutbound()) result = MyJumpFailReason.SRC_ROUTING_DISABLED;
@@ -1192,12 +1180,12 @@ namespace IOTA.ModularJumpGates
 					MyJumpGateConstruct grid = MyJumpGateModSession.Instance.GetJumpGateGrid(uuid.GetJumpGateGrid());
 					target_gate = grid?.GetJumpGate(uuid.GetJumpGate());
 					target_controller_settings = target_gate?.Controller.BlockSettings;
-					if (MyJumpGateModSession.Configuration.ConstructConfiguration.RequireGridCommLink && !this.JumpGateGrid.IsConstructCommLinked(grid, true)) result = MyJumpFailReason.RADIO_LINK_FAILED;
+					if (MyJumpGateModSession.Configuration.ConstructConfiguration.RequireGridCommLink && !this.JumpGateGrid.IsConstructCommLinked(grid)) result = MyJumpFailReason.RADIO_LINK_FAILED;
 					else if (target_gate == null || !target_gate.IsComplete() || !target_gate.Controller.IsWorking()) result = MyJumpFailReason.DST_UNAVAILABLE;
 					else if (!target_controller_settings.CanBeInbound() && !target_controller_settings.CanBeOutbound()) result = MyJumpFailReason.DST_ROUTING_DISABLED;
 					else if (!target_controller_settings.CanBeInbound()) result = MyJumpFailReason.DST_OUTBOUND_ONLY;
 					else if (!target_gate.Controller.IsFactionRelationValid(this.Controller.OwnerSteamID)) result = MyJumpFailReason.DST_FORBIDDEN;
-					else if (target_gate.JumpGateGrid.GetDriveCount(working_dst_drive_filter) < 2) result = MyJumpFailReason.DST_DISABLED;
+					else if (target_gate.JumpGateGrid.GetAttachedJumpGateDrives().Count(working_dst_drive_filter) < 2) result = MyJumpFailReason.DST_DISABLED;
 					else if (target_gate.Status == MyJumpGateStatus.NONE) result = MyJumpFailReason.DST_NOT_CONFIGURED;
 					else if (!target_gate.IsIdle()) result = MyJumpFailReason.DST_BUSY;
 					else target_gate.ConnectAsInbound(this);
@@ -1205,7 +1193,7 @@ namespace IOTA.ModularJumpGates
 				}
 
 				// Check target beacon if applicable
-				else if (result == MyJumpFailReason.NONE && dst.WaypointType == MyWaypointType.BEACON && (dst.Beacon.Beacon == null || !dst.Beacon.Beacon.IsWorking || !this.JumpGateGrid.IsBeaconWithinReverseBroadcastSphere(dst.Beacon, true)))
+				else if (result == MyJumpFailReason.NONE && dst.WaypointType == MyWaypointType.BEACON && (dst.Beacon.Beacon == null || !dst.Beacon.Beacon.IsWorking || !this.JumpGateGrid.IsBeaconWithinReverseBroadcastSphere(dst.Beacon)))
 				{
 					result = MyJumpFailReason.BEACON_LINK_FAILED;
 				}
@@ -1213,7 +1201,7 @@ namespace IOTA.ModularJumpGates
 				// Check gate overlap
 				if (result == MyJumpFailReason.NONE)
 				{
-					MyJumpGateModSession.Instance.GetAllJumpGates(other_gates);
+					other_gates.AddRange(MyJumpGateModSession.Instance.GetAllJumpGates());
 
 					foreach (MyJumpGate other_gate in other_gates)
 					{
@@ -1302,7 +1290,7 @@ namespace IOTA.ModularJumpGates
 				MyJumpGateModSession.Instance.PlayAnimation(gate_animation, MyJumpGateAnimation.AnimationTypeEnum.JUMPING, () => {
 					if (!this.IsValid()) result = MyJumpFailReason.SRC_INVALID;
 					else if (!this.IsComplete() || !this.Controller.IsWorking()) result = MyJumpFailReason.CONTROLLER_NOT_CONNECTED;
-					else if (this.JumpGateGrid.GetDriveCount(working_src_drive_filter) < 2) result = MyJumpFailReason.SRC_DISABLED;
+					else if (this.JumpGateGrid.GetAttachedJumpGateDrives().Count(working_src_drive_filter) < 2) result = MyJumpFailReason.SRC_DISABLED;
 					else if (this.Status == MyJumpGateStatus.NONE) result = MyJumpFailReason.SRC_NOT_CONFIGURED;
 					else if (!controller_settings.CanBeInbound() && !controller_settings.CanBeOutbound()) result = MyJumpFailReason.SRC_ROUTING_CHANGED;
 					else if (!controller_settings.CanBeOutbound()) result = MyJumpFailReason.SRC_ROUTING_CHANGED;
@@ -1311,11 +1299,11 @@ namespace IOTA.ModularJumpGates
 					{
 						JumpGateUUID uuid = JumpGateUUID.FromGuid(dst.JumpGate);
 						MyJumpGateConstruct grid = MyJumpGateModSession.Instance.GetJumpGateGrid(uuid.GetJumpGateGrid());
-						if (MyJumpGateModSession.Configuration.ConstructConfiguration.RequireGridCommLink && !this.JumpGateGrid.IsConstructCommLinked(grid, true)) result = MyJumpFailReason.DST_RADIO_CONNECTION_INTERRUPTED;
+						if (MyJumpGateModSession.Configuration.ConstructConfiguration.RequireGridCommLink && !this.JumpGateGrid.IsConstructCommLinked(grid)) result = MyJumpFailReason.DST_RADIO_CONNECTION_INTERRUPTED;
 						else if (target_gate.Closed || !target_gate.IsComplete() || !target_gate.Controller.IsWorking()) result = MyJumpFailReason.DST_UNAVAILABLE;
 						else if (!target_controller_settings.CanBeInbound()) result = MyJumpFailReason.DST_ROUTING_CHANGED;
 						else if (!target_gate.Controller.IsFactionRelationValid(this.Controller.OwnerID)) result = MyJumpFailReason.DST_FORBIDDEN;
-						else if (target_gate.JumpGateGrid.GetDriveCount(working_dst_drive_filter) < 2) result = MyJumpFailReason.DST_DISABLED;
+						else if (target_gate.JumpGateGrid.GetAttachedJumpGateDrives().Count(working_dst_drive_filter) < 2) result = MyJumpFailReason.DST_DISABLED;
 						else if (target_gate.Status == MyJumpGateStatus.NONE) result = MyJumpFailReason.DST_NOT_CONFIGURED;
 						else if (target_gate.SenderGate != this) result = MyJumpFailReason.DST_VOIDED;
 						else
@@ -1327,7 +1315,7 @@ namespace IOTA.ModularJumpGates
 					}
 					else if (dst.WaypointType == MyWaypointType.BEACON)
 					{
-						if (dst.Beacon.Beacon == null || !dst.Beacon.Beacon.IsWorking || !this.JumpGateGrid.IsBeaconWithinReverseBroadcastSphere(dst.Beacon, true)) result = MyJumpFailReason.DST_BEACON_CONNECTION_INTERRUPTED;
+						if (dst.Beacon.Beacon == null || !dst.Beacon.Beacon.IsWorking || !this.JumpGateGrid.IsBeaconWithinReverseBroadcastSphere(dst.Beacon)) result = MyJumpFailReason.DST_BEACON_CONNECTION_INTERRUPTED;
 						endpoint = dst.Beacon.BeaconPosition;
 						if (MyJumpGateModSession.Network.Registered && endpoint != this.TrueEndpoint) SendUpdatedJumpEndpoint(endpoint);
 						this.TrueEndpoint = endpoint;
@@ -1335,7 +1323,7 @@ namespace IOTA.ModularJumpGates
 
 					if (MyJumpGateModSession.GameTick % 30 == 0)
 					{
-						MyJumpGateModSession.Instance.GetAllJumpGates(other_gates);
+						other_gates.AddRange(MyJumpGateModSession.Instance.GetAllJumpGates());
 
 						foreach (MyJumpGate other_gate in other_gates)
 						{
@@ -1373,7 +1361,7 @@ namespace IOTA.ModularJumpGates
 					}
 
 					List<MyJumpGateDrive> working_drives = new List<MyJumpGateDrive>();
-					this.GetWorkingJumpGateDrives(working_drives);
+					working_drives.AddRange(this.GetWorkingJumpGateDrives());
 
 					foreach (MyJumpGateDrive drive in working_drives)
 					{
@@ -1660,7 +1648,7 @@ namespace IOTA.ModularJumpGates
 							// Destroy neccessary construct blocks
 							if (parent != null)
 							{
-								parent.GetCubeGrids(grids);
+								grids.AddRange(parent.GetCubeGrids());
 
 								foreach (IMyCubeGrid grid in grids)
 								{
@@ -1891,8 +1879,8 @@ namespace IOTA.ModularJumpGates
 					catch (Exception e)
 					{
 						SendJumpResponse(MyJumpFailReason.UNKNOWN_ERROR, false, null);
-						int drive_count = this.JumpGateGrid.GetDriveCount((drive) => drive.JumpGateID == this.JumpGateID);
-						int working_drive_count = this.JumpGateGrid.GetDriveCount(working_src_drive_filter);
+						int drive_count = this.GetJumpGateDrives().Count();
+						int working_drive_count = this.GetWorkingJumpGateDrives().Count();
 						Logger.Error($"Error during jump gate jump:\n\tPHASE=POSTANIM\n\tGATE_CUBE_GRID={this.JumpGateGrid?.CubeGrid?.EntityId.ToString() ?? "N/A"}\n\tGATE_ID={this.JumpGateID}\n\tGATE_SIZE={drive_count}\n\tGATE_SIZE_WORKING={working_drive_count}\n\n\tSTACKTRACE:\n{e}");
 					}
 
@@ -1901,8 +1889,8 @@ namespace IOTA.ModularJumpGates
 			catch (Exception e)
 			{
 				SendJumpResponse(MyJumpFailReason.UNKNOWN_ERROR, false, null);
-				int drive_count = this.JumpGateGrid.GetDriveCount((drive) => drive.JumpGateID == this.JumpGateID);
-				int working_drive_count = this.JumpGateGrid.GetDriveCount(working_src_drive_filter);
+				int drive_count = this.GetJumpGateDrives().Count();
+				int working_drive_count = this.GetWorkingJumpGateDrives().Count();
 				Logger.Error($"Error during jump gate jump:\n\tPHASE=PREANIM\n\tGATE_CUBE_GRID={this.JumpGateGrid?.CubeGrid?.EntityId.ToString() ?? "N/A"}\n\tGATE_ID={this.JumpGateID}\n\tGATE_SIZE={drive_count}\n\tGATE_SIZE_WORKING={working_drive_count}\n\n\tSTACKTRACE:\n{e}");
 			}
 		}
@@ -2112,21 +2100,12 @@ namespace IOTA.ModularJumpGates
 		{
 			Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID}: ENTITY={entity.DisplayName} @ {entity.EntityId}, !ENTERED!", 4);
 			this.IsDirty = this.IsDirty || MyNetworkInterface.IsMultiplayerServer;
-			MyAPIJumpGate api = MyAPISession.GetNewJumpGate(this);
 
 			lock (this.EntityEnterCallbacks)
 			{
 				foreach (Action<MyJumpGate, MyEntity, bool> callback in this.EntityEnterCallbacks)
 				{
 					callback(this, entity, true);
-				}
-			}
-
-			lock (this.APIEntityEnterCallbacks)
-			{
-				foreach (Action<MyAPIJumpGate, MyEntity, bool> callback in this.APIEntityEnterCallbacks)
-				{
-					callback(api, entity, true);
 				}
 			}
 		}
@@ -2140,21 +2119,12 @@ namespace IOTA.ModularJumpGates
 		{
 			Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID}: ENTITY={entity.DisplayName} @ {entity.EntityId}, !LEFT!", 4);
 			this.IsDirty = this.IsDirty || MyNetworkInterface.IsMultiplayerServer;
-			MyAPIJumpGate api = MyAPISession.GetNewJumpGate(this);
 
 			lock (this.EntityEnterCallbacks)
 			{
 				foreach (Action<MyJumpGate, MyEntity, bool> callback in this.EntityEnterCallbacks)
 				{
 					callback(this, entity, false);
-				}
-			}
-
-			lock (this.APIEntityEnterCallbacks)
-			{
-				foreach (Action<MyAPIJumpGate, MyEntity, bool> callback in this.APIEntityEnterCallbacks)
-				{
-					callback(api, entity, false);
 				}
 			}
 		}
@@ -2171,8 +2141,7 @@ namespace IOTA.ModularJumpGates
 			MyGateInvalidationReason reason = this.GetInvalidationReason();
 			JumpGateUUID uuid = JumpGateUUID.FromJumpGate(this);
 			string name = this.GetPrintableName();
-			List<MyJumpGateDrive> drives = new List<MyJumpGateDrive>();
-			this.GetJumpGateDrives(drives);
+			List<MyJumpGateDrive> drives = this.GetJumpGateDrives().ToList();
 			foreach (MyJumpGateDrive drive in drives) drive.SetAttachedJumpGate(null);
 			foreach (KeyValuePair<ulong, KeyValuePair<Vector3D?, MySoundEmitter3D>> pair in this.SoundEmitters) pair.Value.Value.Dispose(true);
 			if (this.Controller != null) this.Controller.AttachedJumpGate(null);
@@ -2206,7 +2175,6 @@ namespace IOTA.ModularJumpGates
 			}
 
 			lock (this.EntityEnterCallbacks) this.EntityEnterCallbacks.Clear();
-			lock (this.APIEntityEnterCallbacks) this.APIEntityEnterCallbacks.Clear();
 
 			this.SoundEmitters.Clear();
 			this.JumpSpaceEntities.Clear();
@@ -2232,6 +2200,7 @@ namespace IOTA.ModularJumpGates
 			this.SoundEmitters = null;
 			this.EntityBatches = null;
 			this.PowerSyphon = null;
+			this.EntityEnterCallbacks = null;
 
 			Logger.Debug($"Jump Gate \"{name}\" ({uuid.GetJumpGateGrid()}-{uuid.GetJumpGate()}) Closed - {reason}", 1);
 		}
@@ -2382,7 +2351,7 @@ namespace IOTA.ModularJumpGates
 
 				if (!this.IsValid()) result = MyJumpFailReason.SRC_INVALID;
 				else if (!this.IsComplete() || !this.Controller.IsWorking()) result = MyJumpFailReason.CONTROLLER_NOT_CONNECTED;
-				else if (this.JumpGateGrid.GetDriveCount(working_src_drive_filter) < 2) result = MyJumpFailReason.SRC_DISABLED;
+				else if (this.JumpGateGrid.GetAttachedJumpGateDrives().Count(working_src_drive_filter) < 2) result = MyJumpFailReason.SRC_DISABLED;
 				else if (this.Status == MyJumpGateStatus.NONE) result = MyJumpFailReason.SRC_NOT_CONFIGURED;
 				else if (!this.IsIdle()) result = MyJumpFailReason.SRC_BUSY;
 				else if (!controller_settings.CanBeInbound() && !controller_settings.CanBeOutbound()) result = MyJumpFailReason.SRC_ROUTING_DISABLED;
@@ -2392,7 +2361,7 @@ namespace IOTA.ModularJumpGates
 				// Check gate overlap
 				if (result == MyJumpFailReason.NONE)
 				{
-					MyJumpGateModSession.Instance.GetAllJumpGates(other_gates);
+					other_gates.AddRange(MyJumpGateModSession.Instance.GetAllJumpGates());
 
 					foreach (MyJumpGate other_gate in other_gates)
 					{
@@ -2467,14 +2436,14 @@ namespace IOTA.ModularJumpGates
 				MyJumpGateModSession.Instance.PlayAnimation(gate_animation, MyJumpGateAnimation.AnimationTypeEnum.JUMPING, () => {
 					if (!this.IsValid()) result = MyJumpFailReason.SRC_INVALID;
 					else if (!this.IsComplete() || !this.Controller.IsWorking()) result = MyJumpFailReason.CONTROLLER_NOT_CONNECTED;
-					else if (this.JumpGateGrid.GetDriveCount(working_src_drive_filter) < 2) result = MyJumpFailReason.SRC_DISABLED;
+					else if (this.JumpGateGrid.GetAttachedJumpGateDrives().Count(working_src_drive_filter) < 2) result = MyJumpFailReason.SRC_DISABLED;
 					else if (this.Status == MyJumpGateStatus.NONE) result = MyJumpFailReason.SRC_NOT_CONFIGURED;
 					else if (!controller_settings.CanBeInbound() && !controller_settings.CanBeOutbound()) result = MyJumpFailReason.SRC_ROUTING_CHANGED;
 					else if (!controller_settings.CanBeOutbound()) result = MyJumpFailReason.SRC_ROUTING_CHANGED;
 					
 					if (MyJumpGateModSession.GameTick % 30 == 0)
 					{
-						MyJumpGateModSession.Instance.GetAllJumpGates(other_gates);
+						other_gates.AddRange(MyJumpGateModSession.Instance.GetAllJumpGates());
 
 						foreach (MyJumpGate other_gate in other_gates)
 						{
@@ -2511,10 +2480,7 @@ namespace IOTA.ModularJumpGates
 						cancel_request_notificiation.Show();
 					}
 
-					List<MyJumpGateDrive> working_drives = new List<MyJumpGateDrive>();
-					this.GetWorkingJumpGateDrives(working_drives);
-
-					foreach (MyJumpGateDrive drive in working_drives)
+					foreach (MyJumpGateDrive drive in this.GetWorkingJumpGateDrives())
 					{
 						if (drive.IsNullWrapper) continue;
 						Vector3D force_dir = (drive.TerminalBlock.WorldMatrix.Translation - this.WorldJumpNode).Normalized() * this.JumpGateConfiguration.ChargingDriveEffectorForceN;
@@ -2595,7 +2561,7 @@ namespace IOTA.ModularJumpGates
 								{
 									parent = MyJumpGateModSession.Instance.GetUnclosedJumpGateGrid(entity.EntityId);
 									if (parent == null) continue;
-									parent.GetCubeGrids(grids);
+									grids.AddRange(parent.GetCubeGrids());
 
 									foreach (IMyCubeGrid grid in grids)
 									{
@@ -2669,8 +2635,8 @@ namespace IOTA.ModularJumpGates
 					catch (Exception e)
 					{
 						SendJumpResponse(MyJumpFailReason.UNKNOWN_ERROR, false, null);
-						int drive_count = this.JumpGateGrid.GetDriveCount((drive) => drive.JumpGateID == this.JumpGateID);
-						int working_drive_count = this.JumpGateGrid.GetDriveCount(working_src_drive_filter);
+						int drive_count = this.GetJumpGateDrives().Count();
+						int working_drive_count = this.GetWorkingJumpGateDrives().Count();
 						Logger.Error($"Error during jump gate jump:\n\tPHASE=POSTANIM\n\tGATE_CUBE_GRID={this.JumpGateGrid?.CubeGrid?.EntityId.ToString() ?? "N/A"}\n\tGATE_ID={this.JumpGateID}\n\tGATE_SIZE={drive_count}\n\tGATE_SIZE_WORKING={working_drive_count}\n\n\tSTACKTRACE:\n{e}");
 					}
 
@@ -2679,8 +2645,8 @@ namespace IOTA.ModularJumpGates
 			catch (Exception e)
 			{
 				SendJumpResponse(MyJumpFailReason.UNKNOWN_ERROR, false, null);
-				int drive_count = this.JumpGateGrid.GetDriveCount((drive) => drive.JumpGateID == this.JumpGateID);
-				int working_drive_count = this.JumpGateGrid.GetDriveCount(working_src_drive_filter);
+				int drive_count = this.GetJumpGateDrives().Count();
+				int working_drive_count = this.GetWorkingJumpGateDrives().Count();
 				Logger.Error($"Error during jump gate jump:\n\tPHASE=PREANIM\n\tGATE_CUBE_GRID={this.JumpGateGrid?.CubeGrid?.EntityId.ToString() ?? "N/A"}\n\tGATE_ID={this.JumpGateID}\n\tGATE_SIZE={drive_count}\n\tGATE_SIZE_WORKING={working_drive_count}\n\n\tSTACKTRACE:\n{e}");
 			}
 		}
@@ -2754,7 +2720,7 @@ namespace IOTA.ModularJumpGates
 				++MyJumpGateModSession.Instance.ConcurrentJumpsCounter;
 
 				if (!this.IsValid() || !this.IsComplete() || !this.Controller.IsWorking()) result = MyJumpFailReason.DST_UNAVAILABLE;
-				else if (this.JumpGateGrid.GetDriveCount(working_src_drive_filter) < 2) result = MyJumpFailReason.DST_DISABLED;
+				else if (this.JumpGateGrid.GetAttachedJumpGateDrives().Count(working_src_drive_filter) < 2) result = MyJumpFailReason.DST_DISABLED;
 				else if (this.Status == MyJumpGateStatus.NONE) result = MyJumpFailReason.DST_NOT_CONFIGURED;
 				else if (!this.IsIdle()) result = MyJumpFailReason.DST_BUSY;
 				else if (!controller_settings.CanBeInbound() && !controller_settings.CanBeOutbound()) result = MyJumpFailReason.DST_ROUTING_DISABLED;
@@ -2821,7 +2787,7 @@ namespace IOTA.ModularJumpGates
 				// Play animation and check for invalidation of jump event
 				MyJumpGateModSession.Instance.PlayAnimation(gate_animation, MyJumpGateAnimation.AnimationTypeEnum.JUMPING, () => {
 					if (!this.IsValid() || !this.IsComplete() || !this.Controller.IsWorking()) result = MyJumpFailReason.DST_UNAVAILABLE;
-					else if (this.JumpGateGrid.GetDriveCount(working_src_drive_filter) < 2) result = MyJumpFailReason.DST_DISABLED;
+					else if (this.JumpGateGrid.GetAttachedJumpGateDrives().Count(working_src_drive_filter) < 2) result = MyJumpFailReason.DST_DISABLED;
 					else if (this.Status == MyJumpGateStatus.NONE) result = MyJumpFailReason.DST_NOT_CONFIGURED;
 					else if (!controller_settings.CanBeInbound() && !controller_settings.CanBeOutbound()) result = MyJumpFailReason.DST_ROUTING_CHANGED;
 					else if (!controller_settings.CanBeInbound()) result = MyJumpFailReason.DST_ROUTING_CHANGED;
@@ -2842,10 +2808,8 @@ namespace IOTA.ModularJumpGates
 					}
 
 					if (this.Closed || this.JumpGateGrid == null || this.JumpGateGrid.Closed) result = MyJumpFailReason.DST_VOIDED;
-					List<MyJumpGateDrive> working_drives = new List<MyJumpGateDrive>();
-					this.GetWorkingJumpGateDrives(working_drives);
 
-					foreach (MyJumpGateDrive drive in working_drives)
+					foreach (MyJumpGateDrive drive in this.GetWorkingJumpGateDrives())
 					{
 						if (drive.IsNullWrapper) continue;
 						Vector3D force_dir = (drive.TerminalBlock.WorldMatrix.Translation - this.WorldJumpNode).Normalized() * this.JumpGateConfiguration.ChargingDriveEffectorForceN;
@@ -2908,8 +2872,8 @@ namespace IOTA.ModularJumpGates
 					catch (Exception e)
 					{
 						SendJumpResponse(MyJumpFailReason.UNKNOWN_ERROR, false, null);
-						int drive_count = this.JumpGateGrid.GetDriveCount((drive) => drive.JumpGateID == this.JumpGateID);
-						int working_drive_count = this.JumpGateGrid.GetDriveCount(working_src_drive_filter);
+						int drive_count = this.GetJumpGateDrives().Count();
+						int working_drive_count = this.GetWorkingJumpGateDrives().Count();
 						Logger.Error($"Error during jump gate jump:\n\tPHASE=POSTANIM\n\tGATE_CUBE_GRID={this.JumpGateGrid?.CubeGrid?.EntityId.ToString() ?? "N/A"}\n\tGATE_ID={this.JumpGateID}\n\tGATE_SIZE={drive_count}\n\tGATE_SIZE_WORKING={working_drive_count}\n\n\tSTACKTRACE:\n{e}");
 					}
 
@@ -2918,8 +2882,8 @@ namespace IOTA.ModularJumpGates
 			catch (Exception e)
 			{
 				SendJumpResponse(MyJumpFailReason.UNKNOWN_ERROR, false, null);
-				int drive_count = this.JumpGateGrid.GetDriveCount((drive) => drive.JumpGateID == this.JumpGateID);
-				int working_drive_count = this.JumpGateGrid.GetDriveCount(working_src_drive_filter);
+				int drive_count = this.GetJumpGateDrives().Count();
+				int working_drive_count = this.GetWorkingJumpGateDrives().Count();
 				Logger.Error($"Error during jump gate jump:\n\tPHASE=PREANIM\n\tGATE_CUBE_GRID={this.JumpGateGrid?.CubeGrid?.EntityId.ToString() ?? "N/A"}\n\tGATE_ID={this.JumpGateID}\n\tGATE_SIZE={drive_count}\n\tGATE_SIZE_WORKING={working_drive_count}\n\n\tSTACKTRACE:\n{e}");
 			}
 		}
@@ -3062,8 +3026,7 @@ namespace IOTA.ModularJumpGates
 				{
 					int most_aligned_plane = 0;
 					int largest_plane = 0;
-					List<MyJumpGateDrive> drives = new List<MyJumpGateDrive>();
-					this.GetJumpGateDrives(drives);
+					List<MyJumpGateDrive> drives = this.GetJumpGateDrives().ToList();
 					this.ForceUpdateJumpEllipsoid = false;
 					Vector3D jump_node = this.WorldJumpNode;
 
@@ -3506,48 +3469,6 @@ namespace IOTA.ModularJumpGates
 		}
 
 		/// <summary>
-		/// Gets a list of all drives attached to this gate
-		/// </summary>
-		/// <param name="drives">All attached jump gate drives<br />List will not be cleared</param>
-		/// <param name="filter">A predicate to match jump gate drives against</param>
-		public void GetJumpGateDrives(List<MyJumpGateDrive> drives, Func<MyJumpGateDrive, bool> filter = null)
-		{
-			this.JumpGateGrid?.GetAttachedJumpGateDrives(drives, (drive) => drive.JumpGateID == this.JumpGateID && !drive.IsClosed() && (filter == null || filter(drive)));
-		}
-
-		/// <summary>
-		/// Gets a list of all drives attached to this gate as the specified type
-		/// </summary>
-		/// <param name="drives">All attached jump gate drives<br />List will not be cleared</param>
-		/// <param name="transformer">A transformer converting a controller to the specified type</param>
-		/// <param name="filter">A predicate to match jump gate drives against</param>
-		public void GetJumpGateDrives<T>(List<T> drives, Func<MyJumpGateDrive, T> transformer, Func<MyJumpGateDrive, bool> filter = null)
-		{
-			this.JumpGateGrid?.GetAttachedJumpGateDrives(drives, transformer, (drive) => drive.JumpGateID == this.JumpGateID && !drive.IsClosed() && (filter == null || filter(drive)));
-		}
-
-		/// <summary>
-		/// Gets a list of all working drives attached to this gate
-		/// </summary>
-		/// <param name="drives">All attached jump gate drives<br />List will not be cleared</param>
-		/// <param name="filter">A predicate to match jump gate drives against</param>
-		public void GetWorkingJumpGateDrives(List<MyJumpGateDrive> drives, Func<MyJumpGateDrive, bool> filter = null)
-		{
-			this.JumpGateGrid?.GetAttachedJumpGateDrives(drives, (drive) => drive.JumpGateID == this.JumpGateID && drive.IsWorking() && (filter == null || filter(drive)));
-		}
-
-		/// <summary>
-		/// Gets a list of all working drives attached to this gate as the specified type
-		/// </summary>
-		/// <param name="drives">All attached jump gate drives<br />List will not be cleared</param>
-		/// <param name="transformer">A transformer converting a controller to the specified type</param>
-		/// <param name="filter">A predicate to match jump gate drives against</param>
-		public void GetWorkingJumpGateDrives<T>(List<T> drives, Func<MyJumpGateDrive, T> transformer, Func<MyJumpGateDrive, bool> filter = null)
-		{
-			this.JumpGateGrid?.GetAttachedJumpGateDrives(drives, transformer, (drive) => drive.JumpGateID == this.JumpGateID && drive.IsWorking() && (filter == null || filter(drive)));
-		}
-
-		/// <summary>
 		/// Gets all entities within this gate's jump space ellipsoid not yet initialized on client
 		/// </summary>
 		/// <param name="entities">All unconfirmed entities within this jump space<br />Dictionary will not be cleared</param>
@@ -3630,34 +3551,6 @@ namespace IOTA.ModularJumpGates
 		}
 
 		/// <summary>
-		/// Registers a callback for when an entity enters or exits this gate's jump space<br />
-		/// Callback parameters:<br />
-		///  ... MyJumpGate - The colliding gate
-		///  ... MyEntity - The entity entering or leaving
-		///  ... bool - True if this entity is entering the jump space
-		/// </summary>
-		/// <param name="callback">The callback to call</param>
-		public void OnEntityCollision(Action<MyAPIJumpGate, MyEntity, bool> callback)
-		{
-			if (this.Closed) return;
-			lock (this.APIEntityEnterCallbacks) if (!this.APIEntityEnterCallbacks.Contains(callback)) this.APIEntityEnterCallbacks.Add(callback);
-		}
-
-		/// <summary>
-		/// Unregisters a callback for when an entity enters or exits this gate's jump space<br />
-		/// Callback parameters:<br />
-		///  ... MyJumpGate - The colliding gate
-		///  ... MyEntity - The entity entering or leaving
-		///  ... bool - True if this entity is entering the jump space
-		/// </summary>
-		/// <param name="callback">The callback to call</param>
-		public void OffEntityCollision(Action<MyAPIJumpGate, MyEntity, bool> callback)
-		{
-			if (this.Closed) return;
-			lock (this.APIEntityEnterCallbacks) this.APIEntityEnterCallbacks.Remove(callback);
-		}
-
-		/// <summary>
 		/// Checks if the specified callback is registered with this gate
 		/// </summary>
 		/// <param name="callback">The callback to check</param>
@@ -3666,17 +3559,6 @@ namespace IOTA.ModularJumpGates
 		{
 			if (this.Closed) return false;
 			lock (this.EntityEnterCallbacks) return this.EntityEnterCallbacks.Contains(callback);
-		}
-
-		/// <summary>
-		/// Checks if the specified callback is registered with this gate
-		/// </summary>
-		/// <param name="callback">The callback to check</param>
-		/// <returns>True if already registered</returns>
-		public bool IsEntityCollisionCallbackRegistered(Action<MyAPIJumpGate, MyEntity, bool> callback)
-		{
-			if (this.Closed) return false;
-			lock (this.APIEntityEnterCallbacks) return this.APIEntityEnterCallbacks.Contains(callback);
 		}
 
 		/// <summary>
@@ -3800,7 +3682,7 @@ namespace IOTA.ModularJumpGates
 		public bool IsLargeGrid()
 		{
 			if (this.Closed) return false;
-			else if (this.DriveGridSize == null) return this.JumpGateGrid.GetFirstDrive((drive) => drive.IsLargeGrid) != null;
+			else if (this.DriveGridSize == null) return this.GetWorkingJumpGateDrives().Any((drive) => drive.IsLargeGrid);
 			else return this.DriveGridSize.Value == MyCubeSize.Large;
 		}
 
@@ -3810,7 +3692,7 @@ namespace IOTA.ModularJumpGates
 		public bool IsSmallGrid()
 		{
 			if (this.Closed) return false;
-			else if (this.DriveGridSize == null) return this.JumpGateGrid.GetFirstDrive((drive) => drive.IsSmallGrid) != null;
+			else if (this.DriveGridSize == null) return this.GetWorkingJumpGateDrives().Any((drive) => drive.IsSmallGrid);
 			else return this.DriveGridSize.Value == MyCubeSize.Small;
 		}
 
@@ -3845,7 +3727,7 @@ namespace IOTA.ModularJumpGates
 			else if (this.JumpGateID < 0) return MyGateInvalidationReason.INVALID_ID;
 			else if (this.InnerDriveIntersectNodes.Count < 1) return MyGateInvalidationReason.INSUFFICIENT_NODES;
 			else if (this.MarkClosed) return MyGateInvalidationReason.CLOSED;
-			else if (this.JumpGateGrid.GetDriveCount((drive) => drive.JumpGateID == this.JumpGateID) < 2) return MyGateInvalidationReason.INSUFFICIENT_DRIVES;
+			else if (this.GetJumpGateDrives().Count() < 2) return MyGateInvalidationReason.INSUFFICIENT_DRIVES;
 			else return MyGateInvalidationReason.NONE;
 		}
 
@@ -3904,8 +3786,7 @@ namespace IOTA.ModularJumpGates
 		public double SyphonGridDrivePower(double power_mw)
 		{
 			if (this.Closed || power_mw <= 0) return 0;
-			List<MyJumpGateDrive> drives = new List<MyJumpGateDrive>();
-			this.GetWorkingJumpGateDrives(drives, (drive) => drive.StoredChargeMW > 0);
+			List<MyJumpGateDrive> drives = this.GetWorkingJumpGateDrives().Where((drive) => drive.StoredChargeMW > 0).ToList();
 			double power_per = power_mw / drives.Count;
 			power_mw = 0;
 			foreach (MyJumpGateDrive drive in drives) power_mw += drive.DrainStoredCharge(power_per);
@@ -3961,7 +3842,7 @@ namespace IOTA.ModularJumpGates
 		public double CalculateMaxGateDistance()
 		{
 			if (this.Closed) return 0;
-			int drive_count = this.JumpGateGrid.GetDriveCount((drive) => drive.JumpGateID == this.JumpGateID && drive.IsWorking());
+			int drive_count = this.GetWorkingJumpGateDrives().Count();
 			return Math.Pow(drive_count, this.JumpGateConfiguration.GateDistanceScaleExponent) * 1000d + this.JumpGateConfiguration.MinimumJumpDistance;
 		}
 
@@ -3988,7 +3869,6 @@ namespace IOTA.ModularJumpGates
 		/// <summary>
 		/// Calculates the total available power stored within construct capacitors and drives for the specified jump gate
 		/// </summary>
-		/// <param name="jump_gate_id">The jump gate to calculate for</param>
 		/// <returns>Total available instant power in Mega-Watts</returns>
 		public double CalculateTotalAvailableInstantPower()
 		{
@@ -4043,7 +3923,7 @@ namespace IOTA.ModularJumpGates
 		public MyCubeSize CubeGridSize()
 		{
 			if (this.Closed) return MyCubeSize.Large;
-			return this.DriveGridSize ?? this.JumpGateGrid.GetFirstDrive((drive) => drive.JumpGateID == this.JumpGateID).CubeGridSize;
+			return this.DriveGridSize ?? this.GetJumpGateDrives().First().CubeGridSize;
 		}
 
 		/// <summary>
@@ -4168,6 +4048,24 @@ namespace IOTA.ModularJumpGates
 		{
 			if (this.Closed || entity == null) return null;
 			return this.EntityBatches.GetValueOrDefault(entity, this.EntityBatches.FirstOrDefault((pair) => pair.Value.Batch.Contains(entity)).Value);
+		}
+
+		/// <summary>
+		/// Gets a list of all drives attached to this gate
+		/// </summary>
+		/// <returns>An IEnumerable referencing all attached drives</returns>
+		public IEnumerable<MyJumpGateDrive> GetJumpGateDrives()
+		{
+			return this.JumpGateGrid?.GetAttachedJumpGateDrives().Where((drive) => drive.JumpGateID == this.JumpGateID && !drive.IsClosed()) ?? Enumerable.Empty<MyJumpGateDrive>();
+		}
+
+		/// <summary>
+		/// Gets a list of all working drives attached to this gate
+		/// </summary>
+		/// <returns>An IEnumerable referencing all attached, working drives</returns>
+		public IEnumerable<MyJumpGateDrive> GetWorkingJumpGateDrives()
+		{
+			return this.JumpGateGrid?.GetAttachedJumpGateDrives().Where((drive) => drive.JumpGateID == this.JumpGateID && drive.IsWorking()) ?? Enumerable.Empty<MyJumpGateDrive>();
 		}
 
 		/// <summary>

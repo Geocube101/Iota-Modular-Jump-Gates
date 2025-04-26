@@ -699,6 +699,19 @@ namespace IOTA.ModularJumpGates.Util
 		public readonly bool UpdateSync;
 		public readonly Action Callback;
 
+		public MyPrefabInfo(Dictionary<string, object> info)
+		{
+			this.PrefabName = (string) info["PrefabName"];
+			this.Position = (Vector3D) info["Position"];
+			this.Forward = (Vector3D) info["Forward"];
+			this.Up = (Vector3D) info["Up"];
+			this.InitialLinearVelocity = (Vector3D) info["InitialLinearVelocity"];
+			this.InitialAngularVelocity = (Vector3D) info["InitialAngularVelocity"];
+			this.BeaconName = (string) info["BeaconName"];
+			this.SpawningOptions = (SpawningOptions) info["SpawningOptions"];
+			this.UpdateSync = (bool) info["UpdateSync"];
+			this.Callback = (Action) info["Callback"];
+		}
 		public MyPrefabInfo(string prefab_name, Vector3D position, Vector3D forward, Vector3D up, Vector3D initial_linear_velocity = default(Vector3D), Vector3D initial_angular_velocity = default(Vector3D), string beacon_name = null, SpawningOptions spawning_options = SpawningOptions.None, bool update_sync = false, Action callback = null)
 		{
 			this.PrefabName = prefab_name;
@@ -716,6 +729,23 @@ namespace IOTA.ModularJumpGates.Util
 		public void Spawn(List<IMyCubeGrid> spawned_grids)
 		{
 			MyAPIGateway.PrefabManager.SpawnPrefab(spawned_grids, this.PrefabName, this.Position, this.Forward, this.Up, this.InitialLinearVelocity, this.InitialAngularVelocity, this.BeaconName, this.SpawningOptions, this.UpdateSync, this.Callback);
+		}
+
+		public Dictionary<string, object> ToDictionary()
+		{
+			return new Dictionary<string, object>
+			{
+				["PrefabName"] = this.PrefabName,
+				["Position"] = this.Position,
+				["Forward"] = this.Forward,
+				["Up"] = this.Up,
+				["InitialLinearVelocity"] = this.InitialLinearVelocity,
+				["InitialAngularVelocity"] = this.InitialAngularVelocity,
+				["BeaconName"] = this.BeaconName,
+				["SpawningOptions"] = this.SpawningOptions,
+				["UpdateSync"] = this.UpdateSync,
+				["Callback"] = this.Callback,
+			};
 		}
 	}
 

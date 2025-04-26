@@ -21,7 +21,6 @@ namespace IOTA.ModularJumpGates.Terminal
 		public static bool IsLoaded { get; private set; } = false;
 		public static readonly string MODID_PREFIX = MyJumpGateModSession.MODID + ".JumpGateController.";
 
-		private static List<MyJumpGate> TEMP_JumpGates = new List<MyJumpGate>();
 		private static List<MyJumpGateWaypoint> TEMP_Waypoints = new List<MyJumpGateWaypoint>();
 		private static Dictionary<MyEntity, float> TEMP_JumpSpaceEntities = new Dictionary<MyEntity, float>();
 
@@ -63,13 +62,12 @@ namespace IOTA.ModularJumpGates.Terminal
 					if (controller == null || controller.JumpGateGrid == null || controller.JumpGateGrid.Closed) return;
 					content_list.Add(new MyTerminalControlListBoxItem(MyStringId.GetOrCompute("-- Deselect --"), MyStringId.GetOrCompute(""), -1L));
 					long selected_jump_gate_id = controller.BlockSettings.JumpGateID();
-					controller.JumpGateGrid.GetJumpGates(MyJumpGateControllerTerminal.TEMP_JumpGates);
 
-					foreach (MyJumpGate jump_gate in MyJumpGateControllerTerminal.TEMP_JumpGates.OrderBy((gate) => gate.JumpGateID))
+					foreach (MyJumpGate jump_gate in controller.JumpGateGrid.GetJumpGates().OrderBy((gate) => gate.JumpGateID))
 					{
 						if (!jump_gate.Closed && jump_gate.IsValid() && (jump_gate.Controller == null || jump_gate.Controller == controller))
 						{
-							MyTerminalControlListBoxItem item = new MyTerminalControlListBoxItem(MyStringId.GetOrCompute($"{jump_gate.GetPrintableName()}"), MyStringId.GetOrCompute($"Jump Gate with {jump_gate.JumpGateGrid.GetDriveCount((drive) => drive.JumpGateID == jump_gate.JumpGateID)} drives\nJump Gate ID: {jump_gate.JumpGateID}"), jump_gate.JumpGateID);
+							MyTerminalControlListBoxItem item = new MyTerminalControlListBoxItem(MyStringId.GetOrCompute($"{jump_gate.GetPrintableName()}"), MyStringId.GetOrCompute($"Jump Gate with {jump_gate.GetJumpGateDrives().Count()} drives\nJump Gate ID: {jump_gate.JumpGateID}"), jump_gate.JumpGateID);
 							content_list.Add(item);
 							if (selected_jump_gate_id == jump_gate.JumpGateID) preselect_list.Add(item);
 						}
@@ -86,8 +84,6 @@ namespace IOTA.ModularJumpGates.Terminal
 							preselect_list.Add(item);
 						}
 					}
-
-					MyJumpGateControllerTerminal.TEMP_JumpGates.Clear();
 				};
 
 				choose_jump_gate_lb.ItemSelected = (block, selected) => {
@@ -1047,7 +1043,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				do_staticify_construct.Visible = MyJumpGateModSession.IsBlockJumpGateController;
 				do_staticify_construct.Enabled = (block) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
-					return controller != null && controller.JumpGateGrid != null && !controller.JumpGateGrid.Closed && controller.JumpGateGrid.GetFirstCubeGrid((grid) => !grid.IsStatic && (grid.Speed < 1e-3 || grid.Physics.AngularVelocity.Length() < 1e-3)) != null;
+					return controller != null && controller.JumpGateGrid != null && !controller.JumpGateGrid.Closed && controller.JumpGateGrid.GetCubeGrids().Any((grid) => !grid.IsStatic && (grid.Speed < 1e-3 || grid.Physics.AngularVelocity.Length() < 1e-3));
 				};
 				do_staticify_construct.Action = (block) => {
 					MyJumpGateController controller;
@@ -1079,7 +1075,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				do_unstaticify_construct.Visible = MyJumpGateModSession.IsBlockJumpGateController;
 				do_unstaticify_construct.Enabled = (block) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
-					return controller != null && controller.JumpGateGrid != null && !controller.JumpGateGrid.Closed && controller.JumpGateGrid.GetFirstCubeGrid((grid) => grid.IsStatic) != null;
+					return controller != null && controller.JumpGateGrid != null && !controller.JumpGateGrid.Closed && controller.JumpGateGrid.GetCubeGrids().Any((grid) => grid.IsStatic);
 				};
 				do_unstaticify_construct.Action = (block) => {
 					MyJumpGateController controller;
