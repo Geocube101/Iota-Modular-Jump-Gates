@@ -268,6 +268,11 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 			return other != null && other is MyAPIJumpGateConstruct && base.Equals(((MyAPIJumpGateConstruct) other).CubeGridID);
 		}
 
+		public override int GetHashCode()
+		{
+			return base.GetHashCode();
+		}
+
 		/// <summary>
 		/// Gets the number of blocks matching the specified predicate<br />
 		/// Gets the number of all blocks if predicate is null

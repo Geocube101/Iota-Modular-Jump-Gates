@@ -2,6 +2,9 @@
 using IOTA.ModularJumpGates.ProgramScripting.CubeBlock;
 using Sandbox.ModAPI;
 using Sandbox.ModAPI.Interfaces.Terminal;
+using System.Collections.Generic;
+using System.Text;
+using VRage.Game;
 using VRage.Game.ModAPI;
 using VRage.Utils;
 using VRageMath;
@@ -65,7 +68,6 @@ namespace IOTA.ModularJumpGates.Terminal
 				effect_color_shift_cl.SupportsMultipleBlocks = true;
 				effect_color_shift_cl.Visible = MyJumpGateModSession.IsBlockJumpGateCapacitor;
 				effect_color_shift_cl.Enabled = MyJumpGateModSession.IsBlockJumpGateCapacitor;
-
 				effect_color_shift_cl.Getter = (block) => MyJumpGateModSession.GetBlockAsJumpGateCapacitor(block)?.BlockSettings?.EmissiveColor ?? Color.White;
 				effect_color_shift_cl.Setter = (block, value) => {
 					MyJumpGateCapacitor capacitor = MyJumpGateModSession.GetBlockAsJumpGateCapacitor(block);

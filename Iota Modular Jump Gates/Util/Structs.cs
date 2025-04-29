@@ -1,12 +1,17 @@
 ﻿using IOTA.ModularJumpGates.CubeBlock;
 using ProtoBuf;
+using Sandbox.Engine.Physics;
 using Sandbox.Game.Entities;
 using Sandbox.ModAPI;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.Contracts;
 using System.Linq;
+using VRage.Game;
+using VRage.Game.Components;
 using VRage.Game.Entity;
 using VRage.Game.ModAPI;
+using VRage.ModAPI;
 using VRageMath;
 
 namespace IOTA.ModularJumpGates.Util
@@ -88,6 +93,54 @@ namespace IOTA.ModularJumpGates.Util
 			public double MaxSafeSpeed;
 		}
 
+		private sealed class MyEntityPhysicalWarpInfo
+		{
+			public readonly bool ForceDisablePrediction;
+			public readonly bool AllowPrediction;
+			public readonly bool PhysicsEnabled;
+			public readonly MyEntityUpdateEnum EntityUpdateEnum;
+			public readonly MyEntity Entity;
+
+			public static MyEntityPhysicalWarpInfo Save(MyEntity entity)
+			{
+				if (entity == null || entity.Closed || entity is IMyCharacter) return null;
+				MyCubeGrid grid;
+				MyEntityPhysicalWarpInfo warp_info = new MyEntityPhysicalWarpInfo(entity, out grid);
+
+				if (grid != null)
+				{
+					grid.ForceDisablePrediction = true;
+					grid.AllowPrediction = false;
+				}
+
+				entity.Physics.Enabled = false;
+				entity.NeedsUpdate = MyEntityUpdateEnum.NONE;
+				return warp_info;
+			}
+
+			private MyEntityPhysicalWarpInfo(MyEntity entity, out MyCubeGrid grid)
+			{
+				grid = null;
+				this.Entity = entity;
+				this.EntityUpdateEnum = entity.NeedsUpdate;
+				this.PhysicsEnabled = entity.Physics.Enabled;
+				if (!(entity is MyCubeGrid)) return;
+				grid = (MyCubeGrid) entity;
+				this.ForceDisablePrediction = grid.ForceDisablePrediction;
+				this.AllowPrediction = grid.AllowPrediction;
+			}
+
+			public void Load()
+			{
+				this.Entity.NeedsUpdate = this.EntityUpdateEnum;
+				this.Entity.Physics.Enabled = this.PhysicsEnabled;
+				if (!(this.Entity is MyCubeGrid)) return;
+				MyCubeGrid grid = (MyCubeGrid) this.Entity;
+				grid.ForceDisablePrediction = this.ForceDisablePrediction;
+				grid.AllowPrediction = this.AllowPrediction;
+			}
+		}
+
 		private static readonly ushort GlobalMaxSpeedCooldownTime = 30;
 
 		private bool IsComplete = false;
@@ -98,6 +151,7 @@ namespace IOTA.ModularJumpGates.Util
 		private readonly List<MyEntity> EntityBatch;
 		private readonly List<MatrixD> RelativeEntityOffsets;
 		private readonly List<Vector3> EntityStartingAngularVelocities;
+		private readonly Dictionary<MyEntity, MyEntityPhysicalWarpInfo> NonPlayerPhysics = new Dictionary<MyEntity, MyEntityPhysicalWarpInfo>();
 		private readonly Action<List<MyEntity>> Callback;
 
 		public readonly MyJumpGate JumpGate;
@@ -116,8 +170,9 @@ namespace IOTA.ModularJumpGates.Util
 		public static EntityWarpInfo FromSerialized(string serialized_warp_info, Action<List<MyEntity>> callback)
 		{
 			SerializedEntityWarpInfo serialized = MyAPIGateway.Utilities.SerializeFromBinary<SerializedEntityWarpInfo>(Convert.FromBase64String(serialized_warp_info));
+			if (serialized.EntityBatch == null || serialized.RelativeEntityOffsets == null) return null;
 			MatrixD final_pos = MatrixD.CreateWorld(serialized.FinalPos[0], serialized.FinalPos[1], serialized.FinalPos[2]);
-			List<MyEntity> batch_entities = serialized.EntityBatch?.Select((id) => (MyEntity) MyAPIGateway.Entities.GetEntityById(id))?.Where((entity) => entity != null)?.ToList() ?? new List<MyEntity>();
+			List<MyEntity> batch_entities = serialized.EntityBatch.Select((id) => (MyEntity) MyAPIGateway.Entities.GetEntityById(id))?.Where((entity) => entity != null)?.ToList() ?? new List<MyEntity>();
 			List<MatrixD> relative_entity_offsets = serialized.RelativeEntityOffsets.Select((matrix) => {
 				double[] doubles = MyAPIGateway.Utilities.SerializeFromBinary<double[]>(Convert.FromBase64String(matrix));
 				return new MatrixD(
@@ -146,7 +201,7 @@ namespace IOTA.ModularJumpGates.Util
 			this.CurrentTick = current_tick;
 			this.MaxSafeSpeed = max_safe_speed;
 			this.Callback = callback;
-			parent.Physics.Deactivate();
+			this.DeactivateEntityPhysics(parent);
 
 			for (int i = 1; i < batch_entities.Count; ++i)
 			{
@@ -154,11 +209,11 @@ namespace IOTA.ModularJumpGates.Util
 				if (entity == null || entity.MarkedForClose || entity.Physics == null) continue;
 				MyJumpGateConstruct construct = (entity is MyCubeGrid) ? MyJumpGateModSession.Instance.GetJumpGateGrid(entity.EntityId) : null;
 				if (construct != null) construct.BatchingGate = jump_gate;
-				entity.Physics.Deactivate();
+				this.DeactivateEntityPhysics(entity);
 			}
 		}
 
-		public EntityWarpInfo(MyJumpGate jump_gate, ref MatrixD current_position, ref MatrixD target_position, List<MyEntity> entity_batch, ushort time, double max_safe_speed, Action<List<MyEntity>> callback)
+		public EntityWarpInfo(MyJumpGate jump_gate, ref MatrixD current_position, ref Vector3D target_position, ref MatrixD final_position, List<MyEntity> entity_batch, ushort time, double max_safe_speed, Action<List<MyEntity>> callback)
 		{
 			MyEntity parent = entity_batch[0];
 			this.JumpGate = jump_gate;
@@ -166,23 +221,79 @@ namespace IOTA.ModularJumpGates.Util
 			this.CurrentTick = 0;
 			this.EntityBatch = entity_batch;
 			this.StartPos = current_position.Translation;
-			this.EndPos = target_position.Translation;
-			this.FinalPos = target_position;
+			this.EndPos = target_position;
+			this.FinalPos = final_position;
 			this.RelativeEntityOffsets = new List<MatrixD>();
 			this.EntityStartingAngularVelocities = new List<Vector3>() { parent.Physics.AngularVelocity };
 			this.MaxSafeSpeed = max_safe_speed;
 			this.Callback = callback;
-			parent.Physics.Deactivate();
+			this.DeactivateEntityPhysics(parent);
+			MyJumpGateConstruct construct;
+			if (parent is MyCubeGrid && (construct = MyJumpGateModSession.Instance.GetUnclosedJumpGateGrid(parent.EntityId)) != null) construct.BatchingGate = jump_gate;
 			MatrixD parent_inv = MatrixD.Invert(parent.WorldMatrix);
 
 			foreach (MyEntity entity in entity_batch.Skip(1))
 			{
 				this.RelativeEntityOffsets.Add(entity.WorldMatrix * parent_inv);
 				this.EntityStartingAngularVelocities.Add(entity.Physics.AngularVelocity);
-				MyJumpGateConstruct construct = (entity is MyCubeGrid) ? MyJumpGateModSession.Instance.GetJumpGateGrid(entity.EntityId) : null;
+				construct = (entity is MyCubeGrid) ? MyJumpGateModSession.Instance.GetJumpGateGrid(entity.EntityId) : null;
 				if (construct != null) construct.BatchingGate = jump_gate;
-				entity.Physics.Deactivate();
+				this.DeactivateEntityPhysics(entity);
 			}
+		}
+
+		private void DeactivateEntityPhysics(MyEntity entity)
+		{
+			if (entity == null || entity.Closed) return;
+			else if (entity is IMyCharacter) entity.Physics?.Deactivate();
+			else this.NonPlayerPhysics[entity] = MyEntityPhysicalWarpInfo.Save(entity);
+		}
+
+		private void ReactivateEntityPhysics(MyEntity entity)
+		{
+			if (entity == null || entity.Closed) return;
+			else if (entity is IMyCharacter) entity.Physics?.Activate();
+			else if (this.NonPlayerPhysics.ContainsKey(entity))
+			{
+				this.NonPlayerPhysics[entity].Load();
+				this.NonPlayerPhysics.Remove(entity);
+			}
+		}
+
+		public void Close()
+		{
+			if (!this.IsComplete)
+			{
+				this.IsComplete = true;
+				this.MaxSpeedCooldownTime = EntityWarpInfo.GlobalMaxSpeedCooldownTime;
+				MyEntity parent = this.EntityBatch[0];
+
+				if (parent is IMyPlayer)
+				{
+					MatrixD parent_matrix = parent.WorldMatrix;
+					parent_matrix.Translation = this.FinalPos.Translation;
+					parent.Teleport(parent_matrix);
+				}
+				else parent.Teleport(this.FinalPos);
+
+				MyJumpGateConstruct construct;
+				if (parent is MyCubeGrid && (construct = MyJumpGateModSession.Instance.GetUnclosedJumpGateGrid(parent.EntityId)) != null) construct.BatchingGate = null;
+				this.ReactivateEntityPhysics(parent);
+
+				for (int i = 0; i < this.EntityBatch.Count; ++i)
+				{
+					MyEntity entity = this.EntityBatch[i];
+					this.ReactivateEntityPhysics(entity);
+					if (entity.MarkedForClose || entity.Physics == null) continue;
+					construct = (entity is MyCubeGrid) ? MyJumpGateModSession.Instance.GetJumpGateGrid(entity.EntityId) : null;
+					if (construct != null) construct.BatchingGate = null;
+				}
+			}
+
+			this.EntityBatch.Clear();
+			this.RelativeEntityOffsets.Clear();
+			this.EntityStartingAngularVelocities.Clear();
+			this.NonPlayerPhysics.Clear();
 		}
 
 		public bool Update()
@@ -207,7 +318,7 @@ namespace IOTA.ModularJumpGates.Util
 					entity.Physics.AngularVelocity = this.EntityStartingAngularVelocities[i];
 				}
 
-				return ++this.MaxSpeedCooldownTime < EntityWarpInfo.GlobalMaxSpeedCooldownTime;
+				return ++this.MaxSpeedCooldownTime >= EntityWarpInfo.GlobalMaxSpeedCooldownTime; ;
 			}
 			else if (complete && parent is IMyPlayer)
 			{
@@ -238,15 +349,24 @@ namespace IOTA.ModularJumpGates.Util
 
 			if (complete)
 			{
-				parent.Physics?.Activate();
+				MyJumpGateConstruct construct;
+				if (parent is MyCubeGrid && (construct = MyJumpGateModSession.Instance.GetUnclosedJumpGateGrid(parent.EntityId)) != null) construct.BatchingGate = null;
+				this.ReactivateEntityPhysics(parent);
+				
+				for (int i = 1; i < this.EntityBatch.Count; ++i)
+				{
+					MyEntity entity = this.EntityBatch[i];
+					this.ReactivateEntityPhysics(entity);
+					if (entity.MarkedForClose || entity.Physics == null) continue;
+					construct = (entity is MyCubeGrid) ? MyJumpGateModSession.Instance.GetJumpGateGrid(entity.EntityId) : null;
+					if (construct != null) construct.BatchingGate = null;
+				}
 
 				for (int i = 0; i < this.EntityBatch.Count; ++i)
 				{
 					MyEntity entity = this.EntityBatch[i];
-					if (entity.MarkedForClose || entity.Physics == null) continue;
-					entity.Physics.Activate();
-					MyJumpGateConstruct construct = (entity is MyCubeGrid) ? MyJumpGateModSession.Instance.GetJumpGateGrid(entity.EntityId) : null;
-					if (construct != null) construct.BatchingGate = null;
+					if (!(entity is MyCubeGrid) || (construct = MyJumpGateModSession.Instance.GetUnclosedJumpGateGrid(entity.EntityId)) == null) continue;
+					foreach (MyDoorBase door in construct.GetAllFatBlocksOfType<MyDoorBase>().ToList()) door.UpdateOnceBeforeFrame();
 				}
 
 				if (this.Callback != null) this.Callback(this.EntityBatch);
@@ -286,16 +406,19 @@ namespace IOTA.ModularJumpGates.Util
 			[ProtoMember(1)]
 			public List<long> Batch;
 			[ProtoMember(2)]
-			public Vector3D[] ObstructAABB;
+			public Vector3D ParentTargetPosition;
 			[ProtoMember(3)]
-			public Vector3D[] ParentTargetMatrix;
+			public Vector3D[] ObstructAABB;
+			[ProtoMember(4)]
+			public Vector3D[] ParentFinalMatrix;
 		}
 
 		public readonly List<MyEntity> Batch;
+		public Vector3D ParentTargetPosition;
 		public BoundingBoxD ObstructAABB;
-		public MatrixD ParentTargetMatrix;
+		public MatrixD ParentFinalMatrix;
 
-		public MyEntity Parent { get { return this.Batch[0]; } }
+		public MyEntity Parent => this.Batch.FirstOrDefault();
 
 		public double BatchMass
 		{
@@ -317,23 +440,34 @@ namespace IOTA.ModularJumpGates.Util
 		{
 			SerializedEntityBatch serialized = MyAPIGateway.Utilities.SerializeFromBinary<SerializedEntityBatch>(Convert.FromBase64String(serialized_batch));
 			this.Batch = serialized.Batch?.Select((id) => (MyEntity) MyAPIGateway.Entities.GetEntityById(id))?.Where((entity) => entity != null)?.ToList() ?? new List<MyEntity>();
+			this.ParentTargetPosition = serialized.ParentTargetPosition;
 			this.ObstructAABB = new BoundingBoxD(serialized.ObstructAABB[0], serialized.ObstructAABB[1]);
-			this.ParentTargetMatrix = MatrixD.CreateWorld(serialized.ParentTargetMatrix[0], serialized.ParentTargetMatrix[1], serialized.ParentTargetMatrix[2]);
+			this.ParentFinalMatrix = MatrixD.CreateWorld(serialized.ParentFinalMatrix[0], serialized.ParentFinalMatrix[1], serialized.ParentFinalMatrix[2]);
+			if (this.Batch.Count == 0) throw new ArgumentException("Batch list cannot be empty");
 		}
 
-		public EntityBatch(List<MyEntity> batch, ref BoundingBoxD obstruct_aabb, ref MatrixD target_matrix)
+		public EntityBatch(List<MyEntity> batch, ref Vector3D target_position, ref BoundingBoxD obstruct_aabb, ref MatrixD final_matrix)
 		{
+			if (batch == null || batch.Count == 0) throw new ArgumentException("Batch list cannot be empty");
 			this.Batch = batch;
+			this.ParentTargetPosition = target_position;
 			this.ObstructAABB = obstruct_aabb;
-			this.ParentTargetMatrix = target_matrix;
+			this.ParentFinalMatrix = final_matrix;
+		}
+
+		public bool IsEntityInBatch(MyEntity entity)
+		{
+			MyEntity topmost = entity.GetTopMostParent();
+			return this.Batch.Contains(topmost) || this.Batch.Any((parent) => topmost == parent);
 		}
 
 		public string ToSerialized()
 		{
 			return Convert.ToBase64String(MyAPIGateway.Utilities.SerializeToBinary(new SerializedEntityBatch {
 				Batch = this.Batch.Select((entity) => entity.EntityId).ToList(),
+				ParentTargetPosition = this.ParentTargetPosition,
 				ObstructAABB = new Vector3D[2] { this.ObstructAABB.Min, this.ObstructAABB.Max },
-				ParentTargetMatrix = new Vector3D[3] { this.ParentTargetMatrix.Translation, this.ParentTargetMatrix.Forward, this.ParentTargetMatrix.Up },
+				ParentFinalMatrix = new Vector3D[3] { this.ParentFinalMatrix.Translation, this.ParentFinalMatrix.Forward, this.ParentFinalMatrix.Up },
 			}));
 		}
 	}

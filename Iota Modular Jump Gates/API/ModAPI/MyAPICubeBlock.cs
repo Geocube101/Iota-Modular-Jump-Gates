@@ -160,6 +160,11 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		{
 			return other != null && other is MyAPICubeBlockBase && base.Equals(((MyAPICubeBlockBase) other).TerminalBlock);
 		}
+
+		public override int GetHashCode()
+		{
+			return base.GetHashCode();
+		}
 	}
 
 	public class MyAPIJumpGateController : MyAPICubeBlockBase

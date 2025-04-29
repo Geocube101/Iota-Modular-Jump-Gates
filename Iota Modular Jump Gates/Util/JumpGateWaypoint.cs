@@ -378,7 +378,7 @@ namespace IOTA.ModularJumpGates.Util
 					return null;
 				case MyWaypointType.JUMP_GATE:
 					target_jump_gate = MyJumpGateModSession.Instance.GetJumpGate(JumpGateUUID.FromGuid(this.JumpGate));
-					if (target_jump_gate == null || !target_jump_gate.IsValid()) return null;
+					if (target_jump_gate == null || (!MyNetworkInterface.IsStandaloneMultiplayerClient && !target_jump_gate.IsValid())) return null;
 					return target_jump_gate.WorldJumpNode;
 				case MyWaypointType.GPS:
 					return this.GPS?.Coords;
@@ -435,7 +435,7 @@ namespace IOTA.ModularJumpGates.Util
 				case MyWaypointType.JUMP_GATE:
 				{
 					MyJumpGate jump_gate = MyJumpGateModSession.Instance.GetJumpGate(JumpGateUUID.FromGuid(this.JumpGate));
-					if (jump_gate == null || !jump_gate.IsValid()) return null;
+					if (jump_gate == null || (!MyNetworkInterface.IsStandaloneMultiplayerClient && !jump_gate.IsValid())) return null;
 					return jump_gate.WorldJumpNode;
 				}
 				case MyWaypointType.GPS:

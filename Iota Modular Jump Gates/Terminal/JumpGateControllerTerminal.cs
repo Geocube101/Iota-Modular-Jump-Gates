@@ -1,6 +1,7 @@
 ﻿using IOTA.ModularJumpGates.CubeBlock;
 using IOTA.ModularJumpGates.ProgramScripting.CubeBlock;
 using IOTA.ModularJumpGates.Util;
+using Sandbox.Game.Entities.Blocks;
 using Sandbox.ModAPI;
 using Sandbox.ModAPI.Interfaces.Terminal;
 using System;
@@ -181,7 +182,7 @@ namespace IOTA.ModularJumpGates.Terminal
 						{
 							double distance = Vector3D.Distance(jump_node, endpoint.Value);
 
-							if (selected_waypoint.WaypointType == MyWaypointType.JUMP_GATE && destination_jump_gate != null && destination_jump_gate.IsComplete())
+							if (selected_waypoint.WaypointType == MyWaypointType.JUMP_GATE && destination_jump_gate != null && (MyNetworkInterface.IsStandaloneMultiplayerClient || destination_jump_gate.IsComplete()))
 							{
 								string grid_name = destination_jump_gate.JumpGateGrid?.PrimaryCubeGridCustomName ?? "N/A";
 								string grid_name_cut = (grid_name.Length > cutoff) ? $"{grid_name.Substring(0, cutoff - 3)}..." : grid_name;
@@ -255,8 +256,8 @@ namespace IOTA.ModularJumpGates.Terminal
 									break;
 							}
 						}
-
-						if (waypoint.WaypointType == MyWaypointType.JUMP_GATE && destination_jump_gate != null && destination_jump_gate.IsComplete())
+						
+						if (waypoint.WaypointType == MyWaypointType.JUMP_GATE && destination_jump_gate != null && (MyNetworkInterface.IsStandaloneMultiplayerClient || destination_jump_gate.IsComplete()))
 						{
 							string grid_name = destination_jump_gate.JumpGateGrid?.PrimaryCubeGridCustomName ?? "N/A";
 							string grid_name_cut = (grid_name.Length > cutoff) ? $"{grid_name.Substring(0, cutoff - 3)}..." : grid_name;

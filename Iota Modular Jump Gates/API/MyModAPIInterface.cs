@@ -16,6 +16,8 @@ namespace IOTA.ModularJumpGates.API
 {
 	internal class MyModAPIInterface
 	{
+		public static readonly int[] APIVersion = new int[2] { 1, 0 };
+
 		private bool Registered = false;
 		private readonly ConcurrentDictionary<long, Dictionary<string, object>> ConstructWrappers = new ConcurrentDictionary<long, Dictionary<string, object>>();
 		private readonly ConcurrentDictionary<Guid, Dictionary<string, object>> JumpGateWrappers = new ConcurrentDictionary<Guid, Dictionary<string, object>>();
@@ -32,6 +34,7 @@ namespace IOTA.ModularJumpGates.API
 			if (this.Registered) return;
 			MyAPIGateway.Utilities.RegisterMessageHandler(3313236685, this.OnModMessage);
 			this.Registered = true;
+			Logger.Log("ModAPI Initialized");
 		}
 
 		public void Close()
@@ -46,14 +49,32 @@ namespace IOTA.ModularJumpGates.API
 			this.CapacitorWrppers.Clear();
 			this.ServerAntennaWrappers.Clear();
 			this.Registered = false;
+			Logger.Log("ModAPI Closed");
 		}
 
 		private void OnModMessage(object obj)
 		{
-			if (!(obj is Action<Dictionary<string, object>>)) return;
-			Action<Dictionary<string, object>> callback = (Action<Dictionary<string, object>>) obj;
-			callback(this.ReturnSessionWrapper());
+			IMyModContext context = this.HandleModApiInit(obj);
+			if (context == null) Logger.Error($"Failed to connect Mod API - Malformed payload");
+			else Logger.Log($"Mod API connected - \"{context.ModName}\"");
 		}
+
+		private IMyModContext HandleModApiInit(object obj)
+		{
+			if (obj == null || !(obj is Dictionary<string, object>)) return null;
+			Dictionary<string, object> payload = (Dictionary<string, object>) obj;
+			if (!payload.ContainsKey("Callback") || !(payload["Callback"] is Action<Dictionary<string, object>>)) return null;
+			Action<Dictionary<string, object>> callback = (Action<Dictionary<string, object>>) payload["Callback"];
+			if (!payload.ContainsKey("Version") || !(payload["Version"] is int[])) return null;
+			int[] version = (int[]) payload["Version"];
+			if (version.Length != 2 || version[0] != MyModAPIInterface.APIVersion[0]) return null;
+			else if (version[1] < MyModAPIInterface.APIVersion[1]) Logger.Warn("ModAPI version is not latest - Current");
+			if (!payload.ContainsKey("ModContext") || !(payload["ModContext"] is MyModContext)) return null;
+			IMyModContext context = (IMyModContext) payload["ModContext"];
+			callback(this.ReturnSessionWrapper());
+			return context;
+		}
+
 
 		private Dictionary<string, object> ReturnSessionWrapper()
 		{
@@ -366,6 +387,7 @@ namespace IOTA.ModularJumpGates.API
 				["IsJumping"] = (Func<bool>) gate.IsJumping,
 				["IsLargeGrid"] = (Func<bool>) gate.IsLargeGrid,
 				["IsSmallGrid"] = (Func<bool>) gate.IsSmallGrid,
+				["IsSuspended"] = (Func<bool>) gate.IsSuspended,
 				["JumpSpaceColliderStatus"] = (Func<byte>) (() => (byte) gate.JumpSpaceColliderStatus()),
 				["GetInvalidationReason"] = (Func<byte>) (() => (byte) gate.GetInvalidationReason()),
 				["GetJumpSpaceEntityCount"] = (Func<bool, Func<MyEntity, bool>, int>) gate.GetJumpSpaceEntityCount,

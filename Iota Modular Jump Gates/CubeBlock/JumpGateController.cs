@@ -526,19 +526,9 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		private List<IMyCubeGrid> TEMP_DetailedInfoConstructsList = new List<IMyCubeGrid>();
 
 		/// <summary>
-		/// Temporary list of beacon linked grids
-		/// </summary>
-		private List<MyBeaconLinkWrapper> TEMP_BeaconLinkedGrids = new List<MyBeaconLinkWrapper>();
-
-		/// <summary>
 		/// Temporary list of construct controllers
 		/// </summary>
 		private List<MyJumpGateController> TEMP_ConstructControllers = new List<MyJumpGateController>();
-
-		/// <summary>
-		/// Temporary list of comm linked grids
-		/// </summary>
-		private List<MyJumpGateConstruct> TEMP_CommLinkedGrids = new List<MyJumpGateConstruct>();
 
 		/// <summary>
 		/// Temporary list of jump gate drives for holo display
@@ -736,8 +726,6 @@ namespace IOTA.ModularJumpGates.CubeBlock
 
 			this.TEMP_DetailedInfoConstructsList.Clear();
 			this.TEMP_ConstructControllers.Clear();
-			this.TEMP_CommLinkedGrids.Clear();
-			this.TEMP_BeaconLinkedGrids.Clear();
 			this.TEMP_JumpGateEntities.Clear();
 			this.TEMP_UnconfirmedJumpGateEntities.Clear();
 			this.TEMP_DriveHoloBoxes.Clear();
@@ -747,8 +735,6 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			this.MultiPanelComponent = null;
 			this.TEMP_DetailedInfoConstructsList = null;
 			this.TEMP_ConstructControllers = null;
-			this.TEMP_CommLinkedGrids = null;
-			this.TEMP_BeaconLinkedGrids = null;
 			this.TEMP_JumpGateEntities = null;
 			this.TEMP_UnconfirmedJumpGateEntities = null;
 			this.TEMP_DriveHoloBoxes = null;
@@ -872,10 +858,8 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			{
 				long player_identity = MyAPIGateway.Players.TryGetIdentityId(MyAPIGateway.Multiplayer.MyId);
 				double distance;
-				if (MyJumpGateModSession.Configuration.ConstructConfiguration.RequireGridCommLink) this.TEMP_CommLinkedGrids.AddRange(this.JumpGateGrid.GetCommLinkedJumpGateGrids());
-				else this.TEMP_CommLinkedGrids.AddRange(MyJumpGateModSession.Instance.GetAllJumpGateGrids());
+				IEnumerable<MyJumpGateConstruct> reachable_grids = (MyJumpGateModSession.Configuration.ConstructConfiguration.RequireGridCommLink) ? this.JumpGateGrid.GetCommLinkedJumpGateGrids() : MyJumpGateModSession.Instance.GetAllJumpGateGrids();
 				Vector3D jump_node = jump_gate.WorldJumpNode;
-				this.TEMP_BeaconLinkedGrids.AddRange(this.JumpGateGrid.GetBeaconsWithinReverseBroadcastSphere().Where((beacon) => (distance = Vector3D.Distance(jump_node, beacon.BeaconPosition)) >= jump_gate.JumpGateConfiguration.MinimumJumpDistance && distance <= jump_gate.JumpGateConfiguration.MaximumJumpDistance));
 				lock (this.WaypointsListMutex) this.WaypointsList.Clear();
 
 				if (jump_gate.ServerAntenna != null)
@@ -883,7 +867,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 
 				}
 
-				foreach (MyJumpGateConstruct connected_grid in this.TEMP_CommLinkedGrids)
+				foreach (MyJumpGateConstruct connected_grid in reachable_grids)
 				{
 					if (connected_grid == this.JumpGateGrid || !MyJumpGateModSession.Instance.IsJumpGateGridMultiplayerValid(connected_grid)) continue;
 					this.TEMP_ConstructControllers.AddRange(connected_grid.GetAttachedJumpGateControllers());
@@ -902,12 +886,9 @@ namespace IOTA.ModularJumpGates.CubeBlock
 
 				lock (this.WaypointsListMutex)
 				{
-					this.WaypointsList.AddRange(this.TEMP_BeaconLinkedGrids.OrderBy((beacon) => Vector3D.Distance(beacon.BeaconPosition, jump_node)).Select((beacon) => new MyJumpGateWaypoint(beacon)));
+					this.WaypointsList.AddRange(this.JumpGateGrid.GetBeaconsWithinReverseBroadcastSphere().Where((beacon) => (distance = Vector3D.Distance(jump_node, beacon.BeaconPosition)) >= jump_gate.JumpGateConfiguration.MinimumJumpDistance && distance <= jump_gate.JumpGateConfiguration.MaximumJumpDistance).OrderBy((beacon) => Vector3D.Distance(beacon.BeaconPosition, jump_node)).Select((beacon) => new MyJumpGateWaypoint(beacon)));
 					this.WaypointsList.AddRange(MyAPIGateway.Session.GPS.GetGpsList(player_identity).Where((gps) => gps.Coords.IsValid()).OrderBy((gps) => Vector3D.Distance(gps.Coords, jump_node)).Select((gps) => new MyJumpGateWaypoint(gps)));
 				}
-
-				this.TEMP_CommLinkedGrids.Clear();
-				this.TEMP_BeaconLinkedGrids.Clear();
 			}
 			
 			// Fix selected waypoint
@@ -1082,7 +1063,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 					packet.Payload(this.ToSerialized(false));
 					packet.Send();
 				}
-				else if (this.FromSerialized(serialized))
+				else if (this.LastUpdateDateTimeUTC < packet.EpochDateTimeUTC && this.FromSerialized(serialized))
 				{
 					this.LastUpdateTime = packet.EpochTime;
 					this.IsDirty = false;

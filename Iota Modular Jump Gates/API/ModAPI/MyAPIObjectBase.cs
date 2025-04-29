@@ -1,8 +1,6 @@
-﻿using Sandbox.ModAPI;
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using VRage.Utils;
 
 namespace IOTA.ModularJumpGates.API.ModAPI
 {
@@ -10,8 +8,6 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 	{
 		private static ulong NextObjectID = 0;
 		private static readonly ConcurrentDictionary<ulong, MyAPIObjectBase> APIObjects = new ConcurrentDictionary<ulong, MyAPIObjectBase>();
-
-		public static readonly long ModAPIID = 3313236685;
 
 		private readonly Dictionary<string, object> ObjectAttributes = new Dictionary<string, object>();
 
@@ -29,15 +25,6 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 			return !(a == b);
 		}
 
-		protected MyAPIObjectBase()
-		{
-			this.ObjectID = MyAPIObjectBase.NextObjectID++;
-			MyAPIObjectBase.APIObjects[this.ObjectID.Value] = this;
-			Dictionary<string, object> attributes = null;
-			Action<Dictionary<string, object>> callback = (_attributes) => attributes = _attributes;
-			MyAPIGateway.Utilities.SendModMessage(MyAPIObjectBase.ModAPIID, callback);
-			this.ObjectAttributes = attributes;
-		}
 		protected MyAPIObjectBase(Dictionary<string, object> attributes)
 		{
 			this.ObjectID = MyAPIObjectBase.NextObjectID++;
@@ -52,6 +39,26 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 			if (method is object[]) throw new InvalidOperationException("Method is an attribute");
 			else if (!(method is T)) throw new InvalidOperationException("Method deduced type does not match declared type");
 			return (T) method;
+		}
+
+		protected void SetAttribute<T>(string name, T value)
+		{
+			if (!this.ObjectAttributes.ContainsKey(name)) throw new InvalidOperationException($"No such attribute - {name}");
+			object attribute = this.ObjectAttributes[name];
+			if (!(attribute is object[])) throw new InvalidOperationException("Attribute is a method");
+			Action<T> setter = (Action<T>) ((object[]) attribute)[1];
+			if (setter == null) throw new InvalidOperationException("Attribute is readonly and has no get accessor");
+			setter(value);
+		}
+
+		protected T GetAttribute<T>(string name)
+		{
+			if (!this.ObjectAttributes.ContainsKey(name)) throw new InvalidOperationException($"No such attribute - {name}");
+			object attribute = this.ObjectAttributes[name];
+			if (!(attribute is object[])) throw new InvalidOperationException("Attribute is a method");
+			Func<T> getter = (Func<T>) ((object[]) attribute)[0];
+			if (getter == null) throw new InvalidOperationException("Attribute is writeonly and has no set accessor");
+			return getter();
 		}
 
 		public void Dispose()
@@ -78,26 +85,6 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 			int upper = (int) (this.ObjectID & 0xFFFFFFFF);
 			int lower = (int) ((this.ObjectID >> 32) & 0xFFFFFFFF);
 			return upper ^ lower;
-		}
-
-		public void SetAttribute<T>(string name, T value)
-		{
-			if (!this.ObjectAttributes.ContainsKey(name)) throw new InvalidOperationException($"No such attribute - {name}");
-			object attribute = this.ObjectAttributes[name];
-			if (!(attribute is object[])) throw new InvalidOperationException("Attribute is a method");
-			Action<T> setter = (Action<T>) ((object[]) attribute)[1];
-			if (setter == null) throw new InvalidOperationException("Attribute is readonly and has no get accessor");
-			setter(value);
-		}
-
-		public T GetAttribute<T>(string name)
-		{
-			if (!this.ObjectAttributes.ContainsKey(name)) throw new InvalidOperationException($"No such attribute - {name}");
-			object attribute = this.ObjectAttributes[name];
-			if (!(attribute is object[])) throw new InvalidOperationException("Attribute is a method");
-			Func<T> getter = (Func<T>) ((object[]) attribute)[0];
-			if (getter == null) throw new InvalidOperationException("Attribute is writeonly and has no set accessor");
-			return getter();
 		}
 	}
 }

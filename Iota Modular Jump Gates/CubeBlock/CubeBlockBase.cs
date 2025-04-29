@@ -519,6 +519,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		public void SetDirty()
 		{
 			this.IsDirty = true;
+			this.LastUpdateDateTimeUTC = DateTime.UtcNow;
 		}
 
 		/// <summary>
@@ -536,7 +537,8 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// <returns>Closedness</returns>
 		public bool IsClosed()
 		{
-			return (this.IsNullWrapper && (this.SerializedWrapperInfo?.IsClosed ?? true)) || (this.TerminalBlock == null || this.TerminalBlock.Closed || this.TerminalBlock.MarkedForClose || this.TerminalBlock.CubeGrid?.Physics == null);
+			if (this.IsNullWrapper) return this.SerializedWrapperInfo?.IsClosed ?? true;
+			else return this.TerminalBlock == null || this.TerminalBlock.Closed || this.TerminalBlock.MarkedForClose || this.TerminalBlock.CubeGrid?.Physics == null;
 		}
 
 		/// <summary>
@@ -557,7 +559,8 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// <returns>Enabledness</returns>
 		public bool IsEnabled()
 		{
-			return (this.IsNullWrapper && (this.SerializedWrapperInfo?.IsEnabled ?? false)) || this.TerminalBlock.Enabled;
+			if (this.IsNullWrapper) return this.SerializedWrapperInfo?.IsEnabled ?? false;
+			else return this.TerminalBlock.Enabled;
 		}
 
 		/// <summary>
@@ -566,7 +569,8 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// <returns>Workingness</returns>
 		public bool IsWorking()
 		{
-			return !this.IsClosed() && this.IsEnabled() && this.IsPowered() && this.TerminalBlock.IsFunctional;
+			if (this.IsNullWrapper) return this.SerializedWrapperInfo?.IsWorking ?? false;
+			else return !this.IsClosed() && this.IsEnabled() && this.IsPowered() && this.TerminalBlock.IsFunctional;
 		}
 
 		/// <summary>

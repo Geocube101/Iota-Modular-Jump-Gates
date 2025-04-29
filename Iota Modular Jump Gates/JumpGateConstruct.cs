@@ -340,7 +340,7 @@ namespace IOTA.ModularJumpGates
 					packet.Payload(this.ToSerialized(false));
 					packet.Send();
 				}
-				else if (packet.EpochTime >= this.LastUpdateTime && this.FromSerialized(serialized))
+				else if (this.LastUpdateDateTimeUTC < packet.EpochDateTimeUTC && this.FromSerialized(serialized))
 				{
 					this.LastUpdateTime = packet.EpochTime;
 					this.IsDirty = false;
@@ -377,8 +377,17 @@ namespace IOTA.ModularJumpGates
 				foreach (long id in info.Value)
 				{
 					MyJumpGateConstruct grid = MyJumpGateModSession.Instance.GetJumpGateGrid(id);
-					if (grid == null || grid.Closed || grid.MarkClosed) MyJumpGateModSession.Instance.RequestGridDownload(id);
-					else this.CommLinkedGrids.Add(grid);
+
+					if (grid == null || grid.Closed || grid.MarkClosed)
+					{
+						MyJumpGateModSession.Instance.RequestGridDownload(id);
+						Logger.Debug($" ... Got Comm-Linked grid - {grid}; NEEDS_DOWNLOAD", 5);
+					}
+					else
+					{
+						this.CommLinkedGrids.Add(grid);
+						Logger.Debug($" ... Got Comm-Linked grid - {grid}; OK", 5);
+					}
 				}
 
 				this.LastCommLinkUpdate = DateTime.Now;
@@ -1140,7 +1149,7 @@ namespace IOTA.ModularJumpGates
 				}
 				
 				// Update comm linked grids
-				if (this.UpdateCommLinkedGrids)
+				if (this.UpdateCommLinkedGrids && MyNetworkInterface.IsServerLike)
 				{
 					using (this.CommLinkedLock.WithWriter())
 					{
@@ -1197,7 +1206,7 @@ namespace IOTA.ModularJumpGates
 				}
 
 				// Update beacon linked beacons
-				if (this.UpdateBeaconLinkedBeacons)
+				if (this.UpdateBeaconLinkedBeacons && MyNetworkInterface.IsServerLike)
 				{
 					using (this.BeaconLinkedLock.WithWriter())
 					{
@@ -1385,7 +1394,7 @@ namespace IOTA.ModularJumpGates
 		{
 			if (this.Closed) return;
 			this.IsDirty = true;
-			this.LastUpdateTime = (ulong) (DateTime.UtcNow - DateTime.MinValue).Ticks;
+			this.LastUpdateDateTimeUTC = DateTime.UtcNow;
 		}
 
 		/// <summary>
@@ -1421,24 +1430,6 @@ namespace IOTA.ModularJumpGates
 				position = block.CubeGrid.GridIntegerToWorld(block.Position);
 				if (contained_blocks != null && ellipsoid.IsPointInEllipse(position)) contained_blocks.Add(block);
 				else if (uncontained_blocks != null) uncontained_blocks.Add(block);
-			}
-		}
-
-		/// <summary>
-		/// Gets all blocks inheriting from the specified type
-		/// </summary>
-		/// <typeparam name="T">The block type</typeparam>
-		/// <param name="blocks">A list of blocks to popuplate<br/> List will not be cleared</param>
-		/// <param name="filter">A predicate to match blocks against</param>
-		public void GetAllBlocksOfType<T>(List<T> blocks, Func<T, bool> filter = null) where T : IMySlimBlock
-		{
-			if (this.Closed) return;
-
-			foreach (IMySlimBlock slim in this.GridBlocks)
-			{
-				if (!(slim is T)) continue;
-				T block = (T) slim;
-				if (filter == null || filter(block)) blocks.Add(block);
 			}
 		}
 
@@ -1577,6 +1568,7 @@ namespace IOTA.ModularJumpGates
 					if (!new_gates.Contains(pair.Key))
 					{
 						pair.Value.Dispose();
+						MyJumpGateModSession.Instance.CloseGate(pair.Value);
 					}
 				}
 
@@ -1706,7 +1698,7 @@ namespace IOTA.ModularJumpGates
             if (this.Closed || this.MarkClosed) return MyGridInvalidationReason.CLOSED;
             else if (this.CubeGrid == null) return (this.IsSuspended) ? MyGridInvalidationReason.NONE : MyGridInvalidationReason.NULL_GRID;
             else if (this.CubeGrids.Count == 0) return MyGridInvalidationReason.INSUFFICIENT_GRIDS;
-            else if (this.BatchingGate == null && this.GetCubeGridPhysics() == null) return MyGridInvalidationReason.NULL_PHYSICS;
+            else if (this.GetCubeGridPhysics() == null) return MyGridInvalidationReason.NULL_PHYSICS;
             else return MyGridInvalidationReason.NONE;
 		}
 
@@ -1998,6 +1990,26 @@ namespace IOTA.ModularJumpGates
 		}
 
 		/// <summary>
+		/// Gets all blocks inheriting from the specified type
+		/// </summary>
+		/// <typeparam name="T">The block type</typeparam>
+		/// <returns>An IEnumerable referencing all matching blocks</returns>
+		public IEnumerable<T> GetAllSlimBlocksOfType<T>() where T : IMySlimBlock
+		{
+			return (this.Closed) ? Enumerable.Empty<T>() : this.GridBlocks.Where((block) => block is T).Select((block) => (T) block);
+		}
+
+		/// <summary>
+		/// Gets all blocks inheriting from the specified type
+		/// </summary>
+		/// <typeparam name="T">The block type</typeparam>
+		/// <returns>An IEnumerable referencing all matching blocks</returns>
+		public IEnumerable<T> GetAllFatBlocksOfType<T>() where T : IMyCubeBlock
+		{
+			return (this.Closed) ? Enumerable.Empty<T>() : this.GridBlocks.Where((block) => block.FatBlock != null && block.FatBlock is T).Select((block) => (T) block.FatBlock);
+		}
+
+		/// <summary>
 		/// Gets all jump gate controllers in this construct
 		/// </summary>
 		/// <returns>An IEnumerable referencing all controllers</returns>
@@ -2127,7 +2139,7 @@ namespace IOTA.ModularJumpGates
 		/// <returns>An IEnumerable referencing all beacon-linked beacons</returns>
 		public IEnumerable<MyBeaconLinkWrapper> GetBeaconsWithinReverseBroadcastSphere()
 		{
-			if (this.Closed || this.BeaconLinks == null) return Enumerable.Empty<MyBeaconLinkWrapper>();
+			if (this.Closed) return Enumerable.Empty<MyBeaconLinkWrapper>();
 			bool timedout = this.BeaconLinks == null || (DateTime.Now - this.LastBeaconLinkUpdate).TotalMilliseconds >= MyJumpGateConstruct.CommLinkedUpdateDelay;
 			IEnumerable<MyBeaconLinkWrapper> beacon_links = Enumerable.Empty<MyBeaconLinkWrapper>();
 
@@ -2139,7 +2151,7 @@ namespace IOTA.ModularJumpGates
 				}
 			}
 
-			if (timedout && MyNetworkInterface.IsServerLike) this.UpdateCommLinkedGrids = true;
+			if (timedout && MyNetworkInterface.IsServerLike) this.UpdateBeaconLinkedBeacons = true;
 			else if (timedout && MyNetworkInterface.IsStandaloneMultiplayerClient && !this.BeaconLinkedClientUpdate)
 			{
 				this.BeaconLinkedClientUpdate = true;

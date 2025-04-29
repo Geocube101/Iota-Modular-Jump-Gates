@@ -308,7 +308,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 					packet.Payload(this.ToSerialized(false));
 					packet.Send();
 				}
-				else if (this.FromSerialized(serialized))
+				else if (this.LastUpdateDateTimeUTC < packet.EpochDateTimeUTC && this.FromSerialized(serialized))
 				{
 					this.LastUpdateTime = packet.EpochTime;
 					this.IsDirty = false;

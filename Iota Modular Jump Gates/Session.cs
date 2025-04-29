@@ -526,6 +526,7 @@ namespace IOTA.ModularJumpGates
 			this.FlushClosureQueues();
 			Logger.Log($"Closed {closed_grids_count} Grids");
 			foreach (KeyValuePair<ulong, AnimationInfo> pair in this.JumpGateAnimations) pair.Value.Animation.Clean();
+			foreach (KeyValuePair<long, EntityWarpInfo> pair in this.EntityWarps) pair.Value.Close();
 
 			this.GridUpdateTimeTicks.Clear();
 			this.SessionUpdateTimeTicks.Clear();
@@ -757,7 +758,14 @@ namespace IOTA.ModularJumpGates
 				}
 
 				// Tick queued entity warps
-				foreach (KeyValuePair<long, EntityWarpInfo> pair in this.EntityWarps) if (pair.Value.Update()) this.EntityWarps.Remove(pair.Key);
+				foreach (KeyValuePair<long, EntityWarpInfo> pair in this.EntityWarps)
+				{
+					if (pair.Value.Update())
+					{
+						pair.Value.Close();
+						this.EntityWarps.Remove(pair.Key);
+					}
+				}
 			}
 			finally
 			{
@@ -1276,12 +1284,25 @@ namespace IOTA.ModularJumpGates
 		/// <param name="entity_batch">The batch of entities to move</param>
 		/// <param name="source_matrix">The starting location of the batch's parent</param>
 		/// <param name="dest_matrix">The ending location of the batch's parent</param>
+		/// <param name="end_position">The end position to warp to<br />"dest_matrix" will be the endposition applied after completion of warp</param>
 		/// <param name="time">The duration in game ticks</param>
+		/// <param name="max_safe_speed">The temporary speed to clamp entities to after warp</param>
 		/// <param name="callback">A callback called when the warp is complete</param>
-		public void WarpEntityBatchOverTime(MyJumpGate jump_gate, List<MyEntity> entity_batch, ref MatrixD source_matrix, ref MatrixD dest_matrix, ushort time, double max_safe_speed, Action<List<MyEntity>> callback = null)
+		public void WarpEntityBatchOverTime(MyJumpGate jump_gate, List<MyEntity> entity_batch, ref MatrixD source_matrix, ref MatrixD dest_matrix, ref Vector3D end_position, ushort time, double max_safe_speed, Action<List<MyEntity>> callback = null)
 		{
 			if (MyNetworkInterface.IsStandaloneMultiplayerClient) return;
-			this.EntityWarps.TryAdd(entity_batch[0].EntityId, new EntityWarpInfo(jump_gate, ref source_matrix, ref dest_matrix, entity_batch, time, max_safe_speed, callback));
+			this.EntityWarps.TryAdd(entity_batch[0].EntityId, new EntityWarpInfo(jump_gate, ref source_matrix, ref end_position, ref dest_matrix, entity_batch, time, max_safe_speed, callback));
+		}
+
+		/// <summary>
+		/// Queues an entity warp<br />
+		/// This will move the specified entity over time to the targeted position and rotation
+		/// </summary>
+		/// <param name="warp">The entity warp</param>
+		public void WarpEntityBatchOverTime(EntityWarpInfo warp)
+		{
+			if (warp == null || warp.Parent == null || warp.Parent.Closed) return;
+			this.EntityWarps.TryAdd(warp.Parent.EntityId, warp);
 		}
 
 		/// <summary>

@@ -9,14 +9,24 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 {
 	public class MyAPISession : MyAPIObjectBase
 	{
+		public static readonly long ModAPIID = 3313236685;
+		public static readonly int[] ModAPIVersion = new int[2] { 1, 0 };
 		public static MyAPISession Instance { get; private set; } = null;
 
-		public static void Init()
+		public static bool Init(IMyModContext context)
 		{
-			MyAPISession.Instance = new MyAPISession();
+			bool result = false;
+			MyAPIGateway.Utilities.SendModMessage(MyAPISession.ModAPIID, new Dictionary<string, object>() {
+				["Callback"] = (Action<Dictionary<string, object>>) ((attributes) => {
+					if (result = attributes != null) MyAPISession.Instance = new MyAPISession(attributes);
+				}),
+				["Version"] = MyAPISession.ModAPIVersion,
+				["ModContext"] = context,
+			});
+			return result;
 		}
 
-		private MyAPISession() { }
+		private MyAPISession(Dictionary<string, object> attributes) : base(attributes) { }
 
 		/// <summary>
 		/// The current, session local game tick

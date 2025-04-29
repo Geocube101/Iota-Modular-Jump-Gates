@@ -3355,13 +3355,13 @@ namespace IOTA.ModularJumpGates
 
 				foreach (MyJumpGateDrive drive in working_drives)
 				{
-					if (!this.InitialDriveColors.ContainsKey(drive.TerminalBlock.EntityId)) this.InitialDriveColors.Add(drive.TerminalBlock.EntityId, drive.DriveEmitterColor);
+					if (!this.InitialDriveColors.ContainsKey(drive.BlockID)) this.InitialDriveColors.Add(drive.BlockID, drive.DriveEmitterColor);
 					double brightness = this.DriveEmissiveColorDef.Brightness;
 					Vector4D color = this.DriveEmissiveColorDef.EmissiveColor.ToVector4D() * (this.ControllerSettings?.JumpEffectAnimationColorShift().ToVector4D() ?? Vector4D.One);
 					AnimationExpression.ExpressionArguments arguments = new AnimationExpression.ExpressionArguments(local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, null, null);
 					color = AttributeAnimationDef.GetAnimatedVectorValue(this.DriveEmissiveColorDef.Animations?.ParticleColorAnimation, arguments, color);
 					brightness = AttributeAnimationDef.GetAnimatedDoubleValue(this.DriveEmissiveColorDef.Animations?.ParticleColorIntensityAnimation, arguments, brightness);
-					Vector4D start = this.InitialDriveColors[drive.TerminalBlock.EntityId].ToVector4();
+					Vector4D start = this.InitialDriveColors[drive.BlockID].ToVector4();
 					Vector4D result = (color - start) * tick_ratio + start;
 					drive.EmitterEmissiveBrightness = brightness;
 					drive.SetDriveEmitterColor(new Vector4((float) result.X, (float) result.Y, (float) result.Z, (float) result.W));
@@ -3876,10 +3876,10 @@ namespace IOTA.ModularJumpGates
 					foreach (MyJumpGateDrive drive in jump_gate_drives)
 					{
 						if (!drive.IsWorking()) continue;
-						MatrixD drive_emitter_pos = drive.TerminalBlock.WorldMatrix;
+						MatrixD drive_emitter_pos = drive.WorldMatrix;
 						drive_emitter_pos.Translation = drive.GetDriveRaycastStartpoint();
 						if (this.PerDriveParticles.ContainsKey(drive)) this.ClosedDrives.Remove(drive);
-						else this.PerDriveParticles.Add(drive, this.AnimationDefinition.PerDriveParticles.Select((particle) => new Particle(particle, this.AnimationDefinition.Duration, this.JumpGate, this.TargetGate, this.ControllerSettings, drive.TerminalBlock.WorldMatrix, drive_emitter_pos.Translation, false)).ToList());
+						else this.PerDriveParticles.Add(drive, this.AnimationDefinition.PerDriveParticles.Select((particle) => new Particle(particle, this.AnimationDefinition.Duration, this.JumpGate, this.TargetGate, this.ControllerSettings, drive.WorldMatrix, drive_emitter_pos.Translation, false)).ToList());
 						foreach (Particle particle in this.PerDriveParticles[drive]) particle.Tick(this.CurrentTick, drive_emitter_pos, jump_gate_drives, jump_gate_entities, ref endpoint, drive.TerminalBlock as MyEntity);
 					}
 
@@ -3899,10 +3899,10 @@ namespace IOTA.ModularJumpGates
 					foreach (MyJumpGateDrive drive in target_jump_gate_drives)
 					{
 						if (!drive.IsWorking()) continue;
-						MatrixD drive_emitter_pos = drive.TerminalBlock.WorldMatrix;
+						MatrixD drive_emitter_pos = drive.WorldMatrix;
 						drive_emitter_pos.Translation = drive.GetDriveRaycastStartpoint();
 						if (this.PerAntiDriveParticles.ContainsKey(drive)) this.ClosedDrives.Remove(drive);
-						else this.PerAntiDriveParticles.Add(drive, this.AnimationDefinition.PerAntiDriveParticles.Select((particle) => new Particle(particle, this.AnimationDefinition.Duration, this.JumpGate, this.TargetGate, this.ControllerSettings, drive.TerminalBlock.WorldMatrix, drive_emitter_pos.Translation, false)).ToList());
+						else this.PerAntiDriveParticles.Add(drive, this.AnimationDefinition.PerAntiDriveParticles.Select((particle) => new Particle(particle, this.AnimationDefinition.Duration, this.JumpGate, this.TargetGate, this.ControllerSettings, drive.WorldMatrix, drive_emitter_pos.Translation, false)).ToList());
 						foreach (Particle particle in this.PerAntiDriveParticles[drive]) particle.Tick(this.CurrentTick, drive_emitter_pos, jump_gate_drives, jump_gate_entities, ref endpoint, drive.TerminalBlock as MyEntity);
 					}
 
@@ -4043,18 +4043,17 @@ namespace IOTA.ModularJumpGates
 				}
 				
 				MyEntity controller = (MyNetworkInterface.IsDedicatedMultiplayerServer) ? null : MyAPIGateway.Session.CameraController?.Entity?.GetTopMostParent();
-				EntityBatch batch = this.JumpGate.GetEntityBatchFromEntity(controller);
+				MyEntity parent = this.JumpGate.GetEntityBatchFromEntity(controller)?.Parent;
 
-				if (batch == null && this.TravelParticles != null)
+				if (parent == null && this.TravelParticles != null)
 				{
 					foreach (Particle particle in this.TravelParticles) particle.Stop();
 					this.TravelParticles.Clear();
 					this.TravelParticles = null;
 				}
-				else if (batch != null && this.AnimationDefinition.TravelEffects != null && (this.JumpType == MyJumpTypeEnum.STANDARD || this.JumpType == MyJumpTypeEnum.OUTBOUND_VOID))
+				else if (parent != null && this.AnimationDefinition.TravelEffects != null && (this.JumpType == MyJumpTypeEnum.STANDARD || this.JumpType == MyJumpTypeEnum.OUTBOUND_VOID))
 				{
 					ushort duration = this.Beam?.BeamPulseDefinition?.Duration ?? this.AnimationDefinition.Duration;
-					MyEntity parent = batch.Parent;
 					this.TravelParticles = this.TravelParticles ?? this.AnimationDefinition.TravelEffects.Select((particle) => new Particle(particle, duration, this.JumpGate, this.TargetGate, this.ControllerSettings, parent.WorldMatrix, parent.WorldMatrix.Translation, false)).ToList();
 					
 					foreach (Particle particle in this.TravelParticles)
@@ -4065,16 +4064,15 @@ namespace IOTA.ModularJumpGates
 					}
 				}
 
-				if (batch == null && this.TravelSounds != null)
+				if (parent == null && this.TravelSounds != null)
 				{
 					foreach (Sound sound in this.TravelSounds) sound.Stop();
 					this.TravelSounds.Clear();
 					this.TravelSounds = null;
 				}
-				else if (batch != null && this.AnimationDefinition.TravelSounds != null && (this.JumpType == MyJumpTypeEnum.STANDARD || this.JumpType == MyJumpTypeEnum.OUTBOUND_VOID))
+				else if (parent != null && this.AnimationDefinition.TravelSounds != null && (this.JumpType == MyJumpTypeEnum.STANDARD || this.JumpType == MyJumpTypeEnum.OUTBOUND_VOID))
 				{
 					ushort duration = this.Beam?.BeamPulseDefinition?.Duration ?? this.AnimationDefinition.Duration;
-					MyEntity parent = batch.Parent;
 					this.TravelSounds = this.TravelSounds ?? this.AnimationDefinition.TravelSounds.Select((sound) => new Sound(sound, duration, this.JumpGate, this.TargetGate, false)).ToList();
 					foreach (Sound sound in this.TravelSounds) sound.Tick(this.CurrentTick, jump_gate_drives, this.JumpedEntities, ref endpoint, parent);
 				}
@@ -4086,10 +4084,10 @@ namespace IOTA.ModularJumpGates
 					foreach (MyJumpGateDrive drive in jump_gate_drives)
 					{
 						if (!drive.IsWorking()) continue;
-						MatrixD drive_emitter_pos = drive.TerminalBlock.WorldMatrix;
+						MatrixD drive_emitter_pos = drive.WorldMatrix;
 						drive_emitter_pos.Translation = drive.GetDriveRaycastStartpoint();
 						if (this.PerDriveParticles.ContainsKey(drive)) this.ClosedDrives.Remove(drive);
-						else this.PerDriveParticles.Add(drive, this.AnimationDefinition.PerDriveParticles.Select((particle) => new Particle(particle, this.AnimationDefinition.Duration, this.JumpGate, this.TargetGate, this.ControllerSettings, drive.TerminalBlock.WorldMatrix, drive_emitter_pos.Translation, false)).ToList());
+						else this.PerDriveParticles.Add(drive, this.AnimationDefinition.PerDriveParticles.Select((particle) => new Particle(particle, this.AnimationDefinition.Duration, this.JumpGate, this.TargetGate, this.ControllerSettings, drive.WorldMatrix, drive_emitter_pos.Translation, false)).ToList());
 						foreach (Particle particle in this.PerDriveParticles[drive]) particle.Tick(this.CurrentTick, drive_emitter_pos, jump_gate_drives, jump_gate_entities, ref endpoint, drive.TerminalBlock as MyEntity);
 					}
 
@@ -4109,10 +4107,10 @@ namespace IOTA.ModularJumpGates
 					foreach (MyJumpGateDrive drive in target_jump_gate_drives)
 					{
 						if (!drive.IsWorking()) continue;
-						MatrixD drive_emitter_pos = drive.TerminalBlock.WorldMatrix;
+						MatrixD drive_emitter_pos = drive.WorldMatrix;
 						drive_emitter_pos.Translation = drive.GetDriveRaycastStartpoint();
 						if (this.PerAntiDriveParticles.ContainsKey(drive)) this.ClosedDrives.Remove(drive);
-						else this.PerAntiDriveParticles.Add(drive, this.AnimationDefinition.PerAntiDriveParticles.Select((particle) => new Particle(particle, this.AnimationDefinition.Duration, this.JumpGate, this.TargetGate, this.ControllerSettings, drive.TerminalBlock.WorldMatrix, drive_emitter_pos.Translation, false)).ToList());
+						else this.PerAntiDriveParticles.Add(drive, this.AnimationDefinition.PerAntiDriveParticles.Select((particle) => new Particle(particle, this.AnimationDefinition.Duration, this.JumpGate, this.TargetGate, this.ControllerSettings, drive.WorldMatrix, drive_emitter_pos.Translation, false)).ToList());
 						foreach (Particle particle in this.PerAntiDriveParticles[drive]) particle.Tick(this.CurrentTick, drive_emitter_pos, jump_gate_drives, jump_gate_entities, ref endpoint, drive.TerminalBlock as MyEntity);
 					}
 
@@ -4125,7 +4123,7 @@ namespace IOTA.ModularJumpGates
 					this.ClosedDrives.Clear();
 				}
 
-				if (batch == null) this.Beam?.Tick(this.CurrentTick, jump_gate_drives, jump_gate_entities, ref endpoint, ref world_jump_node);
+				if (parent == null) this.Beam?.Tick(this.CurrentTick, jump_gate_drives, jump_gate_entities, ref endpoint, ref world_jump_node);
 
 				if (this.JumpType == MyJumpTypeEnum.STANDARD || this.JumpType == MyJumpTypeEnum.OUTBOUND_VOID)
 				{
@@ -4274,10 +4272,10 @@ namespace IOTA.ModularJumpGates
 					foreach (MyJumpGateDrive drive in jump_gate_drives)
 					{
 						if (!drive.IsWorking()) continue;
-						MatrixD drive_emitter_pos = drive.TerminalBlock.WorldMatrix;
+						MatrixD drive_emitter_pos = drive.WorldMatrix;
 						drive_emitter_pos.Translation = drive.GetDriveRaycastStartpoint();
 						if (this.PerDriveParticles.ContainsKey(drive)) this.ClosedDrives.Remove(drive);
-						else this.PerDriveParticles.Add(drive, this.AnimationDefinition.PerDriveParticles.Select((particle) => new Particle(particle, this.AnimationDefinition.Duration, this.JumpGate, this.TargetGate, this.ControllerSettings, drive.TerminalBlock.WorldMatrix, drive_emitter_pos.Translation, false)).ToList());
+						else this.PerDriveParticles.Add(drive, this.AnimationDefinition.PerDriveParticles.Select((particle) => new Particle(particle, this.AnimationDefinition.Duration, this.JumpGate, this.TargetGate, this.ControllerSettings, drive.WorldMatrix, drive_emitter_pos.Translation, false)).ToList());
 						foreach (Particle particle in this.PerDriveParticles[drive]) particle.Tick(this.CurrentTick, drive_emitter_pos, jump_gate_drives, jump_gate_entities, ref endpoint, drive.TerminalBlock as MyEntity);
 					}
 
@@ -4297,10 +4295,10 @@ namespace IOTA.ModularJumpGates
 					foreach (MyJumpGateDrive drive in target_jump_gate_drives)
 					{
 						if (!drive.IsWorking()) continue;
-						MatrixD drive_emitter_pos = drive.TerminalBlock.WorldMatrix;
+						MatrixD drive_emitter_pos = drive.WorldMatrix;
 						drive_emitter_pos.Translation = drive.GetDriveRaycastStartpoint();
 						if (this.PerAntiDriveParticles.ContainsKey(drive)) this.ClosedDrives.Remove(drive);
-						else this.PerAntiDriveParticles.Add(drive, this.AnimationDefinition.PerAntiDriveParticles.Select((particle) => new Particle(particle, this.AnimationDefinition.Duration, this.JumpGate, this.TargetGate, this.ControllerSettings, drive.TerminalBlock.WorldMatrix, drive_emitter_pos.Translation, false)).ToList());
+						else this.PerAntiDriveParticles.Add(drive, this.AnimationDefinition.PerAntiDriveParticles.Select((particle) => new Particle(particle, this.AnimationDefinition.Duration, this.JumpGate, this.TargetGate, this.ControllerSettings, drive.WorldMatrix, drive_emitter_pos.Translation, false)).ToList());
 						foreach (Particle particle in this.PerAntiDriveParticles[drive]) particle.Tick(this.CurrentTick, drive_emitter_pos, jump_gate_drives, jump_gate_entities, ref endpoint, drive.TerminalBlock as MyEntity);
 					}
 
@@ -4565,7 +4563,7 @@ namespace IOTA.ModularJumpGates
 			}
 
 			this.ActiveAnimationIndex = index;
-			if ((this.JumpGate?.Closed ?? true) || (this.JumpGate?.JumpGateGrid?.Closed ?? true)) return;
+			if ((this.JumpGate?.Closed ?? true) || (this.JumpGate.JumpGateGrid?.Closed ?? true)) return;
 			List<MyJumpGateDrive> drives = null;
 			this.TEMP_JumpGateDrives.AddRange(this.JumpGate.GetJumpGateDrives());
 			this.JumpGate.GetEntitiesInJumpSpace(this.TEMP_JumpGateEntities, true);

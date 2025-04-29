@@ -447,6 +447,17 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 			return this.GetMethod<Func<bool>>("IsSmallGrid")();
 		}
 
+		/// <summary>
+		/// Checks whether this jump gate is suspended<br />
+		/// Gate is suspended if parent construct is suspended or at least one drive is a null wrapper<br />
+		/// Always false on server or singleplayer
+		/// </summary>
+		/// <returns>Suspendedness</returns>
+		public bool IsSuspended()
+		{
+			return this.GetMethod<Func<bool>>("IsSuspended")();
+		}
+
 		public override bool Equals(object other)
 		{
 			return other != null && other is MyAPIJumpGate && base.Equals(((MyAPIJumpGate) other).Guid);
@@ -467,6 +478,11 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		public MyAPIGateInvalidationReason GetInvalidationReason()
 		{
 			return (MyAPIGateInvalidationReason) this.GetMethod<Func<byte>>("GetInvalidationReason")();
+		}
+
+		public override int GetHashCode()
+		{
+			return base.GetHashCode();
 		}
 
 		/// <summary>

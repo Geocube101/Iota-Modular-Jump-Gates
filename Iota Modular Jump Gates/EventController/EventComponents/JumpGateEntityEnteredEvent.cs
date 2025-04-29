@@ -55,13 +55,13 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 		protected override void OnJumpGateAdded(MyJumpGate jump_gate)
 		{
 			base.OnJumpGateAdded(jump_gate);
-			if (MyNetworkInterface.IsMultiplayerServer) jump_gate.OnEntityCollision(this.OnEntityCollision);
+			if (MyNetworkInterface.IsServerLike) jump_gate.OnEntityCollision(this.OnEntityCollision);
 		}
 
 		protected override void OnJumpGateRemoved(MyJumpGate jump_gate)
 		{
 			base.OnJumpGateAdded(jump_gate);
-			if (MyNetworkInterface.IsMultiplayerServer) jump_gate.OffEntityCollision(this.OnEntityCollision);
+			if (MyNetworkInterface.IsServerLike) jump_gate.OffEntityCollision(this.OnEntityCollision);
 		}
 
 		public override void CreateTerminalInterfaceControls<T>()

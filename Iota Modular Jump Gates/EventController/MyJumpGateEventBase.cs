@@ -88,16 +88,22 @@ namespace IOTA.ModularJumpGates.EventController
 
 				if (value)
 				{
-					((MyCubeGrid) event_controller.CubeGrid).Schedule(MyCubeGrid.UpdateQueue.BeforeSimulation, this.Update); ((MyCubeGrid) event_controller.CubeGrid).Schedule(MyCubeGrid.UpdateQueue.BeforeSimulation, this.Update);
+					((MyCubeGrid) event_controller.CubeGrid).Schedule(MyCubeGrid.UpdateQueue.BeforeSimulation, this.Update);
 					this.OnSelected();
+					this.SetDirty();
 				}
 				else
 				{
 					((MyCubeGrid) event_controller.CubeGrid).DeSchedule(MyCubeGrid.UpdateQueue.BeforeSimulation, this.Update);
 					this.OnUnselected();
+					this.SetDirty();
 				}
 			}
 		}
+
+		public virtual string YesNoToolbarYesDescription => "Condition Accepted";
+
+		public virtual string YesNoToolbarNoDescription => "Condition Rejected";
 
 		private void OnNetworkUpdate(MyNetworkInterface.Packet packet)
 		{
@@ -210,7 +216,7 @@ namespace IOTA.ModularJumpGates.EventController
 				}
 			}
 
-			if (this.IsDirty && MyJumpGateModSession.Network.Registered && this.IsSelected)
+			if (this.IsDirty && MyJumpGateModSession.Network.Registered)
 			{
 				MyNetworkInterface.Packet packet = new MyNetworkInterface.Packet {
 					PacketType = MyPacketTypeEnum.UPDATE_EVENT_CONTROLLER_EVENT,
