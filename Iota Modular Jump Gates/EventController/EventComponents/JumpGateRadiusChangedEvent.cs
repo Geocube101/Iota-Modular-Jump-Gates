@@ -18,6 +18,8 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 		public override long UniqueSelectionId => 0x7FFFFFFFFFFFFFF8;
 		public override MyStringId EventDisplayName => MyStringId.GetOrCompute("Jump Gate Radius Changed");
 		public override string ComponentTypeDebugString => nameof(JumpGateRadiusChangedEvent);
+		public override string YesNoToolbarYesDescription => $"Node Radius {((this.EventController.IsLowerOrEqualCondition) ? "<=" : ">=")} {MyJumpGateModSession.AutoconvertMetricUnits(this.TargetValue, "m", 2)}";
+		public override string YesNoToolbarNoDescription => $"Node Radius {((this.EventController.IsLowerOrEqualCondition) ? ">=" : "<=")} {MyJumpGateModSession.AutoconvertMetricUnits(this.TargetValue, "m", 2)}";
 
 		protected override void CheckValueAgainstTarget(double new_value, double old_value, double target)
 		{

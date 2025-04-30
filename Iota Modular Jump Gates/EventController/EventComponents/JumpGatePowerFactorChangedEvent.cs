@@ -18,6 +18,8 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 		public override long UniqueSelectionId => 0x7FFFFFFFFFFFFFF9;
 		public override MyStringId EventDisplayName => MyStringId.GetOrCompute("Jump Gate Power Factor Changed");
 		public override string ComponentTypeDebugString => nameof(JumpGatePowerFactorChangedEvent);
+		public override string YesNoToolbarYesDescription => $"Power Factor {((this.EventController.IsLowerOrEqualCondition) ? "<=" : ">=")} {MyJumpGateModSession.AutoconvertSciNotUnits(this.TargetValue, 0)}";
+		public override string YesNoToolbarNoDescription => $"Power Factor {((this.EventController.IsLowerOrEqualCondition) ? ">=" : "<=")} {MyJumpGateModSession.AutoconvertSciNotUnits(this.TargetValue, 0)}";
 
 		protected override void CheckValueAgainstTarget(double new_value, double old_value, double target)
 		{

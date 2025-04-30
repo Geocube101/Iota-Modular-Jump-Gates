@@ -1,14 +1,10 @@
 ﻿using IOTA.ModularJumpGates.CubeBlock;
 using ProtoBuf;
-using Sandbox.Engine.Physics;
 using Sandbox.Game.Entities;
 using Sandbox.ModAPI;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics.Contracts;
 using System.Linq;
-using VRage.Game;
-using VRage.Game.Components;
 using VRage.Game.Entity;
 using VRage.Game.ModAPI;
 using VRage.ModAPI;
@@ -418,12 +414,13 @@ namespace IOTA.ModularJumpGates.Util
 		public BoundingBoxD ObstructAABB;
 		public MatrixD ParentFinalMatrix;
 
-		public MyEntity Parent => this.Batch.FirstOrDefault();
+		public MyEntity Parent => this.Batch?.FirstOrDefault();
 
 		public double BatchMass
 		{
 			get
 			{
+				if (this.Batch == null) return 0;
 				double mass = 0;
 
 				foreach (MyEntity child in this.Batch)
@@ -443,12 +440,10 @@ namespace IOTA.ModularJumpGates.Util
 			this.ParentTargetPosition = serialized.ParentTargetPosition;
 			this.ObstructAABB = new BoundingBoxD(serialized.ObstructAABB[0], serialized.ObstructAABB[1]);
 			this.ParentFinalMatrix = MatrixD.CreateWorld(serialized.ParentFinalMatrix[0], serialized.ParentFinalMatrix[1], serialized.ParentFinalMatrix[2]);
-			if (this.Batch.Count == 0) throw new ArgumentException("Batch list cannot be empty");
 		}
 
 		public EntityBatch(List<MyEntity> batch, ref Vector3D target_position, ref BoundingBoxD obstruct_aabb, ref MatrixD final_matrix)
 		{
-			if (batch == null || batch.Count == 0) throw new ArgumentException("Batch list cannot be empty");
 			this.Batch = batch;
 			this.ParentTargetPosition = target_position;
 			this.ObstructAABB = obstruct_aabb;
@@ -458,13 +453,13 @@ namespace IOTA.ModularJumpGates.Util
 		public bool IsEntityInBatch(MyEntity entity)
 		{
 			MyEntity topmost = entity.GetTopMostParent();
-			return this.Batch.Contains(topmost) || this.Batch.Any((parent) => topmost == parent);
+			return this.Batch != null && (this.Batch.Contains(topmost) || this.Batch.Any((parent) => topmost == parent));
 		}
 
 		public string ToSerialized()
 		{
 			return Convert.ToBase64String(MyAPIGateway.Utilities.SerializeToBinary(new SerializedEntityBatch {
-				Batch = this.Batch.Select((entity) => entity.EntityId).ToList(),
+				Batch = this.Batch?.Select((entity) => entity.EntityId)?.ToList(),
 				ParentTargetPosition = this.ParentTargetPosition,
 				ObstructAABB = new Vector3D[2] { this.ObstructAABB.Min, this.ObstructAABB.Max },
 				ParentFinalMatrix = new Vector3D[3] { this.ParentFinalMatrix.Translation, this.ParentFinalMatrix.Forward, this.ParentFinalMatrix.Up },
@@ -708,24 +703,20 @@ namespace IOTA.ModularJumpGates.Util
 	public class MyBeaconLinkWrapper : IEquatable<MyBeaconLinkWrapper>
 	{
 		#region Private Variables
-		[ProtoMember(1, IsRequired = true, Name = "F_BeaconPosition")]
+		[ProtoMember(1, IsRequired = true)]
 		private Vector3D _BeaconPosition;
-		[ProtoMember(2, IsRequired = true, Name = "F_BroadcastName")]
+		[ProtoMember(2, IsRequired = true)]
 		private string _BroadcastName;
+		[ProtoMember(3, IsRequired = true)]
+		private string _CubeGridName;
 		#endregion
 
 		#region Public Variables
-		[ProtoMember(3, IsRequired = true)]
+		[ProtoMember(4, IsRequired = true)]
 		public long BeaconID { get; private set; }
 
 		[ProtoIgnore]
-		public IMyBeacon Beacon
-		{
-			get
-			{
-				return (IMyBeacon) MyAPIGateway.Entities.GetEntityById(this.BeaconID);
-			}
-		}
+		public IMyBeacon Beacon => (IMyBeacon) MyAPIGateway.Entities.GetEntityById(this.BeaconID);
 
 		[ProtoIgnore]
 		public Vector3D BeaconPosition
@@ -744,6 +735,16 @@ namespace IOTA.ModularJumpGates.Util
 			{
 				if (this.Beacon != null) this._BroadcastName = (this.Beacon.HudText == null || this.Beacon.HudText.Length == 0) ? this.Beacon.CustomName : this.Beacon.HudText;
 				return this._BroadcastName;
+			}
+		}
+
+		[ProtoIgnore]
+		public string CubeGridCustomName
+		{
+			get
+			{
+				if (this.Beacon != null) this._CubeGridName = this.Beacon.CubeGrid?.CustomName;
+				return this._CubeGridName;
 			}
 		}
 		#endregion
@@ -782,6 +783,7 @@ namespace IOTA.ModularJumpGates.Util
 		{
 			this._BeaconPosition = beacon.WorldMatrix.Translation;
 			this._BroadcastName = (beacon.HudText == null || beacon.HudText.Length == 0) ? beacon.CustomName : beacon.HudText;
+			this._CubeGridName = beacon.CubeGrid?.CustomName;
 			this.BeaconID = beacon.EntityId;
 		}
 		#endregion

@@ -1,4 +1,5 @@
-﻿using IOTA.ModularJumpGates.Util;
+﻿using IOTA.ModularJumpGates.Terminal;
+using IOTA.ModularJumpGates.Util;
 using ProtoBuf;
 using Sandbox.Common.ObjectBuilders;
 using Sandbox.Game.EntityComponents;
@@ -219,6 +220,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		public override void UpdateAfterSimulation()
 		{
 			base.UpdateAfterSimulation();
+			if (MyJumpGateModSession.Instance.AllFirstTickComplete() && !MyJumpGateCapacitorTerminal.IsLoaded) MyJumpGateCapacitorTerminal.Load(this.ModContext);
 
 			// Update Emmissives
 			bool is_working;

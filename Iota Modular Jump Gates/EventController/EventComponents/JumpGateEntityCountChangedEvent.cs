@@ -19,6 +19,8 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 		public override long UniqueSelectionId => 0x7FFFFFFFFFFFFFFD;
 		public override MyStringId EventDisplayName => MyStringId.GetOrCompute("Jump Gate Entity Count Changed");
 		public override string ComponentTypeDebugString => nameof(JumpGateEntityCountChangedEvent);
+		public override string YesNoToolbarYesDescription => $"Number of Entities {((this.EventController.IsLowerOrEqualCondition) ? "<=" : ">=")} {MyJumpGateModSession.AutoconvertSciNotUnits(this.TargetValue, 0)}";
+		public override string YesNoToolbarNoDescription => $"Number of Entities {((this.EventController.IsLowerOrEqualCondition) ? ">=" : "<=")} {MyJumpGateModSession.AutoconvertSciNotUnits(this.TargetValue, 0)}";
 
 		protected override void CheckValueAgainstTarget(int new_value, int old_value, int target)
 		{

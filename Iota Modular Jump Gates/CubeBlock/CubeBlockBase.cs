@@ -203,9 +203,6 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			base.UpdateOnceBeforeFrame();
 			MyCubeBlockBase.ModelBoundingBoxSize = (MyCubeBlockBase.ModelBoundingBoxSize == Vector3D.Zero && !this.IsNullWrapper) ? new Vector3D(this.TerminalBlock.Model.BoundingBoxSize) : MyCubeBlockBase.ModelBoundingBoxSize;
 			MyCubeBlockTerminal.Load(this.ModContext);
-			MyJumpGateControllerTerminal.Load(this.ModContext);
-			MyJumpGateCapacitorTerminal.Load(this.ModContext);
-			MyJumpGateDriveTerminal.Load(this.ModContext);
 		}
 
 		/// <summary>
@@ -237,7 +234,6 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		public override void UpdateAfterSimulation()
 		{
 			base.UpdateAfterSimulation();
-			if (this.TerminalBlock == null || this.TerminalBlock.MarkedForClose) return;
 			++this.LocalGameTick;
 			if (MyAPIGateway.Gui.GetCurrentScreen != VRage.Game.ModAPI.MyTerminalPageEnum.ControlPanel) return;
 			this.TerminalBlock.RefreshCustomInfo();

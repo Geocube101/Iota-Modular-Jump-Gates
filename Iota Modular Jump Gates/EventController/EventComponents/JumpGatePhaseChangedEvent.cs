@@ -23,6 +23,8 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 		public override long UniqueSelectionId => 0x7FFFFFFFFFFFFFFF;
 		public override MyStringId EventDisplayName => MyStringId.GetOrCompute("Jump Gate Phase Changed");
 		public override string ComponentTypeDebugString => nameof(JumpGatePhaseChangedEvent);
+		public override string YesNoToolbarYesDescription => $"Jump Gate Phase == {(MyJumpGatePhase) this.TargetValue}";
+		public override string YesNoToolbarNoDescription => $"Jump Gate Phase != {(MyJumpGatePhase) this.TargetValue}";
 
 		public JumpGatePhaseChangedEvent() : base()
 		{

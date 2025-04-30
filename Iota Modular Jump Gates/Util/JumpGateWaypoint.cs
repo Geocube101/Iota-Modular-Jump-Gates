@@ -5,7 +5,7 @@ using VRageMath;
 
 namespace IOTA.ModularJumpGates.Util
 {
-    public enum MyWaypointType : byte { NONE, JUMP_GATE, GPS, BEACON, SERVER };
+    public enum MyWaypointType : byte { NONE = 0, JUMP_GATE = 1, JUMPGATE = 1, GATE = 1, GPS = 2, BEACON = 3, SERVER = 4 };
 
     /// <summary>
     /// Serializable wrapper for GPSs
@@ -449,6 +449,36 @@ namespace IOTA.ModularJumpGates.Util
 					throw new InvalidOperationException("Waypoint is invalid");
 			}
         }
+
+		public void GetNameAndTooltip(ref Vector3D this_pos, out string name, out string tooltip)
+		{
+			name = null;
+			tooltip = null;
+			int cutoff = 15;
+			MyJumpGate destination_jump_gate;
+			Vector3D? endpoint = this.GetEndpoint(out destination_jump_gate);
+			if (endpoint == null) return;
+			double distance = Vector3D.Distance(this_pos, endpoint.Value);
+
+			if (this.WaypointType == MyWaypointType.JUMP_GATE && destination_jump_gate != null && (MyNetworkInterface.IsStandaloneMultiplayerClient || destination_jump_gate.IsComplete()))
+			{
+				string grid_name = destination_jump_gate.JumpGateGrid?.PrimaryCubeGridCustomName ?? "N/A";
+				string grid_name_cut = (grid_name.Length > cutoff) ? $"{grid_name.Substring(0, cutoff - 3)}..." : grid_name;
+				string gate_name = destination_jump_gate.GetPrintableName();
+				string gate_name_cut = (gate_name.Length > cutoff) ? $"{gate_name.Substring(0, cutoff - 3)}..." : gate_name;
+				tooltip = $"{grid_name} - {gate_name}: (Jump Gate {MyJumpGateModSession.AutoconvertMetricUnits(distance, "m", 2)} away)";
+				name = $"{grid_name_cut} - {gate_name_cut}: (Jump Gate {MyJumpGateModSession.AutoconvertMetricUnits(distance, "m", 2)} away)";
+			}
+			else if (this.WaypointType == MyWaypointType.GPS)
+			{
+				MyGpsWrapper gps = this.GPS;
+				name = tooltip = $"{gps.Name} (GPS {MyJumpGateModSession.AutoconvertMetricUnits(distance, "m", 2)} away)";
+			}
+			else if (this.WaypointType == MyWaypointType.BEACON)
+			{
+				name = tooltip = $"{this.Beacon.BroadcastName} (Beacon {MyJumpGateModSession.AutoconvertMetricUnits(distance, "m", 2)} away)";
+			}
+		}
 		#endregion
 	}
 }

@@ -18,6 +18,8 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 		public override long UniqueSelectionId => 0x7FFFFFFFFFFFFFF6;
 		public override MyStringId EventDisplayName => MyStringId.GetOrCompute("Jump Gate Node Velocity Changed");
 		public override string ComponentTypeDebugString => nameof(JumpGateNodeVelocityChangedEvent);
+		public override string YesNoToolbarYesDescription => $"Node Velocity {((this.EventController.IsLowerOrEqualCondition) ? "<=" : ">=")} {MyJumpGateModSession.AutoconvertMetricUnits(this.TargetValue, "m/s", 2)}";
+		public override string YesNoToolbarNoDescription => $"Node Velocity {((this.EventController.IsLowerOrEqualCondition) ? ">=" : "<=")} {MyJumpGateModSession.AutoconvertMetricUnits(this.TargetValue, "m/s", 2)}";
 
 		protected override void CheckValueAgainstTarget(double new_value, double old_value, double target)
 		{

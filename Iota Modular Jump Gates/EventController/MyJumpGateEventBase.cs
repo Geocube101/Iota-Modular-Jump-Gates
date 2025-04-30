@@ -230,6 +230,7 @@ namespace IOTA.ModularJumpGates.EventController
 				});
 
 				packet.Send();
+				this.IsDirty = false;
 			}
 		}
 

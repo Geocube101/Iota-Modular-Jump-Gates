@@ -18,6 +18,8 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 		public override long UniqueSelectionId => 0x7FFFFFFFFFFFFFF5;
 		public override MyStringId EventDisplayName => MyStringId.GetOrCompute("Jump Gate Target Distance Changed");
 		public override string ComponentTypeDebugString => nameof(JumpGateTargetDistanceChangedEvent);
+		public override string YesNoToolbarYesDescription => $"Target Waypoint Distance {((this.EventController.IsLowerOrEqualCondition) ? "<=" : ">=")} {MyJumpGateModSession.AutoconvertMetricUnits(this.TargetValue, "m", 2)}";
+		public override string YesNoToolbarNoDescription => $"Target Waypoint Distance {((this.EventController.IsLowerOrEqualCondition) ? ">=" : "<=")} {MyJumpGateModSession.AutoconvertMetricUnits(this.TargetValue, "m", 2)}";
 
 		protected override void CheckValueAgainstTarget(double new_value, double old_value, double target)
 		{

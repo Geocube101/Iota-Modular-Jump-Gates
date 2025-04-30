@@ -1,10 +1,10 @@
 ﻿using IOTA.ModularJumpGates.CubeBlock;
 using IOTA.ModularJumpGates.ProgramScripting.CubeBlock;
 using IOTA.ModularJumpGates.Util;
-using Sandbox.Game.Entities.Blocks;
 using Sandbox.ModAPI;
 using Sandbox.ModAPI.Interfaces.Terminal;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -22,8 +22,9 @@ namespace IOTA.ModularJumpGates.Terminal
 		public static bool IsLoaded { get; private set; } = false;
 		public static readonly string MODID_PREFIX = MyJumpGateModSession.MODID + ".JumpGateController.";
 
-		private static List<MyJumpGateWaypoint> TEMP_Waypoints = new List<MyJumpGateWaypoint>();
-		private static Dictionary<MyEntity, float> TEMP_JumpSpaceEntities = new Dictionary<MyEntity, float>();
+		private static readonly List<MyJumpGateWaypoint> TEMP_Waypoints = new List<MyJumpGateWaypoint>();
+		private static readonly Dictionary<MyEntity, float> TEMP_JumpSpaceEntities = new Dictionary<MyEntity, float>();
+		private static readonly ConcurrentDictionary<long, string> ControllerSearchInputs = new ConcurrentDictionary<long, string>();
 
 		private static void SetupTerminalSetupControls()
 		{
@@ -148,6 +149,23 @@ namespace IOTA.ModularJumpGates.Terminal
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(settings_label_lb);
 			}
 
+			// Search [Destinations]
+			{
+				IMyTerminalControlTextbox search_waypoint_tb = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlTextbox, IMyUpgradeModule>(MODID_PREFIX + "SearchControllerWaypoint");
+				search_waypoint_tb.Title = MyStringId.GetOrCompute("Search Destination Waypoints");
+				search_waypoint_tb.SupportsMultipleBlocks = false;
+				search_waypoint_tb.Visible = MyJumpGateModSession.IsBlockJumpGateController;
+				search_waypoint_tb.Enabled = (block) => {
+					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
+					MyJumpGate jump_gate = controller?.AttachedJumpGate();
+					if (controller == null || !controller.IsWorking() || controller.JumpGateGrid == null || controller.JumpGateGrid.Closed || jump_gate == null) return false;
+					else return jump_gate.IsIdle();
+				};
+				search_waypoint_tb.Getter = (block) => new StringBuilder(MyJumpGateControllerTerminal.ControllerSearchInputs.GetValueOrDefault(block.EntityId, ""));
+				search_waypoint_tb.Setter = (block, input) => MyJumpGateControllerTerminal.ControllerSearchInputs[block.EntityId] = input.ToString();
+				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(search_waypoint_tb);
+			}
+
 			// Listbox [Destinations]
 			{
 				IMyTerminalControlListbox choose_waypoint_lb = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlListbox, IMyUpgradeModule>(MODID_PREFIX + "ControllerWaypoint");
@@ -170,7 +188,6 @@ namespace IOTA.ModularJumpGates.Terminal
 					MyJumpGateWaypoint selected_waypoint = controller.BlockSettings.SelectedWaypoint();
 					Vector3D jump_node = jump_gate.WorldJumpNode;
 					MyWaypointType last_waypoint_type = MyWaypointType.NONE;
-					int cutoff = 15;
 
 					if (selected_waypoint != null)
 					{
@@ -180,35 +197,11 @@ namespace IOTA.ModularJumpGates.Terminal
 
 						if (endpoint != null)
 						{
-							double distance = Vector3D.Distance(jump_node, endpoint.Value);
-
-							if (selected_waypoint.WaypointType == MyWaypointType.JUMP_GATE && destination_jump_gate != null && (MyNetworkInterface.IsStandaloneMultiplayerClient || destination_jump_gate.IsComplete()))
-							{
-								string grid_name = destination_jump_gate.JumpGateGrid?.PrimaryCubeGridCustomName ?? "N/A";
-								string grid_name_cut = (grid_name.Length > cutoff) ? $"{grid_name.Substring(0, cutoff - 3)}..." : grid_name;
-								string gate_name = destination_jump_gate.GetPrintableName();
-								string gate_name_cut = (gate_name.Length > cutoff) ? $"{gate_name.Substring(0, cutoff - 3)}..." : gate_name;
-								string item_name = $"{grid_name} - {gate_name}: (Jump Gate {MyJumpGateModSession.AutoconvertMetricUnits(distance, "m", 2)} away)";
-								string item_name_cut = $"{grid_name_cut} - {gate_name_cut}: (Jump Gate {MyJumpGateModSession.AutoconvertMetricUnits(distance, "m", 2)} away)";
-								item = new MyTerminalControlListBoxItem(MyStringId.GetOrCompute(item_name_cut), MyStringId.GetOrCompute(item_name), selected_waypoint);
-								preselect_list.Add(item);
-								content_list.Add(item);
-							}
-							else if (selected_waypoint.WaypointType == MyWaypointType.GPS)
-							{
-								MyGpsWrapper gps = selected_waypoint.GPS;
-								string item_name = $"{gps.Name} (GPS {MyJumpGateModSession.AutoconvertMetricUnits(distance, "m", 2)} away)";
-								item = new MyTerminalControlListBoxItem(MyStringId.GetOrCompute(item_name), MyStringId.GetOrCompute(item_name), selected_waypoint);
-								preselect_list.Add(item);
-								content_list.Add(item);
-							}
-							else if (selected_waypoint.WaypointType == MyWaypointType.BEACON)
-							{
-								string item_name = $"{selected_waypoint.Beacon.BroadcastName} (GPS {MyJumpGateModSession.AutoconvertMetricUnits(distance, "m", 2)} away)";
-								item = new MyTerminalControlListBoxItem(MyStringId.GetOrCompute(item_name), MyStringId.GetOrCompute(item_name), selected_waypoint);
-								preselect_list.Add(item);
-								content_list.Add(item);
-							}
+							string name, tooltip;
+							selected_waypoint.GetNameAndTooltip(ref jump_node, out name, out tooltip);
+							item = new MyTerminalControlListBoxItem(MyStringId.GetOrCompute(name), MyStringId.GetOrCompute(tooltip), selected_waypoint);
+							preselect_list.Add(item);
+							content_list.Add(item);
 						}
 
 					}
@@ -220,7 +213,8 @@ namespace IOTA.ModularJumpGates.Terminal
 						MyTerminalControlListBoxItem item;
 						MyJumpGate destination_jump_gate;
 						Vector3D? endpoint = waypoint.GetEndpoint(out destination_jump_gate);
-						if (endpoint == null) continue;
+						string name, tooltip;
+						if (endpoint == null || !MyJumpGateControllerTerminal.DoesWaypointMatchSearch(controller, waypoint, jump_node, out name, out tooltip) || name == null || tooltip == null) continue;
 						double distance = Vector3D.Distance(jump_node, endpoint.Value);
 						if (distance < jump_gate.JumpGateConfiguration.MinimumJumpDistance || distance > jump_gate.JumpGateConfiguration.MaximumJumpDistance) continue;
 
@@ -256,34 +250,10 @@ namespace IOTA.ModularJumpGates.Terminal
 									break;
 							}
 						}
-						
-						if (waypoint.WaypointType == MyWaypointType.JUMP_GATE && destination_jump_gate != null && (MyNetworkInterface.IsStandaloneMultiplayerClient || destination_jump_gate.IsComplete()))
-						{
-							string grid_name = destination_jump_gate.JumpGateGrid?.PrimaryCubeGridCustomName ?? "N/A";
-							string grid_name_cut = (grid_name.Length > cutoff) ? $"{grid_name.Substring(0, cutoff - 3)}..." : grid_name;
-							string gate_name = destination_jump_gate.GetPrintableName();
-							string gate_name_cut = (gate_name.Length > cutoff) ? $"{gate_name.Substring(0, cutoff - 3)}..." : gate_name;
-							string item_name = $"{grid_name} - {gate_name}: (Jump Gate {MyJumpGateModSession.AutoconvertMetricUnits(distance, "m", 2)} away)";
-							string item_name_cut = $"{grid_name_cut} - {gate_name_cut}: (Jump Gate {MyJumpGateModSession.AutoconvertMetricUnits(distance, "m", 2)} away)";
-							item = new MyTerminalControlListBoxItem(MyStringId.GetOrCompute(item_name_cut), MyStringId.GetOrCompute(item_name), waypoint);
-							if (selected_waypoint == waypoint) preselect_list.Add(item);
-							content_list.Add(item);
-						}
-						else if (waypoint.WaypointType == MyWaypointType.GPS)
-						{
-							MyGpsWrapper gps = waypoint.GPS;
-							string item_name = $"{gps.Name} (GPS {MyJumpGateModSession.AutoconvertMetricUnits(distance, "m", 2)} away)";
-							item = new MyTerminalControlListBoxItem(MyStringId.GetOrCompute(item_name), MyStringId.GetOrCompute(item_name), waypoint);
-							if (selected_waypoint == waypoint) preselect_list.Add(item);
-							content_list.Add(item);
-						}
-						else if (waypoint.WaypointType == MyWaypointType.BEACON)
-						{
-							string item_name = $"{waypoint.Beacon.BroadcastName} (Beacon {MyJumpGateModSession.AutoconvertMetricUnits(distance, "m", 2)} away)";
-							item = new MyTerminalControlListBoxItem(MyStringId.GetOrCompute(item_name), MyStringId.GetOrCompute(item_name), waypoint);
-							if (selected_waypoint == waypoint) preselect_list.Add(item);
-							content_list.Add(item);
-						}
+
+						item = new MyTerminalControlListBoxItem(MyStringId.GetOrCompute(name), MyStringId.GetOrCompute(tooltip), waypoint);
+						if (selected_waypoint == waypoint) preselect_list.Add(item);
+						content_list.Add(item);
 					}
 
 					MyJumpGateControllerTerminal.TEMP_Waypoints.Clear();
@@ -2041,6 +2011,94 @@ namespace IOTA.ModularJumpGates.Terminal
 			MyJumpGateControllerTerminal.SetupJumpGateControllerTerminalActions();
 			MyJumpGateControllerTerminal.SetupJumpGateControllerTerminalProperties();
 			MyPBJumpGateController.SetupBlockTerminal();
+		}
+
+		public static void ResetSearchInputs()
+		{
+			MyJumpGateControllerTerminal.ControllerSearchInputs.Clear();
+		}
+
+		public static bool DoesWaypointMatchSearch(MyJumpGateController controller, MyJumpGateWaypoint waypoint, Vector3D this_pos, out string name, out string tooltip)
+		{
+			name = null;
+			tooltip = null;
+			if (controller == null || waypoint == null) return false;
+			string input = MyJumpGateControllerTerminal.ControllerSearchInputs.GetValueOrDefault(controller.BlockID, null);
+			waypoint.GetNameAndTooltip(ref this_pos, out name, out tooltip);
+			Vector3D? null_point;
+			MyJumpGate destination_jump_gate;
+			if (input == null || input.Length == 0) return true;
+			else if ((null_point = waypoint.GetEndpoint(out destination_jump_gate)) == null) return false;
+			double distance = Vector3D.Distance(this_pos, null_point.Value);
+			bool matched = true;
+			
+			foreach (string filter in input.ToLowerInvariant().Split(new char[] { ';' }))
+			{
+				if (filter.StartsWith("#"))
+				{
+					string[] parts = filter.Split(new char[] { '=' }, 2);
+					if (parts.Length < 2) matched = matched && true;
+					else
+					{
+						switch (parts[0])
+						{
+							case "#type":
+							{
+								MyWaypointType waypoint_type;
+								matched = matched && Enum.TryParse<MyWaypointType>(parts[1], true, out waypoint_type) && waypoint.WaypointType == waypoint_type;
+								break;
+							}
+							case "#distance":
+							{
+								string[] ranges = parts[1].Split(new string[] { ".." }, StringSplitOptions.None);
+								Logger.Log(string.Join(" / ", ranges));
+								if (ranges.Length == 0) continue;
+								else if (ranges.Length == 1)
+								{
+									double range;
+									matched = matched && double.TryParse(ranges[0], out range) && Math.Abs(range - distance) <= 1;
+								}
+								else if (ranges.Length >= 2 && ranges[0].Length == 0)
+								{
+									double range;
+									matched = matched && double.TryParse(ranges[ranges.Length - 1], out range) && distance <= range;
+								}
+								else if (ranges.Length >= 2 && ranges[ranges.Length - 1].Length == 0)
+								{
+									double range;
+									matched = matched && double.TryParse(ranges[0], out range) && distance >= range;
+								}
+								else if (ranges.Length >= 2)
+								{
+									double min_range, max_range;
+									matched = matched && double.TryParse(ranges[0], out min_range) && double.TryParse(ranges[ranges.Length - 1], out max_range) && min_range <= distance && distance <= max_range;
+								}
+
+								break;
+							}
+							case "#jumpgate":
+							case "#gate":
+							{
+								long gateid;
+								matched = matched && waypoint.WaypointType == MyWaypointType.JUMP_GATE && long.TryParse(parts[1], out gateid) && JumpGateUUID.FromGuid(waypoint.JumpGate).GetJumpGate() == gateid;
+								break;
+							}
+							case "#gridname":
+							{
+								string gridname = null;
+								if (waypoint.WaypointType == MyWaypointType.JUMP_GATE) gridname = destination_jump_gate?.JumpGateGrid?.PrimaryCubeGridCustomName;
+								else if (waypoint.WaypointType == MyWaypointType.BEACON) gridname = waypoint.Beacon.CubeGridCustomName;
+								else matched = false;
+								matched = matched && gridname != null && gridname.ToLowerInvariant().Contains(parts[1]);
+								break;
+							}
+						}
+					}
+				}
+				else matched = matched && name.ToLowerInvariant().Contains(filter);
+			}
+
+			return matched;
 		}
 	}
 }

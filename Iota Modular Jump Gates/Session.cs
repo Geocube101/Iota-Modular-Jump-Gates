@@ -1,6 +1,7 @@
 ﻿using IOTA.ModularJumpGates.API;
 using IOTA.ModularJumpGates.CubeBlock;
 using IOTA.ModularJumpGates.ISC;
+using IOTA.ModularJumpGates.Terminal;
 using IOTA.ModularJumpGates.Util;
 using IOTA.ModularJumpGates.Util.ConcurrentCollections;
 using Sandbox.ModAPI;
@@ -698,13 +699,14 @@ namespace IOTA.ModularJumpGates
 				}
 
 				// Redraw Terminal Controls
-				if ((MyNetworkInterface.IsSingleplayer || MyNetworkInterface.IsMultiplayerClient) && (MyJumpGateModSession.GameTick % 60 == 0 || this.__RedrawAllTerminalControls))
+				if (MyNetworkInterface.IsClientLike && (MyJumpGateModSession.GameTick % 60 == 0 || this.__RedrawAllTerminalControls))
 				{
 					MyAPIGateway.TerminalControls.GetControls<IMyUpgradeModule>(out this.TEMP_ControlsList);
 					foreach (IMyTerminalControl control in this.TEMP_ControlsList) control.UpdateVisual();
 					this.TEMP_ControlsList.Clear();
 					this.__RedrawAllTerminalControls = false;
 				}
+				if (MyAPIGateway.Gui.GetCurrentScreen != MyTerminalPageEnum.ControlPanel) MyJumpGateControllerTerminal.ResetSearchInputs();
 
 				// Update grid non-threadable
 				foreach (KeyValuePair<long, MyJumpGateConstruct> pair in this.GridMap)

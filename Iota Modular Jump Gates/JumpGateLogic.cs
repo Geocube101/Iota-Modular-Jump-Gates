@@ -287,6 +287,27 @@ namespace IOTA.ModularJumpGates
 			}
 			#endregion
 		}
+
+		[ProtoContract]
+		private sealed class JumpGateDebugPayload
+		{
+			[ProtoMember(1)]
+			public Guid JumpGateUUID;
+			[ProtoMember(2)]
+			public byte DebugType;
+			[ProtoMember(3)]
+			private string F_MetaData;
+
+			public void SetMetaData<T>(T data)
+			{
+				this.F_MetaData = Convert.ToBase64String(MyAPIGateway.Utilities.SerializeToBinary<T>(data));
+			}
+
+			public T GetMetaData<T>()
+			{
+				return MyAPIGateway.Utilities.SerializeFromBinary<T>(Convert.FromBase64String(this.F_MetaData));
+			}
+		}
 		#endregion
 
 		#region Private Variables
@@ -862,6 +883,7 @@ namespace IOTA.ModularJumpGates
 					MyJumpGateModSession.Network.On(MyPacketTypeEnum.UPDATE_JUMP_GATE, this.OnNetworkJumpGateUpdate);
 					MyJumpGateModSession.Network.On(MyPacketTypeEnum.AUTOACTIVATE, this.OnNetworkAutoActivationAlert);
 					MyJumpGateModSession.Network.On(MyPacketTypeEnum.SHEARWARNING, this.OnNetworkShearBlockAlert);
+					MyJumpGateModSession.Network.On(MyPacketTypeEnum.GATE_DEBUG, this.OnGateDebug);
 				}
 			}
 			else this.Dispose();
@@ -887,6 +909,7 @@ namespace IOTA.ModularJumpGates
 					MyJumpGateModSession.Network.On(MyPacketTypeEnum.UPDATE_JUMP_GATE, this.OnNetworkJumpGateUpdate);
 					MyJumpGateModSession.Network.On(MyPacketTypeEnum.AUTOACTIVATE, this.OnNetworkAutoActivationAlert);
 					MyJumpGateModSession.Network.On(MyPacketTypeEnum.SHEARWARNING, this.OnNetworkShearBlockAlert);
+					MyJumpGateModSession.Network.On(MyPacketTypeEnum.GATE_DEBUG, this.OnGateDebug);
 				}
 			}
 			else this.Dispose();
@@ -1032,6 +1055,36 @@ namespace IOTA.ModularJumpGates
 		}
 
 		/// <summary>
+		/// Callback triggered when this object receives a gate debug event from clients
+		/// </summary>
+		/// <param name="packet"></param>
+		private void OnGateDebug(MyNetworkInterface.Packet packet)
+		{
+			if (packet == null || packet.PhaseFrame != 1 || !MyNetworkInterface.IsMultiplayerServer) return;
+			JumpGateDebugPayload payload = packet.Payload<JumpGateDebugPayload>();
+			if (payload == null || payload.JumpGateUUID != JumpGateUUID.FromJumpGate(this).ToGuid()) return;
+
+			switch (payload.DebugType)
+			{
+				case 0:
+					this.SetColliderDirty();
+					break;
+				case 1:
+				{
+					KeyValuePair<MyJumpGateController.MyControllerBlockSettingsStruct, double> arguments = payload.GetMetaData<KeyValuePair<MyJumpGateController.MyControllerBlockSettingsStruct, double>>();
+					this.JumpToVoid(arguments.Key, arguments.Value);
+					break;
+				}
+				case 2:
+				{
+					KeyValuePair<MyJumpGateController.MyControllerBlockSettingsStruct, List<MyPrefabInfo>> arguments = payload.GetMetaData<KeyValuePair<MyJumpGateController.MyControllerBlockSettingsStruct, List<MyPrefabInfo>>>();
+					this.JumpFromVoid(arguments.Key, arguments.Value, null);
+					break;
+				}
+			}
+		}
+
+		/// <summary>
 		/// If server: Transmits this jump gate to all clients
 		/// </summary>
 		private void SendNetworkJumpGateUpdate()
@@ -1100,7 +1153,7 @@ namespace IOTA.ModularJumpGates
 			Vector3D jump_node = this.WorldJumpNode;
 			Guid this_id = JumpGateUUID.FromJumpGate(this).ToGuid();
 			BoundingEllipsoidD jump_ellipse = this.JumpEllipse;
-
+			
 			Action<MyJumpFailReason, bool, string> SendJumpResponse = (reason, result_status, override_message) => {
 				this.Status = MyJumpGateStatus.SWITCHING;
 				this.Phase = MyJumpGatePhase.RESETING;
@@ -1270,8 +1323,7 @@ namespace IOTA.ModularJumpGates
 				// If server, broadcast jump start
 				if (MyNetworkInterface.IsMultiplayerServer)
 				{
-					MyNetworkInterface.Packet packet = new MyNetworkInterface.Packet
-					{
+					MyNetworkInterface.Packet packet = new MyNetworkInterface.Packet {
 						PacketType = MyPacketTypeEnum.JUMP_GATE_JUMP,
 						TargetID = 0,
 						Broadcast = true,
@@ -1993,7 +2045,8 @@ namespace IOTA.ModularJumpGates
 					this.TrueEndpoint = null;
 					this.EntityBatches.Clear();
 					if (this.ServerJumpResponse != null && this.ServerJumpResponse.Type == JumpGateInfo.TypeEnum.CLOSED) this.Dispose();
-					else if (!this.Closed && !this.MarkClosed) this.Reset();
+					else if (!this.Closed) this.Reset();
+					if (!target_gate.Closed) target_gate.Reset();
 					this.ServerJumpResponse = null;
 					this.OnNetworkJumpResponse = null;
 					this.OnNetworkUpdateJumpEndpoint = null;
@@ -2251,6 +2304,7 @@ namespace IOTA.ModularJumpGates
 				MyJumpGateModSession.Network.Off(MyPacketTypeEnum.UPDATE_JUMP_GATE, this.OnNetworkJumpGateUpdate);
 				MyJumpGateModSession.Network.Off(MyPacketTypeEnum.AUTOACTIVATE, this.OnNetworkAutoActivationAlert);
 				MyJumpGateModSession.Network.Off(MyPacketTypeEnum.SHEARWARNING, this.OnNetworkShearBlockAlert);
+				MyJumpGateModSession.Network.Off(MyPacketTypeEnum.GATE_DEBUG, this.OnGateDebug);
 			}
 		}
 
@@ -3203,6 +3257,8 @@ namespace IOTA.ModularJumpGates
 					
 					if (total_mass == 0 || this.JumpSpaceEntities.Count == 0 || !check_pass)
 					{
+						this.AutoActivateStartTime = null;
+
 						if (MyJumpGateModSession.Network.Registered && this.AutoActivateStartTime != null)
 						{
 							MyNetworkInterface.Packet packet = new MyNetworkInterface.Packet {
@@ -3214,8 +3270,6 @@ namespace IOTA.ModularJumpGates
 							packet.Payload(new KeyValuePair<Guid, DateTime?>(JumpGateUUID.FromJumpGate(this).ToGuid(), this.AutoActivateStartTime));
 							packet.Send();
 						}
-
-						this.AutoActivateStartTime = null;
 					}
 					else if (this.AutoActivateStartTime == null && activation_delay == 0) this.JumpWrapper(this.Controller.BlockSettings, null, null, MyJumpTypeEnum.STANDARD);
 					else if (this.AutoActivateStartTime == null)
@@ -3236,7 +3290,22 @@ namespace IOTA.ModularJumpGates
 					}
 					else if (this.AutoActivateStartTime != null && (now - this.AutoActivateStartTime.Value).TotalSeconds >= activation_delay) this.JumpWrapper(this.Controller.BlockSettings, null, null, MyJumpTypeEnum.STANDARD);
 				}
-				else if (MyNetworkInterface.IsServerLike && this.AutoActivateStartTime != null) this.AutoActivateStartTime = null;
+				else if (MyNetworkInterface.IsServerLike && this.AutoActivateStartTime != null)
+				{
+					this.AutoActivateStartTime = null;
+
+					if (MyJumpGateModSession.Network.Registered)
+					{
+						MyNetworkInterface.Packet packet = new MyNetworkInterface.Packet {
+							PacketType = MyPacketTypeEnum.AUTOACTIVATE,
+							TargetID = 0,
+							Broadcast = true,
+						};
+
+						packet.Payload(new KeyValuePair<Guid, DateTime?>(JumpGateUUID.FromJumpGate(this).ToGuid(), this.AutoActivateStartTime));
+						packet.Send();
+					}
+				}
 
 				// Check lenient jump blocks
 				if (this.Controller != null && !MyJumpGateModSession.Configuration.GeneralConfiguration.LenientJumps && MyJumpGateModSession.GameTick % 60 == 0)
@@ -3311,6 +3380,21 @@ namespace IOTA.ModularJumpGates
 		/// </summary>
 		public void SetColliderDirty()
 		{
+			if (MyNetworkInterface.IsStandaloneMultiplayerClient)
+			{
+				MyNetworkInterface.Packet packet = new MyNetworkInterface.Packet {
+					PacketType = MyPacketTypeEnum.GATE_DEBUG,
+					TargetID = 0,
+					Broadcast = false,
+				};
+				packet.Payload(new JumpGateDebugPayload {
+					DebugType = 0,
+					JumpGateUUID = JumpGateUUID.FromJumpGate(this).ToGuid(),
+				});
+				packet.Send();
+				return;
+			}
+
 			this.ForceUpdateCollider = !this.Closed;
 		}
 
@@ -3618,8 +3702,12 @@ namespace IOTA.ModularJumpGates
 					return true;
 				}
 
-				this.JumpSpaceEntities.Clear();
-				if (MyNetworkInterface.IsStandaloneMultiplayerClient && jump_gate.JumpSpaceEntities != null) foreach (KeyValuePair<long, float> pair in jump_gate.JumpSpaceEntities) this.JumpSpaceEntities.TryAdd(pair.Key, pair.Value);
+				if (MyNetworkInterface.IsStandaloneMultiplayerClient)
+				{
+					this.JumpSpaceEntities.Clear();
+					if (jump_gate.JumpSpaceEntities != null) foreach (KeyValuePair<long, float> pair in jump_gate.JumpSpaceEntities) this.JumpSpaceEntities[pair.Key] = pair.Value;
+				}
+
 				this.UpdateDriveIntersectNodes(jump_gate.IntersectNodes);
 				this.Controller = (jump_gate.Controller == Guid.Empty) ? null : this.JumpGateGrid.GetController(JumpGateUUID.FromGuid(jump_gate.Controller).GetBlock());
 				this.ServerAntenna = (jump_gate.ServerAntenna == Guid.Empty) ? null : this.JumpGateGrid.GetServerAntenna(JumpGateUUID.FromGuid(jump_gate.ServerAntenna).GetBlock());

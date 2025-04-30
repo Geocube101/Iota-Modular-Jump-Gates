@@ -23,6 +23,8 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 		public override long UniqueSelectionId => 0x7FFFFFFFFFFFFFFB;
 		public override MyStringId EventDisplayName => MyStringId.GetOrCompute("Jump Gate Entity Mass Changed");
 		public override string ComponentTypeDebugString => nameof(JumpGateEntityMassChangedEvent);
+		public override string YesNoToolbarYesDescription => $"Total Entity Mass {((this.EventController.IsLowerOrEqualCondition) ? "<=" : ">=")} {MyJumpGateModSession.AutoconvertMetricUnits(this.TargetValue * 1e3, "g", 2)}";
+		public override string YesNoToolbarNoDescription => $"Total Entity mass {((this.EventController.IsLowerOrEqualCondition) ? ">=" : "<=")} {MyJumpGateModSession.AutoconvertMetricUnits(this.TargetValue * 1e3, "g", 2)}";
 
 		protected override void CheckValueAgainstTarget(double new_value, double old_value, double target)
 		{

@@ -653,14 +653,16 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		public class MyAPIBeaconLinkWrapper : IEquatable<MyAPIBeaconLinkWrapper>
 		{
 			#region Private Variables
-			[ProtoMember(1, IsRequired = true, Name = "F_BeaconPosition")]
+			[ProtoMember(1, IsRequired = true)]
 			private Vector3D _BeaconPosition;
-			[ProtoMember(2, IsRequired = true, Name = "F_BroadcastName")]
+			[ProtoMember(2, IsRequired = true)]
 			private string _BroadcastName;
+			[ProtoMember(3, IsRequired = true)]
+			private string _CubeGridName;
 			#endregion
 
 			#region Public Variables
-			[ProtoMember(3, IsRequired = true)]
+			[ProtoMember(4, IsRequired = true)]
 			public long BeaconID { get; private set; }
 
 			[ProtoIgnore]
@@ -689,6 +691,16 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 				{
 					if (this.Beacon != null) this._BroadcastName = (this.Beacon.HudText == null || this.Beacon.HudText.Length == 0) ? this.Beacon.CustomName : this.Beacon.HudText;
 					return this._BroadcastName;
+				}
+			}
+
+			[ProtoIgnore]
+			public string CubeGridCustomName
+			{
+				get
+				{
+					if (this.Beacon != null) this._CubeGridName = this.Beacon.CubeGrid?.CustomName;
+					return this._CubeGridName;
 				}
 			}
 			#endregion
@@ -727,6 +739,7 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 			{
 				this._BeaconPosition = beacon.WorldMatrix.Translation;
 				this._BroadcastName = (beacon.HudText == null || beacon.HudText.Length == 0) ? beacon.CustomName : beacon.HudText;
+				this._CubeGridName = beacon.CubeGrid?.CustomName;
 				this.BeaconID = beacon.EntityId;
 			}
 			#endregion

@@ -16,6 +16,8 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 		public override long UniqueSelectionId => 0x7FFFFFFFFFFFFFF3;
 		public override MyStringId EventDisplayName => MyStringId.GetOrCompute("Jump Gate Controller Attached");
 		public override string ComponentTypeDebugString => nameof(JumpGateControllerChangedEvent);
+		public override string YesNoToolbarYesDescription => "Controller Attached";
+		public override string YesNoToolbarNoDescription => "Controller Detached";
 
 		protected override void CheckValueAgainstTarget(long new_value, long old_value, long target)
 		{

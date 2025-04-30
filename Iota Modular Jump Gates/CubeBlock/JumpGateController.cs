@@ -1,4 +1,5 @@
-﻿using IOTA.ModularJumpGates.Util;
+﻿using IOTA.ModularJumpGates.Terminal;
+using IOTA.ModularJumpGates.Util;
 using ProtoBuf;
 using Sandbox.Common.ObjectBuilders;
 using Sandbox.Game.Components;
@@ -115,8 +116,10 @@ namespace IOTA.ModularJumpGates.CubeBlock
 					this.JumpSpaceRadius_V = (double) mapping.GetValueOrDefault("JumpSpaceRadius", this.JumpSpaceRadius_V);
 					this.JumpSpaceDepthPercent_V = (double) mapping.GetValueOrDefault("JumpSpaceDepthPercent", this.JumpSpaceDepthPercent_V);
 					this.JumpEffectName_V = (string) mapping.GetValueOrDefault("JumpEffectName", this.JumpEffectName_V);
+					string name = (string) mapping.GetValueOrDefault("JumpGateName", this.JumpGateName_V);
 					this.VectorNormal_V = (Vector3D) mapping.GetValueOrDefault("VectorNormal", this.VectorNormal_V);
 					this.EffectColorShift_V = (Color) mapping.GetValueOrDefault("EffectColorShift", this.EffectColorShift_V);
+					this.JumpGateName_V = (name != null && (name.StartsWith("#") || name.Contains(';'))) ? this.JumpGateName_V : name;
 
 					{
 						object selected_waypoint = mapping.GetValueOrDefault("SelectedWaypoint", null);
@@ -301,6 +304,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			}
 			public void JumpGateName(string name)
 			{
+				if (name != null && (name.StartsWith("#") || name.Contains(';'))) return;
 				lock (this.WriterLock) this.JumpGateName_V = ((name?.Length ?? 0) == 0) ? null : name;
 			}
 			public void VectorNormalOverride(Vector3D? vector)
@@ -682,6 +686,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 
 				sb.Append($"\n[color=#FF78FFFB]--- Construct Info ---[/color][color=#FF5ABFBC]\n");
 				sb.Append($" - Main Grid: {(this_grid?.CubeGridID.ToString() ?? "N/A")}\n");
+				sb.Append($" - Main Grid Name: {(this_grid?.PrimaryCubeGridCustomName ?? "N/A")}\n");
 				sb.Append($" - Static Grids: {((this_grid == null) ? "N/A" : $"{this.TEMP_DetailedInfoConstructsList.Count((grid) => grid.IsStatic)}")}/{this.TEMP_DetailedInfoConstructsList.Count}\n");
 				sb.Append($" - Total Grid Drives: {(this_grid?.GetAttachedJumpGateDrives().Count().ToString() ?? "N/A")}\n");
 				sb.Append($" - Total Grid Gates: {(this_grid?.GetJumpGates().Count().ToString() ?? "N/A")}[/color]\n");
@@ -835,7 +840,8 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		public override void UpdateAfterSimulation()
 		{
 			base.UpdateAfterSimulation();
-			
+			if (MyJumpGateModSession.Instance.AllFirstTickComplete() && !MyJumpGateControllerTerminal.IsLoaded) MyJumpGateControllerTerminal.Load(this.ModContext);
+
 			bool working;
 			if (this.TerminalBlock?.CubeGrid?.Physics == null || this.TerminalBlock.MarkedForClose) return;
 			else if (working = this.IsWorking()) this.TerminalBlock.SetEmissiveParts("Emissive0", Color.Green, 1);

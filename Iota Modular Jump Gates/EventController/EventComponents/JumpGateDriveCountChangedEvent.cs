@@ -22,6 +22,8 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 		public override long UniqueSelectionId => 0x7FFFFFFFFFFFFFF4;
 		public override MyStringId EventDisplayName => MyStringId.GetOrCompute("Jump Gate Drive Count Changed");
 		public override string ComponentTypeDebugString => nameof(JumpGateDriveCountChangedEvent);
+		public override string YesNoToolbarYesDescription => $"Number of Drives {((this.EventController.IsLowerOrEqualCondition) ? "<=" : ">=")} {MyJumpGateModSession.AutoconvertSciNotUnits(this.TargetValue, 0)}";
+		public override string YesNoToolbarNoDescription => $"Number of Drives {((this.EventController.IsLowerOrEqualCondition) ? ">=" : "<=")} {MyJumpGateModSession.AutoconvertSciNotUnits(this.TargetValue, 0)}";
 
 		protected override void CheckValueAgainstTarget(int new_value, int old_value, int target)
 		{

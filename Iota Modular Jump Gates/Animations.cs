@@ -4573,61 +4573,66 @@ namespace IOTA.ModularJumpGates
 
 			List<MyJumpGateDrive> anti_drives = null;
 
-			if (this.GateJumpType == MyJumpTypeEnum.INBOUND_VOID)
+			try
 			{
-				anti_drives = drives;
-				drives = null;
+				if (this.GateJumpType == MyJumpTypeEnum.INBOUND_VOID)
+				{
+					anti_drives = drives;
+					drives = null;
+				}
+				else if (this.TargetGate != null && !this.TargetGate.Closed && !(this.TargetGate.JumpGateGrid?.Closed ?? true))
+				{
+					this.TEMP_JumpGateAntiDrives.AddRange(this.TargetGate.GetJumpGateDrives());
+					anti_drives = this.TEMP_JumpGateAntiDrives;
+				}
+
+				Vector3D jump_node, endpoint, anti_node, target_world_jump_node;
+
+				if (this.GateJumpType == MyJumpTypeEnum.INBOUND_VOID)
+				{
+					Vector3D? _startpoint = this.JumpGate.TrueEndpoint;
+					if (_startpoint == null) return;
+					endpoint = this.JumpGate.WorldJumpNode;
+					anti_node = endpoint;
+					jump_node = _startpoint.Value;
+					target_world_jump_node = jump_node;
+				}
+				else
+				{
+					jump_node = this.JumpGate.WorldJumpNode;
+					Vector3D? _endpoint = this.JumpGate.TrueEndpoint;
+					if (_endpoint == null) return;
+					endpoint = _endpoint.Value;
+					anti_node = endpoint;
+					target_world_jump_node = jump_node;
+
+					if (!MyNetworkInterface.IsDedicatedMultiplayerServer && this.ControllerSettings.HasVectorNormalOverride() && Vector3D.Distance(MyAPIGateway.Session.Camera.Position, this.JumpGate.WorldJumpNode) <= this.JumpGate.JumpGateConfiguration.MinimumJumpDistance) endpoint = jump_node + this.JumpGate.GetWorldMatrix(true, true).Forward * Vector3D.Distance(jump_node, endpoint);
+					if (!MyNetworkInterface.IsDedicatedMultiplayerServer && this.TargetControllerSettings != null && this.TargetGate != null && this.TargetControllerSettings.HasVectorNormalOverride() && Vector3D.Distance(MyAPIGateway.Session.Camera.Position, this.TargetGate.WorldJumpNode) <= this.JumpGate.JumpGateConfiguration.MinimumJumpDistance) target_world_jump_node = endpoint + this.TargetGate.GetWorldMatrix(false, true).Forward * Vector3D.Distance(endpoint, target_world_jump_node);
+				}
+
+				switch (this.ActiveAnimationIndex)
+				{
+					case 0:
+						if (this.GateJumpingAnimation == null) this.GateJumpingAnimation = (this.GateJumpingAnimationDef == null) ? null : new MyJumpGateJumpingAnimation(this.GateJumpingAnimationDef, this.JumpGate, this.TargetGate, this.ControllerSettings, ref endpoint, ref anti_node, this.GateJumpType);
+						this.GateJumpingAnimation?.Tick(ref endpoint, ref anti_node, ref target_world_jump_node, drives, anti_drives, this.TEMP_JumpGateEntitiesL);
+						break;
+					case 1:
+						if (this.GateJumpedAnimation == null) this.GateJumpedAnimation = (this.GateJumpedAnimationDef == null) ? null : new MyJumpGateJumpedAnimation(this.GateJumpedAnimationDef, this.JumpGate, this.TargetGate, this.ControllerSettings, ref endpoint, ref anti_node, this.GateJumpType);
+						this.GateJumpedAnimation?.Tick(ref endpoint, ref anti_node, ref target_world_jump_node, drives, anti_drives, this.TEMP_JumpGateEntitiesL);
+						break;
+					case 2:
+						if (this.GateFailedAnimation == null) this.GateFailedAnimation = (this.GateFailedAnimationDef == null) ? null : new MyJumpGateFailedAnimation(this.GateFailedAnimationDef, this.JumpGate, this.TargetGate, this.ControllerSettings, ref endpoint, ref anti_node, this.GateJumpType);
+						this.GateFailedAnimation?.Tick(ref endpoint, ref anti_node, ref target_world_jump_node, drives, anti_drives, this.TEMP_JumpGateEntitiesL);
+						break;
+				}
 			}
-			else if (this.TargetGate != null && !this.TargetGate.Closed && !(this.TargetGate.JumpGateGrid?.Closed ?? true))
+			finally
 			{
-				this.TEMP_JumpGateAntiDrives.AddRange(this.TargetGate.GetJumpGateDrives());
-				anti_drives = this.TEMP_JumpGateAntiDrives;
+				this.TEMP_JumpGateDrives.Clear();
+				this.TEMP_JumpGateAntiDrives.Clear();
+				this.TEMP_JumpGateEntitiesL.Clear();
+				this.TEMP_JumpGateEntities.Clear();
 			}
-
-			Vector3D jump_node, endpoint, anti_node, target_world_jump_node;
-
-			if (this.GateJumpType == MyJumpTypeEnum.INBOUND_VOID)
-			{
-				Vector3D? _startpoint = this.JumpGate.TrueEndpoint;
-				if (_startpoint == null) return;
-				endpoint = this.JumpGate.WorldJumpNode;
-				anti_node = endpoint;
-				jump_node = _startpoint.Value;
-				target_world_jump_node = jump_node;
-			}
-			else
-			{
-				jump_node = this.JumpGate.WorldJumpNode;
-				Vector3D? _endpoint = this.JumpGate.TrueEndpoint;
-				if (_endpoint == null) return;
-				endpoint = _endpoint.Value;
-				anti_node = endpoint;
-				target_world_jump_node = jump_node;
-
-				if (!MyNetworkInterface.IsDedicatedMultiplayerServer && this.ControllerSettings.HasVectorNormalOverride() && Vector3D.Distance(MyAPIGateway.Session.Camera.Position, this.JumpGate.WorldJumpNode) <= this.JumpGate.JumpGateConfiguration.MinimumJumpDistance) endpoint = jump_node + this.JumpGate.GetWorldMatrix(true, true).Forward * Vector3D.Distance(jump_node, endpoint);
-				if (!MyNetworkInterface.IsDedicatedMultiplayerServer && this.TargetControllerSettings != null && this.TargetGate != null && this.TargetControllerSettings.HasVectorNormalOverride() && Vector3D.Distance(MyAPIGateway.Session.Camera.Position, this.TargetGate.WorldJumpNode) <= this.JumpGate.JumpGateConfiguration.MinimumJumpDistance) target_world_jump_node = endpoint + this.TargetGate.GetWorldMatrix(false, true).Forward * Vector3D.Distance(endpoint, target_world_jump_node);
-			}
-
-			switch (this.ActiveAnimationIndex)
-			{
-				case 0:
-					if (this.GateJumpingAnimation == null) this.GateJumpingAnimation = (this.GateJumpingAnimationDef == null) ? null : new MyJumpGateJumpingAnimation(this.GateJumpingAnimationDef, this.JumpGate, this.TargetGate, this.ControllerSettings, ref endpoint, ref anti_node, this.GateJumpType);
-					this.GateJumpingAnimation?.Tick(ref endpoint, ref anti_node, ref target_world_jump_node, drives, anti_drives, this.TEMP_JumpGateEntitiesL);
-					break;
-				case 1:
-					if (this.GateJumpedAnimation == null) this.GateJumpedAnimation = (this.GateJumpedAnimationDef == null) ? null : new MyJumpGateJumpedAnimation(this.GateJumpedAnimationDef, this.JumpGate, this.TargetGate, this.ControllerSettings, ref endpoint, ref anti_node, this.GateJumpType);
-					this.GateJumpedAnimation?.Tick(ref endpoint, ref anti_node, ref target_world_jump_node, drives, anti_drives, this.TEMP_JumpGateEntitiesL);
-					break;
-				case 2:
-					if (this.GateFailedAnimation == null) this.GateFailedAnimation = (this.GateFailedAnimationDef == null) ? null : new MyJumpGateFailedAnimation(this.GateFailedAnimationDef, this.JumpGate, this.TargetGate, this.ControllerSettings, ref endpoint, ref anti_node, this.GateJumpType);
-					this.GateFailedAnimation?.Tick(ref endpoint, ref anti_node, ref target_world_jump_node, drives, anti_drives, this.TEMP_JumpGateEntitiesL);
-					break;
-			}
-
-			this.TEMP_JumpGateDrives.Clear();
-			this.TEMP_JumpGateAntiDrives.Clear();
-			this.TEMP_JumpGateEntitiesL.Clear();
-			this.TEMP_JumpGateEntities.Clear();
 		}
 
 		/// <summary>
@@ -4919,7 +4924,7 @@ namespace IOTA.ModularJumpGates
 			List<AnimationDef> animations = MyAnimationHandler.Animations.GetValueOrDefault(name, null);
 			if (animations == null) return null;
 			else if (jump_gate == null) return animations.FirstOrDefault();
-			else if (!jump_gate.IsValid()) return null;
+			else if (!MyNetworkInterface.IsStandaloneMultiplayerClient && !jump_gate.IsValid()) return null;
 			AnimationDef _default = animations.Where((animation) => animation.AnimationContraint == null).FirstOrDefault();
 			AnimationDef matched = animations.Where((animation) => animation.AnimationContraint?.Validate(jump_gate) ?? false).FirstOrDefault();
 			return matched ?? _default ?? null;
@@ -4937,7 +4942,7 @@ namespace IOTA.ModularJumpGates
 		public static MyJumpGateAnimation GetAnimation(string name, MyJumpGate jump_gate, MyJumpGate target_gate, MyJumpGateController.MyControllerBlockSettingsStruct controller_settings, MyJumpGateController.MyControllerBlockSettingsStruct target_controller_settings, ref Vector3D endpoint, MyJumpTypeEnum jump_type)
 		{
 			AnimationDef animation_def = MyAnimationHandler.GetAnimationDef(name, jump_gate);
-			if (animation_def == null || jump_gate == null || !jump_gate.IsValid()) return null;
+			if (animation_def == null || jump_gate == null || (!MyNetworkInterface.IsStandaloneMultiplayerClient && !jump_gate.IsValid())) return null;
 			return new MyJumpGateAnimation(animation_def, name, jump_gate, target_gate, controller_settings, target_controller_settings, ref endpoint, jump_type);
 		}
 		#endregion

@@ -19,6 +19,8 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 		public override long UniqueSelectionId => 0x7FFFFFFFFFFFFFFC;
 		public override MyStringId EventDisplayName => MyStringId.GetOrCompute("Jump Gate Entity Entered");
 		public override string ComponentTypeDebugString => nameof(JumpGateEntityEnteredEvent);
+		public override string YesNoToolbarYesDescription => "Entity Entered";
+		public override string YesNoToolbarNoDescription => "Entity Exited";
 
 		private void OnEntityCollision(MyJumpGate caller, MyEntity entity, bool is_entering)
 		{

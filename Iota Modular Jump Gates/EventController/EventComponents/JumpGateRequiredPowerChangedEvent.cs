@@ -17,6 +17,8 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 		public override long UniqueSelectionId => 0x7FFFFFFFFFFFFFFA;
 		public override MyStringId EventDisplayName => MyStringId.GetOrCompute("Jump Gate Required Power Changed");
 		public override string ComponentTypeDebugString => nameof(JumpGateRequiredPowerChangedEvent);
+		public override string YesNoToolbarYesDescription => $"Total Required Power {((this.EventController.IsLowerOrEqualCondition) ? "<=" : ">=")} {MyJumpGateModSession.AutoconvertMetricUnits(this.TargetValue * 1e6, "w", 2)}";
+		public override string YesNoToolbarNoDescription => $"Total Required Power {((this.EventController.IsLowerOrEqualCondition) ? ">=" : "<=")} {MyJumpGateModSession.AutoconvertMetricUnits(this.TargetValue * 1e6, "w", 2)}";
 
 		protected override void CheckValueAgainstTarget(double new_value, double old_value, double target)
 		{

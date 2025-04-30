@@ -897,8 +897,9 @@ namespace IOTA.ModularJumpGates
 						return;
 					}
 				}
-				
+
 				// Initialize update
+				this.PrimaryCubeGridCustomName = this.CubeGrid?.CustomName ?? this.PrimaryCubeGridCustomName;
 				bool first_update = this.LocalGameTick == 0;
 				this.LocalGameTick = (this.LocalGameTick + 1) % 0xFFFFFFFFFFFFFFF0;
 				bool full_gate_update = this.MarkUpdateJumpGates || first_update;
@@ -1474,7 +1475,7 @@ namespace IOTA.ModularJumpGates
 				}
 
 				this.MarkClosed = false;
-				this.PrimaryCubeGridCustomName = new_grid?.CustomName ?? "";
+				this.PrimaryCubeGridCustomName = grid.ConstructName ?? new_grid?.CustomName;
 				List<MySerializedJumpGate> jump_gates = grid.JumpGates ?? new List<MySerializedJumpGate>();
 				List<MySerializedJumpGateDrive> drives = grid.JumpGateDrives ?? new List<MySerializedJumpGateDrive>();
 				List<MySerializedJumpGateCapacitor> capacitors = grid.JumpGateCapacitors ?? new List<MySerializedJumpGateCapacitor>();
