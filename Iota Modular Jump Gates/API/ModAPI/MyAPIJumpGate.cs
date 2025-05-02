@@ -210,10 +210,11 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		/// Destination is the void; <b>All jump entities will be destroyed</b><br />
 		/// This method must be called on singleplayer or multiplayer server
 		/// </summary>
-		/// <param name="controller">The controller to use for the jump</param>
 		/// <param name="distance">The distance to use for power calculations</param>
-		public void JumpToVoid(MyAPIJumpGateController controller, double distance)
+		/// <param name="controller">The controller to use for the jump or the attached controller if null</param>
+		public void JumpToVoid(double distance, MyAPIJumpGateController controller = null)
 		{
+			controller = controller ?? this.Controller;
 			this.GetMethod<Action<double, IMyTerminalBlock, Dictionary<string, object>>>("JumpToVoid")(distance, controller.TerminalBlock, controller.BlockSettings.ToDictionary());
 		}
 
@@ -222,11 +223,12 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		/// Source is the void; Allows spawning of prefab entities<br />
 		/// This method must be called on singleplayer or multiplayer server
 		/// </summary>
-		/// <param name="controller">The controller to use for the jump</param>
 		/// <param name="spawn_prefabs">A list of prefabs to spawn<br />Jump will fail if empty</param>
 		/// <param name="spawned_grids">A list containing the list of spawned grids per prefab</param>
-		public void JumpFromVoid(MyAPIJumpGateController controller, List<MyAPIPrefabInfo> spawn_prefabs, List<List<IMyCubeGrid>> spawned_grids)
+		/// <param name="controller">The controller to use for the jump or the attached controller if null</param>
+		public void JumpFromVoid(List<MyAPIPrefabInfo> spawn_prefabs, List<List<IMyCubeGrid>> spawned_grids, MyAPIJumpGateController controller)
 		{
+			controller = controller ?? this.Controller;
 			this.GetMethod<Action<List<Dictionary<string, object>>, List<List<IMyCubeGrid>>, IMyTerminalBlock, Dictionary<string, object>>>("JumpFromVoid")(spawn_prefabs.Select((prefab) => prefab.ToDictionary()).ToList(), spawned_grids, controller.TerminalBlock, controller.BlockSettings.ToDictionary());
 		}
 
