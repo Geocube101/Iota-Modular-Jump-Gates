@@ -614,17 +614,13 @@ namespace IOTA.ModularJumpGates.ProgramScripting.CubeBlock
 
 		private static void SetupGateEntitiesTerminalAction()
 		{
-			IMyTerminalControlProperty<Action<Dictionary<VRage.Game.ModAPI.Ingame.IMyEntity, float>, bool>> property = MyAPIGateway.TerminalControls.CreateProperty<Action<Dictionary<VRage.Game.ModAPI.Ingame.IMyEntity, float>, bool>, IMyUpgradeModule>(MyJumpGateControllerTerminal.MODID_PREFIX + "GetGateJumpSpaceEntities");
+			IMyTerminalControlProperty<Func<bool, IEnumerable<KeyValuePair<VRage.Game.ModAPI.Ingame.IMyEntity, float>>>> property = MyAPIGateway.TerminalControls.CreateProperty<Func<bool, IEnumerable<KeyValuePair<VRage.Game.ModAPI.Ingame.IMyEntity, float>>>, IMyUpgradeModule>(MyJumpGateControllerTerminal.MODID_PREFIX + "GetGateJumpSpaceEntities");
 			property.Getter = (block) => {
 				MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 				MyJumpGate jump_gate = controller?.AttachedJumpGate();
 				if (controller == null) throw new InvalidBlockTypeException("Specified block is not a jump gate controller");
 				else if (jump_gate == null) throw new InvalidOperationException("No jump gate attached");
-				return (entities, filtered) => {
-					Dictionary<MyEntity, float> temp = new Dictionary<MyEntity, float>(entities.Count);
-					jump_gate.GetEntitiesInJumpSpace(temp, filtered);
-					foreach (KeyValuePair<MyEntity, float> pair in temp) entities.Add(pair.Key, pair.Value);
-				};
+				return (filtered) => jump_gate.GetEntitiesInJumpSpace(filtered).Select((pair) => new KeyValuePair<VRage.Game.ModAPI.Ingame.IMyEntity, float>(pair.Key, pair.Value));
 			};
 			property.Setter = (block, value) => { throw new InvalidOperationException("Specified property is readonly"); };
 			MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(property);

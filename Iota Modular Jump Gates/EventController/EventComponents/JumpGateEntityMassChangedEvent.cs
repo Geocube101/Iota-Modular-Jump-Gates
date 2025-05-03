@@ -15,7 +15,6 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 	internal class JumpGateEntityMassChangedEvent : MyJumpGateEventBase<double>
 	{
 		private bool IsControllerFiltered = true;
-		private readonly Dictionary<MyEntity, float> JumpSpaceEntities = new Dictionary<MyEntity, float>();
 		
 		public override bool IsThresholdUsed => false;
 		public override bool IsConditionSelectionUsed => true;
@@ -49,10 +48,7 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 
 		protected override double GetValueFromJumpGate(MyJumpGate jump_gate)
 		{
-			jump_gate.GetEntitiesInJumpSpace(this.JumpSpaceEntities, this.IsControllerFiltered);
-			double mass = this.JumpSpaceEntities.Sum((pair) => (double) pair.Value);
-			this.JumpSpaceEntities.Clear();
-			return mass;
+			return jump_gate.GetEntitiesInJumpSpace().Sum((pair) => (double) pair.Value);
 		}
 
 		protected override bool IsJumpGateValidForList(MyJumpGate jump_gate)

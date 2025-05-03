@@ -374,8 +374,6 @@ namespace IOTA.ModularJumpGates.API
 				["StopSounds"] = (Action) gate.StopSounds,
 				["CanDoSyphonGridPower"] = (Action<double, ulong, Action<bool>, bool>) gate.CanDoSyphonGridPower,
 				["CancelJump"] = (Action) gate.CancelJump,
-				["GetUninitializedEntititesInJumpSpace"] = (Action<IDictionary<long, float>, bool>) gate.GetUninitializedEntititesInJumpSpace,
-				["GetEntitiesInJumpSpace"] = (Action<IDictionary<MyEntity, float>, bool>) gate.GetEntitiesInJumpSpace,
 				["OnEntityCollision"] = (Action<Action<Dictionary<string, object>, MyEntity, bool>>) entity_entered_callbacks.Add,
 				["OffEntityCollision"] = (Action<Action<Dictionary<string, object>, MyEntity, bool>>) ((callback) => entity_entered_callbacks.Remove(callback)),
 				["IsEntityCollisionCallbackRegistered"] = (Func<Action<Dictionary<string, object>, MyEntity, bool>, bool>) entity_entered_callbacks.Contains,
@@ -409,7 +407,9 @@ namespace IOTA.ModularJumpGates.API
 				["GetName"] = (Func<string>) gate.GetName,
 				["GetPrintableName"] = (Func<string>) gate.GetPrintableName,
 				["GetJumpGateDrives"] = (Func<IEnumerable<Dictionary<string, object>>>) (() => gate.GetJumpGateDrives().Select(this.ReturnCubeBlockDriveWrapper)),
-				["GetWorkingJumpGateDrives"] = (Func < IEnumerable<Dictionary<string, object>>>) (() => gate.GetWorkingJumpGateDrives().Select(this.ReturnCubeBlockDriveWrapper)),
+				["GetWorkingJumpGateDrives"] = (Func<IEnumerable<Dictionary<string, object>>>) (() => gate.GetWorkingJumpGateDrives().Select(this.ReturnCubeBlockDriveWrapper)),
+				["GetUninitializedEntititesInJumpSpace"] = (Func<bool, IEnumerable<KeyValuePair<long, float>>>) gate.GetUninitializedEntititesInJumpSpace,
+				["GetEntitiesInJumpSpace"] = (Func<bool, IEnumerable<KeyValuePair<MyEntity, float>>>) gate.GetEntitiesInJumpSpace,
 			};
 			gate.OnEntityCollision((trigger, entity, is_entering) => entity_entered_callbacks.ForEach((cb) => cb(attributes, entity, is_entering)));
 			this.JumpGateWrappers[uuid] = attributes;

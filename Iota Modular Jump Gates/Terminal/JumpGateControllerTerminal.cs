@@ -23,7 +23,6 @@ namespace IOTA.ModularJumpGates.Terminal
 		public static readonly string MODID_PREFIX = MyJumpGateModSession.MODID + ".JumpGateController.";
 
 		private static readonly List<MyJumpGateWaypoint> TEMP_Waypoints = new List<MyJumpGateWaypoint>();
-		private static readonly Dictionary<MyEntity, float> TEMP_JumpSpaceEntities = new Dictionary<MyEntity, float>();
 		private static readonly ConcurrentDictionary<long, string> ControllerSearchInputs = new ConcurrentDictionary<long, string>();
 
 		private static void SetupTerminalSetupControls()
@@ -421,47 +420,29 @@ namespace IOTA.ModularJumpGates.Terminal
 					MyJumpGate jump_gate = controller?.AttachedJumpGate();
 					if (controller == null || controller.JumpGateGrid == null || controller.JumpGateGrid.Closed || jump_gate == null || (!jump_gate.IsIdle() && !jump_gate.IsJumping())) return;
 					List<long> blacklisted = controller.BlockSettings.GetBlacklistedEntities();
-					jump_gate.GetEntitiesInJumpSpace(MyJumpGateControllerTerminal.TEMP_JumpSpaceEntities);
 					MyTerminalControlListBoxItem item;
 					if (blacklisted.Count == 0) item = new MyTerminalControlListBoxItem(MyStringId.GetOrCompute("-- Deselect All --"), MyStringId.GetOrCompute("Deselect all entities"), -1L);
 					else item = new MyTerminalControlListBoxItem(MyStringId.GetOrCompute("-- Select All --"), MyStringId.GetOrCompute("Select all entities"), -2L);
 					content_list.Add(item);
 
-					foreach (MyEntity entity in MyJumpGateControllerTerminal.TEMP_JumpSpaceEntities.Keys)
+					foreach (KeyValuePair<MyEntity, float> pair in jump_gate.GetEntitiesInJumpSpace())
 					{
-						string entity_name = entity.DisplayName ?? $"E:{entity.EntityId}";
+						string entity_name = pair.Key.DisplayName ?? $"E:{pair.Key.EntityId}";
 						if (entity_name.Length > 21) entity_name = $"{entity_name.Substring(0, 22)}...";
-						string marker = (jump_gate.IsEntityValidForJumpSpace(entity)) ? "[+] " : "[-] ";
-						item = new MyTerminalControlListBoxItem(MyStringId.GetOrCompute(marker + entity_name), MyStringId.GetOrCompute(entity.EntityId.ToString()), entity.EntityId);
+						string marker = (jump_gate.IsEntityValidForJumpSpace(pair.Key)) ? "[+] " : "[-] ";
+						item = new MyTerminalControlListBoxItem(MyStringId.GetOrCompute(marker + entity_name), MyStringId.GetOrCompute(pair.Key.EntityId.ToString()), pair.Key.EntityId);
 						content_list.Add(item);
-						if (!blacklisted.Contains(entity.EntityId)) preselect_list.Add(item);
+						if (!blacklisted.Contains(pair.Key.EntityId)) preselect_list.Add(item);
 					}
-
-					MyJumpGateControllerTerminal.TEMP_JumpSpaceEntities.Clear();
 				};
 
 				choose_allowed_entities_lb.ItemSelected = (block, selected) => {
 					if (!choose_allowed_entities_lb.Enabled(block)) return;
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					List<long> whitelisted = selected.Select((item) => (long) item.UserData).ToList();
-
-					if (whitelisted.Contains(-1))
-					{
-						Dictionary<MyEntity, float> entities = new Dictionary<MyEntity, float>();
-						controller.AttachedJumpGate().GetEntitiesInJumpSpace(entities, false);
-						controller.BlockSettings.SetBlacklistedEntities(entities.Keys.Select((entity) => entity.EntityId));
-					}
-					else if (whitelisted.Contains(-2))
-					{
-						controller.BlockSettings.SetBlacklistedEntities(null);
-					}
-					else
-					{
-						Dictionary<MyEntity, float> entities = new Dictionary<MyEntity, float>();
-						controller.AttachedJumpGate().GetEntitiesInJumpSpace(entities, false);
-						controller.BlockSettings.SetBlacklistedEntities(entities.Keys.Select((entity) => entity.EntityId).Where((id) => !whitelisted.Contains(id)));
-					}
-
+					if (whitelisted.Contains(-1)) controller.BlockSettings.SetBlacklistedEntities(controller.AttachedJumpGate().GetEntitiesInJumpSpace(false).Select((pair) => pair.Key.EntityId));
+					else if (whitelisted.Contains(-2)) controller.BlockSettings.SetBlacklistedEntities(null);
+					else controller.BlockSettings.SetBlacklistedEntities(controller.AttachedJumpGate().GetEntitiesInJumpSpace(false).Select((pair) => pair.Key.EntityId).Where((id) => !whitelisted.Contains(id)));
 					controller.SetDirty();
 					MyJumpGateModSession.Instance.RedrawAllTerminalControls();
 				};
@@ -480,7 +461,7 @@ namespace IOTA.ModularJumpGates.Terminal
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					return controller != null && controller.IsWorking() && controller.JumpGateGrid != null && !controller.JumpGateGrid.Closed;
 				};
-				allowed_entity_mass_min.SetLimits(0f, float.MaxValue);
+				allowed_entity_mass_min.SetLimits(0f, 999e24f);
 
 				allowed_entity_mass_min.Writer = (block, string_builder) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
@@ -508,7 +489,7 @@ namespace IOTA.ModularJumpGates.Terminal
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					return controller != null && controller.IsWorking() && controller.JumpGateGrid != null && !controller.JumpGateGrid.Closed;
 				};
-				allowed_entity_mass_max.SetLimits(0f, float.MaxValue);
+				allowed_entity_mass_max.SetLimits(0f, 999e24f);
 
 				allowed_entity_mass_max.Writer = (block, string_builder) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
@@ -661,7 +642,7 @@ namespace IOTA.ModularJumpGates.Terminal
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					return controller != null && controller.IsWorking() && controller.JumpGateGrid != null && !controller.JumpGateGrid.Closed && controller.BlockSettings.CanAutoActivate();
 				};
-				autoactivate_mass_min.SetLimits(0f, float.MaxValue);
+				autoactivate_mass_min.SetLimits(0f, 999e24f);
 
 				autoactivate_mass_min.Writer = (block, string_builder) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
@@ -690,7 +671,7 @@ namespace IOTA.ModularJumpGates.Terminal
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					return controller != null && controller.IsWorking() && controller.JumpGateGrid != null && !controller.JumpGateGrid.Closed && controller.BlockSettings.CanAutoActivate();
 				};
-				autoactivate_mass_max.SetLimits(0f, float.MaxValue);
+				autoactivate_mass_max.SetLimits(0f, 999e24f);
 
 				autoactivate_mass_max.Writer = (block, string_builder) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
@@ -722,7 +703,7 @@ namespace IOTA.ModularJumpGates.Terminal
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					return controller != null && controller.IsWorking() && controller.JumpGateGrid != null && !controller.JumpGateGrid.Closed && controller.BlockSettings.CanAutoActivate();
 				};
-				autoactivate_power_min.SetLimits(0f, float.MaxValue);
+				autoactivate_power_min.SetLimits(0f, 999e24f);
 
 				autoactivate_power_min.Writer = (block, string_builder) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
@@ -751,7 +732,7 @@ namespace IOTA.ModularJumpGates.Terminal
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					return controller != null && controller.IsWorking() && controller.JumpGateGrid != null && !controller.JumpGateGrid.Closed && controller.BlockSettings.CanAutoActivate();
 				};
-				auto_activate_power_max.SetLimits(0f, float.MaxValue);
+				auto_activate_power_max.SetLimits(0f, 999e24f);
 
 				auto_activate_power_max.Writer = (block, string_builder) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);

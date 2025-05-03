@@ -319,26 +319,6 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		}
 
 		/// <summary>
-		/// Gets all entities within this gate's jump space ellipsoid not yet initialized on client
-		/// </summary>
-		/// <param name="entities">All unconfirmed entities within this jump space<br />Dictionary will not be cleared</param>
-		/// <param name="filtered">Whether to remove blacklisted entities per this gate's controller</param>
-		public void GetUninitializedEntititesInJumpSpace(IDictionary<long, float> entities, bool filtered = false)
-		{
-			this.GetMethod<Action<IDictionary<long, float>, bool>>("GetUninitializedEntititesInJumpSpace")(entities, filtered);
-		}
-
-		/// <summary>
-		/// Gets all entities within this gate's jump space ellipsoid
-		/// </summary>
-		/// <param name="entities">All entities within this jump space<br />Dictionary will not be cleared</param>
-		/// <param name="filtered">Whether to remove blacklisted entities per this gate's controller</param>
-		public void GetEntitiesInJumpSpace(IDictionary<MyEntity, float> entities, bool filtered = false)
-		{
-			this.GetMethod<Action<IDictionary<MyEntity, float>, bool>>("GetEntitiesInJumpSpace")(entities, filtered);
-		}
-
-		/// <summary>
 		/// Registers a callback for when an entity enters or exits this gate's jump space<br />
 		/// Callback parameters:<br />
 		///  ... MyJumpGate - The colliding gate
@@ -683,6 +663,28 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		public IEnumerable<MyAPIJumpGateDrive> GetWorkingJumpGateDrives()
 		{
 			return this.GetMethod<Func<IEnumerable<Dictionary<string, object>>>>("GetWorkingJumpGateDrives")().Select(MyAPIJumpGateDrive.New);
+		}
+
+		/// <summary>
+		/// Gets all entities within this gate's jump space ellipsoid not yet initialized on client<br />
+		/// Resulting key-value pair is a long (entity ID) and a flot (entity's mass in kilograms)
+		/// </summary>
+		/// <param name="filtered">Whether to remove blacklisted entities per this gate's controller</param>
+		/// <returns>An IEnumerable referencing all entities within the jump space</returns>
+		public IEnumerable<KeyValuePair<long, float>> GetUninitializedEntititesInJumpSpace(bool filtered = false)
+		{
+			return this.GetMethod<Func<bool, IEnumerable<KeyValuePair<long, float>>>>("GetUninitializedEntititesInJumpSpace")(filtered);
+		}
+
+		/// <summary>
+		/// Gets all entities within this gate's jump space ellipsoid<br />
+		/// Resulting key-value pair is a long (entity ID) and a flot (entity's mass in kilograms)
+		/// </summary>
+		/// <param name="filtered">Whether to remove blacklisted entities per this gate's controller</param>
+		/// <returns>An IEnumerable referencing all entities within the jump space</returns>
+		public IEnumerable<KeyValuePair<MyEntity, float>> GetEntitiesInJumpSpace(bool filtered = false)
+		{
+			return this.GetMethod<Func<bool, IEnumerable<KeyValuePair<MyEntity, float>>>>("GetEntitiesInJumpSpace")(filtered);
 		}
 	}
 }

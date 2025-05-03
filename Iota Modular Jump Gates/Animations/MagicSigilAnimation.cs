@@ -1824,17 +1824,16 @@ namespace IOTA.ModularJumpGates.Animations
 					},
 				},
 
-				BeamPulse = new BeamPulseDef
-				{
+				BeamPulse = new BeamPulseDef {
 					BeamBrightness = 20,
 					BeamFrequency = 512,
 					TravelTime = 240,
 
-					Animations = new AttributeAnimationDef
-					{
+					Animations = new AttributeAnimationDef {
 						ParticleColorAnimation = new VectorKeyframe[] {
 							new VectorKeyframe(0, Vector4D.One, ratio_type: RatioTypeEnum.ENDPOINT_DISTANCE, lower: new Vector4D(0.5, 0.625, 1, 1), upper: new Vector4D(1, 0.625, 0.5, 1)),
-							new VectorKeyframe(240, Vector4D.Zero),
+							new VectorKeyframe(240, Vector4D.One, ratio_type: RatioTypeEnum.ENDPOINT_DISTANCE, lower: new Vector4D(0.5, 0.625, 1, 1), upper: new Vector4D(1, 0.625, 0.5, 1)),
+							new VectorKeyframe(300, Vector4D.Zero),
 						},
 						ParticleRadiusAnimation = new DoubleKeyframe[] {
 							new DoubleKeyframe(0, 0d, ratio_type: RatioTypeEnum.RANDOM, lower: 0.25, upper: 1) * AnimationSourceEnum.JUMP_GATE_SIZE / 25,
@@ -1844,6 +1843,17 @@ namespace IOTA.ModularJumpGates.Animations
 							new DoubleKeyframe(300, -1.25) * AnimationSourceEnum.JUMP_GATE_SIZE,
 						},
 					},
+
+					FlashPointParticles = new ParticleDef[] {
+						new ParticleDef {
+							ParticleNames = new string[] { "IOTA.BasicFlashPoint" },
+							Animations = new AttributeAnimationDef {
+								ParticleScaleAnimation = new DoubleKeyframe[] {
+									new DoubleKeyframe(0, AnimationSourceEnum.JUMP_GATE_SIZE) / 4,
+								},
+							},
+						},
+					}
 				},
 
 				NodeSounds = new SoundDef[] {

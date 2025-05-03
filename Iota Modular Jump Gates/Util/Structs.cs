@@ -62,6 +62,9 @@ namespace IOTA.ModularJumpGates.Util
 		#endregion
 	}
 
+	/// <summary>
+	/// Class responsible for warping a batch of entities across space
+	/// </summary>
 	internal sealed class EntityWarpInfo
 	{
 		[ProtoContract]
@@ -138,6 +141,7 @@ namespace IOTA.ModularJumpGates.Util
 		}
 
 		private static readonly ushort GlobalMaxSpeedCooldownTime = 30;
+		private static readonly ushort GlobalTickSkip = 5;
 
 		private bool IsComplete = false;
 		private ushort MaxSpeedCooldownTime = 0;
@@ -294,7 +298,7 @@ namespace IOTA.ModularJumpGates.Util
 
 		public bool Update()
 		{
-			++this.CurrentTick;
+			if (this.CurrentTick++ % EntityWarpInfo.GlobalTickSkip != 0 && !this.IsComplete) return false;
 			bool complete = this.CurrentTick >= this.Duration;
 			MyEntity parent = this.EntityBatch[0];
 
@@ -325,7 +329,7 @@ namespace IOTA.ModularJumpGates.Util
 			else if (complete) parent.Teleport(this.FinalPos);
 			else
 			{
-				double tick_ratio = (double) this.CurrentTick / this.Duration;
+				double tick_ratio = MathHelper.Clamp((double) this.CurrentTick / this.Duration, 0, 1);
 				Vector3D current_pos;
 				Vector3D.Lerp(ref this.StartPos, ref this.EndPos, tick_ratio, out current_pos);
 				MatrixD parent_matrix = parent.WorldMatrix;
@@ -394,6 +398,9 @@ namespace IOTA.ModularJumpGates.Util
 		}
 	}
 
+	/// <summary>
+	/// Class holding information on an entity batch
+	/// </summary>
 	internal class EntityBatch
 	{
 		[ProtoContract]
@@ -699,6 +706,9 @@ namespace IOTA.ModularJumpGates.Util
 		public List<Vector3D> IntersectNodes = new List<Vector3D>();
 	}
 
+	/// <summary>
+	/// Class wrapping a beacon for use on server and clients
+	/// </summary>
 	[ProtoContract(UseProtoMembersOnly = true)]
 	public class MyBeaconLinkWrapper : IEquatable<MyBeaconLinkWrapper>
 	{
@@ -822,6 +832,9 @@ namespace IOTA.ModularJumpGates.Util
 		#endregion
 	}
 
+	/// <summary>
+	/// Class holding information on prefabs and their spawning info
+	/// </summary>
 	public struct MyPrefabInfo
 	{
 		public readonly string PrefabName;

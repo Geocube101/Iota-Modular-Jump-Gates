@@ -352,6 +352,17 @@ namespace IOTA.ModularJumpGates.Animations
 							new DoubleKeyframe(0, 0d, ratio_type: RatioTypeEnum.RANDOM, lower: 0.25, upper: 1) * AnimationSourceEnum.JUMP_GATE_SIZE / 25,
 						},
 					},
+
+					FlashPointParticles = new ParticleDef[] {
+						new ParticleDef {
+							ParticleNames = new string[] { "IOTA.BasicFlashPoint" },
+							Animations = new AttributeAnimationDef {
+								ParticleScaleAnimation = new DoubleKeyframe[] {
+									new DoubleKeyframe(0, AnimationSourceEnum.JUMP_GATE_SIZE) / 4,
+								},
+							},
+						},
+					}
 				},
 
 				NodeSounds = new SoundDef[] {

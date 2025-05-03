@@ -18,6 +18,7 @@ using VRage.Game.ModAPI;
 using VRage.ModAPI;
 using VRage.Utils;
 using VRageMath;
+using static VRage.Game.MyObjectBuilder_SessionComponentMission;
 
 namespace IOTA.ModularJumpGates
 {
@@ -1144,7 +1145,6 @@ namespace IOTA.ModularJumpGates
 			MyJumpGateWaypoint dst = controller_settings.SelectedWaypoint();
 			List<KeyValuePair<MyEntity, bool>> entities_to_jump = null;
 			List<MyJumpGate> other_gates = new List<MyJumpGate>();
-			Dictionary<MyEntity, float> jump_space_entities = new Dictionary<MyEntity, float>(this.JumpSpaceEntities.Count);
 			Func<MyJumpGateDrive, bool> working_src_drive_filter = (drive) => drive.JumpGateID == this.JumpGateID && drive.IsWorking();
 			Func<MyJumpGateDrive, bool> working_dst_drive_filter = (drive) => target_gate != null && drive.JumpGateID == target_gate.JumpGateID && drive.IsWorking();
 			MyJumpFailReason result = MyJumpFailReason.NONE;
@@ -1452,9 +1452,7 @@ namespace IOTA.ModularJumpGates
 
 						this.Phase = MyJumpGatePhase.JUMPING;
 						if (target_gate != null) target_gate.Phase = MyJumpGatePhase.JUMPING;
-						this.GetEntitiesInJumpSpace(jump_space_entities, true);
-						entities_to_jump = jump_space_entities.Keys.Select((entity) => new KeyValuePair<MyEntity, bool>(entity, entity.Render.Visible)).ToList();
-						jump_space_entities.Clear();
+						entities_to_jump = this.GetEntitiesInJumpSpace(true).Select((pair) => new KeyValuePair<MyEntity, bool>(pair.Key, pair.Key.Render.Visible)).ToList();
 						Random prng = new Random();
 
 						if (entities_to_jump.Count == 0)
@@ -2369,7 +2367,6 @@ namespace IOTA.ModularJumpGates
 			MyJumpGateAnimation gate_animation = null;
 			List<KeyValuePair<MyEntity, bool>> entities_to_jump = null;
 			List<MyJumpGate> other_gates = new List<MyJumpGate>();
-			Dictionary<MyEntity, float> jump_space_entities = new Dictionary<MyEntity, float>(this.JumpSpaceEntities.Count);
 			Func<MyJumpGateDrive, bool> working_src_drive_filter = (drive) => drive.JumpGateID == this.JumpGateID && drive.IsWorking();
 			MyJumpFailReason result = MyJumpFailReason.NONE;
 			this.JumpFailureReason = new KeyValuePair<MyJumpFailReason, bool>(MyJumpFailReason.IN_PROGRESS, true);
@@ -2581,9 +2578,7 @@ namespace IOTA.ModularJumpGates
 							return;
 						}
 
-						this.GetEntitiesInJumpSpace(jump_space_entities, true);
-						entities_to_jump = jump_space_entities.Keys.Select((entity) => new KeyValuePair<MyEntity, bool>(entity, entity.Render.Visible)).ToList();
-						jump_space_entities.Clear();
+						entities_to_jump = this.GetEntitiesInJumpSpace(true).Select((pair) => new KeyValuePair<MyEntity, bool>(pair.Key, pair.Key.Render.Visible)).ToList();
 
 						if (entities_to_jump.Count == 0)
 						{
@@ -3573,60 +3568,6 @@ namespace IOTA.ModularJumpGates
 		}
 
 		/// <summary>
-		/// Gets all entities within this gate's jump space ellipsoid not yet initialized on client
-		/// </summary>
-		/// <param name="entities">All unconfirmed entities within this jump space<br />Dictionary will not be cleared</param>
-		/// <param name="filtered">Whether to remove blacklisted entities per this gate's controller</param>
-		public void GetUninitializedEntititesInJumpSpace(IDictionary<long, float> entities, bool filtered = false)
-		{
-			if (this.Closed) return;
-
-			if (filtered && this.Controller != null)
-			{
-				foreach (KeyValuePair<long, float> pair in this.JumpSpaceEntities)
-				{
-					IMyEntity entity = MyAPIGateway.Entities.GetEntityById(pair.Key);
-					if (entity == null && !this.Controller.BlockSettings.IsEntityBlacklisted(pair.Key)) entities.Add(pair.Key, pair.Value);
-				}
-			}
-			else
-			{
-				foreach (KeyValuePair<long, float> pair in this.JumpSpaceEntities)
-				{
-					IMyEntity entity = MyAPIGateway.Entities.GetEntityById(pair.Key);
-					if (entity == null) entities.Add(pair.Key, pair.Value);
-				}
-			}
-		}
-
-		/// <summary>
-		/// Gets all entities within this gate's jump space ellipsoid
-		/// </summary>
-		/// <param name="entities">All entities within this jump space<br />Dictionary will not be cleared</param>
-		/// <param name="filtered">Whether to remove blacklisted entities per this gate's controller</param>
-		public void GetEntitiesInJumpSpace(IDictionary<MyEntity, float> entities, bool filtered = false)
-		{
-			if (this.Closed) return;
-
-			if (filtered && this.Controller != null)
-			{
-				foreach (KeyValuePair<long, float> pair in this.JumpSpaceEntities)
-				{
-					MyEntity entity = (MyEntity) MyAPIGateway.Entities.GetEntityById(pair.Key);
-					if (entity != null && !this.Controller.BlockSettings.IsEntityBlacklisted(entity.EntityId) && this.IsEntityValidForJumpSpace(entity)) entities.Add(entity, pair.Value);
-				}
-			}
-			else
-			{
-				foreach (KeyValuePair<long, float> pair in this.JumpSpaceEntities)
-				{
-					MyEntity entity = (MyEntity) MyAPIGateway.Entities.GetEntityById(pair.Key);
-					if (entity != null) entities.Add(entity, pair.Value);
-				}
-			}
-		}
-
-		/// <summary>
 		/// Registers a callback for when an entity enters or exits this gate's jump space<br />
 		/// Callback parameters:<br />
 		///  ... MyJumpGate - The colliding gate
@@ -4185,6 +4126,32 @@ namespace IOTA.ModularJumpGates
 		public IEnumerable<MyJumpGateDrive> GetWorkingJumpGateDrives()
 		{
 			return this.JumpGateGrid?.GetAttachedJumpGateDrives().Where((drive) => drive.JumpGateID == this.JumpGateID && drive.IsWorking()) ?? Enumerable.Empty<MyJumpGateDrive>();
+		}
+
+		/// <summary>
+		/// Gets all entities within this gate's jump space ellipsoid not yet initialized on client<br />
+		/// Resulting key-value pair is a long (entity ID) and a float (entity's mass in kilograms)
+		/// </summary>
+		/// <param name="filtered">Whether to remove blacklisted entities per this gate's controller</param>
+		/// <returns>An IEnumerable referencing all entities within the jump space</returns>
+		public IEnumerable<KeyValuePair<long, float>> GetUninitializedEntititesInJumpSpace(bool filtered = false)
+		{
+			if (this.Closed) return Enumerable.Empty<KeyValuePair<long, float>>();
+			if (filtered && this.Controller != null) return this.JumpSpaceEntities.Where((pair) => MyAPIGateway.Entities.GetEntityById(pair.Key) == null && !this.Controller.BlockSettings.IsEntityBlacklisted(pair.Key));
+			else return this.JumpSpaceEntities.Where((pair) => MyAPIGateway.Entities.GetEntityById(pair.Key) == null);
+		}
+
+		/// <summary>
+		/// Gets all entities within this gate's jump space ellipsoid<br />
+		/// Resulting key-value pair is an entity and a float (entity's mass in kilograms)
+		/// </summary>
+		/// <param name="filtered">Whether to remove blacklisted entities per this gate's controller</param>
+		/// <returns>An IEnumerable referencing all entities within the jump space</returns>
+		public IEnumerable<KeyValuePair<MyEntity, float>> GetEntitiesInJumpSpace(bool filtered = false)
+		{
+			if (this.Closed) return Enumerable.Empty<KeyValuePair<MyEntity, float>>();
+			if (filtered && this.Controller != null) return this.JumpSpaceEntities.Select((pair) => new KeyValuePair<MyEntity, float>((MyEntity) MyAPIGateway.Entities.GetEntityById(pair.Key), pair.Value)).Where((pair) => pair.Key != null && !this.Controller.BlockSettings.IsEntityBlacklisted(pair.Key.EntityId) && this.IsEntityValidForJumpSpace(pair.Key));
+			else return this.JumpSpaceEntities.Select((pair) => new KeyValuePair<MyEntity, float>((MyEntity) MyAPIGateway.Entities.GetEntityById(pair.Key), pair.Value)).Where((pair) => pair.Key != null);
 		}
 
 		/// <summary>

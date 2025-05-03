@@ -2306,6 +2306,11 @@ namespace IOTA.ModularJumpGates
 		/// The beam's material
 		/// </summary>
 		public string Material = "WeaponLaser";
+
+		/// <summary>
+		/// The particle to use for the beam's head
+		/// </summary>
+		public ParticleDef[] FlashPointParticles = null;
 		#endregion
 	}
 
@@ -3168,6 +3173,11 @@ namespace IOTA.ModularJumpGates
 		/// The beam material
 		/// </summary>
 		private MyStringId? BeamMaterial = null;
+
+		/// <summary>
+		/// The flash point particles
+		/// </summary>
+		private Particle[] FlashPointParticles = null;
 		#endregion
 
 		#region Public Variables
@@ -3190,11 +3200,13 @@ namespace IOTA.ModularJumpGates
 		public BeamPulse(BeamPulseDef def, ushort animation_duration, MyJumpGate jump_gate, MyJumpGate target_gate, MyJumpGateController.MyControllerBlockSettingsStruct controller_settings)
 		{
 			if (def == null) throw new ArgumentNullException("BeamPulseDef cannot be null");
+			Vector3D node = jump_gate.WorldJumpNode;
 			this.BeamPulseDefinition = def;
 			this.JumpGate = jump_gate;
 			this.TargetGate = target_gate;
 			this.ControllerSettings = controller_settings;
 			this.Duration = (def.Duration == 0) ? animation_duration : def.Duration;
+			this.FlashPointParticles = def.FlashPointParticles?.Select((particle) => new Particle(particle, animation_duration, jump_gate, target_gate, controller_settings, MyJumpGateModSession.WorldMatrix, node, false)).ToArray();
 			if (this.BeamPulseDefinition.Material != null) this.BeamMaterial = MyStringId.GetOrCompute(this.BeamPulseDefinition.Material);
 		}
 		#endregion
@@ -3213,8 +3225,7 @@ namespace IOTA.ModularJumpGates
 			if (!this.JumpGate.Closed && current_tick >= this.BeamPulseDefinition.StartTime && current_tick <= this.BeamPulseDefinition.StartTime + this.Duration && this.Duration > 0)
 			{
 				ushort local_tick = (ushort) (current_tick - this.BeamPulseDefinition.StartTime);
-				ushort travel_time = Math.Max((ushort) 0, this.BeamPulseDefinition.TravelTime);
-				double tick_ratio = (travel_time == 0) ? 1 : ((double) local_tick / travel_time);
+				double tick_ratio = (this.BeamPulseDefinition.TravelTime == 0) ? 1 : MathHelper.Clamp(((double) local_tick) / this.BeamPulseDefinition.TravelTime, 0, 1);
 				AnimationExpression.ExpressionArguments arguments = new AnimationExpression.ExpressionArguments(local_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, null, null);
 				double frequency = Math.Max(0, AttributeAnimationDef.GetAnimatedDoubleValue(this.BeamPulseDefinition.Animations?.BeamFrequencyAnimation, arguments, this.BeamPulseDefinition.BeamFrequency));
 				double beam_length = AttributeAnimationDef.GetAnimatedDoubleValue(this.BeamPulseDefinition.Animations?.ParticleLifeAnimation, arguments, this.BeamPulseDefinition.BeamLength);
@@ -3225,12 +3236,19 @@ namespace IOTA.ModularJumpGates
 				Vector3D beam_dir_n = beam_dir.Normalized();
 				Vector3D offset_vec = beam_dir_n * offset;
 				beam_dir -= offset_vec;
-				beam_length = (beam_length < 0) ? beam_dir.Length() : beam_length;
+				beam_length = (beam_length < 0) ? (beam_dir.Length() * tick_ratio) : beam_length;
 				Vector3D beam_end = jump_node + beam_dir * tick_ratio;
 				Vector3D beam_start = ((Vector3D.Distance(beam_end, jump_node) <= beam_length) ? jump_node : (beam_end - beam_dir_n * beam_length)) + offset_vec;
 
 				double beam_width;
 				Vector4 beam_color;
+
+				if (this.FlashPointParticles != null)
+				{
+					MatrixD flash_matrix = MyJumpGateModSession.WorldMatrix;
+					flash_matrix.Translation = beam_end;
+					foreach (Particle particle in this.FlashPointParticles) particle.Tick(current_tick, flash_matrix, drives, entities, ref endpoint, null);
+				}
 
 				if (frequency == 0)
 				{
@@ -3239,7 +3257,7 @@ namespace IOTA.ModularJumpGates
 					MySimpleObjectDraw.DrawLine(beam_start, beam_end, this.BeamMaterial, ref beam_color, (float) beam_width);
 					return;
 				}
-				
+
 				double beam_dir_length = beam_dir.Length();
 				double waveform = (beam_dir_length - (beam_dir_length - beam_length)) / frequency;
 				double w0 = waveform * duty_cycle;
@@ -3272,6 +3290,9 @@ namespace IOTA.ModularJumpGates
 			this.TargetGate = null;
 			this.ControllerSettings = null;
 			this.BeamMaterial = null;
+			if (this.FlashPointParticles == null) return;
+			foreach (Particle particle in this.FlashPointParticles) particle.Clean();
+			this.FlashPointParticles = null;
 		}
 		#endregion
 	}
@@ -4376,7 +4397,6 @@ namespace IOTA.ModularJumpGates
 		private List<MyJumpGateDrive> TEMP_JumpGateDrives = new List<MyJumpGateDrive>();
 		private List<MyJumpGateDrive> TEMP_JumpGateAntiDrives = new List<MyJumpGateDrive>();
 		private List<MyEntity> TEMP_JumpGateEntitiesL = new List<MyEntity>();
-		private Dictionary<MyEntity, float> TEMP_JumpGateEntities = new Dictionary<MyEntity, float>();
 		#endregion
 
 		#region Public Variables
@@ -4529,12 +4549,10 @@ namespace IOTA.ModularJumpGates
 
 			this.TEMP_JumpGateDrives?.Clear();
 			this.TEMP_JumpGateAntiDrives?.Clear();
-			this.TEMP_JumpGateEntities?.Clear();
 			this.TEMP_JumpGateEntitiesL?.Clear();
 
 			this.TEMP_JumpGateDrives = null;
 			this.TEMP_JumpGateAntiDrives = null;
-			this.TEMP_JumpGateEntities = null;
 			this.TEMP_JumpGateEntitiesL = null;
 		}
 
@@ -4566,9 +4584,7 @@ namespace IOTA.ModularJumpGates
 			if ((this.JumpGate?.Closed ?? true) || (this.JumpGate.JumpGateGrid?.Closed ?? true)) return;
 			List<MyJumpGateDrive> drives = null;
 			this.TEMP_JumpGateDrives.AddRange(this.JumpGate.GetJumpGateDrives());
-			this.JumpGate.GetEntitiesInJumpSpace(this.TEMP_JumpGateEntities, true);
-			this.TEMP_JumpGateEntitiesL.AddRange(this.TEMP_JumpGateEntities.Keys);
-			this.TEMP_JumpGateEntitiesL.AddRange(this.JumpGate.EntityBatches.Keys);
+			foreach (KeyValuePair<MyEntity, EntityBatch> pair in this.JumpGate.EntityBatches) this.TEMP_JumpGateEntitiesL.AddRange(pair.Value.Batch);
 			drives = this.TEMP_JumpGateDrives;
 
 			List<MyJumpGateDrive> anti_drives = null;
@@ -4631,7 +4647,6 @@ namespace IOTA.ModularJumpGates
 				this.TEMP_JumpGateDrives.Clear();
 				this.TEMP_JumpGateAntiDrives.Clear();
 				this.TEMP_JumpGateEntitiesL.Clear();
-				this.TEMP_JumpGateEntities.Clear();
 			}
 		}
 
@@ -4660,7 +4675,6 @@ namespace IOTA.ModularJumpGates
 
 				this.TEMP_JumpGateDrives.Clear();
 				this.TEMP_JumpGateAntiDrives.Clear();
-				this.TEMP_JumpGateEntities.Clear();
 			}
 		}
 
@@ -4677,7 +4691,6 @@ namespace IOTA.ModularJumpGates
 
 			this.TEMP_JumpGateDrives.Clear();
 			this.TEMP_JumpGateAntiDrives.Clear();
-			this.TEMP_JumpGateEntities.Clear();
 			this.TEMP_JumpGateEntitiesL.Clear();
 		}
 

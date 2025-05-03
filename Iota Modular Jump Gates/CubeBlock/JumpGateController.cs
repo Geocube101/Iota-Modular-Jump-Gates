@@ -538,16 +538,6 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// Temporary list of jump gate drives for holo display
 		/// </summary>
 		private Dictionary<MyJumpGateDrive, KeyValuePair<MatrixD, BoundingBoxD>> TEMP_DriveHoloBoxes = new Dictionary<MyJumpGateDrive, KeyValuePair<MatrixD, BoundingBoxD>>();
-
-		/// <summary>
-		/// Temporary list of jump space entities
-		/// </summary>
-		private ConcurrentDictionary<MyEntity, float> TEMP_JumpGateEntities = new ConcurrentDictionary<MyEntity, float>();
-
-		/// <summary>
-		/// Temporary list of unconfirmed jump space entities
-		/// </summary>
-		private ConcurrentDictionary<long, float> TEMP_UnconfirmedJumpGateEntities = new ConcurrentDictionary<long, float>();
 		#endregion
 
 		#region Public Variables
@@ -610,9 +600,49 @@ namespace IOTA.ModularJumpGates.CubeBlock
 
 				double distance = (jump_node == null) ? -1 : Vector3D.Distance(endpoint, jump_node.Value);
 				double distance_ratio = jump_gate?.CalculateDistanceRatio(ref endpoint) ?? -1;
-				double total_mass_kg = (this.TEMP_JumpGateEntities?.Sum((pair) => (double) pair.Value) ?? 0) + (this.TEMP_UnconfirmedJumpGateEntities?.Sum((pair) => (double) pair.Value) ?? 0);
+				double total_mass_kg = 0;
 				double total_required_power_mw = jump_gate?.CalculateTotalRequiredPower(endpoint, null, total_mass_kg) ?? double.NaN;
 				double total_available_power_mw = this_grid?.CalculateTotalAvailableInstantPower(jump_gate?.JumpGateID ?? -1) ?? double.NaN;
+				StringBuilder entity_list = new StringBuilder();
+
+				if (jump_gate != null)
+				{
+					foreach (KeyValuePair<MyEntity, float> pair in jump_gate.GetEntitiesInJumpSpace(true))
+					{
+						string name = $" {pair.Key.DisplayName}";
+						string info = $" - {MyJumpGateModSession.AutoconvertMetricUnits(pair.Value * 1e3, "g", 4)}";
+						const int max_length = 30;
+						int remaining_length = max_length - info.Length - name.Length;
+						int chop_length = -Math.Min(remaining_length, 0);
+						total_mass_kg += pair.Value;
+
+						if (chop_length > 0)
+						{
+							chop_length += 3;
+							info = $"...{info}";
+						}
+
+						entity_list.Append($"[color=#FF911CBF] - {name.Substring(0, name.Length - chop_length)}{info}[/color]\n");
+					}
+
+					foreach (KeyValuePair<long, float> pair in jump_gate.GetUninitializedEntititesInJumpSpace(true))
+					{
+						string name = $" U:{pair.Key}";
+						string info = $" - {MyJumpGateModSession.AutoconvertMetricUnits(pair.Value * 1e3, "g", 4)}";
+						const int max_length = 30;
+						int remaining_length = max_length - info.Length - name.Length;
+						int chop_length = -Math.Min(remaining_length, 0);
+						total_mass_kg += pair.Value;
+
+						if (chop_length > 0)
+						{
+							chop_length += 3;
+							info = $"...{info}";
+						}
+
+						entity_list.Append($"[color=#FF911CBF] - {name.Substring(0, name.Length - chop_length)}{info}[/color]\n");
+					}
+				}
 
 				sb.Append($"\n-=-=-=( Jump Gate Controller )=-=-=-\n");
 				sb.Append($" Input: {input_wattage} MW\n");
@@ -649,40 +679,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				sb.Append($" - Power Percentage: {((jump_gate == null) ? "N/A" : $"{Math.Round(MathHelper.Clamp(total_available_power_mw / total_required_power_mw, 0, 1) * 100, 2)}%")}[/color]\n");
 
 				sb.Append($"\n[color=#FFC226FF]--- Jump Space Entities ---[/color]\n");
-
-				foreach (KeyValuePair<MyEntity, float> pair in this.TEMP_JumpGateEntities)
-				{
-					string name = $" {pair.Key.DisplayName}";
-					string info = $" - {MyJumpGateModSession.AutoconvertMetricUnits(pair.Value * 1e3, "g", 4)}";
-					const int max_length = 30;
-					int remaining_length = max_length - info.Length - name.Length;
-					int chop_length = -Math.Min(remaining_length, 0);
-
-					if (chop_length > 0)
-					{
-						chop_length += 3;
-						info = $"...{info}";
-					}
-
-					sb.Append($"[color=#FF911CBF] - {name.Substring(0, name.Length - chop_length)}{info}[/color]\n");
-				}
-
-				foreach (KeyValuePair<long, float> pair in this.TEMP_UnconfirmedJumpGateEntities)
-				{
-					string name = $" U:{pair.Key}";
-					string info = $" - {MyJumpGateModSession.AutoconvertMetricUnits(pair.Value * 1e3, "g", 4)}";
-					const int max_length = 30;
-					int remaining_length = max_length - info.Length - name.Length;
-					int chop_length = -Math.Min(remaining_length, 0);
-
-					if (chop_length > 0)
-					{
-						chop_length += 3;
-						info = $"...{info}";
-					}
-
-					sb.Append($"[color=#FF911CBF] - {name.Substring(0, name.Length - chop_length)}{info}[/color]\n");
-				}
+				sb.Append(entity_list);
 
 				sb.Append($"\n[color=#FF78FFFB]--- Construct Info ---[/color][color=#FF5ABFBC]\n");
 				sb.Append($" - Main Grid: {(this_grid?.CubeGridID.ToString() ?? "N/A")}\n");
@@ -731,8 +728,6 @@ namespace IOTA.ModularJumpGates.CubeBlock
 
 			this.TEMP_DetailedInfoConstructsList.Clear();
 			this.TEMP_ConstructControllers.Clear();
-			this.TEMP_JumpGateEntities.Clear();
-			this.TEMP_UnconfirmedJumpGateEntities.Clear();
 			this.TEMP_DriveHoloBoxes.Clear();
 
 			this.WaypointsList = null;
@@ -740,8 +735,6 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			this.MultiPanelComponent = null;
 			this.TEMP_DetailedInfoConstructsList = null;
 			this.TEMP_ConstructControllers = null;
-			this.TEMP_JumpGateEntities = null;
-			this.TEMP_UnconfirmedJumpGateEntities = null;
 			this.TEMP_DriveHoloBoxes = null;
 			this.BlockSettings = null;
 		}
@@ -936,11 +929,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 					if (jump_gate_valid && this.LocalGameTick % 30 == 0)
 					{
 						this.AttachedJumpGateDrives.Clear();
-						this.TEMP_JumpGateEntities.Clear();
-						this.TEMP_UnconfirmedJumpGateEntities.Clear();
 						this.AttachedJumpGateDrives.AddRange(jump_gate.GetJumpGateDrives());
-						jump_gate.GetEntitiesInJumpSpace(this.TEMP_JumpGateEntities, true);
-						jump_gate.GetUninitializedEntititesInJumpSpace(this.TEMP_UnconfirmedJumpGateEntities, true);
 
 						if (this.AttachedJumpGateDrives.Count > 0)
 						{
@@ -976,7 +965,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 							MySimpleObjectDraw.DrawTransparentBox(ref drive_matrix, ref drive_box, ref color, MySimpleObjectRasterizer.Wireframe, 1, 0.00025f, null, MyJumpGateModSession.MyMaterialsHolder.WeaponLaser, intensity: 10);
 						}
 
-						foreach (KeyValuePair<MyEntity, float> pair in this.TEMP_JumpGateEntities)
+						foreach (KeyValuePair<MyEntity, float> pair in jump_gate.GetEntitiesInJumpSpace())
 						{
 							MyEntity entity = pair.Key;
 							MyJumpGateConstruct construct = MyJumpGateModSession.Instance.GetJumpGateGrid(entity.EntityId);
