@@ -1,10 +1,9 @@
 ﻿using IOTA.ModularJumpGates.EventController.ObjectBuilders;
 using Sandbox.ModAPI;
 using Sandbox.ModAPI.Interfaces.Terminal;
-using System.Collections.Generic;
 using System.Linq;
+using VRage;
 using VRage.Game.Components;
-using VRage.Game.Entity;
 using VRage.Utils;
 
 namespace IOTA.ModularJumpGates.EventController.EventComponents
@@ -20,10 +19,10 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 		public override bool IsConditionSelectionUsed => true;
 		public override bool IsBlocksListUsed => false;
 		public override long UniqueSelectionId => 0x7FFFFFFFFFFFFFFB;
-		public override MyStringId EventDisplayName => MyStringId.GetOrCompute("Jump Gate Entity Mass Changed");
+		public override MyStringId EventDisplayName => MyStringId.GetOrCompute(MyTexts.GetString("DisplayName_JumpGateEntityMassChangedEvent"));
 		public override string ComponentTypeDebugString => nameof(JumpGateEntityMassChangedEvent);
-		public override string YesNoToolbarYesDescription => $"Total Entity Mass {((this.EventController.IsLowerOrEqualCondition) ? "<=" : ">=")} {MyJumpGateModSession.AutoconvertMetricUnits(this.TargetValue * 1e3, "g", 2)}";
-		public override string YesNoToolbarNoDescription => $"Total Entity mass {((this.EventController.IsLowerOrEqualCondition) ? ">=" : "<=")} {MyJumpGateModSession.AutoconvertMetricUnits(this.TargetValue * 1e3, "g", 2)}";
+		public override string YesNoToolbarYesDescription => MyTexts.GetString("DisplayName_JumpGateEntityMassChangedEvent_YesDescription").Replace("{%0}", ((this.EventController.IsLowerOrEqualCondition) ? "<=" : ">=").Replace("{%1}", MyJumpGateModSession.AutoconvertMetricUnits(this.TargetValue * 1e3, "g", 2).ToString()));
+		public override string YesNoToolbarNoDescription => MyTexts.GetString("DisplayName_JumpGateEntityMassChangedEvent_NoDescription").Replace("{%0}", ((this.EventController.IsLowerOrEqualCondition) ? ">=" : "<=").Replace("{%1}", MyJumpGateModSession.AutoconvertMetricUnits(this.TargetValue * 1e3, "g", 2).ToString()));
 
 		protected override void CheckValueAgainstTarget(double new_value, double old_value, double target)
 		{
@@ -60,11 +59,11 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 		{
 			{
 				IMyTerminalControlOnOffSwitch is_controller_filtered = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlOnOffSwitch, T>(this.MODID_PREFIX + "IsFiltered");
-				is_controller_filtered.Title = MyStringId.GetOrCompute("Use Filtered Entities");
-				is_controller_filtered.Tooltip = MyStringId.GetOrCompute("Whether to respect attached controller filter settings");
-				is_controller_filtered.OnText = MyStringId.GetOrCompute("Yes");
-				is_controller_filtered.OffText = MyStringId.GetOrCompute("No");
-				is_controller_filtered.SupportsMultipleBlocks = false;
+				is_controller_filtered.Title = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateEntityCountChangedEvent_UseFilteredOnly"));
+				is_controller_filtered.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateEntityCountChangedEvent_UseFilteredOnly_Tooltip"));
+				is_controller_filtered.OnText = MyStringId.GetOrCompute(MyTexts.GetString("GeneralText_Yes"));
+				is_controller_filtered.OffText = MyStringId.GetOrCompute(MyTexts.GetString("GeneralText_No"));
+				is_controller_filtered.SupportsMultipleBlocks = true;
 				is_controller_filtered.Visible = block => block.Components.Get<JumpGateEntityMassChangedEvent>()?.IsSelected ?? false;
 				is_controller_filtered.Getter = block => block.Components.Get<JumpGateEntityMassChangedEvent>().IsControllerFiltered;
 				is_controller_filtered.Setter = (block, value) => {
@@ -77,9 +76,9 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 
 			{
 				IMyTerminalControlSlider entity_mass_sdr = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSlider, T>(this.MODID_PREFIX + "TargetMass");
-				entity_mass_sdr.Title = MyStringId.GetOrCompute("Entity Mass (Kg)");
-				entity_mass_sdr.Tooltip = MyStringId.GetOrCompute("The mass (in kilograms) of jump space entitites to check against");
-				entity_mass_sdr.SupportsMultipleBlocks = false;
+				entity_mass_sdr.Title = MyStringId.GetOrCompute($"{MyTexts.GetString("Terminal_JumpGateEntityMassChangedEvent_EntityMass")} (Kg):");
+				entity_mass_sdr.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateEntityMassChangedEvent_EntityMass_Tooltip"));
+				entity_mass_sdr.SupportsMultipleBlocks = true;
 				entity_mass_sdr.Visible = block => block.Components.Get<JumpGateEntityMassChangedEvent>()?.IsSelected ?? false;
 				entity_mass_sdr.SetLimits(0f, 1e24f);
 				entity_mass_sdr.Writer = (block, string_builder) => string_builder.Append(MyJumpGateModSession.AutoconvertMetricUnits(block.Components.Get<JumpGateEntityMassChangedEvent>().TargetValue * 1e3, "g", 4));

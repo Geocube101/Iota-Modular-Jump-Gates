@@ -8,6 +8,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using VRage;
 using VRage.Game.ObjectBuilders.ComponentSystem;
 using VRage.ModAPI;
 using VRage.Utils;
@@ -37,23 +38,24 @@ namespace IOTA.ModularJumpGates.EventController
 
 			public void SetValue<T>(string key, T value)
 			{
+				if (this.MetaData == null) this.MetaData = new Dictionary<string, string>();
 				this.MetaData[key] = Convert.ToBase64String(MyAPIGateway.Utilities.SerializeToBinary(value));
 			}
 
 			public void RemoveValue(string key)
 			{
-				this.MetaData.Remove(key);
+				this.MetaData?.Remove(key);
 			}
 
 			public T GetValue<T>(string key)
 			{
-				if (!this.MetaData.ContainsKey(key)) throw new KeyNotFoundException($"No key with the specified name \"{key}\"");
+				if (this.MetaData == null || !this.MetaData.ContainsKey(key)) throw new KeyNotFoundException($"No key with the specified name \"{key}\"");
 				return MyAPIGateway.Utilities.SerializeFromBinary<T>(Convert.FromBase64String(this.MetaData[key]));
 			}
 
 			public T GetValueOrDefault<T>(string key, T default_ = default(T))
 			{
-				return (this.MetaData.ContainsKey(key)) ? MyAPIGateway.Utilities.SerializeFromBinary<T>(Convert.FromBase64String(this.MetaData[key])) : default_;
+				return (this.MetaData != null && this.MetaData.ContainsKey(key)) ? MyAPIGateway.Utilities.SerializeFromBinary<T>(Convert.FromBase64String(this.MetaData[key])) : default_;
 			}
 		}
 
@@ -148,8 +150,8 @@ namespace IOTA.ModularJumpGates.EventController
 		protected virtual void AppendCustomInfo(StringBuilder sb)
 		{
 			IMyEventControllerBlock event_controller = this.EventController;
-			sb.Append($"Event: {this.EventDisplayName.String}\n");
-			sb.Append($"Action Triggered: {this.LastActionTriggered}\n\n");
+			string header = MyTexts.GetString("DetailedInfo_JumpGateEventBase_Header").Replace("{%0}", this.EventDisplayName.String).Replace("{%1}", this.LastActionTriggered.ToString());
+			sb.Append($"{header}\n\n");
 			string condition = (event_controller.IsLowerOrEqualCondition) ? "<=" : ">=";
 
 			foreach (KeyValuePair<MyJumpGate, TargetedGateValueType> pair in this.TargetedJumpGates)
@@ -158,11 +160,21 @@ namespace IOTA.ModularJumpGates.EventController
 				{
 					int compare = pair.Value.CompareTo(this.TargetValue);
 					bool matched = (event_controller.IsLowerOrEqualCondition) ? (compare <= 0) : (compare >= 0);
-					sb.Append($" - Jump Gate \"{pair.Key.GetPrintableName()}\" (ID {pair.Key.JumpGateID})\n - ... Condition: {pair.Value} {condition} {this.TargetValue}\n - ... Trigger Action {(matched ? 0 : 1)}\n");
+					string entry = MyTexts.GetString("DetailedInfo_JumpGateEventBase_ConditionalEntry")
+						.Replace("{%0}", pair.Key.GetPrintableName())
+						.Replace("{%1}", pair.Key.JumpGateID.ToString())
+						.Replace("{%2}", pair.Value.ToString())
+						.Replace("{%3}", condition)
+						.Replace("{%4}", this.TargetValue.ToString())
+						.Replace("{%5}", (matched ? "0" : "1"));
+					sb.Append(entry);
 				}
 				else
 				{
-					sb.Append($" - Jump Gate \"{pair.Key.GetPrintableName()}\" (ID {pair.Key.JumpGateID})\n");
+					string entry = MyTexts.GetString("DetailedInfo_JumpGateEventBase_StandardEntry")
+						.Replace("{%0}", pair.Key.GetPrintableName())
+						.Replace("{%1}", pair.Key.JumpGateID.ToString());
+					sb.Append(entry);
 				}
 			}
 		}
@@ -288,7 +300,7 @@ namespace IOTA.ModularJumpGates.EventController
 		{
 			{
 				IMyTerminalControlListbox choose_jump_gate_lb = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlListbox, T>(this.MODID_PREFIX + "JumpGate");
-				choose_jump_gate_lb.Title = MyStringId.GetOrCompute("Jump Gates");
+				choose_jump_gate_lb.Title = MyStringId.GetOrCompute(MyTexts.GetString($"Terminal_JumpGateEventBase_JumpGates"));
 				choose_jump_gate_lb.SupportsMultipleBlocks = false;
 				choose_jump_gate_lb.Visible = block => block.Components.Get<EventType>()?.IsSelected ?? false;
 				choose_jump_gate_lb.Multiselect = true;
@@ -303,7 +315,8 @@ namespace IOTA.ModularJumpGates.EventController
 					{
 						if (!jump_gate.Closed && this.IsJumpGateValidForList(jump_gate))
 						{
-							MyTerminalControlListBoxItem item = new MyTerminalControlListBoxItem(MyStringId.GetOrCompute($"{jump_gate.GetPrintableName()}"), MyStringId.GetOrCompute($"Jump Gate with {jump_gate.GetJumpGateDrives().Count()} drives\nJump Gate ID: {jump_gate.JumpGateID}"), jump_gate.JumpGateID);
+							string tooltip = $"{MyTexts.GetString("Terminal_JumpGateController_ActiveJumpGateTooltip0").Replace("{%0}", jump_gate.GetJumpGateDrives().Count().ToString()).Replace("{%1}", jump_gate.JumpGateID.ToString())}";
+							MyTerminalControlListBoxItem item = new MyTerminalControlListBoxItem(MyStringId.GetOrCompute($"{jump_gate.GetPrintableName()}"), MyStringId.GetOrCompute(tooltip), jump_gate.JumpGateID);
 							content_list.Add(item);
 							if (event_block.TargetedJumpGates.ContainsKey(jump_gate)) preselect_list.Add(item);
 						}

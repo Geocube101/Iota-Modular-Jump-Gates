@@ -14,15 +14,16 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// Creates a new null wrapper
 		/// </summary>
 		/// <param name="serialized">The serialized block data</param>
-		public MyJumpGateServerAntenna(MySerializedJumpGateServerAntenna serialized) : base(serialized)
+		/// <param name="parent">The containing grid or null to calculate</param>
+		public MyJumpGateServerAntenna(MySerializedJumpGateServerAntenna serialized, MyJumpGateConstruct parent = null) : base(serialized, parent)
 		{
-			this.FromSerialized(serialized);
+			this.FromSerialized(serialized, parent);
 		}
 		#endregion
 
-		public bool FromSerialized(MySerializedJumpGateServerAntenna antenna)
+		public bool FromSerialized(MySerializedJumpGateServerAntenna antenna, MyJumpGateConstruct parent = null)
 		{
-			if (!base.FromSerialized(antenna)) return false;
+			if (!base.FromSerialized(antenna, parent)) return false;
 			return true;
 		}
 

@@ -1,6 +1,7 @@
 ﻿using IOTA.ModularJumpGates.EventController.ObjectBuilders;
 using Sandbox.ModAPI;
 using Sandbox.ModAPI.Interfaces.Terminal;
+using VRage;
 using VRage.Game.Components;
 using VRage.Utils;
 
@@ -17,10 +18,11 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 		public override bool IsConditionSelectionUsed => true;
 		public override bool IsBlocksListUsed => false;
 		public override long UniqueSelectionId => 0x7FFFFFFFFFFFFFFD;
-		public override MyStringId EventDisplayName => MyStringId.GetOrCompute("Jump Gate Entity Count Changed");
+		public override MyStringId EventDisplayName => MyStringId.GetOrCompute(MyTexts.GetString("DisplayName_JumpGateEntityCountChangedEvent"));
+
 		public override string ComponentTypeDebugString => nameof(JumpGateEntityCountChangedEvent);
-		public override string YesNoToolbarYesDescription => $"Number of Entities {((this.EventController.IsLowerOrEqualCondition) ? "<=" : ">=")} {MyJumpGateModSession.AutoconvertSciNotUnits(this.TargetValue, 0)}";
-		public override string YesNoToolbarNoDescription => $"Number of Entities {((this.EventController.IsLowerOrEqualCondition) ? ">=" : "<=")} {MyJumpGateModSession.AutoconvertSciNotUnits(this.TargetValue, 0)}";
+		public override string YesNoToolbarYesDescription => MyTexts.GetString("DisplayName_JumpGateEntityCountChangedEvent_YesDescription").Replace("{%0}", ((this.EventController.IsLowerOrEqualCondition) ? "<=" : ">=").Replace("{%1}", MyJumpGateModSession.AutoconvertSciNotUnits(this.TargetValue, 0).ToString()));
+		public override string YesNoToolbarNoDescription => MyTexts.GetString("DisplayName_JumpGateEntityCountChangedEvent_NoDescription").Replace("{%0}", ((this.EventController.IsLowerOrEqualCondition) ? ">=" : "<=").Replace("{%1}", MyJumpGateModSession.AutoconvertSciNotUnits(this.TargetValue, 0).ToString()));
 
 		protected override void CheckValueAgainstTarget(int new_value, int old_value, int target)
 		{
@@ -57,11 +59,11 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 		{
 			{
 				IMyTerminalControlOnOffSwitch is_controller_filtered = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlOnOffSwitch, T>(this.MODID_PREFIX + "IsFiltered");
-				is_controller_filtered.Title = MyStringId.GetOrCompute("Use Filtered Entities");
-				is_controller_filtered.Tooltip = MyStringId.GetOrCompute("Whether to respect attached controller filter settings");
-				is_controller_filtered.OnText = MyStringId.GetOrCompute("Yes");
-				is_controller_filtered.OffText = MyStringId.GetOrCompute("No");
-				is_controller_filtered.SupportsMultipleBlocks = false;
+				is_controller_filtered.Title = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateEntityCountChangedEvent_UseFilteredOnly"));
+				is_controller_filtered.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateEntityCountChangedEvent_UseFilteredOnly_Tooltip"));
+				is_controller_filtered.OnText = MyStringId.GetOrCompute(MyTexts.GetString("GeneralText_Yes"));
+				is_controller_filtered.OffText = MyStringId.GetOrCompute(MyTexts.GetString("GeneralText_No"));
+				is_controller_filtered.SupportsMultipleBlocks = true;
 				is_controller_filtered.Visible = block => block.Components.Get<JumpGateEntityCountChangedEvent>()?.IsSelected ?? false;
 				is_controller_filtered.Getter = block => block.Components.Get<JumpGateEntityCountChangedEvent>().IsControllerFiltered;
 				is_controller_filtered.Setter = (block, value) => {
@@ -74,9 +76,9 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 
 			{
 				IMyTerminalControlSlider entity_count_sdr = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSlider, T>(this.MODID_PREFIX + "TargetCount");
-				entity_count_sdr.Title = MyStringId.GetOrCompute("Entity Count");
-				entity_count_sdr.Tooltip = MyStringId.GetOrCompute("The number of jump space entitites to check against");
-				entity_count_sdr.SupportsMultipleBlocks = false;
+				entity_count_sdr.Title = MyStringId.GetOrCompute($"{MyTexts.GetString("Terminal_JumpGateEntityCountChangedEvent_EntityCount")}:");
+				entity_count_sdr.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateEntityCountChangedEvent_EntityCount_Tooltip"));
+				entity_count_sdr.SupportsMultipleBlocks = true;
 				entity_count_sdr.Visible = block => block.Components.Get<JumpGateEntityCountChangedEvent>()?.IsSelected ?? false;
 				entity_count_sdr.SetLimits(0f, uint.MaxValue);
 				entity_count_sdr.Writer = (block, string_builder) => string_builder.Append(MyJumpGateModSession.AutoconvertSciNotUnits(block.Components.Get<JumpGateEntityCountChangedEvent>().TargetValue, 0));

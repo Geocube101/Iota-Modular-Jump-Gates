@@ -6,12 +6,12 @@ using Sandbox.Game.Components;
 using Sandbox.Game.EntityComponents;
 using Sandbox.ModAPI;
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using System.Text;
 using System.Threading;
+using VRage;
 using VRage.Game;
 using VRage.Game.Components;
 using VRage.Game.Entity;
@@ -47,42 +47,46 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			[ProtoMember(4)]
 			private bool HasVectorNormalOverride_V = false;
 			[ProtoMember(5)]
-			private MyFactionDisplayType FactionDisplayType_V = MyFactionDisplayType.FRIENDLY | MyFactionDisplayType.OWNED;
+			public byte RemoteAntennaChannel_V = 0xFF;
 			[ProtoMember(6)]
-			private double JumpSpaceRadius_V = 250d;
+			private MyFactionDisplayType FactionDisplayType_V = MyFactionDisplayType.FRIENDLY | MyFactionDisplayType.OWNED;
 			[ProtoMember(7)]
-			private double JumpSpaceDepthPercent_V = 0.2d;
+			private double JumpSpaceRadius_V = 250d;
 			[ProtoMember(8)]
-			private long JumpGateID_V = -1;
+			private double JumpSpaceDepthPercent_V = 0.2d;
 			[ProtoMember(9)]
-			private string JumpEffectName_V = "standard";
+			private long JumpGateID_V = -1;
 			[ProtoMember(10)]
-			private string JumpGateName_V = null;
+			private long RemoteAntennaID_V = -1;
 			[ProtoMember(11)]
-			private Vector3D VectorNormal_V = Vector3D.Zero;
+			private string JumpEffectName_V = "standard";
 			[ProtoMember(12)]
-			private Color EffectColorShift_V = Color.White;
+			private string JumpGateName_V = null;
 			[ProtoMember(13)]
-			private MyJumpGateWaypoint SelectedWaypoint_V = null;
+			private Vector3D VectorNormal_V = Vector3D.Zero;
 			[ProtoMember(14)]
-			private List<long> BlacklistedEntities = new List<long>();
+			private Color EffectColorShift_V = Color.White;
 			[ProtoMember(15)]
-			private float MinimumEntityMass_V = 0;
+			private MyJumpGateWaypoint SelectedWaypoint_V = null;
 			[ProtoMember(16)]
-			private float MaximumEntityMass_V = float.PositiveInfinity;
+			private List<long> BlacklistedEntities = new List<long>();
 			[ProtoMember(17)]
-			private uint MinimumCubeGridSize_V = 0;
+			private float MinimumEntityMass_V = 0;
 			[ProtoMember(18)]
-			private uint MaximumCubeGridSize_V = uint.MaxValue;
+			private float MaximumEntityMass_V = float.PositiveInfinity;
 			[ProtoMember(19)]
-			private float MinimumAutoMass_V = 0;
+			private uint MinimumCubeGridSize_V = 0;
 			[ProtoMember(20)]
-			private float MaximumAutoMass_V = float.PositiveInfinity;
+			private uint MaximumCubeGridSize_V = uint.MaxValue;
 			[ProtoMember(21)]
-			private double MinimumAutoPower_V = 0;
+			private float MinimumAutoMass_V = 0;
 			[ProtoMember(22)]
-			private double MaximumAutoPower_V = double.PositiveInfinity;
+			private float MaximumAutoMass_V = float.PositiveInfinity;
 			[ProtoMember(23)]
+			private double MinimumAutoPower_V = 0;
+			[ProtoMember(24)]
+			private double MaximumAutoPower_V = double.PositiveInfinity;
+			[ProtoMember(25)]
 			private float AutoActivationDelay_V = 0;
 
 			private readonly object WriterLock = new object();
@@ -120,6 +124,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 					this.VectorNormal_V = (Vector3D) mapping.GetValueOrDefault("VectorNormal", this.VectorNormal_V);
 					this.EffectColorShift_V = (Color) mapping.GetValueOrDefault("EffectColorShift", this.EffectColorShift_V);
 					this.JumpGateName_V = (name != null && (name.StartsWith("#") || name.Contains(';'))) ? this.JumpGateName_V : name;
+					this.RemoteAntennaChannel_V = (byte) mapping.GetValueOrDefault("RemoteAntennaChannel", this.RemoteAntennaChannel_V);
 
 					{
 						object selected_waypoint = mapping.GetValueOrDefault("SelectedWaypoint", null);
@@ -132,9 +137,9 @@ namespace IOTA.ModularJumpGates.CubeBlock
 							IMyGps gps = MyAPIGateway.Session.GPS.Create("�TemporaryGPS�", $"[{Math.Round(position.X, 2)}, {Math.Round(position.Y, 2)}, {Math.Round(position.Z, 2)}]", position, false);
 							result_waypoint = new MyJumpGateWaypoint(gps);
 						}
-						else if (selected_waypoint is Guid)
+						else if (selected_waypoint is long[])
 						{
-							MyJumpGate target_gate = MyJumpGateModSession.Instance.GetJumpGate(JumpGateUUID.FromGuid((Guid) selected_waypoint));
+							MyJumpGate target_gate = MyJumpGateModSession.Instance.GetJumpGate(new JumpGateUUID((long[]) selected_waypoint));
 							if (target_gate == null) throw new InvalidGuuidException("The specified jump gate does not exist");
 							result_waypoint = new MyJumpGateWaypoint(target_gate);
 						}
@@ -202,6 +207,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 						["CanBeInbound"] = this.CanBeInbound_V,
 						["CanBeOutbound"] = this.CanBeOutbound_V,
 						["HasVectorNormalOverride"] = this.HasVectorNormalOverride_V,
+						["RemoteAntennaChannel"] = this.RemoteAntennaChannel_V,
 						["FactionDisplayType"] = this.FactionDisplayType_V,
 						["JumpSpaceRadius"] = this.JumpSpaceRadius_V,
 						["JumpSpaceDepthPercent"] = this.JumpSpaceDepthPercent_V,
@@ -279,6 +285,10 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			{
 				lock (this.WriterLock) this.HasVectorNormalOverride_V = flag;
 			}
+			public void RemoteAntennaChannel(byte channel)
+			{
+				lock (this.WriterLock) this.RemoteAntennaChannel_V = (channel >= MyJumpGateRemoteAntenna.ChannelCount) ? (byte) 0xFF : channel;
+			}
 			public void AutoActivationDelay(float seconds)
 			{
 				lock (this.WriterLock) this.AutoActivationDelay_V = MathHelper.Clamp(seconds, 0, 60);
@@ -297,6 +307,11 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			{
 				id = Math.Max(id, -1);
 				lock (this.WriterLock) this.JumpGateID_V = id;
+			}
+			public void RemoteAntennaID(long id)
+			{
+				id = Math.Max(id, -1);
+				lock (this.WriterLock) this.RemoteAntennaID_V = id;
 			}
 			public void JumpEffectAnimationName(string name)
 			{
@@ -426,6 +441,10 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			{
 				return this.HasVectorNormalOverride_V;
 			}
+			public byte RemoteAntennaChannel()
+			{
+				return this.RemoteAntennaChannel_V;
+			}
 			public float AutoActivationDelay()
 			{
 				return this.AutoActivationDelay_V;
@@ -441,6 +460,10 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			public long JumpGateID()
 			{
 				return Math.Max(this.JumpGateID_V, -1);
+			}
+			public long RemoteAntennaID()
+			{
+				return Math.Max(this.RemoteAntennaID_V, -1);
 			}
 			public string JumpEffectAnimationName()
 			{
@@ -555,6 +578,45 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// The block data for this block
 		/// </summary>
 		public MyControllerBlockSettingsStruct BlockSettings { get; private set; }
+
+		/// <summary>
+		/// The antenna and channel this controller is searching for jump gates through
+		/// </summary>
+		public KeyValuePair<MyJumpGateRemoteAntenna, byte> RemoteAntennaChannel
+		{
+			get
+			{
+				long antenna_id = this.BlockSettings.RemoteAntennaID();
+				if (antenna_id == -1) return new KeyValuePair<MyJumpGateRemoteAntenna, byte>(null, 0xFF);
+				MyJumpGateRemoteAntenna antenna = this.JumpGateGrid?.GetRemoteAntenna(antenna_id);
+				byte channel = this.BlockSettings.RemoteAntennaChannel();
+				return new KeyValuePair<MyJumpGateRemoteAntenna, byte>((channel == 0xFF) ? null : antenna, channel);
+			}
+		}
+
+		/// <summary>
+		/// The antenna this controller is searching for jump gates through
+		/// </summary>
+		public MyJumpGateRemoteAntenna RemoteAntenna
+		{
+			get
+			{
+				KeyValuePair<MyJumpGateRemoteAntenna, byte> antenna = this.RemoteAntennaChannel;
+				return (antenna.Value == 0xFF) ? null : antenna.Key;
+			}
+		}
+
+		/// <summary>
+		/// The antenna this controller's antenna is connected to or null
+		/// </summary>
+		public MyJumpGateRemoteAntenna ConnectedRemoteAntenna
+		{
+			get
+			{
+				KeyValuePair<MyJumpGateRemoteAntenna, byte> remote_antenna = this.RemoteAntennaChannel;
+				return remote_antenna.Key?.GetConnectedRemoteAntenna(remote_antenna.Value);
+			}
+		}
 		#endregion
 
 		#region Constructors
@@ -564,9 +626,10 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// Creates a new null wrapper
 		/// </summary>
 		/// <param name="serialized">The serialized block data</param>
-		public MyJumpGateController(MySerializedJumpGateController serialized) : base(serialized)
+		/// <param name="parent">The containing grid or null to calculate</param>
+		public MyJumpGateController(MySerializedJumpGateController serialized, MyJumpGateConstruct parent = null) : base(serialized, parent)
 		{
-			this.FromSerialized(serialized);
+			this.FromSerialized(serialized, parent);
 		}
 		#endregion
 
@@ -601,8 +664,6 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				double distance = (jump_node == null) ? -1 : Vector3D.Distance(endpoint, jump_node.Value);
 				double distance_ratio = jump_gate?.CalculateDistanceRatio(ref endpoint) ?? -1;
 				double total_mass_kg = 0;
-				double total_required_power_mw = jump_gate?.CalculateTotalRequiredPower(endpoint, null, total_mass_kg) ?? double.NaN;
-				double total_available_power_mw = this_grid?.CalculateTotalAvailableInstantPower(jump_gate?.JumpGateID ?? -1) ?? double.NaN;
 				StringBuilder entity_list = new StringBuilder();
 
 				if (jump_gate != null)
@@ -644,78 +705,81 @@ namespace IOTA.ModularJumpGates.CubeBlock
 					}
 				}
 
-				sb.Append($"\n-=-=-=( Jump Gate Controller )=-=-=-\n");
-				sb.Append($" Input: {input_wattage} MW\n");
-				sb.Append($" Required Input: {required_input} MW\n");
-				sb.Append($" Input Ratio: {Math.Round(MathHelperD.Clamp(input_wattage / required_input, 0, 1) * 100, 2):#.00}%\n");
-				sb.Append($" Attached Jump Gate: {jump_gate?.GetPrintableName() ?? "N/A"}\n");
-				sb.Append($" Attached Jump Gate ID: {jump_gate?.JumpGateID.ToString() ?? "N/A"}\n");				
+				double total_required_power_mw = jump_gate?.CalculateTotalRequiredPower(endpoint, null, total_mass_kg) ?? double.NaN;
+				double total_available_power_mw = this_grid?.CalculateTotalAvailableInstantPower(jump_gate?.JumpGateID ?? -1) ?? double.NaN;
 
-				sb.Append($"\n[color=#FF78FFFB]--- Jump Gate Info ---[/color][color=#FF5ABFBC]\n");
-				sb.Append($" - Status: {jump_gate?.Status.ToString() ?? "N/A"}\n");
-				sb.Append($" - Phase: {jump_gate?.Phase.ToString() ?? "N/A"}\n");
-				sb.Append($" - Drive Count: {jump_gate?.GetWorkingJumpGateDrives().Count().ToString() ?? "N/A"}\n");
-				sb.Append($" - Grid Size Type: {jump_gate?.CubeGridSize().ToString() ?? "N/A"}\n");
-				sb.Append($" - Radius: {((jump_gate == null) ? "N/A" : MyJumpGateModSession.AutoconvertMetricUnits(jump_ellipse.Value.Radii.X, "m", 4))}\n");
-				sb.Append($" - Effective Radius: {((jump_gate == null) ? "N/A" : MyJumpGateModSession.AutoconvertMetricUnits(jump_ellipse.Value.Radii.X, "m", 4))}\n");
-				sb.Append($" - Node Velocity: {((jump_gate == null) ? "N/A" : MyJumpGateModSession.AutoconvertMetricUnits(jump_gate.JumpNodeVelocity.Length(), "m/s", 4))}[/color]\n");
+				sb.Append($"\n-=-=-=( {MyTexts.GetString("DisplayName_CubeBlock_JumpGateController")} )=-=-=-\n");
+				sb.Append($" {MyTexts.GetString("DetailedInfo_BlockBase_Input")}: {input_wattage} MW\n");
+				sb.Append($" {MyTexts.GetString("DetailedInfo_BlockBase_RequiredInput")}: {required_input} MW\n");
+				sb.Append($" {MyTexts.GetString("DetailedInfo_BlockBase_InputRatio")}: {Math.Round(MathHelperD.Clamp(input_wattage / required_input, 0, 1) * 100, 2):#.00}%\n");
+				sb.Append($" {MyTexts.GetString("DetailedInfo_JumpGateController_AttachedJumpGate")}: {jump_gate?.GetPrintableName() ?? "N/A"}\n");
+				sb.Append($" {MyTexts.GetString("DetailedInfo_JumpGateController_AttachedJumpGateId")}: {jump_gate?.JumpGateID.ToString() ?? "N/A"}\n");				
 
-				sb.Append($"\n[color=#FF26FF3C]--- Jump Gate Distances ---[/color][color=#FF1CBF2D]\n");
-				sb.Append($" - Max Possible Distance: {((jump_gate == null) ? "N/A" : MyJumpGateModSession.AutoconvertMetricUnits(jump_gate.JumpGateConfiguration.MaximumJumpDistance, "m", 4))}\n");
-				sb.Append($" - Min Possible Distance: {((jump_gate == null) ? "N/A" : MyJumpGateModSession.AutoconvertMetricUnits(jump_gate.JumpGateConfiguration.MinimumJumpDistance, "m", 4))}\n");
-				sb.Append($" - Reasonable Distance: {((jump_gate == null) ? "N/A" : MyJumpGateModSession.AutoconvertMetricUnits(jump_gate.CalculateMaxGateDistance(), "m", 4))}\n");
-				sb.Append($" - Ideal 50-Gate Distance: {((jump_gate == null) ? "N/A" : MyJumpGateModSession.AutoconvertMetricUnits(jump_gate.JumpGateConfiguration.MaxJumpGate50Distance, "m", 4))}\n");
-				sb.Append($" - Distance to Target: {((jump_gate == null) ? "N/A" : MyJumpGateModSession.AutoconvertMetricUnits(distance, "m", 4))}\n");
-				sb.Append($" - Drives Needed: {((jump_gate == null) ? "N/A" : jump_gate.CalculateDrivesRequiredForDistance(distance).ToString())}\n");
-				sb.Append($" - Distance Ratio: {((jump_gate == null) ? "N/A" : MyJumpGateModSession.AutoconvertSciNotUnits(distance_ratio, 4))}\n");
+				sb.Append($"\n[color=#FF78FFFB]--- {MyTexts.GetString("DetailedInfo_JumpGateController_HeaderJumpGateInfo")} ---[/color][color=#FF5ABFBC]\n");
+				sb.Append($" - {MyTexts.GetString("StatusText_Status")}: {((jump_gate == null) ? "N/A" : MyTexts.GetString($"StatusText_{jump_gate.Status}"))}\n");
+				sb.Append($" - {MyTexts.GetString("PhaseText_Phase")}: {((jump_gate == null) ? "N/A" : MyTexts.GetString($"PhaseText_{jump_gate.Phase}"))}\n");
+				sb.Append($" - {MyTexts.GetString("DetailedInfo_JumpGateController_DriveCount")}: {jump_gate?.GetWorkingJumpGateDrives().Count().ToString() ?? "N/A"}\n");
+				sb.Append($" - {MyTexts.GetString("DetailedInfo_JumpGateController_GridSize")}: {jump_gate?.CubeGridSize().ToString() ?? "N/A"}\n");
+				sb.Append($" - {MyTexts.GetString("DetailedInfo_JumpGateController_Radius")}: {((jump_gate == null) ? "N/A" : MyJumpGateModSession.AutoconvertMetricUnits(jump_ellipse.Value.Radii.X, "m", 4))}\n");
+				sb.Append($" - {MyTexts.GetString("DetailedInfo_JumpGateController_EffectiveRadius")}: {((jump_gate == null) ? "N/A" : MyJumpGateModSession.AutoconvertMetricUnits(jump_ellipse.Value.Radii.X, "m", 4))}\n");
+				sb.Append($" - {MyTexts.GetString("DetailedInfo_JumpGateController_NodeVelocity")}: {((jump_gate == null) ? "N/A" : MyJumpGateModSession.AutoconvertMetricUnits(jump_gate.JumpNodeVelocity.Length(), "m/s", 4))}[/color]\n");
+
+				sb.Append($"\n[color=#FF26FF3C]--- {MyTexts.GetString("DetailedInfo_JumpGateController_HeaderJumpGateDistances")} ---[/color][color=#FF1CBF2D]\n");
+				sb.Append($" - {MyTexts.GetString("DetailedInfo_JumpGateController_MaxPossibleDistance")}: {((jump_gate == null) ? "N/A" : MyJumpGateModSession.AutoconvertMetricUnits(jump_gate.JumpGateConfiguration.MaximumJumpDistance, "m", 4))}\n");
+				sb.Append($" - {MyTexts.GetString("DetailedInfo_JumpGateController_MinPossibleDistance")}: {((jump_gate == null) ? "N/A" : MyJumpGateModSession.AutoconvertMetricUnits(jump_gate.JumpGateConfiguration.MinimumJumpDistance, "m", 4))}\n");
+				sb.Append($" - {MyTexts.GetString("DetailedInfo_JumpGateController_ReasonableDistance")}: {((jump_gate == null) ? "N/A" : MyJumpGateModSession.AutoconvertMetricUnits(jump_gate.CalculateMaxGateDistance(), "m", 4))}\n");
+				sb.Append($" - {MyTexts.GetString("DetailedInfo_JumpGateController_Ideal50Distance")}: {((jump_gate == null) ? "N/A" : MyJumpGateModSession.AutoconvertMetricUnits(jump_gate.JumpGateConfiguration.MaxJumpGate50Distance, "m", 4))}\n");
+				sb.Append($" - {MyTexts.GetString("DetailedInfo_JumpGateController_TargetDistance")}: {((jump_gate == null) ? "N/A" : MyJumpGateModSession.AutoconvertMetricUnits(distance, "m", 4))}\n");
+				sb.Append($" - {MyTexts.GetString("DetailedInfo_JumpGateController_NeededDrives")}: {((jump_gate == null) ? "N/A" : jump_gate.CalculateDrivesRequiredForDistance(distance).ToString())}\n");
+				sb.Append($" - {MyTexts.GetString("DetailedInfo_JumpGateController_DistanceRatio")}: {((jump_gate == null) ? "N/A" : MyJumpGateModSession.AutoconvertSciNotUnits(distance_ratio, 4))}\n");
 				sb.Append("[/color]");
 
-				sb.Append($"\n[color=#FFFF6E26]--- Power Info ---[/color][color=#FFBF521C]\n");
-				sb.Append($" - Power Factor: {((jump_gate == null) ? "N/A" : MyJumpGateModSession.AutoconvertSciNotUnits(jump_gate.CalculatePowerFactorFromDistanceRatio(distance_ratio), 4))}\n");
-				sb.Append($" - Jump Space Mass: {((jump_gate == null) ? "N/A" : MyJumpGateModSession.AutoconvertMetricUnits(total_mass_kg * 1000, "g", 4))}\n");
-				sb.Append($" - Power Density: {((jump_gate == null) ? "N/A" : MyJumpGateModSession.AutoconvertMetricUnits(jump_gate.CalculateUnitPowerRequiredForJump(ref endpoint) * 1000, "w/kg", 4))}\n");
-				sb.Append($" - Total Required Power: {((jump_gate == null) ? "N/A" : MyJumpGateModSession.AutoconvertMetricUnits(total_required_power_mw * 1e6, "w", 2))}\n");
-				sb.Append($" - Available Instant Power: {((jump_gate == null) ? "N/A" : MyJumpGateModSession.AutoconvertMetricUnits(total_available_power_mw * 1e6, "w", 2))}\n");
-				sb.Append($" - Power Percentage: {((jump_gate == null) ? "N/A" : $"{Math.Round(MathHelper.Clamp(total_available_power_mw / total_required_power_mw, 0, 1) * 100, 2)}%")}[/color]\n");
+				sb.Append($"\n[color=#FFFF6E26]--- {MyTexts.GetString("DetailedInfo_JumpGateController_HeaderPowerInfo")} ---[/color][color=#FFBF521C]\n");
+				sb.Append($" - {MyTexts.GetString("DetailedInfo_JumpGateController_PowerFactor")}: {((jump_gate == null) ? "N/A" : MyJumpGateModSession.AutoconvertSciNotUnits(jump_gate.CalculatePowerFactorFromDistanceRatio(distance_ratio), 4))}\n");
+				sb.Append($" - {MyTexts.GetString("DetailedInfo_JumpGateController_JumpSpaceMass")}: {((jump_gate == null) ? "N/A" : MyJumpGateModSession.AutoconvertMetricUnits(total_mass_kg * 1000, "g", 4))}\n");
+				sb.Append($" - {MyTexts.GetString("DetailedInfo_JumpGateController_PowerDensity")}: {((jump_gate == null) ? "N/A" : MyJumpGateModSession.AutoconvertMetricUnits(jump_gate.CalculateUnitPowerRequiredForJump(ref endpoint) * 1000, "w/kg", 4))}\n");
+				sb.Append($" - {MyTexts.GetString("DetailedInfo_JumpGateController_TotalRequiredPower")}: {((jump_gate == null) ? "N/A" : MyJumpGateModSession.AutoconvertMetricUnits(total_required_power_mw * 1e6, "w", 2))}\n");
+				sb.Append($" - {MyTexts.GetString("DetailedInfo_JumpGateController_AvailableInstantPower")}: {((jump_gate == null) ? "N/A" : MyJumpGateModSession.AutoconvertMetricUnits(total_available_power_mw * 1e6, "w", 2))}\n");
+				sb.Append($" - {MyTexts.GetString("DetailedInfo_JumpGateController_PowerPercentage")}: {((jump_gate == null) ? "N/A" : $"{Math.Round(MathHelper.Clamp(total_available_power_mw / total_required_power_mw, 0, 1) * 100, 2)}%")}[/color]\n");
 
-				sb.Append($"\n[color=#FFC226FF]--- Jump Space Entities ---[/color]\n");
+				sb.Append($"\n[color=#FFC226FF]--- {MyTexts.GetString("DetailedInfo_JumpGateController_HeaderJumpSpaceEntities")} ---[/color]\n");
 				sb.Append(entity_list);
 
-				sb.Append($"\n[color=#FF78FFFB]--- Construct Info ---[/color][color=#FF5ABFBC]\n");
-				sb.Append($" - Main Grid: {(this_grid?.CubeGridID.ToString() ?? "N/A")}\n");
-				sb.Append($" - Main Grid Name: {(this_grid?.PrimaryCubeGridCustomName ?? "N/A")}\n");
-				sb.Append($" - Static Grids: {((this_grid == null) ? "N/A" : $"{this.TEMP_DetailedInfoConstructsList.Count((grid) => grid.IsStatic)}")}/{this.TEMP_DetailedInfoConstructsList.Count}\n");
-				sb.Append($" - Total Grid Drives: {(this_grid?.GetAttachedJumpGateDrives().Count().ToString() ?? "N/A")}\n");
-				sb.Append($" - Total Grid Gates: {(this_grid?.GetJumpGates().Count().ToString() ?? "N/A")}[/color]\n");
+				sb.Append($"\n[color=#FF78FFFB]--- {MyTexts.GetString("DetailedInfo_JumpGateController_HeaderConstructInfo")} ---[/color][color=#FF5ABFBC]\n");
+				sb.Append($" - {MyTexts.GetString("DetailedInfo_JumpGateController_MainGrid")}: {(this_grid?.CubeGridID.ToString() ?? "N/A")}\n");
+				sb.Append($" - {MyTexts.GetString("DetailedInfo_JumpGateController_MainGridName")}: {(this_grid?.PrimaryCubeGridCustomName ?? "N/A")}\n");
+				sb.Append($" - {MyTexts.GetString("DetailedInfo_JumpGateController_StaticGrids")}: {((this_grid == null) ? "N/A" : $"{this.TEMP_DetailedInfoConstructsList.Count((grid) => grid.IsStatic)}")}/{this.TEMP_DetailedInfoConstructsList.Count}\n");
+				sb.Append($" - {MyTexts.GetString("DetailedInfo_JumpGateController_TotalGridDrives")}: {(this_grid?.GetAttachedJumpGateDrives().Count().ToString() ?? "N/A")}\n");
+				sb.Append($" - {MyTexts.GetString("DetailedInfo_JumpGateController_TotalGridGates")}: {(this_grid?.GetJumpGates().Count().ToString() ?? "N/A")}[/color]\n");
 
 				if (MyJumpGateModSession.DebugMode)
 				{
-					sb.Append($"\n--- Debug Info ---[color=#FFCCCCCC]\n");
+					sb.Append($"\n--- {MyTexts.GetString("DetailedInfo_JumpGateController_HeaderDebugInfo")} ---[color=#FFCCCCCC]\n");
 
-					sb.Append($"\n :Construct Info:\n");
-					sb.Append($" ... This Grid ID: {(this.TerminalBlock?.CubeGrid?.EntityId.ToString() ?? "N/A")}\n");
-					sb.Append($" ... Is Current Grid Main: {((this_grid == null) ? "N/A" : (this.TerminalBlock.CubeGrid.EntityId == this_grid.CubeGridID).ToString())}\n");
-					sb.Append($" ... Gate Collider: {jump_gate?.JumpSpaceColliderStatus().ToString() ?? "N/A"}\n");
-					sb.Append($" ... Marked for Gate Update: {((this_grid == null) ? "N/A" : this_grid.MarkUpdateJumpGates.ToString())}\n");
-					sb.Append($"\n <<< Update Times >>>\n");
-					sb.Append($" ... Average: {((this_grid == null) ? "N/A" : Math.Round(this_grid.AverageUpdateTime60(), 4).ToString())}ms\n");
-					sb.Append($" ... Longest: {((this_grid == null) ? "N/A" : Math.Round(this_grid.LongestUpdateTime, 4).ToString())}ms\n");
-					sb.Append($" ... Longest Local: {((this_grid == null) ? "N/A" : Math.Round(this_grid.LocalLongestUpdateTime60(), 4).ToString())}ms\n");
+					sb.Append($"\n :{MyTexts.GetString("DetailedInfo_JumpGateController_HeaderConstructInfo")}:\n");
+					sb.Append($" ... {MyTexts.GetString("DetailedInfo_JumpGateController_ThisGridId")}: {(this.TerminalBlock?.CubeGrid?.EntityId.ToString() ?? "N/A")}\n");
+					sb.Append($" ... {MyTexts.GetString("DetailedInfo_JumpGateController_IsCurrentGridMain")}: {((this_grid == null) ? "N/A" : (this.TerminalBlock.CubeGrid.EntityId == this_grid.CubeGridID).ToString())}\n");
+					sb.Append($" ... {MyTexts.GetString("DetailedInfo_JumpGateController_GateColliderStatus")}: {((jump_gate == null) ? "N/A" : MyTexts.GetString($"ColliderStatusText_{jump_gate.JumpSpaceColliderStatus()}"))}\n");
+					sb.Append($" ... {MyTexts.GetString("DetailedInfo_JumpGateController_MarkedForGateUpdate")}: {((this_grid == null) ? "N/A" : this_grid.MarkUpdateJumpGates.ToString())}\n");
+					sb.Append($"\n <<< {MyTexts.GetString("DetailedInfo_JumpGateController_UpdateTimes")} >>>\n");
+					sb.Append($" ... {MyTexts.GetString("DetailedInfo_JumpGateController_AverageUpdateTime")}: {((this_grid == null) ? "N/A" : Math.Round(this_grid.AverageUpdateTime60(), 4).ToString())}ms\n");
+					sb.Append($" ... {MyTexts.GetString("DetailedInfo_JumpGateController_LongestUpdateTime")}: {((this_grid == null) ? "N/A" : Math.Round(this_grid.LongestUpdateTime, 4).ToString())}ms\n");
+					sb.Append($" ... {MyTexts.GetString("DetailedInfo_JumpGateController_LongestLocalUpdateTime")}: {((this_grid == null) ? "N/A" : Math.Round(this_grid.LocalLongestUpdateTime60(), 4).ToString())}ms\n");
 
-					sb.Append($"\n :Session Info:\n");
-					sb.Append($" ... Session Entities Loaded: {(MyNetworkInterface.IsServerLike ? MyJumpGateModSession.Instance.AllSessionEntitiesLoaded.ToString() : "N/A")}\n");
-					sb.Append($" ... Session Entity Load Time: {(MyNetworkInterface.IsServerLike ? Math.Round((MyJumpGateModSession.Instance.EntityLoadedDelayTicks / 60d), 2).ToString() : "N/A")}\n");
-					sb.Append($"\n <<< Grid Update Times >>>\n");
-					sb.Append($" ... Average: {Math.Round(MyJumpGateModSession.Instance.AverageGridUpdateTime60(), 4)}ms\n");
-					sb.Append($" ... Longest Local: {Math.Round(MyJumpGateModSession.Instance.LocalLongestGridUpdateTime60(), 4)}ms\n");
-					sb.Append($"\n <<< Session Update Times >>>\n");
-					sb.Append($" ... Average: {Math.Round(MyJumpGateModSession.Instance.AverageSessionUpdateTime60(), 4)}ms\n");
-					sb.Append($" ... Longest Local: {Math.Round(MyJumpGateModSession.Instance.LocalLongestSessionUpdateTime60(), 4)}ms\n");
+					sb.Append($"\n :{MyTexts.GetString("DetailedInfo_JumpGateController_HeaderSessionInfo")}:\n");
+					sb.Append($" ... {MyTexts.GetString("DetailedInfo_JumpGateController_SessionEntitiesLoaded")}: {(MyNetworkInterface.IsServerLike ? MyJumpGateModSession.Instance.AllSessionEntitiesLoaded.ToString() : "N/A")}\n");
+					sb.Append($" ... {MyTexts.GetString("DetailedInfo_JumpGateController_SessionEntitiesLoadTime")}: {(MyNetworkInterface.IsServerLike ? Math.Round((MyJumpGateModSession.Instance.EntityLoadedDelayTicks / 60d), 2).ToString() : "N/A")}\n");
+					sb.Append($"\n <<< {MyTexts.GetString("DetailedInfo_JumpGateController_GridUpdateTimes")} >>>\n");
+					sb.Append($" ... {MyTexts.GetString("DetailedInfo_JumpGateController_AverageUpdateTime")}: {Math.Round(MyJumpGateModSession.Instance.AverageGridUpdateTime60(), 4)}ms\n");
+					sb.Append($" ... {MyTexts.GetString("DetailedInfo_JumpGateController_LongestLocalUpdateTime")}: {Math.Round(MyJumpGateModSession.Instance.LocalLongestGridUpdateTime60(), 4)}ms\n");
+					sb.Append($"\n <<< {MyTexts.GetString("DetailedInfo_JumpGateController_SessionUpdateTimes")} >>>\n");
+					sb.Append($" ... {MyTexts.GetString("DetailedInfo_JumpGateController_AverageUpdateTime")}: {Math.Round(MyJumpGateModSession.Instance.AverageSessionUpdateTime60(), 4)}ms\n");
+					sb.Append($" ... {MyTexts.GetString("DetailedInfo_JumpGateController_LongestLocalUpdateTime")}: {Math.Round(MyJumpGateModSession.Instance.LocalLongestSessionUpdateTime60(), 4)}ms\n");
 
-					sb.Append($"\n :MP Update Info:\n");
-					sb.Append($" ... Last Block Update: {this.LastUpdateDateTimeUTC.ToLocalTime().ToLongTimeString()}\n");
-					sb.Append($" ... Last Gate Update: {(jump_gate?.LastUpdateDateTimeUTC.ToLocalTime().ToLongTimeString() ?? "N/A")}\n");
-					sb.Append($" ... Last Grid Update: {this_grid.LastUpdateDateTimeUTC.ToLocalTime().ToLongTimeString()}[/color]\n");
+					sb.Append($"\n :{MyTexts.GetString("DetailedInfo_JumpGateController_HeaderMPUpdateInfo")}:\n");
+					sb.Append($" ... {MyTexts.GetString("DetailedInfo_JumpGateController_LastBlockUpdate")}: {this.LastUpdateDateTimeUTC.ToLocalTime().ToLongTimeString()}\n");
+					sb.Append($" ... {MyTexts.GetString("DetailedInfo_JumpGateController_LastGateUpdate")}: {(jump_gate?.LastUpdateDateTimeUTC.ToLocalTime().ToLongTimeString() ?? "N/A")}\n");
+					sb.Append($" ... {MyTexts.GetString("DetailedInfo_JumpGateController_LastGridUpdate")}: {this_grid.LastUpdateDateTimeUTC.ToLocalTime().ToLongTimeString()}[/color]\n");
 				}
 			}
 		}
@@ -737,6 +801,12 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			this.TEMP_ConstructControllers = null;
 			this.TEMP_DriveHoloBoxes = null;
 			this.BlockSettings = null;
+		}
+
+		protected override void UpdateOnceAfterInit()
+		{
+			base.UpdateOnceAfterInit();
+			if (!MyJumpGateControllerTerminal.IsLoaded) MyJumpGateControllerTerminal.Load(this.ModContext);
 		}
 
 		/// <summary>
@@ -833,11 +903,9 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		public override void UpdateAfterSimulation()
 		{
 			base.UpdateAfterSimulation();
-			if (MyJumpGateModSession.Instance.AllFirstTickComplete() && !MyJumpGateControllerTerminal.IsLoaded) MyJumpGateControllerTerminal.Load(this.ModContext);
-
 			bool working;
 			if (this.TerminalBlock?.CubeGrid?.Physics == null || this.TerminalBlock.MarkedForClose) return;
-			else if (working = this.IsWorking()) this.TerminalBlock.SetEmissiveParts("Emissive0", Color.Green, 1);
+			else if (working = this.IsWorking) this.TerminalBlock.SetEmissiveParts("Emissive0", Color.Lime, 1);
 			else if (this.TerminalBlock.IsFunctional) this.TerminalBlock.SetEmissiveParts("Emissive0", Color.Red, 1);
 			else this.TerminalBlock.SetEmissiveParts("Emissive0", Color.Black, 1);
 			
@@ -850,6 +918,15 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				this.AttachedJumpGate(null);
 				jump_gate = null;
 				jump_gate_valid = false;
+			}
+
+			// Update antenna
+			MyJumpGateRemoteAntenna antenna = this.RemoteAntenna;
+
+			if (antenna != null && (antenna.JumpGateGrid?.MarkClosed ?? true))
+			{
+				this.BlockSettings.RemoteAntennaChannel(0xFF);
+				this.BlockSettings.RemoteAntennaID(-1);
 			}
 
 			// Update waypoints
@@ -939,7 +1016,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 						}
 					}
 
-					if (jump_gate_valid && this.AttachedJumpGateDrives.Count((drive) => drive.IsWorking()) >= 2)
+					if (jump_gate_valid && this.AttachedJumpGateDrives.Count((drive) => drive.IsWorking) >= 2)
 					{
 						MatrixD holo_matrix = jump_ellipse.WorldMatrix;
 						holo_matrix.Translation = table_holo_center;
@@ -957,11 +1034,11 @@ namespace IOTA.ModularJumpGates.CubeBlock
 
 						foreach (MyJumpGateDrive drive in this.AttachedJumpGateDrives)
 						{
-							Color color = (drive.IsWorking()) ? aqua : red;
+							Color color = (drive.IsWorking) ? aqua : red;
 							MatrixD drive_matrix = this.HoloDisplayScalar * drive.WorldMatrix;
 							Vector3D pos = MyJumpGateModSession.WorldVectorToLocalVectorP(ref jump_ellipse.WorldMatrix, drive.WorldMatrix.Translation);
 							drive_matrix.Translation = MyJumpGateModSession.LocalVectorToWorldVectorP(ref scaled_matrix, pos);
-							BoundingBoxD drive_box = BoundingBoxD.CreateFromSphere(new BoundingSphereD(Vector3D.Zero, (this.IsLargeGrid) ? 10 : 2));
+							BoundingBoxD drive_box = BoundingBoxD.CreateFromSphere(new BoundingSphereD(Vector3D.Zero, (jump_gate.IsLargeGrid()) ? 10 : 2));
 							MySimpleObjectDraw.DrawTransparentBox(ref drive_matrix, ref drive_box, ref color, MySimpleObjectRasterizer.Wireframe, 1, 0.00025f, null, MyJumpGateModSession.MyMaterialsHolder.WeaponLaser, intensity: 10);
 						}
 
@@ -1049,7 +1126,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		{
 			if (packet == null || packet.EpochTime <= this.LastUpdateTime) return;
 			MySerializedJumpGateController serialized = packet.Payload<MySerializedJumpGateController>();
-			if (serialized == null || JumpGateUUID.FromGuid(serialized.UUID).GetBlock() != this.TerminalBlock.EntityId) return;
+			if (serialized == null || serialized.UUID.GetBlock() != this.BlockID) return;
 
 			if (MyNetworkInterface.IsMultiplayerServer && packet.PhaseFrame == 1)
 			{
@@ -1109,6 +1186,28 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			else if (old_gate != null && !old_gate.Closed) old_gate.Controller = null;
 			this.BlockSettings.JumpGateID((jump_gate == null || jump_gate.Closed) ? -1 : jump_gate.JumpGateID);
 			if (jump_gate == null || jump_gate.Closed) return;
+			KeyValuePair<MyJumpGateRemoteAntenna, byte> remote_antenna = this.RemoteAntennaChannel;
+			jump_gate.Controller = this;
+			remote_antenna.Key?.SetControllerForOutboundControl(remote_antenna.Value, null);
+			this.BlockSettings.RemoteAntennaID(-1);
+			this.BlockSettings.RemoteAntennaChannel(0xFF);
+			this.BlockSettings.JumpGateName(jump_gate.GetName());
+		}
+
+		/// <summary>
+		/// Attaches this controller to the specified remote jump gate<br />
+		/// Jump gate must be nul or a jump gate on a different construct as this controller
+		/// </summary>
+		/// <param name="jump_gate">The jump gate to attach to or null to detach</param>
+		public void AttachedRemoteJumpGate(MyJumpGate jump_gate)
+		{
+			MyJumpGate old_gate = this.AttachedJumpGate();
+			if (old_gate == jump_gate || (jump_gate != null && this.JumpGateGrid == jump_gate.JumpGateGrid)) return;
+			else if (old_gate != null && !old_gate.Closed) old_gate.Controller = null;
+			KeyValuePair<MyJumpGateRemoteAntenna, byte> remote_antenna = this.RemoteAntennaChannel;
+			if (remote_antenna.Key == null || remote_antenna.Value == 0xFF || remote_antenna.Key.GetConnectedControlledJumpGate(remote_antenna.Value) != jump_gate) jump_gate = null;
+			this.BlockSettings.JumpGateID((jump_gate == null || jump_gate.Closed) ? -1 : jump_gate.JumpGateID);
+			if (jump_gate == null || jump_gate.Closed || this.RemoteAntenna == null) return;
 			jump_gate.Controller = this;
 			this.BlockSettings.JumpGateName(jump_gate.GetName());
 		}
@@ -1125,16 +1224,25 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		}
 
 		/// <summary>
+		/// </summary>
+		/// <returns>True if the attached jump gate is remote</returns>
+		public bool IsAttachedJumpGateRemote()
+		{
+			MyJumpGate gate = this.AttachedJumpGate();
+			return this.RemoteAntenna != null && gate != null && gate.JumpGateGrid != this.JumpGateGrid;
+		}
+
+		/// <summary>
 		/// Updates this block data from a serialized controller
 		/// </summary>
 		/// <param name="controller">The serialized controller data</param>
+		/// <param name="parent">The containing grid or null to calculate</param>
 		/// <returns>Whether this block was updated</returns>
-		public bool FromSerialized(MySerializedJumpGateController controller)
+		public bool FromSerialized(MySerializedJumpGateController controller, MyJumpGateConstruct parent = null)
 		{
-			if (!base.FromSerialized(controller)) return false;
+			if (!base.FromSerialized(controller, parent)) return false;
 			if (controller.SerializedPanelInfo != null) this.MultiPanelComponent?.Deserialize(controller.SerializedPanelInfo);
-			MyControllerBlockSettingsStruct new_settings = MyAPIGateway.Utilities.SerializeFromBinary<MyControllerBlockSettingsStruct>(Convert.FromBase64String(controller.SerializedBlockSettings));
-			bool can_update_gate_settings = this.AttachedJumpGate()?.IsIdle() ?? true;
+			MyControllerBlockSettingsStruct new_settings = MyAPIGateway.Utilities.SerializeFromBinary<MyControllerBlockSettingsStruct>(controller.BlockSettings);
 
 			if (this.BlockSettings == null)
 			{
@@ -1142,6 +1250,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				return true;
 			}
 
+			bool can_update_gate_settings = this.AttachedJumpGate()?.IsIdle() ?? true;
 			this.BlockSettings.AcquireLock();
 			this.BlockSettings.CanAutoActivate(new_settings.CanAutoActivate());
 			this.BlockSettings.CanBeInbound(new_settings.CanBeInbound());
@@ -1175,6 +1284,8 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				this.BlockSettings.VectorNormalOverride(new_settings.VectorNormalOverride());
 				this.BlockSettings.JumpEffectAnimationColorShift(new_settings.JumpEffectAnimationColorShift());
 				this.BlockSettings.JumpSpaceDepthPercent(new_settings.JumpSpaceDepthPercent());
+				this.BlockSettings.RemoteAntennaChannel(new_settings.RemoteAntennaChannel());
+				this.BlockSettings.RemoteAntennaID(new_settings.RemoteAntennaID());
 			}
 
 			this.BlockSettings.ReleaseLock();
@@ -1242,8 +1353,10 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		public MyJumpGate AttachedJumpGate()
 		{
 			long gate_id = this.BlockSettings?.JumpGateID() ?? -1;
-			if (gate_id < 0 || this.JumpGateGrid == null || this.JumpGateGrid.Closed) return null;
-			return this.JumpGateGrid.GetJumpGate(gate_id);
+			KeyValuePair<MyJumpGateRemoteAntenna, byte> antenna = this.RemoteAntennaChannel;
+			if (gate_id >= 0 && antenna.Value != 0xFF && antenna.Key != null) return antenna.Key?.GetConnectedControlledJumpGate(antenna.Value);
+			else if (gate_id >= 0 && this.JumpGateGrid != null && !this.JumpGateGrid.Closed) return this.JumpGateGrid.GetJumpGate(gate_id);
+			else return null;
 		}
 
 		/// <summary>
@@ -1255,7 +1368,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		{
 			if (as_client_request) return base.ToSerialized<MySerializedJumpGateController>(true);
 			MySerializedJumpGateController serialized = base.ToSerialized<MySerializedJumpGateController>(false);
-			serialized.SerializedBlockSettings = Convert.ToBase64String(MyAPIGateway.Utilities.SerializeToBinary(this.BlockSettings));
+			serialized.BlockSettings = MyAPIGateway.Utilities.SerializeToBinary(this.BlockSettings);
 			serialized.SerializedPanelInfo = this.MultiPanelComponent?.Serialize(true);
 			return serialized;
 		}
@@ -1272,7 +1385,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// The serialized block settings as a base64 string
 		/// </summary>
 		[ProtoMember(20)]
-		public string SerializedBlockSettings;
+		public byte[] BlockSettings;
 
 		/// <summary>
 		/// The serialized text panel component info

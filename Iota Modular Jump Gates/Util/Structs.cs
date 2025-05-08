@@ -83,7 +83,7 @@ namespace IOTA.ModularJumpGates.Util
 			[ProtoMember(6)]
 			public List<Vector3> EntityStartingAngularVelocities;
 			[ProtoMember(7)]
-			public Guid JumpGate;
+			public JumpGateUUID JumpGate;
 			[ProtoMember(8)]
 			public ushort Duration;
 			[ProtoMember(9)]
@@ -182,7 +182,7 @@ namespace IOTA.ModularJumpGates.Util
 					doubles[12], doubles[13], doubles[14], doubles[15]
 				);
 			}).ToList();
-			MyJumpGate jump_gate = MyJumpGateModSession.Instance.GetJumpGate(JumpGateUUID.FromGuid(serialized.JumpGate));
+			MyJumpGate jump_gate = MyJumpGateModSession.Instance.GetJumpGate(serialized.JumpGate);
 			if (jump_gate == null || batch_entities.Count == 0) return null;
 			return new EntityWarpInfo(ref serialized.StartPos, ref serialized.EndPos, ref final_pos, batch_entities, relative_entity_offsets, serialized.EntityStartingAngularVelocities, jump_gate, serialized.Duration, serialized.CurrentTick, serialized.MaxSafeSpeed, callback);
 		}
@@ -390,7 +390,7 @@ namespace IOTA.ModularJumpGates.Util
 					offsets.M41, offsets.M42, offsets.M43, offsets.M44
 				}))).ToList(),
 				EntityStartingAngularVelocities = this.EntityStartingAngularVelocities,
-				JumpGate = JumpGateUUID.FromJumpGate(this.JumpGate).ToGuid(),
+				JumpGate = JumpGateUUID.FromJumpGate(this.JumpGate),
 				Duration = this.Duration,
 				CurrentTick = this.CurrentTick,
 				MaxSafeSpeed = this.MaxSafeSpeed,

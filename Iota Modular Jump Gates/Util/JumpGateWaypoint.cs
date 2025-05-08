@@ -1,5 +1,6 @@
 ﻿using ProtoBuf;
 using System;
+using VRage;
 using VRage.Game.ModAPI;
 using VRageMath;
 
@@ -11,7 +12,7 @@ namespace IOTA.ModularJumpGates.Util
     /// Serializable wrapper for GPSs
     /// </summary>
     [ProtoContract]
-	public class MyGpsWrapper : IEquatable<MyGpsWrapper>
+	internal class MyGpsWrapper : IEquatable<MyGpsWrapper>
     {
 		#region Public Variables
         /// <summary>
@@ -124,7 +125,7 @@ namespace IOTA.ModularJumpGates.Util
 	}
 
 	[ProtoContract]
-    public class MyServerJumpGate : IEquatable<MyServerJumpGate>
+    internal class MyServerJumpGate : IEquatable<MyServerJumpGate>
     {
 		#region Public Variables
         /// <summary>
@@ -232,14 +233,14 @@ namespace IOTA.ModularJumpGates.Util
     /// Class representing a destination for a jump gate
     /// </summary>
 	[ProtoContract]
-    public class MyJumpGateWaypoint : IEquatable<MyJumpGateWaypoint>
+	internal class MyJumpGateWaypoint : IEquatable<MyJumpGateWaypoint>
     {
 		#region Public Variables
         /// <summary>
         /// The target jump gate
         /// </summary>
 		[ProtoMember(1)]
-        public Guid JumpGate { get; private set; } = Guid.Empty;
+        public JumpGateUUID JumpGate { get; private set; } = JumpGateUUID.Empty;
 
         /// <summary>
         /// The target GPS
@@ -305,7 +306,7 @@ namespace IOTA.ModularJumpGates.Util
         /// <param name="jump_gate">The non-null jump gate</param>
         internal MyJumpGateWaypoint(MyJumpGate jump_gate)
         {
-            this.JumpGate = JumpGateUUID.FromJumpGate(jump_gate).ToGuid();
+            this.JumpGate = JumpGateUUID.FromJumpGate(jump_gate);
             this.WaypointType = MyWaypointType.JUMP_GATE;
 		}
 
@@ -361,14 +362,14 @@ namespace IOTA.ModularJumpGates.Util
 		}
 		#endregion
 
-		#region Internal Methods
+		#region Public Methods
 		/// <summary>
 		/// Gets the endpoint of this waypoint in world coordinates
 		/// </summary>
 		/// <param name="target_jump_gate">The targeted jump gate or null if target is not a jump gate</param>
 		/// <returns>The target's world coordinates<br />null if this waypoint is None<br />Vector3D.Zero if this waypoint targets a server</returns>
 		/// <exception cref="InvalidOperationException"></exception>
-		internal Vector3D? GetEndpoint(out MyJumpGate target_jump_gate)
+		public Vector3D? GetEndpoint(out MyJumpGate target_jump_gate)
 		{
 			target_jump_gate = null;
 
@@ -377,7 +378,7 @@ namespace IOTA.ModularJumpGates.Util
 				case MyWaypointType.NONE:
 					return null;
 				case MyWaypointType.JUMP_GATE:
-					target_jump_gate = MyJumpGateModSession.Instance.GetJumpGate(JumpGateUUID.FromGuid(this.JumpGate));
+					target_jump_gate = MyJumpGateModSession.Instance.GetJumpGate(this.JumpGate);
 					if (target_jump_gate == null || (!MyNetworkInterface.IsStandaloneMultiplayerClient && !target_jump_gate.IsValid())) return null;
 					return target_jump_gate.WorldJumpNode;
 				case MyWaypointType.GPS:
@@ -391,9 +392,7 @@ namespace IOTA.ModularJumpGates.Util
 					throw new InvalidOperationException("Waypoint is invalid");
 			}
 		}
-		#endregion
-
-		#region Public Methods
+		
 		/// <summary>
 		/// Whether or this waypoint has a valid target
 		/// </summary>
@@ -434,7 +433,7 @@ namespace IOTA.ModularJumpGates.Util
 					return null;
 				case MyWaypointType.JUMP_GATE:
 				{
-					MyJumpGate jump_gate = MyJumpGateModSession.Instance.GetJumpGate(JumpGateUUID.FromGuid(this.JumpGate));
+					MyJumpGate jump_gate = MyJumpGateModSession.Instance.GetJumpGate(this.JumpGate);
 					if (jump_gate == null || (!MyNetworkInterface.IsStandaloneMultiplayerClient && !jump_gate.IsValid())) return null;
 					return jump_gate.WorldJumpNode;
 				}
@@ -466,17 +465,20 @@ namespace IOTA.ModularJumpGates.Util
 				string grid_name_cut = (grid_name.Length > cutoff) ? $"{grid_name.Substring(0, cutoff - 3)}..." : grid_name;
 				string gate_name = destination_jump_gate.GetPrintableName();
 				string gate_name_cut = (gate_name.Length > cutoff) ? $"{gate_name.Substring(0, cutoff - 3)}..." : gate_name;
-				tooltip = $"{grid_name} - {gate_name}: (Jump Gate {MyJumpGateModSession.AutoconvertMetricUnits(distance, "m", 2)} away)";
-				name = $"{grid_name_cut} - {gate_name_cut}: (Jump Gate {MyJumpGateModSession.AutoconvertMetricUnits(distance, "m", 2)} away)";
+				string value = MyTexts.GetString("Terminal_JumpGateController_JumpGateWaypointTooltip").Replace("{%0}", MyJumpGateModSession.AutoconvertMetricUnits(distance, "m", 2));
+				tooltip = $"{grid_name} - {gate_name}: ({value})";
+				name = $"{grid_name_cut} - {gate_name_cut}: ({value})";
 			}
 			else if (this.WaypointType == MyWaypointType.GPS)
 			{
 				MyGpsWrapper gps = this.GPS;
-				name = tooltip = $"{gps.Name} (GPS {MyJumpGateModSession.AutoconvertMetricUnits(distance, "m", 2)} away)";
+				string value = MyTexts.GetString("Terminal_JumpGateController_GPSWaypointTooltip").Replace("{%0}", MyJumpGateModSession.AutoconvertMetricUnits(distance, "m", 2));
+				name = tooltip = $"{gps.Name} ({value})";
 			}
 			else if (this.WaypointType == MyWaypointType.BEACON)
 			{
-				name = tooltip = $"{this.Beacon.BroadcastName} (Beacon {MyJumpGateModSession.AutoconvertMetricUnits(distance, "m", 2)} away)";
+				string value = MyTexts.GetString("Terminal_JumpGateController_BeaconWaypointTooltip").Replace("{%0}", MyJumpGateModSession.AutoconvertMetricUnits(distance, "m", 2));
+				name = tooltip = $"{this.Beacon.BroadcastName} ({value})";
 			}
 		}
 		#endregion

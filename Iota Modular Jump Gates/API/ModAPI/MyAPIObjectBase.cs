@@ -1,4 +1,5 @@
-﻿using System;
+﻿using IOTA.ModularJumpGates.API.ModAPI.Util;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 
@@ -6,13 +7,12 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 {
 	public abstract class MyAPIObjectBase : IDisposable, IEquatable<MyAPIObjectBase>
 	{
-		private static ulong NextObjectID = 0;
-		private static readonly ConcurrentDictionary<ulong, MyAPIObjectBase> APIObjects = new ConcurrentDictionary<ulong, MyAPIObjectBase>();
+		private static readonly ConcurrentDictionary<JumpGateUUID, MyAPIObjectBase> APIObjects = new ConcurrentDictionary<JumpGateUUID, MyAPIObjectBase>();
 
 		private readonly Dictionary<string, object> ObjectAttributes = new Dictionary<string, object>();
 
 		public bool HandleValid => this.ObjectID != null;
-		public ulong? ObjectID { get; private set; } = null;
+		public JumpGateUUID? ObjectID { get; private set; } = null;
 
 		public static bool operator== (MyAPIObjectBase a, MyAPIObjectBase b)
 		{
@@ -25,9 +25,24 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 			return !(a == b);
 		}
 
+		protected static T GetObjectOrNew<T>(Dictionary<string, object> attributes, Func<T> factory) where T : MyAPIObjectBase
+		{
+			if (attributes == null) return null;
+			JumpGateUUID guid = new JumpGateUUID((long[]) attributes["GUID"]);
+			T dynamic = null;
+
+			for (byte i = 0; i < 100; ++i)
+			{
+				try { return (T) MyAPIObjectBase.APIObjects.GetValueOrDefault(guid, dynamic = (dynamic ?? factory())); }
+				catch (ArgumentException _) { }
+			}
+
+			return null;
+		}
+
 		protected MyAPIObjectBase(Dictionary<string, object> attributes)
 		{
-			this.ObjectID = MyAPIObjectBase.NextObjectID++;
+			this.ObjectID = new JumpGateUUID((long[]) attributes["GUID"]);
 			this.ObjectAttributes = attributes;
 			MyAPIObjectBase.APIObjects[this.ObjectID.Value] = this;
 		}
@@ -63,6 +78,8 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 
 		public void Dispose()
 		{
+			if (this.ObjectID == null) return;
+			else if (this.ObjectAttributes != null && this.ObjectAttributes.ContainsKey("#DEINIT")) ((Action) this.ObjectAttributes["#DEINIT"])();
 			MyAPIObjectBase.APIObjects.Remove(this.ObjectID.Value);
 			this.ObjectID = null;
 			this.ObjectAttributes.Clear();
@@ -82,9 +99,7 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		public override int GetHashCode()
 		{
 			if (this.ObjectAttributes.ContainsKey("#HASH")) return this.GetMethod<Func<int>>("#HASH")();
-			int upper = (int) (this.ObjectID & 0xFFFFFFFF);
-			int lower = (int) ((this.ObjectID >> 32) & 0xFFFFFFFF);
-			return upper ^ lower;
+			else return this.ObjectID.GetHashCode();
 		}
 	}
 }

@@ -3,6 +3,7 @@ using IOTA.ModularJumpGates.EventController.ObjectBuilders;
 using Sandbox.ModAPI;
 using Sandbox.ModAPI.Interfaces.Terminal;
 using System.Collections.Generic;
+using VRage;
 using VRage.Game.Components;
 using VRage.Utils;
 
@@ -20,10 +21,10 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 		public override bool IsConditionSelectionUsed => true;
 		public override bool IsBlocksListUsed => false;
 		public override long UniqueSelectionId => 0x7FFFFFFFFFFFFFF4;
-		public override MyStringId EventDisplayName => MyStringId.GetOrCompute("Jump Gate Drive Count Changed");
+		public override MyStringId EventDisplayName => MyStringId.GetOrCompute(MyTexts.GetString("DisplayName_JumpGateDriveCountChangedEvent"));
 		public override string ComponentTypeDebugString => nameof(JumpGateDriveCountChangedEvent);
-		public override string YesNoToolbarYesDescription => $"Number of Drives {((this.EventController.IsLowerOrEqualCondition) ? "<=" : ">=")} {MyJumpGateModSession.AutoconvertSciNotUnits(this.TargetValue, 0)}";
-		public override string YesNoToolbarNoDescription => $"Number of Drives {((this.EventController.IsLowerOrEqualCondition) ? ">=" : "<=")} {MyJumpGateModSession.AutoconvertSciNotUnits(this.TargetValue, 0)}";
+		public override string YesNoToolbarYesDescription => MyTexts.GetString("DisplayName_JumpGateDriveCountChangedEvent_YesDescription").Replace("{%0}", ((this.EventController.IsLowerOrEqualCondition) ? "<=" : ">=").Replace("{%1}", MyJumpGateModSession.AutoconvertSciNotUnits(this.TargetValue, 0).ToString()));
+		public override string YesNoToolbarNoDescription => MyTexts.GetString("DisplayName_JumpGateDriveCountChangedEvent_NoDescription").Replace("{%0}", ((this.EventController.IsLowerOrEqualCondition) ? ">=" : "<=").Replace("{%1}", MyJumpGateModSession.AutoconvertSciNotUnits(this.TargetValue, 0).ToString()));
 
 		protected override void CheckValueAgainstTarget(int new_value, int old_value, int target)
 		{
@@ -59,11 +60,11 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 		{
 			{
 				IMyTerminalControlOnOffSwitch is_working_only = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlOnOffSwitch, T>(this.MODID_PREFIX + "IsWorkingOnly");
-				is_working_only.Title = MyStringId.GetOrCompute("Use Only Working Drives");
-				is_working_only.Tooltip = MyStringId.GetOrCompute("Whether to use only working jump gate drives");
-				is_working_only.OnText = MyStringId.GetOrCompute("Yes");
-				is_working_only.OffText = MyStringId.GetOrCompute("No");
-				is_working_only.SupportsMultipleBlocks = false;
+				is_working_only.Title = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateDriveCountChangedEvent_UseWorkingOnly"));
+				is_working_only.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateDriveCountChangedEvent_UseWorkingOnly_Tooltip"));
+				is_working_only.OnText = MyStringId.GetOrCompute(MyTexts.GetString("GeneralText_Yes"));
+				is_working_only.OffText = MyStringId.GetOrCompute(MyTexts.GetString("GeneralText_No"));
+				is_working_only.SupportsMultipleBlocks = true;
 				is_working_only.Visible = block => block.Components.Get<JumpGateDriveCountChangedEvent>()?.IsSelected ?? false;
 				is_working_only.Getter = block => block.Components.Get<JumpGateDriveCountChangedEvent>().IsWorkingOnly;
 				is_working_only.Setter = (block, value) => {
@@ -76,9 +77,9 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 
 			{
 				IMyTerminalControlSlider drive_count_sdr = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSlider, T>(this.MODID_PREFIX + "TargetCount");
-				drive_count_sdr.Title = MyStringId.GetOrCompute("Drive Count");
-				drive_count_sdr.Tooltip = MyStringId.GetOrCompute("The number of jump gate drives to check against");
-				drive_count_sdr.SupportsMultipleBlocks = false;
+				drive_count_sdr.Title = MyStringId.GetOrCompute($"{MyTexts.GetString("DetailedInfo_JumpGateController_DriveCount")}:");
+				drive_count_sdr.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateControllerChangedEvent_DriveCount_Tooltip"));
+				drive_count_sdr.SupportsMultipleBlocks = true;
 				drive_count_sdr.Visible = block => block.Components.Get<JumpGateDriveCountChangedEvent>()?.IsSelected ?? false;
 				drive_count_sdr.SetLimits(0f, 1e24f);
 				drive_count_sdr.Writer = (block, string_builder) => string_builder.Append(MyJumpGateModSession.AutoconvertSciNotUnits(block.Components.Get<JumpGateDriveCountChangedEvent>().TargetValue, 0));

@@ -3372,7 +3372,7 @@ namespace IOTA.ModularJumpGates
 				double tick = current_tick - this.DriveEmissiveColorDef.StartTime;
 				ushort local_tick = (ushort) (current_tick - this.DriveEmissiveColorDef.StartTime);
 				double tick_ratio = MathHelperD.Clamp((this.Duration == 0) ? tick : (tick / this.Duration), 0, 1);
-				List<MyJumpGateDrive> working_drives = drives.Where((drive) => drive != null && drive.IsWorking()).ToList();
+				List<MyJumpGateDrive> working_drives = drives.Where((drive) => drive != null && drive.IsWorking).ToList();
 
 				foreach (MyJumpGateDrive drive in working_drives)
 				{
@@ -3641,11 +3641,6 @@ namespace IOTA.ModularJumpGates
 		/// The current tick of this animation
 		/// </summary>
 		public ushort CurrentTick { get; protected set; } = 0;
-
-		/// <summary>
-		/// Whether this animation is playing
-		/// </summary>
-		public bool IsPlaying { get; protected set; } = false;
 		#endregion
 
 		#region Constructors
@@ -3773,7 +3768,7 @@ namespace IOTA.ModularJumpGates
 		public void CleanOnEnd()
 		{
 			this.DoCleanOnEnd = true;
-			if (!this.IsPlaying) this.Clean();
+			if (this.Stopped()) this.Clean();
 		}
 
 		/// <summary>
@@ -3855,12 +3850,9 @@ namespace IOTA.ModularJumpGates
 
 			if (this.CurrentTick > this.AnimationDefinition.Duration || this.StopActive)
 			{
-				this.IsPlaying = false;
 				if (this.DoCleanOnEnd) this.Clean();
 				return;
 			}
-
-			this.IsPlaying = true;
 
 			if (!MyNetworkInterface.IsDedicatedMultiplayerServer)
 			{
@@ -3896,7 +3888,7 @@ namespace IOTA.ModularJumpGates
 
 					foreach (MyJumpGateDrive drive in jump_gate_drives)
 					{
-						if (!drive.IsWorking()) continue;
+						if (!drive.IsWorking) continue;
 						MatrixD drive_emitter_pos = drive.WorldMatrix;
 						drive_emitter_pos.Translation = drive.GetDriveRaycastStartpoint();
 						if (this.PerDriveParticles.ContainsKey(drive)) this.ClosedDrives.Remove(drive);
@@ -3919,7 +3911,7 @@ namespace IOTA.ModularJumpGates
 
 					foreach (MyJumpGateDrive drive in target_jump_gate_drives)
 					{
-						if (!drive.IsWorking()) continue;
+						if (!drive.IsWorking) continue;
 						MatrixD drive_emitter_pos = drive.WorldMatrix;
 						drive_emitter_pos.Translation = drive.GetDriveRaycastStartpoint();
 						if (this.PerAntiDriveParticles.ContainsKey(drive)) this.ClosedDrives.Remove(drive);
@@ -4028,12 +4020,9 @@ namespace IOTA.ModularJumpGates
 
 			if (this.CurrentTick > this.AnimationDefinition.Duration || this.StopActive)
 			{
-				this.IsPlaying = false;
 				if (this.DoCleanOnEnd) this.Clean();
 				return;
 			}
-
-			this.IsPlaying = true;
 
 			if (!MyNetworkInterface.IsDedicatedMultiplayerServer)
 			{
@@ -4104,7 +4093,7 @@ namespace IOTA.ModularJumpGates
 
 					foreach (MyJumpGateDrive drive in jump_gate_drives)
 					{
-						if (!drive.IsWorking()) continue;
+						if (!drive.IsWorking) continue;
 						MatrixD drive_emitter_pos = drive.WorldMatrix;
 						drive_emitter_pos.Translation = drive.GetDriveRaycastStartpoint();
 						if (this.PerDriveParticles.ContainsKey(drive)) this.ClosedDrives.Remove(drive);
@@ -4127,7 +4116,7 @@ namespace IOTA.ModularJumpGates
 
 					foreach (MyJumpGateDrive drive in target_jump_gate_drives)
 					{
-						if (!drive.IsWorking()) continue;
+						if (!drive.IsWorking) continue;
 						MatrixD drive_emitter_pos = drive.WorldMatrix;
 						drive_emitter_pos.Translation = drive.GetDriveRaycastStartpoint();
 						if (this.PerAntiDriveParticles.ContainsKey(drive)) this.ClosedDrives.Remove(drive);
@@ -4251,12 +4240,9 @@ namespace IOTA.ModularJumpGates
 
 			if (this.CurrentTick > this.AnimationDefinition.Duration || this.StopActive)
 			{
-				this.IsPlaying = false;
 				if (this.DoCleanOnEnd) this.Clean();
 				return;
 			}
-
-			this.IsPlaying = true;
 
 			if (!MyNetworkInterface.IsDedicatedMultiplayerServer)
 			{
@@ -4292,7 +4278,7 @@ namespace IOTA.ModularJumpGates
 
 					foreach (MyJumpGateDrive drive in jump_gate_drives)
 					{
-						if (!drive.IsWorking()) continue;
+						if (!drive.IsWorking) continue;
 						MatrixD drive_emitter_pos = drive.WorldMatrix;
 						drive_emitter_pos.Translation = drive.GetDriveRaycastStartpoint();
 						if (this.PerDriveParticles.ContainsKey(drive)) this.ClosedDrives.Remove(drive);
@@ -4315,7 +4301,7 @@ namespace IOTA.ModularJumpGates
 
 					foreach (MyJumpGateDrive drive in target_jump_gate_drives)
 					{
-						if (!drive.IsWorking()) continue;
+						if (!drive.IsWorking) continue;
 						MatrixD drive_emitter_pos = drive.WorldMatrix;
 						drive_emitter_pos.Translation = drive.GetDriveRaycastStartpoint();
 						if (this.PerAntiDriveParticles.ContainsKey(drive)) this.ClosedDrives.Remove(drive);
@@ -4584,7 +4570,8 @@ namespace IOTA.ModularJumpGates
 			if ((this.JumpGate?.Closed ?? true) || (this.JumpGate.JumpGateGrid?.Closed ?? true)) return;
 			List<MyJumpGateDrive> drives = null;
 			this.TEMP_JumpGateDrives.AddRange(this.JumpGate.GetJumpGateDrives());
-			foreach (KeyValuePair<MyEntity, EntityBatch> pair in this.JumpGate.EntityBatches) this.TEMP_JumpGateEntitiesL.AddRange(pair.Value.Batch);
+			if (this.JumpGate.Phase == MyJumpGatePhase.JUMPING) foreach (KeyValuePair<MyEntity, EntityBatch> pair in this.JumpGate.EntityBatches) this.TEMP_JumpGateEntitiesL.AddRange(pair.Value.Batch);
+			else this.TEMP_JumpGateEntitiesL.AddRange(this.JumpGate.GetEntitiesInJumpSpace(true).Select((pair) => pair.Key));
 			drives = this.TEMP_JumpGateDrives;
 
 			List<MyJumpGateDrive> anti_drives = null;
@@ -4725,19 +4712,19 @@ namespace IOTA.ModularJumpGates
 					if (this.GateJumpingAnimation == null) break;
 					current_tick = this.GateJumpingAnimation.CurrentTick;
 					duration = this.GateJumpingAnimation.Duration();
-					stopped = (current_tick >= duration || this.GateJumpingAnimation.Stopped()) && !this.GateJumpingAnimation.IsPlaying;
+					stopped = current_tick >= duration || this.GateJumpingAnimation.Stopped();
 					break;
 				case 1:
 					if (this.GateJumpedAnimation == null) break;
 					current_tick = this.GateJumpedAnimation.CurrentTick;
 					duration = this.GateJumpedAnimation.Duration();
-					stopped = (current_tick >= duration || this.GateJumpedAnimation.Stopped()) && !this.GateJumpedAnimation.IsPlaying;
+					stopped = current_tick >= duration || this.GateJumpedAnimation.Stopped();
 					break;
 				case 2:
 					if (this.GateFailedAnimation == null) break;
 					current_tick = this.GateFailedAnimation.CurrentTick;
 					duration = this.GateFailedAnimation.Duration();
-					stopped = (current_tick >= duration || this.GateFailedAnimation.Stopped()) && !this.GateFailedAnimation.IsPlaying;
+					stopped = current_tick >= duration || this.GateFailedAnimation.Stopped();
 					break;
 			}
 

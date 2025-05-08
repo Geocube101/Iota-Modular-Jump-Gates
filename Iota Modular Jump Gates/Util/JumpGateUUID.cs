@@ -1,4 +1,6 @@
 ﻿using IOTA.ModularJumpGates.CubeBlock;
+using ProtoBuf;
+using Sandbox.ModAPI;
 using System;
 
 namespace IOTA.ModularJumpGates.Util
@@ -6,17 +8,27 @@ namespace IOTA.ModularJumpGates.Util
 	/// <summary>
 	/// UUID class for jump gates, jump gate grids, and game logic components
 	/// </summary>
-	public struct JumpGateUUID : IEquatable<JumpGateUUID>
+	[ProtoContract]
+	internal struct JumpGateUUID : IEquatable<JumpGateUUID>
     {
+		#region Public Static Variables
+		/// <summary>
+		/// An empty UUID
+		/// </summary>
+		public static readonly JumpGateUUID Empty = new JumpGateUUID(0, 0);
+		#endregion
+
 		#region Private Variables
 		/// <summary>
 		/// The grid construct ID component of the UUID or 0 if storing only a grid construct
 		/// </summary>
+		[ProtoMember(1)]
 		private readonly long GridID;
 
-        /// <summary>
-        /// The entity ID component of the UUID
-        /// </summary>
+		/// <summary>
+		/// The entity ID component of the UUID
+		/// </summary>
+		[ProtoMember(2)]
         private readonly long EntityID;
 		#endregion
 
@@ -47,13 +59,13 @@ namespace IOTA.ModularJumpGates.Util
 		}
 		#endregion
 
-		#region Internal Static Methods
+		#region Public Static Methods
 		/// <summary>
 		/// Creates a JumpGateUUID from a CubeBlockBase logic component
 		/// </summary>
 		/// <param name="jump_gate">The non-null logic component</param>
 		/// <returns>The associated UUID</returns>
-		internal static JumpGateUUID FromBlock(MyCubeBlockBase block)
+		public static JumpGateUUID FromBlock(MyCubeBlockBase block)
 		{
 			if (block == null) throw new ArgumentNullException("block was null");
 			long grid_id = block.JumpGateGrid?.CubeGridID ?? -1;
@@ -65,7 +77,7 @@ namespace IOTA.ModularJumpGates.Util
 		/// </summary>
 		/// <param name="cube_grid">The non-null grid construct</param>
 		/// <returns>The associated UUID</returns>
-		internal static JumpGateUUID FromJumpGateGrid(MyJumpGateConstruct cube_grid)
+		public static JumpGateUUID FromJumpGateGrid(MyJumpGateConstruct cube_grid)
 		{
 			if (cube_grid == null) throw new ArgumentNullException("cube_grid was null");
 			return new JumpGateUUID(0, cube_grid.CubeGridID);
@@ -76,26 +88,10 @@ namespace IOTA.ModularJumpGates.Util
 		/// </summary>
 		/// <param name="jump_gate">The non-null jump gate</param>
 		/// <returns>The associated UUID</returns>
-		internal static JumpGateUUID FromJumpGate(MyJumpGate jump_gate)
+		public static JumpGateUUID FromJumpGate(MyJumpGate jump_gate)
 		{
 			if (jump_gate == null) throw new ArgumentNullException("jump_gate was null");
 			return new JumpGateUUID(jump_gate.JumpGateGrid.CubeGridID, -jump_gate.JumpGateID);
-		}
-		#endregion
-
-		#region Public Static Methods
-		/// <summary>
-		/// Creates a JumpGateUUID from a Guid
-		/// </summary>
-		/// <param name="jump_gate">The non-null Guid</param>
-		/// <returns>The associated UUID</returns>
-		public static JumpGateUUID FromGuid(Guid guid)
-		{
-			if (guid == null) throw new ArgumentNullException("guid was null");
-			byte[] buffer = guid.ToByteArray();
-			long grid_id = BitConverter.ToInt64(buffer, 0);
-			long entity_id = BitConverter.ToInt64(buffer, sizeof(long));
-			return new JumpGateUUID(grid_id, entity_id);
 		}
 		#endregion
 
@@ -111,6 +107,12 @@ namespace IOTA.ModularJumpGates.Util
             this.GridID = jump_gate_grid_id;
             this.EntityID = entity_id;
         }
+
+		public JumpGateUUID(long[] uuid)
+		{
+			this.GridID = (uuid == null) ? 0 : uuid[0];
+			this.EntityID = (uuid == null) ? 0 : uuid[1];
+		}
 		#endregion
 
 		#region "object" Methods
@@ -131,7 +133,10 @@ namespace IOTA.ModularJumpGates.Util
 		/// <returns>The hashcode of this Guid</returns>
 		public override int GetHashCode()
 		{
-			return this.ToGuid().GetHashCode();
+			byte[] buffer = new byte[16];
+			BitConverter.GetBytes(this.GridID).CopyTo(buffer, 0);
+			BitConverter.GetBytes(this.EntityID).CopyTo(buffer, sizeof(long));
+			return new Guid(buffer).GetHashCode();
 		}
 		#endregion
 
@@ -144,14 +149,6 @@ namespace IOTA.ModularJumpGates.Util
 		public bool Equals(JumpGateUUID other)
 		{
 			return object.ReferenceEquals(this, other) || (this.GridID == other.GridID && this.EntityID == other.EntityID);
-		}
-
-		/// <summary>
-		/// </summary>
-		/// <returns>True if this UUID equals 0</returns>
-		public bool IsZero()
-		{
-			return this.EntityID == 0 && this.GridID == 0;
 		}
 
 		/// <summary>
@@ -205,17 +202,10 @@ namespace IOTA.ModularJumpGates.Util
             return this.EntityID;
         }
 
-		/// <summary>
-		/// Converts this UUID to a Guid object
-		/// </summary>
-		/// <returns>The Guid</returns>
-        public Guid ToGuid()
-        {
-            byte[] buffer = new byte[sizeof(long) * 2];
-            Array.Copy(BitConverter.GetBytes(this.GridID), 0, buffer, 0, sizeof(long));
-            Array.Copy(BitConverter.GetBytes(this.EntityID), 0, buffer, sizeof(long), sizeof(long));
-            return new Guid(buffer);
-        }
+		public long[] Packed()
+		{
+			return new long[2] {this.GridID, this.EntityID};
+		}
 		#endregion
 	}
 }

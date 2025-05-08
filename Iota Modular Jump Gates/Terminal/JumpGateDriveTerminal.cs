@@ -1,5 +1,4 @@
-﻿using IOTA.ModularJumpGates.ProgramScripting.CubeBlock;
-using VRage.Game.ModAPI;
+﻿using VRage.Game.ModAPI;
 
 namespace IOTA.ModularJumpGates.Terminal
 {
@@ -30,7 +29,6 @@ namespace IOTA.ModularJumpGates.Terminal
 			MyJumpGateDriveTerminal.SetupJumpGateDriveTerminalControls();
 			MyJumpGateDriveTerminal.SetupJumpGateDriveTerminalActions();
 			MyJumpGateDriveTerminal.SetupJumpGateDriveTerminalProperties();
-			MyPBJumpGateDrive.SetupBlockTerminal();
 		}
 	}
 }

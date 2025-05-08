@@ -20,11 +20,12 @@ namespace IOTA.ModularJumpGates.API
 
 		private bool Registered = false;
 		private readonly ConcurrentDictionary<long, Dictionary<string, object>> ConstructWrappers = new ConcurrentDictionary<long, Dictionary<string, object>>();
-		private readonly ConcurrentDictionary<Guid, Dictionary<string, object>> JumpGateWrappers = new ConcurrentDictionary<Guid, Dictionary<string, object>>();
+		private readonly ConcurrentDictionary<JumpGateUUID, Dictionary<string, object>> JumpGateWrappers = new ConcurrentDictionary<JumpGateUUID, Dictionary<string, object>>();
 		private readonly ConcurrentDictionary<long, Dictionary<string, object>> BlockBaseWrappers = new ConcurrentDictionary<long, Dictionary<string, object>>();
 		private readonly ConcurrentDictionary<long, Dictionary<string, object>> ControllerWrappers = new ConcurrentDictionary<long, Dictionary<string, object>>();
 		private readonly ConcurrentDictionary<long, Dictionary<string, object>> DriveWrappers = new ConcurrentDictionary<long, Dictionary<string, object>>();
 		private readonly ConcurrentDictionary<long, Dictionary<string, object>> CapacitorWrppers = new ConcurrentDictionary<long, Dictionary<string, object>>();
+		private readonly ConcurrentDictionary<long, Dictionary<string, object>> RemoteAntennaWrappers = new ConcurrentDictionary<long, Dictionary<string, object>>();
 		private readonly ConcurrentDictionary<long, Dictionary<string, object>> ServerAntennaWrappers = new ConcurrentDictionary<long, Dictionary<string, object>>();
 
 		public MyModAPIInterface() { }
@@ -47,6 +48,7 @@ namespace IOTA.ModularJumpGates.API
 			this.ControllerWrappers.Clear();
 			this.DriveWrappers.Clear();
 			this.CapacitorWrppers.Clear();
+			this.RemoteAntennaWrappers.Clear();
 			this.ServerAntennaWrappers.Clear();
 			this.Registered = false;
 			Logger.Log("ModAPI Closed");
@@ -75,10 +77,10 @@ namespace IOTA.ModularJumpGates.API
 			return context;
 		}
 
-
 		private Dictionary<string, object> ReturnSessionWrapper()
 		{
 			return new Dictionary<string, object> {
+				["GUID"] = JumpGateUUID.Empty.Packed(),
 				["GameTick"] = new object[2] { (Func<ulong>) (() => MyJumpGateModSession.GameTick), null },
 				["DebugMode"] = new object[2] { (Func<bool>) (() => MyJumpGateModSession.DebugMode), (Action<bool>) ((value) => MyJumpGateModSession.DebugMode = value) },
 				["SessionStatus"] = new object[2] { (Func<byte>) (() => (byte) MyJumpGateModSession.SessionStatus), null },
@@ -89,11 +91,13 @@ namespace IOTA.ModularJumpGates.API
 				["IsBlockJumpGateController"] = (Func<IMyTerminalBlock, bool>) MyJumpGateModSession.IsBlockJumpGateController,
 				["IsBlockJumpGateDrive"] = (Func<IMyTerminalBlock, bool>) MyJumpGateModSession.IsBlockJumpGateDrive,
 				["IsBlockJumpGateCapacitor"] = (Func<IMyTerminalBlock, bool>) MyJumpGateModSession.IsBlockJumpGateCapacitor,
+				["IsBlockJumpGateRemoteAntenna"] = (Func<IMyTerminalBlock, bool>) MyJumpGateModSession.IsBlockJumpGateRemoteAntenna,
 				["IsBlockJumpGateServerAntenna"] = (Func<IMyTerminalBlock, bool>) MyJumpGateModSession.IsBlockJumpGateServerAntenna,
 				["GetBlockAsCubeBlockBase"] = (Func<IMyTerminalBlock, Dictionary<string, object>>) ((block) => this.ReturnCubeBlockBaseWrapper(MyJumpGateModSession.GetBlockAsCubeBlockBase(block))),
 				["GetBlockAsJumpGateController"] = (Func<IMyTerminalBlock, Dictionary<string, object>>) ((block) => this.ReturnCubeBlockControllerWrapper(MyJumpGateModSession.GetBlockAsJumpGateController(block))),
 				["GetBlockAsJumpGateDrive"] = (Func<IMyTerminalBlock, Dictionary<string, object>>) ((block) => this.ReturnCubeBlockDriveWrapper(MyJumpGateModSession.GetBlockAsJumpGateDrive(block))),
 				["GetBlockAsJumpGateCapacitor"] = (Func<IMyTerminalBlock, Dictionary<string, object>>) ((block) => this.ReturnCubeBlockCapacitorWrapper(MyJumpGateModSession.GetBlockAsJumpGateCapacitor(block))),
+				["GetBlockAsJumpGateRemoteAntenna"] = (Func<IMyTerminalBlock, Dictionary<string, object>>) ((block) => this.ReturnCubeBlockRemoteAntennaWrapper(MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block))),
 				["GetBlockAsJumpGateServerAntenna"] = (Func<IMyTerminalBlock, Dictionary<string, object>>) ((block) => this.ReturnCubeBlockServerAntennaWrapper(MyJumpGateModSession.GetBlockAsJumpGateServerAntenna(block))),
 				["GetAllJumpGates"] = (Func<IEnumerable<Dictionary<string, object>>>) (() => MyJumpGateModSession.Instance.GetAllJumpGates().Select(this.ReturnJumpGateWrapper)),
 				["GetAllJumpGateGrids"] = (Func<IEnumerable<Dictionary<string, object>>>) (() => MyJumpGateModSession.Instance.GetAllJumpGateGrids().Select(this.ReturnConstructWrapper)),
@@ -103,18 +107,18 @@ namespace IOTA.ModularJumpGates.API
 				["HasCubeGrid"] = (Func<long, bool>) MyJumpGateModSession.Instance.HasCubeGrid,
 				["IsJumpGateGridMultiplayerValid"] = (Func<long, bool>) ((construct_id) => MyJumpGateModSession.Instance.IsJumpGateGridMultiplayerValid(MyJumpGateModSession.Instance.GetJumpGateGrid(construct_id))),
 				["HasDuplicateGrid"] = (Func<long, bool>) ((construct_id) => MyJumpGateModSession.Instance.HasDuplicateGrid(MyJumpGateModSession.Instance.GetJumpGateGrid(construct_id))),
-				["MoveGrid"] = (Action<long, long>) ((construct_id, new_id) => MyJumpGateModSession.Instance.MoveGrid(MyJumpGateModSession.Instance.GetJumpGateGrid(construct_id), new_id)),
+				["MoveGrid"] = (Func<long, long, bool>) ((construct_id, new_id) => MyJumpGateModSession.Instance.MoveGrid(MyJumpGateModSession.Instance.GetJumpGateGrid(construct_id), new_id)),
 				["AverageGridUpdateTime60"] = (Func<double>) MyJumpGateModSession.Instance.AverageGridUpdateTime60,
 				["LocalLongestGridUpdateTime60"] = (Func<double>) MyJumpGateModSession.Instance.LocalLongestGridUpdateTime60,
 				["AverageSessionUpdateTime60"] = (Func<double>) MyJumpGateModSession.Instance.AverageSessionUpdateTime60,
 				["LocalLongestSessionUpdateTime60"] = (Func<double>) MyJumpGateModSession.Instance.LocalLongestSessionUpdateTime60,
 				["GetJumpGateGridL"] = (Func<long, Dictionary<string, object>>) ((grid_id) => this.ReturnConstructWrapper(MyJumpGateModSession.Instance.GetJumpGateGrid(grid_id))),
 				["GetJumpGateGridC"] = (Func<IMyCubeGrid, Dictionary<string, object>>) ((grid) => this.ReturnConstructWrapper(MyJumpGateModSession.Instance.GetJumpGateGrid(grid))),
-				["GetJumpGateGridG"] = (Func<Guid, Dictionary<string, object>>) ((grid_id) => this.ReturnConstructWrapper(MyJumpGateModSession.Instance.GetJumpGateGrid(JumpGateUUID.FromGuid(grid_id)))),
+				["GetJumpGateGridG"] = (Func<long[], Dictionary<string, object>>) ((grid_id) => this.ReturnConstructWrapper(MyJumpGateModSession.Instance.GetJumpGateGrid(new JumpGateUUID(grid_id)))),
 				["GetUnclosedJumpGateGridL"] = (Func<long, Dictionary<string, object>>) ((grid_id) => this.ReturnConstructWrapper(MyJumpGateModSession.Instance.GetUnclosedJumpGateGrid(grid_id))),
 				["GetUnclosedJumpGateGridC"] = (Func<IMyCubeGrid, Dictionary<string, object>>) ((grid) => this.ReturnConstructWrapper(MyJumpGateModSession.Instance.GetUnclosedJumpGateGrid(grid))),
-				["GetUnclosedJumpGateGridG"] = (Func<Guid, Dictionary<string, object>>) ((grid_id) => this.ReturnConstructWrapper(MyJumpGateModSession.Instance.GetUnclosedJumpGateGrid(JumpGateUUID.FromGuid(grid_id)))),
-				["GetJumpGate"] = (Func<Guid, Dictionary<string, object>>) ((gate_id) => this.ReturnJumpGateWrapper(MyJumpGateModSession.Instance.GetJumpGate(JumpGateUUID.FromGuid(gate_id)))),
+				["GetUnclosedJumpGateGridG"] = (Func<long[], Dictionary<string, object>>) ((grid_id) => this.ReturnConstructWrapper(MyJumpGateModSession.Instance.GetUnclosedJumpGateGrid(new JumpGateUUID(grid_id)))),
+				["GetJumpGate"] = (Func<long[], Dictionary<string, object>>) ((gate_id) => this.ReturnJumpGateWrapper(MyJumpGateModSession.Instance.GetJumpGate(new JumpGateUUID(gate_id)))),
 			};
 		}
 
@@ -124,10 +128,15 @@ namespace IOTA.ModularJumpGates.API
 			if (block == null) return null;
 			else if (this.BlockBaseWrappers.TryGetValue(block.BlockID, out attributes)) return attributes;
 			attributes = new Dictionary<string, object> {
+				["GUID"] = JumpGateUUID.FromBlock(block).Packed(),
 				["IsDirty"] = new object[2] { (Func<bool>) (() => block.IsDirty), null },
 				["IsLargeGrid"] = new object[2] { (Func<bool>) (() => block.IsLargeGrid), null },
 				["IsSmallGrid"] = new object[2] { (Func<bool>) (() => block.IsSmallGrid), null },
 				["IsNullWrapper"] = new object[2] { (Func<bool>) (() => block.IsNullWrapper), null },
+				["IsClosed"] = new object[2] { (Func<bool>) (() => block.IsClosed), null },
+				["IsPowered"] = new object[2] { (Func<bool>) (() => block.IsPowered), null },
+				["IsEnabled"] = new object[2] { (Func<bool>) (() => block.IsEnabled), null },
+				["IsWorking"] = new object[2] { (Func<bool>) (() => block.IsWorking), null },
 				["BlockID"] = new object[2] { (Func<long>) (() => block.BlockID), null },
 				["CubeGridID"] = new object[2] { (Func<long>) (() => block.CubeGridID), null },
 				["ConstructID"] = new object[2] { (Func<long>) (() => block.ConstructID), null },
@@ -140,10 +149,6 @@ namespace IOTA.ModularJumpGates.API
 				["WorldMatrix"] = new object[2] { (Func<MatrixD>) (() => block.WorldMatrix), null },
 				["JumpGateGrid"] = new object[2] { (Func<Dictionary<string, object>>) (() => this.ReturnConstructWrapper(block.JumpGateGrid)), null },
 				["SetDirty"] = (Action) block.SetDirty,
-				["IsClosed"] = (Func<bool>) block.IsClosed,
-				["IsPowered"] = (Func<bool>) block.IsPowered,
-				["IsEnabled"] = (Func<bool>) block.IsEnabled,
-				["IsWorking"] = (Func<bool>) block.IsWorking,
 				["#HASH"] = (Func<int>) block.GetHashCode,
 				["#EQUALS"] = (Func<object, bool>) ((other) => other is IMyTerminalBlock && block.Equals(MyJumpGateModSession.GetBlockAsCubeBlockBase((IMyTerminalBlock) other))),
 			};
@@ -157,12 +162,20 @@ namespace IOTA.ModularJumpGates.API
 			if (block == null) return null;
 			else if (this.ControllerWrappers.TryGetValue(block.BlockID, out attributes)) return attributes;
 			attributes = new Dictionary<string, object> {
+				["GUID"] = JumpGateUUID.FromBlock(block).Packed(),
 				["BlockBase"] = this.ReturnCubeBlockBaseWrapper(block),
 				["UseGenericLcd"] = new object[2] { (Func<bool>) (() => block.UseGenericLcd), null },
 				["SurfaceCount"] = new object[2] { (Func<int>) (() => block.SurfaceCount), null },
 				["BlockSettings"] = new object[2] { (Func<Dictionary<string, object>>) (() => block.BlockSettings.ToDictionary()), (Action<Dictionary<string, object>>) ((settings) => block.BlockSettings.FromDictionary(block, settings)) },
 				["SelectedWaypoint"] = new object[2] { (Func<byte[]>) (() => MyAPIGateway.Utilities.SerializeToBinary(block.BlockSettings.SelectedWaypoint())), (Action<byte[]>) ((waypoint) => block.BlockSettings.SelectedWaypoint(MyAPIGateway.Utilities.SerializeFromBinary<MyJumpGateWaypoint>(waypoint))) },
-				["SetAttachedJumpGate"] = (Action<Guid>) ((gate_id) => block.AttachedJumpGate(MyJumpGateModSession.Instance.GetJumpGate(JumpGateUUID.FromGuid(gate_id)))),
+				["RemoteAntenna"] = new object[2] { (Func<Dictionary<string, object>>) (() => this.ReturnCubeBlockRemoteAntennaWrapper(block.RemoteAntenna)), null },
+				["RemoteAntennaChannel"] = new object[2] { (Func<KeyValuePair<Dictionary<string, object>, byte>>) (() => {
+					KeyValuePair<MyJumpGateRemoteAntenna, byte> antenna = block.RemoteAntennaChannel;
+					return new KeyValuePair<Dictionary<string, object>, byte>(this.ReturnCubeBlockRemoteAntennaWrapper(antenna.Key), antenna.Value);
+				}), null },
+				["ConnectedRemoteAntenna"] = new object[2] { (Func<Dictionary<string, object>>) (() => this.ReturnCubeBlockRemoteAntennaWrapper(block.ConnectedRemoteAntenna)), null },
+				["SetAttachedJumpGate"] = (Action<long[]>) ((gate_id) => block.AttachedJumpGate(MyJumpGateModSession.Instance.GetJumpGate(new JumpGateUUID(gate_id)))),
+				["SetAttachedRemoteJumpGate"] = (Action<long[]>) ((gate_id) => block.AttachedRemoteJumpGate(MyJumpGateModSession.Instance.GetJumpGate(new JumpGateUUID(gate_id)))),
 				["IsPlayerFactionRelationValid"] = (Func<long, bool>) block.IsFactionRelationValid,
 				["IsSteamFactionRelationValid"] = (Func<ulong, bool>) block.IsFactionRelationValid,
 				["GetAttachedJumpGate"] = (Func<Dictionary<string, object>>) (() => this.ReturnJumpGateWrapper(block.AttachedJumpGate())),
@@ -176,7 +189,8 @@ namespace IOTA.ModularJumpGates.API
 			Dictionary<string, object> attributes;
 			if (block == null) return null;
 			else if (this.DriveWrappers.TryGetValue(block.BlockID, out attributes)) return attributes;
-			attributes = new Dictionary<string, object> {
+			attributes = new Dictionary<string, object>	{
+				["GUID"] = JumpGateUUID.FromBlock(block).Packed(),
 				["BlockBase"] = this.ReturnCubeBlockBaseWrapper(block),
 				["StoredChargeMW"] = new object[2] { (Func<double>) (() => block.StoredChargeMW), null },
 				["MaxRaycastDistance"] = new object[2] { (Func<double>) (() => block.MaxRaycastDistance), null },
@@ -204,6 +218,7 @@ namespace IOTA.ModularJumpGates.API
 			if (block == null) return null;
 			else if (this.CapacitorWrppers.TryGetValue(block.BlockID, out attributes)) return attributes;
 			attributes = new Dictionary<string, object> {
+				["GUID"] = JumpGateUUID.FromBlock(block).Packed(),
 				["BlockBase"] = this.ReturnCubeBlockBaseWrapper(block),
 				["StoredChargeMW"] = new object[2] { (Func<double>) (() => block.StoredChargeMW), null },
 				["BlockSettings"] = new object[2] { (Func<Dictionary<string, object>>) (() => block.BlockSettings.ToDictionary()), null },
@@ -214,12 +229,40 @@ namespace IOTA.ModularJumpGates.API
 			return attributes;
 		}
 
+		private Dictionary<string, object> ReturnCubeBlockRemoteAntennaWrapper(MyJumpGateRemoteAntenna block)
+		{
+			Dictionary<string, object> attributes;
+			if (block == null) return null;
+			else if (this.RemoteAntennaWrappers.TryGetValue(block.BlockID, out attributes)) return attributes;
+			attributes = new Dictionary<string, object> {
+				["GUID"] = JumpGateUUID.FromBlock(block).Packed(),
+				["BlockBase"] = this.ReturnCubeBlockBaseWrapper(block),
+				["AllowedRemoteSettings"] = new object[2] { (Func<ushort>) (() => (ushort) block.BlockSettings.AllowedRemoteSettings), (Action<ushort>) ((flag) => block.BlockSettings.AllowedRemoteSettings = (MyAllowedRemoteSettings) flag) },
+				["BroadcastRange"] = new object[2] { (Func<double>) (() => block.BlockSettings.AntennaRange), (Action<double>) ((range) => block.BlockSettings.AntennaRange = MathHelper.Clamp(range, 0, 1500)) },
+				["SetGateForInboundControl"] = (Action<byte, long>) ((channel, id) => block.SetGateForInboundControl(channel, block.JumpGateGrid?.GetJumpGate(id))),
+				["SetControllerForOutboundControl"] = (Action<byte, long>) ((channel, id) => block.SetControllerForOutboundControl(channel, block.JumpGateGrid?.GetController(id))),
+				["GetJumpGateInboundControlChannel"] = (Func<long[], byte>) ((id) => block.GetJumpGateInboundControlChannel(MyJumpGateModSession.Instance.GetJumpGate(new JumpGateUUID(id)))),
+				["GetControllerOutboundControlChannel"] = (Func<long[], byte>) ((id) => block.GetControllerOutboundControlChannel(MyJumpGateModSession.Instance.GetJumpGateBlock<MyJumpGateController>(new JumpGateUUID(id)))),
+				["GetInboundControlGate"] = (Func<byte, Dictionary<string, object>>) ((channel) => this.ReturnJumpGateWrapper(block.GetInboundControlGate(channel))),
+				["GetConnectedControlledJumpGate"] = (Func<byte, Dictionary<string, object>>) ((channel) => this.ReturnJumpGateWrapper(block.GetConnectedControlledJumpGate(channel))),
+				["ReturnCubeBlockControllerWrapper"] = (Func<byte, Dictionary<string, object>>) ((channel) => this.ReturnCubeBlockControllerWrapper(block.GetOutboundControlController(channel))),
+				["GetConnectedRemoteAntenna"] = (Func<byte, Dictionary<string, object>>) ((channel) => this.ReturnCubeBlockRemoteAntennaWrapper(block.GetConnectedRemoteAntenna(channel))),
+				["RegisteredInboundControlGateIDs"] = (Func<IEnumerable<long>>) block.RegisteredInboundControlGateIDs,
+				["RegisteredOutboundControlControllerIDs"] = (Func<IEnumerable<long>>) block.RegisteredOutboundControlControllerIDs,
+				["RegisteredInboundControlGates"] = (Func<IEnumerable<Dictionary<string, object>>>) (() => block.RegisteredInboundControlGates().Select(this.ReturnJumpGateWrapper)),
+				["RegisteredOutboundControlControllers"] = (Func<IEnumerable<Dictionary<string, object>>>) (() => block.RegisteredOutboundControlControllers().Select(this.ReturnCubeBlockControllerWrapper)),
+			};
+			this.RemoteAntennaWrappers[block.BlockID] = attributes;
+			return attributes;
+		}
+
 		private Dictionary<string, object> ReturnCubeBlockServerAntennaWrapper(MyJumpGateServerAntenna block)
 		{
 			Dictionary<string, object> attributes;
 			if (block == null) return null;
 			else if (this.ServerAntennaWrappers.TryGetValue(block.BlockID, out attributes)) return attributes;
 			attributes = new Dictionary<string, object> {
+				["GUID"] = JumpGateUUID.FromBlock(block).Packed(),
 				["BlockBase"] = this.ReturnCubeBlockBaseWrapper(block),
 			};
 			this.ServerAntennaWrappers[block.BlockID] = attributes;
@@ -232,6 +275,7 @@ namespace IOTA.ModularJumpGates.API
 			if (construct == null) return null;
 			else if (this.ConstructWrappers.TryGetValue(construct.CubeGridID, out attributes)) return attributes;
 			attributes = new Dictionary<string, object> {
+				["GUID"] = JumpGateUUID.FromJumpGateGrid(construct).Packed(),
 				["Closed"] = new object[2] { (Func<bool>) (() => construct.Closed), null },
 				["MarkClosed"] = new object[2] { (Func<bool>) (() => construct.MarkClosed), null },
 				["IsSuspended"] = new object[2] { (Func<bool>) (() => construct.IsSuspended), null },
@@ -264,8 +308,8 @@ namespace IOTA.ModularJumpGates.API
 				["HasCubeGridByID"] = (Func<long, bool>) construct.HasCubeGrid,
 				["HasCubeGrid"] = (Func<IMyCubeGrid, bool>) construct.HasCubeGrid,
 				["IsConstructCommLinked"] = (Func<long, bool>) ((id) => construct.IsConstructCommLinked(MyJumpGateModSession.Instance.GetJumpGateGrid(id))),
-				["IsBeaconWithinReverseBroadcastSphere"] = (Func<IMyBeacon, bool>) ((beacon) => construct.IsBeaconWithinReverseBroadcastSphere(new MyBeaconLinkWrapper(beacon))),
-				["IsBeaconWrapperWithinReverseBroadcastSphere"] = (Func<byte[], bool>) ((beacon) => construct.IsBeaconWithinReverseBroadcastSphere(MyAPIGateway.Utilities.SerializeFromBinary<MyBeaconLinkWrapper>(beacon))),
+				["IsBeaconWithinReverseBroadcastSphere"] = (Func<IMyBeacon, bool>) ((beacon) => (beacon == null) ? false : construct.IsBeaconWithinReverseBroadcastSphere(new MyBeaconLinkWrapper(beacon))),
+				["IsBeaconWrapperWithinReverseBroadcastSphere"] = (Func<byte[], bool>) ((beacon) => (beacon == null) ? false : construct.IsBeaconWithinReverseBroadcastSphere(MyAPIGateway.Utilities.SerializeFromBinary<MyBeaconLinkWrapper>(beacon))),
 				["IsConstructWithinBoundingEllipsoid"] = (Func<byte[], bool>) ((serialized) => {
 					BoundingEllipsoidD ellipsoid = BoundingEllipsoidD.FromSerialized(serialized, 0);
 					return construct.IsConstructWithinBoundingEllipsoid(ref ellipsoid);
@@ -291,8 +335,10 @@ namespace IOTA.ModularJumpGates.API
 				["GetConstructBlocks"] = (Func<IEnumerator<IMySlimBlock>>) construct.GetConstructBlocks,
 				["GetCombinedAABB"] = (Func<BoundingBoxD>) construct.GetCombinedAABB,
 				["GetJumpGate"] = (Func<long, Dictionary<string, object>>) ((id) => this.ReturnJumpGateWrapper(construct.GetJumpGate(id))),
+				["GetCubeBlock"] = (Func<long, Dictionary<string, object>>) ((id) => this.ReturnCubeBlockBaseWrapper(construct.GetCubeBlock(id))),
 				["GetCapacitor"] = (Func<long, Dictionary<string, object>>) ((id) => this.ReturnCubeBlockCapacitorWrapper(construct.GetCapacitor(id))),
 				["GetDrive"] = (Func<long, Dictionary<string, object>>) ((id) => this.ReturnCubeBlockDriveWrapper(construct.GetDrive(id))),
+				["GetRemoteAntenna"] = (Func<long, Dictionary<string, object>>) ((id) => this.ReturnCubeBlockRemoteAntennaWrapper(construct.GetRemoteAntenna(id))),
 				["GetServerAntenna"] = (Func<long, Dictionary<string, object>>) ((id) => this.ReturnCubeBlockServerAntennaWrapper(construct.GetServerAntenna(id))),
 				["GetController"] = (Func<long, Dictionary<string, object>>) ((id) => this.ReturnCubeBlockControllerWrapper(construct.GetController(id))),
 				["GetCubeGridPhysics"] = (Func<MyPhysicsComponentBase>) construct.GetCubeGridPhysics,
@@ -300,6 +346,7 @@ namespace IOTA.ModularJumpGates.API
 				["GetAttachedJumpGateDrives"] = (Func<IEnumerable<Dictionary<string, object>>>) (() => construct.GetAttachedJumpGateDrives().Select(this.ReturnCubeBlockDriveWrapper)),
 				["GetAttachedUnassociatedJumpGateDrives"] = (Func<IEnumerable<Dictionary<string, object>>>) (() => construct.GetAttachedUnassociatedJumpGateDrives().Select(this.ReturnCubeBlockDriveWrapper)),
 				["GetAttachedJumpGateCapacitors"] = (Func<IEnumerable<Dictionary<string, object>>>) (() => construct.GetAttachedJumpGateCapacitors().Select(this.ReturnCubeBlockCapacitorWrapper)),
+				["GetAttachedJumpGateRemoteAntennas"] = (Func<IEnumerable<Dictionary<string, object>>>) (() => construct.GetAttachedJumpGateRemoteAntennas().Select(this.ReturnCubeBlockRemoteAntennaWrapper)),
 				["GetAttachedJumpGateServerAntennas"] = (Func<IEnumerable<Dictionary<string, object>>>) (() => construct.GetAttachedJumpGateServerAntennas().Select(this.ReturnCubeBlockServerAntennaWrapper)),
 				["GetAttachedLaserAntennas"] = (Func<IEnumerable<IMyLaserAntenna>>) construct.GetAttachedLaserAntennas,
 				["GetAttachedRadioAntennas"] = (Func<IEnumerable<IMyRadioAntenna>>) construct.GetAttachedRadioAntennas,
@@ -317,11 +364,20 @@ namespace IOTA.ModularJumpGates.API
 		{
 			Dictionary<string, object> attributes;
 			if (gate == null) return null;
-			Guid uuid = JumpGateUUID.FromJumpGate(gate).ToGuid();
+			JumpGateUUID uuid = JumpGateUUID.FromJumpGate(gate);
 			if (this.JumpGateWrappers.TryGetValue(uuid, out attributes)) return attributes;
-			List<Action<Dictionary<string, object>, MyEntity, bool>> entity_entered_callbacks = new List<Action<Dictionary<string, object>, MyEntity, bool>>();
+			ConcurrentDictionary<int, Action<Dictionary<string, object>, MyEntity, bool>> entity_entered_callbacks = new ConcurrentDictionary<int, Action<Dictionary<string, object>, MyEntity, bool>>();
+
+			Action<MyJumpGate, MyEntity, bool> entity_entered_callback = (caller, entity, entered) => {
+				foreach (KeyValuePair<int, Action<Dictionary<string, object>, MyEntity, bool>> pair in entity_entered_callbacks)
+				{
+					pair.Value(this.ReturnJumpGateWrapper(caller), entity, entered);
+				}
+			};
+
 			attributes = new Dictionary<string, object> {
-				["Guid"] = new object[2] { (Func<Guid>) (() => JumpGateUUID.FromJumpGate(gate).ToGuid()), null },
+				["GUID"] = JumpGateUUID.FromJumpGate(gate).Packed(),
+				["Guid"] = new object[2] { (Func<long[]>) (() => JumpGateUUID.FromJumpGate(gate).Packed()), null },
 				["MarkClosed"] = new object[2] { (Func<bool>) (() => gate.MarkClosed), null },
 				["Closed"] = new object[2] { (Func<bool>) (() => gate.Closed), null },
 				["IsDirty"] = new object[2] { (Func<bool>) (() => gate.IsDirty), null },
@@ -338,6 +394,7 @@ namespace IOTA.ModularJumpGates.API
 				["LastUpdateDateTimeUTC"] = new object[2] { (Func<DateTime>) (() => gate.LastUpdateDateTimeUTC), (Action<DateTime>) ((datetime) => gate.LastUpdateDateTimeUTC = datetime) },
 				["JumpGateConfiguration"] = new object[2] { (Func<Dictionary<string, object>>) (() => gate.JumpGateConfiguration.ToDictionary()), null },
 				["Controller"] = new object[2] { (Func<Dictionary<string, object>>) (() => this.ReturnCubeBlockControllerWrapper(gate.Controller)), null },
+				["RemoteAntenna"] = new object[2] { (Func<Dictionary<string, object>>) (() => this.ReturnCubeBlockRemoteAntennaWrapper(gate.RemoteAntenna)), null },
 				["ServerAntenna"] = new object[2] { (Func<Dictionary<string, object>>) (() => this.ReturnCubeBlockServerAntennaWrapper(gate.ServerAntenna)), null },
 				["SenderGate"] = new object[2] { (Func<Dictionary<string, object>>) (() => this.ReturnJumpGateWrapper(gate.SenderGate)), null },
 				["JumpGateGrid"] = new object[2] { (Func<Dictionary<string, object>>) (() => this.ReturnConstructWrapper(gate.JumpGateGrid)), null },
@@ -345,10 +402,11 @@ namespace IOTA.ModularJumpGates.API
 				["ShearEllipse"] = new object[2] { (Func<byte[]>) (() => gate.ShearEllipse.ToSerialized()), null },
 				["LocalDriveIntersectNodes"] = new object[2] { (Func<ImmutableList<Vector3D>>) (() => gate.LocalDriveIntersectNodes), null },
 				["WorldDriveIntersectNodes"] = new object[2] { (Func<ImmutableList<Vector3D>>) (() => gate.WorldDriveIntersectNodes), null },
-				["GetFailureDescription"] = (Func<int, string>) ((failure) => MyJumpGate.GetFailureDescription((MyJumpFailReason) failure)),
-				["GetFailureSound"] = (Func<int, bool, string>) ((failure, isinit) => MyJumpGate.GetFailureSound((MyJumpFailReason) failure, isinit)),
+				["GetFailureDescription"] = (Func<byte, string>) ((failure) => MyJumpGate.GetFailureDescription((MyJumpFailReason) failure)),
+				["GetFailureSound"] = (Func<byte, bool, string>) ((failure, isinit) => MyJumpGate.GetFailureSound((MyJumpFailReason) failure, isinit)),
 				["#HASH"] = (Func<int>) gate.GetHashCode,
-				["#EQUALS"] = (Func<object, bool>) ((id) => id is Guid && gate.Equals(MyJumpGateModSession.Instance.GetJumpGate(JumpGateUUID.FromGuid((Guid) id)))),
+				["#EQUALS"] = (Func<object, bool>) ((id) => id is long[] && gate.Equals(MyJumpGateModSession.Instance.GetJumpGate(new JumpGateUUID((long[]) id)))),
+				["#DEINIT"] = (Action) (() => gate.EntityEnterered -= entity_entered_callback),
 				["RequestGateUpdate"] = (Action) gate.RequestGateUpdate,
 				["Jump"] = (Action<IMyTerminalBlock, Dictionary<string, object>>) ((block, settings) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
@@ -363,10 +421,11 @@ namespace IOTA.ModularJumpGates.API
 				["JumpFromVoid"] = (Action<List<Dictionary<string, object>>, List<List<IMyCubeGrid>>, IMyTerminalBlock, Dictionary<string, object>>) ((prefabs, spawned_grids, block, settings) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					MyJumpGateController.MyControllerBlockSettingsStruct controller_settings = (controller == null || settings == null) ? gate.Controller?.BlockSettings : new MyJumpGateController.MyControllerBlockSettingsStruct(controller, settings);
-					gate.JumpFromVoid(controller_settings, prefabs.Select((info) => new MyPrefabInfo(info)).ToList(), spawned_grids);
+					gate.JumpFromVoid(controller_settings, prefabs?.Select((info) => new MyPrefabInfo(info)).ToList(), spawned_grids);
 				}),
 				["SetColliderDirty"] = (Action) gate.SetColliderDirty,
 				["SetJumpSpaceEllipsoidDirty"] = (Action) gate.SetJumpSpaceEllipsoidDirty,
+				["SetDirty"] = (Action) gate.SetDirty,
 				["StopSoundByName"] = (Action<string>) gate.StopSound,
 				["StopSoundByID"] = (Action<ulong?>) gate.StopSound,
 				["SetSoundVolume"] = (Action<ulong?, float>) gate.SetSoundVolume,
@@ -374,9 +433,8 @@ namespace IOTA.ModularJumpGates.API
 				["StopSounds"] = (Action) gate.StopSounds,
 				["CanDoSyphonGridPower"] = (Action<double, ulong, Action<bool>, bool>) gate.CanDoSyphonGridPower,
 				["CancelJump"] = (Action) gate.CancelJump,
-				["OnEntityCollision"] = (Action<Action<Dictionary<string, object>, MyEntity, bool>>) entity_entered_callbacks.Add,
-				["OffEntityCollision"] = (Action<Action<Dictionary<string, object>, MyEntity, bool>>) ((callback) => entity_entered_callbacks.Remove(callback)),
-				["IsEntityCollisionCallbackRegistered"] = (Func<Action<Dictionary<string, object>, MyEntity, bool>, bool>) entity_entered_callbacks.Contains,
+				["OnEntityCollision"] = (Action<Action<Dictionary<string, object>, MyEntity, bool>>) ((callback) => entity_entered_callbacks.TryAdd(callback.GetHashCode(), callback)),
+				["OffEntityCollision"] = (Action<Action<Dictionary<string, object>, MyEntity, bool>>) ((callback) => entity_entered_callbacks.Remove(callback.GetHashCode())),
 				["IsPointInHudBroadcastRange"] = (Func<Vector3D, bool>) ((pos) => gate.IsPointInHudBroadcastRange(ref pos)),
 				["IsEntityValidForJumpSpace"] = (Func<MyEntity, bool>) gate.IsEntityValidForJumpSpace,
 				["IsValid"] = (Func<bool>) gate.IsValid,
@@ -411,9 +469,27 @@ namespace IOTA.ModularJumpGates.API
 				["GetUninitializedEntititesInJumpSpace"] = (Func<bool, IEnumerable<KeyValuePair<long, float>>>) gate.GetUninitializedEntititesInJumpSpace,
 				["GetEntitiesInJumpSpace"] = (Func<bool, IEnumerable<KeyValuePair<MyEntity, float>>>) gate.GetEntitiesInJumpSpace,
 			};
-			gate.OnEntityCollision((trigger, entity, is_entering) => entity_entered_callbacks.ForEach((cb) => cb(attributes, entity, is_entering)));
+
+			gate.EntityEnterered += entity_entered_callback;
 			this.JumpGateWrappers[uuid] = attributes;
 			return attributes;
+		}
+
+		/// <summary>
+		/// Creates a new session API interface for PB scripts
+		/// </summary>
+		/// <param name="version">The API version being used</param>
+		/// <param name="callback">The callback to accept session data</param>
+		/// <returns>A key value pair containing two booleans:<br />1: Whether the session handle was created<br />2: Value checking if the version is up to date - will be false if session handle failed</returns>
+		public KeyValuePair<bool, bool> HandleModApiScriptingInit(int[] version, Action<Dictionary<string, object>> callback)
+		{
+			bool version_ok = false;
+			if (version == null || callback == null || !(version is int[]) || !(callback is Action<Dictionary<string, object>>)) return new KeyValuePair<bool, bool>(false, false);
+			else if (version.Length != 2 || version[0] != MyModAPIInterface.APIVersion[0]) return new KeyValuePair<bool, bool>(false, false);
+			else if (version[1] < MyModAPIInterface.APIVersion[1]) Logger.Warn("Scripting ModAPI version is not latest - Current");
+			else version_ok = true;
+			callback(this.ReturnSessionWrapper());
+			return new KeyValuePair<bool, bool>(true, version_ok);
 		}
 	}
 }

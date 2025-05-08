@@ -1,5 +1,7 @@
 ﻿using IOTA.ModularJumpGates.EventController.ObjectBuilders;
 using Sandbox.ModAPI;
+using System.Collections.Generic;
+using VRage;
 using VRage.Game.Components;
 using VRage.Game.Entity;
 using VRage.Utils;
@@ -12,15 +14,16 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 	internal class JumpGateEntityEnteredEvent : MyJumpGateEventBase<bool>
 	{
 		private bool? TriggerIndex = null;
+		private readonly List<MyJumpGate> ListiningJumpGates = new List<MyJumpGate>();
 
 		public override bool IsThresholdUsed => false;
 		public override bool IsConditionSelectionUsed => false;
 		public override bool IsBlocksListUsed => false;
 		public override long UniqueSelectionId => 0x7FFFFFFFFFFFFFFC;
-		public override MyStringId EventDisplayName => MyStringId.GetOrCompute("Jump Gate Entity Entered");
+		public override MyStringId EventDisplayName => MyStringId.GetOrCompute(MyTexts.GetString("DisplayName_JumpGateEntityEnteredEvent"));
 		public override string ComponentTypeDebugString => nameof(JumpGateEntityEnteredEvent);
-		public override string YesNoToolbarYesDescription => "Entity Entered";
-		public override string YesNoToolbarNoDescription => "Entity Exited";
+		public override string YesNoToolbarYesDescription => MyTexts.GetString("DisplayName_JumpGateEntityEnteredEvent_YesDescription");
+		public override string YesNoToolbarNoDescription => MyTexts.GetString("DisplayName_JumpGateEntityEnteredEvent_NoDescription");
 
 		private void OnEntityCollision(MyJumpGate caller, MyEntity entity, bool is_entering)
 		{
@@ -46,7 +49,9 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 
 		protected override bool GetValueFromJumpGate(MyJumpGate jump_gate)
 		{
-			return jump_gate.IsEntityCollisionCallbackRegistered(this.OnEntityCollision);
+			if (this.ListiningJumpGates.Contains(jump_gate)) return true;
+			this.OnJumpGateAdded(jump_gate);
+			return true;
 		}
 
 		protected override bool IsJumpGateValidForList(MyJumpGate jump_gate)
@@ -57,13 +62,17 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 		protected override void OnJumpGateAdded(MyJumpGate jump_gate)
 		{
 			base.OnJumpGateAdded(jump_gate);
-			if (MyNetworkInterface.IsServerLike) jump_gate.OnEntityCollision(this.OnEntityCollision);
+			if (!MyNetworkInterface.IsServerLike) return;
+			jump_gate.EntityEnterered += this.OnEntityCollision;
+			this.ListiningJumpGates.Add(jump_gate);
 		}
 
 		protected override void OnJumpGateRemoved(MyJumpGate jump_gate)
 		{
 			base.OnJumpGateAdded(jump_gate);
-			if (MyNetworkInterface.IsServerLike) jump_gate.OffEntityCollision(this.OnEntityCollision);
+			if (!MyNetworkInterface.IsServerLike) return;
+			jump_gate.EntityEnterered -= this.OnEntityCollision;
+			this.ListiningJumpGates.Remove(jump_gate);
 		}
 
 		public override void CreateTerminalInterfaceControls<T>()

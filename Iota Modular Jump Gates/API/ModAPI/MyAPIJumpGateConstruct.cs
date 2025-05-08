@@ -5,7 +5,7 @@ using System.Linq;
 using VRage.Game.Components;
 using VRage.Game.ModAPI;
 using VRageMath;
-using static IOTA.ModularJumpGates.API.ModAPI.Util;
+using IOTA.ModularJumpGates.API.ModAPI.Util;
 
 namespace IOTA.ModularJumpGates.API.ModAPI
 {
@@ -13,7 +13,7 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 	{
 		internal static MyAPIJumpGateConstruct New(Dictionary<string, object> attributes)
 		{
-			return (attributes == null) ? null : new MyAPIJumpGateConstruct(attributes);
+			return MyAPIObjectBase.GetObjectOrNew<MyAPIJumpGateConstruct>(attributes, () => new MyAPIJumpGateConstruct(attributes));
 		}
 
 		private MyAPIJumpGateConstruct(Dictionary<string, object> attributes) : base(attributes) { }
@@ -226,7 +226,7 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		/// <returns>Whether target grid is comm linked</returns>
 		public bool IsConstructCommLinked(MyAPIJumpGateConstruct grid)
 		{
-			return this.GetMethod<Func<long, bool>>("IsConstructCommLinked")(grid.CubeGridID);
+			return (grid == null) ? false : this.GetMethod<Func<long, bool>>("IsConstructCommLinked")(grid.CubeGridID);
 		}
 
 		/// <summary>
@@ -290,7 +290,7 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		/// <returns>The invalidation reason or InvalidationReason.NONE</returns>
 		public MyAPIGridInvalidationReason GetInvalidationReason()
 		{
-			return (MyAPIGridInvalidationReason) this.GetMethod<Func<byte>>("GetConstructBlockCount")();
+			return (MyAPIGridInvalidationReason) this.GetMethod<Func<byte>>("GetInvalidationReason")();
 		}
 
 		/// <summary>
@@ -482,6 +482,16 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		}
 
 		/// <summary>
+		/// Gets a cube block by it's terminal block entity ID
+		/// </summary>
+		/// <param name="id">The block's ID</param>
+		/// <returns>The block</returns>
+		public MyAPICubeBlockBase GetCubeBlock(long id)
+		{
+			return MyAPICubeBlockBase.New(this.GetMethod<Func<long, Dictionary<string, object>>>("GetCubeBlock")(id));
+		}
+
+		/// <summary>
 		/// Gets a capacitor by it's terminal block entity ID
 		/// </summary>
 		/// <param name="id">The capacitor's ID</param>
@@ -499,6 +509,16 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		public MyAPIJumpGateDrive GetDrive(long id)
 		{
 			return MyAPIJumpGateDrive.New(this.GetMethod<Func<long, Dictionary<string, object>>>("GetDrive")(id));
+		}
+
+		/// <summary>
+		/// Gets a remote antenna by it's terminal block entity ID
+		/// </summary>
+		/// <param name="id">The remote antenna's ID</param>
+		/// <returns>The remote antenna</returns>
+		public MyAPIJumpGateRemoteAntenna GetRemoteAntenna(long id)
+		{
+			return MyAPIJumpGateRemoteAntenna.New(this.GetMethod<Func<long, Dictionary<string, object>>>("GetRemoteAntenna")(id));
 		}
 
 		/// <summary>
@@ -564,6 +584,15 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		public IEnumerable<MyAPIJumpGateCapacitor> GetAttachedJumpGateCapacitors()
 		{
 			return this.GetMethod<Func<IEnumerable<Dictionary<string, object>>>>("GetAttachedJumpGateCapacitors")().Select(MyAPIJumpGateCapacitor.New);
+		}
+
+		/// <summary>
+		/// Gets all jump gate remote antennas in this construct
+		/// </summary>
+		/// <returns>An IEnumerable referencing all remote antennas</returns>
+		public IEnumerable<MyAPIJumpGateRemoteAntenna> GetAttachedJumpGateRemoteAntennas()
+		{
+			return this.GetMethod<Func<IEnumerable<Dictionary<string, object>>>>("GetAttachedJumpGateRemoteAntennas")().Select(MyAPIJumpGateRemoteAntenna.New);
 		}
 
 		/// <summary>

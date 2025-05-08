@@ -1,6 +1,7 @@
 ﻿using IOTA.ModularJumpGates.EventController.ObjectBuilders;
 using Sandbox.ModAPI;
 using Sandbox.ModAPI.Interfaces.Terminal;
+using VRage;
 using VRage.Game.Components;
 using VRage.Utils;
 using VRageMath;
@@ -16,10 +17,10 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 		public override bool IsConditionSelectionUsed => true;
 		public override bool IsBlocksListUsed => false;
 		public override long UniqueSelectionId => 0x7FFFFFFFFFFFFFF9;
-		public override MyStringId EventDisplayName => MyStringId.GetOrCompute("Jump Gate Power Factor Changed");
+		public override MyStringId EventDisplayName => MyStringId.GetOrCompute(MyTexts.GetString("DisplayName_JumpGatePowerFactorChangedEvent"));
 		public override string ComponentTypeDebugString => nameof(JumpGatePowerFactorChangedEvent);
-		public override string YesNoToolbarYesDescription => $"Power Factor {((this.EventController.IsLowerOrEqualCondition) ? "<=" : ">=")} {MyJumpGateModSession.AutoconvertSciNotUnits(this.TargetValue, 0)}";
-		public override string YesNoToolbarNoDescription => $"Power Factor {((this.EventController.IsLowerOrEqualCondition) ? ">=" : "<=")} {MyJumpGateModSession.AutoconvertSciNotUnits(this.TargetValue, 0)}";
+		public override string YesNoToolbarYesDescription => MyTexts.GetString("DisplayName_JumpGatePowerFactorChangedEvent_YesDescription").Replace("{%0}", ((this.EventController.IsLowerOrEqualCondition) ? "<=" : ">=").Replace("{%1}", MyJumpGateModSession.AutoconvertSciNotUnits(this.TargetValue, 0).ToString()));
+		public override string YesNoToolbarNoDescription => MyTexts.GetString("DisplayName_JumpGatePowerFactorChangedEvent_NoDescription").Replace("{%0}", ((this.EventController.IsLowerOrEqualCondition) ? ">=" : "<=").Replace("{%1}", MyJumpGateModSession.AutoconvertSciNotUnits(this.TargetValue, 0).ToString()));
 
 		protected override void CheckValueAgainstTarget(double new_value, double old_value, double target)
 		{
@@ -48,9 +49,9 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 		{
 			{
 				IMyTerminalControlSlider power_factor_sdr = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSlider, T>(this.MODID_PREFIX + "TargetPowerFactor");
-				power_factor_sdr.Title = MyStringId.GetOrCompute("Power Factor");
-				power_factor_sdr.Tooltip = MyStringId.GetOrCompute("The power factor to check against");
-				power_factor_sdr.SupportsMultipleBlocks = false;
+				power_factor_sdr.Title = MyStringId.GetOrCompute(MyTexts.GetString("DetailedInfo_JumpGateController_PowerFactor"));
+				power_factor_sdr.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGatePowerFactorChangedEvent_PowerFactor_Tooltip"));
+				power_factor_sdr.SupportsMultipleBlocks = true;
 				power_factor_sdr.Visible = block => block.Components.Get<JumpGatePowerFactorChangedEvent>()?.IsSelected ?? false;
 				power_factor_sdr.SetLimits(0f, float.MaxValue);
 				power_factor_sdr.Writer = (block, string_builder) => string_builder.Append(MyJumpGateModSession.AutoconvertSciNotUnits(block.Components.Get<JumpGatePowerFactorChangedEvent>().TargetValue, 4));

@@ -5,8 +5,7 @@ using System.Collections.Generic;
 namespace IOTA.ModularJumpGates.Util.ConcurrentCollections
 {
 	/// <summary>
-	/// A concurrent hashset allowing iteration with a single linked list<br />
-	/// Duplicity is not checked
+	/// A concurrent hashset allowing iteration with a single linked list
 	/// </summary>
 	/// <typeparam name="T">The type of elements stored</typeparam>
 	public class ConcurrentLinkedHashSet<T> : ICollection<T>
@@ -35,6 +34,19 @@ namespace IOTA.ModularJumpGates.Util.ConcurrentCollections
 				if (next == this || prev == this || (next == prev && next != null)) throw new InvalidOperationException("Neighboring nodes are self or invalid");
 			}
 
+			public bool InStack(T item)
+			{
+				LinkedNode node = this;
+
+				while (node != null)
+				{
+					if (node.Value.Equals(item)) return true;
+					node = node.NextNode;
+				}
+
+				return false;
+			}
+
 			public LinkedNode CloneStack(LinkedNode prev)
 			{
 				LinkedNode clone = new LinkedNode(this.Value, this.Bucket, null, prev);
@@ -47,7 +59,6 @@ namespace IOTA.ModularJumpGates.Util.ConcurrentCollections
 		{
 			private LinkedNode Root;
 			private LinkedNode CurrentNode;
-			private T CurrentValue;
 
 			public ConcurrentLinkedHashSetIterator(ConcurrentLinkedHashSet<T> hashset)
 			{
@@ -60,7 +71,7 @@ namespace IOTA.ModularJumpGates.Util.ConcurrentCollections
 			{
 				get
 				{
-					return this.CurrentValue;
+					return this.CurrentNode.Value;
 				}
 			}
 
@@ -68,7 +79,7 @@ namespace IOTA.ModularJumpGates.Util.ConcurrentCollections
 			{
 				get
 				{
-					return this.CurrentValue;
+					return this.CurrentNode.Value;
 				}
 			}
 
@@ -80,8 +91,7 @@ namespace IOTA.ModularJumpGates.Util.ConcurrentCollections
 
 			public bool MoveNext()
 			{
-				this.CurrentNode = this.CurrentNode?.Next;
-				this.CurrentValue = (this.CurrentNode == null) ? default(T) : this.CurrentNode.Value;
+				this.CurrentNode = this.CurrentNode.Next;
 				return this.CurrentNode != null;
 			}
 
@@ -153,23 +163,31 @@ namespace IOTA.ModularJumpGates.Util.ConcurrentCollections
 			using (this.RWLock.WithWriter())
 			{
 				LinkedNode bucket_root = this.Buckets.GetValueOrDefault(bucket, null);
-				LinkedNode node = new LinkedNode(item, bucket, bucket_root?.Next, this.LastEntry);
+				LinkedNode node = new LinkedNode(item, bucket, bucket_root?.Next, bucket_root ?? this.LastEntry);
 
 				if (bucket_root == null && this.LastEntry == null)
 				{
 					this.Buckets.Add(bucket, node);
+					this.LastEntry = node;
 				}
 				else if (bucket_root == null)
 				{
 					this.Buckets.Add(bucket, node);
 					this.LastEntry.Next = node;
+					this.LastEntry = node;
+				}
+				else if (bucket_root.InStack(item)) return;
+				else if (bucket_root.Next == null)
+				{
+					bucket_root.Next = node;
+					this.LastEntry = node;
 				}
 				else
 				{
+					bucket_root.Next.Prev = node;
 					bucket_root.Next = node;
 				}
 
-				this.LastEntry = node;
 				this.FirstEntry = this.FirstEntry ?? node;
 				++this.Count;
 			}
@@ -208,23 +226,31 @@ namespace IOTA.ModularJumpGates.Util.ConcurrentCollections
 					if (item == null) continue;
 					int bucket = item.GetHashCode();
 					LinkedNode bucket_root = this.Buckets.GetValueOrDefault(bucket, null);
-					LinkedNode node = new LinkedNode(item, bucket, bucket_root?.Next, this.LastEntry);
+					LinkedNode node = new LinkedNode(item, bucket, bucket_root?.Next, bucket_root ?? this.LastEntry);
 
 					if (bucket_root == null && this.LastEntry == null)
 					{
 						this.Buckets.Add(bucket, node);
+						this.LastEntry = node;
 					}
 					else if (bucket_root == null)
 					{
 						this.Buckets.Add(bucket, node);
 						this.LastEntry.Next = node;
+						this.LastEntry = node;
+					}
+					else if (bucket_root.InStack(item)) continue;
+					else if (bucket_root.Next == null)
+					{
+						bucket_root.Next = node;
+						this.LastEntry = node;
 					}
 					else
 					{
+						bucket_root.Next.Prev = node;
 						bucket_root.Next = node;
 					}
 
-					this.LastEntry = node;
 					this.FirstEntry = this.FirstEntry ?? node;
 					++this.Count;
 				}
@@ -305,12 +331,12 @@ namespace IOTA.ModularJumpGates.Util.ConcurrentCollections
 
 		public IEnumerator<T> GetEnumerator()
 		{
-			using (this.RWLock.WithReader()) return new ConcurrentLinkedHashSetIterator(this);
+			return new ConcurrentLinkedHashSetIterator(this);
 		}
 
 		IEnumerator IEnumerable.GetEnumerator()
 		{
-			using (this.RWLock.WithReader()) return new ConcurrentLinkedHashSetIterator(this);
+			return new ConcurrentLinkedHashSetIterator(this);
 		}
 	}
 }

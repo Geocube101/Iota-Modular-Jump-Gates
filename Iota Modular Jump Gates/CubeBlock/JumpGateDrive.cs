@@ -6,6 +6,7 @@ using Sandbox.Game.EntityComponents;
 using System;
 using System.Collections.Generic;
 using System.Text;
+using VRage;
 using VRage.Game.Components;
 using VRage.Game.ModAPI;
 using VRage.ModAPI;
@@ -114,9 +115,10 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// Creates a new null wrapper
 		/// </summary>
 		/// <param name="serialized">The serialized block data</param>
-		public MyJumpGateDrive(MySerializedJumpGateDrive serialized) : base(serialized)
+		/// <param name="parent">The containing grid or null to calculate</param>
+		public MyJumpGateDrive(MySerializedJumpGateDrive serialized, MyJumpGateConstruct parent = null) : base(serialized, parent)
 		{
-			this.FromSerialized(serialized);
+			this.FromSerialized(serialized, parent);
 		}
 		#endregion
 
@@ -150,19 +152,19 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				double charge_time = Math.Log((1 - charge_ratio) / 0.0005) * (this.DriveConfiguration.MaxDriveChargeMW / this.DriveConfiguration.MaxDriveChargeRateMW);
 
 				string stored_power = Math.Round(this.StoredChargeMW, 4).ToString("#.0000");
-				info.Append("\n-=-=-=( Jump Gate Drive )=-=-=-\n");
-				info.Append($" Input: {Math.Round(input_wattage, 4)} MW/s\n");
-				info.Append($" Required Input: {Math.Round(this.ResourceSink.RequiredInputByType(MyResourceDistributorComponent.ElectricityId), 4)} MW/s\n");
-				info.Append($" Stored Power: {stored_power} MW\n");
-				info.Append($" Charge: {Math.Round(charge_ratio * 100, 1)}%\n");
-				info.Append($" Buffer Size: {MyJumpGateModSession.AutoconvertMetricUnits(this.DriveConfiguration.MaxDriveChargeMW * 1e6, "w", 4)}\n");
-				info.Append($" Charge Efficiency: {Math.Round(this.DriveConfiguration.DriveChargeEfficiency * 100, 2)}%\n");
-				if (double.IsInfinity(charge_time)) info.Append($" Charged in --:--:--\n");
-				else if (double.IsNaN(charge_time)) info.Append($" Charged in 00:00:00\n");
-				else info.Append($" Charged in {(int) Math.Floor(charge_time / 3600):00}:{(int) Math.Floor(charge_time % 3600 / 60d):00}:{(int) Math.Floor(charge_time % 60d):00}\n\n");
-				info.Append($" Jump Gate: {jump_gate?.GetPrintableName() ?? "N/A"}\n");
-				info.Append($" Jump Gate ID: {jump_gate?.JumpGateID.ToString() ?? "N/A"}\n");
-				info.Append($" Current Construct: {(this.JumpGateGrid?.CubeGridID.ToString() ?? "N/A")}");
+				info.Append($"\n-=-=-=( {MyTexts.GetString("DisplayName_CubeBlock_JumpGateDrive")} )=-=-=-\n");
+				info.Append($" {MyTexts.GetString("DetailedInfo_BlockBase_Input")}: {Math.Round(input_wattage, 4)} MW/s\n");
+				info.Append($" {MyTexts.GetString("DetailedInfo_BlockBase_RequiredInput")}: {Math.Round(this.ResourceSink.RequiredInputByType(MyResourceDistributorComponent.ElectricityId), 4)} MW/s\n");
+				info.Append($" {MyTexts.GetString("DetailedInfo_BlockBase_InputRatio")}: {stored_power} MW\n");
+				info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateCapacitor_Charge")}: {Math.Round(charge_ratio * 100, 1)}%\n");
+				info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateCapacitor_BufferSize")}: {MyJumpGateModSession.AutoconvertMetricUnits(this.DriveConfiguration.MaxDriveChargeMW * 1e6, "w", 4)}\n");
+				info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateCapacitor_ChargeEfficiency")}: {Math.Round(this.DriveConfiguration.DriveChargeEfficiency * 100, 2)}%\n");
+				if (double.IsInfinity(charge_time)) info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateCapacitor_ChargeTime")} --:--:--\n");
+				else if (double.IsNaN(charge_time)) info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateCapacitor_ChargeTime")} 00:00:00\n");
+				else info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateCapacitor_ChargeTime")} {(int) Math.Floor(charge_time / 3600):00}:{(int) Math.Floor(charge_time % 3600 / 60d):00}:{(int) Math.Floor(charge_time % 60d):00}\n\n");
+				info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateDrive_JumpGate")}: {jump_gate?.GetPrintableName() ?? "N/A"}\n");
+				info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateDrive_JumpGateId")}: {jump_gate?.JumpGateID.ToString() ?? "N/A"}\n");
+				info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateDrive_CurrentConstruct")}: {(this.JumpGateGrid?.CubeGridID.ToString() ?? "N/A")}");
 			}
 		}
 
@@ -170,6 +172,12 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		{
 			base.Clean();
 			this.DriveConfiguration = null;
+		}
+
+		protected override void UpdateOnceAfterInit()
+		{
+			base.UpdateOnceAfterInit();
+			if (!MyJumpGateDriveTerminal.IsLoaded) MyJumpGateDriveTerminal.Load(this.ModContext);
 		}
 
 		/// <summary>
@@ -248,13 +256,12 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		public override void UpdateAfterSimulation()
 		{
 			base.UpdateAfterSimulation();
-			if (MyJumpGateModSession.Instance.AllFirstTickComplete() && !MyJumpGateDriveTerminal.IsLoaded) MyJumpGateDriveTerminal.Load(this.ModContext);
 
 			// Skip update if a projection or closed
-			if (this.TerminalBlock?.CubeGrid?.Physics == null || this.IsClosed()) return;
+			if (this.TerminalBlock?.CubeGrid?.Physics == null || this.IsClosed) return;
 
 			// Update emissives
-			bool working = this.IsWorking();
+			bool working = this.IsWorking;
 			if (working) this.TerminalBlock.SetEmissiveParts("Emissive1", Color.Lime, 1);
 			else if (this.TerminalBlock.IsFunctional) this.TerminalBlock.SetEmissiveParts("Emissive1", Color.Red, 1);
 			else this.TerminalBlock.SetEmissiveParts("Emissive1", Color.Black, 0);
@@ -296,7 +303,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				else if (jump_gate != null)
 				{
 					if (this.DriveEmitterColor != Color.Black && !this.DriveEmitterCycling()) this.CycleDriveEmitter(this.DriveEmitterColor, Color.Black, 300);
-					this.TerminalBlock.SetEmissiveParts("Emissive1", (MyJumpGateModSession.GameTick % 120 >= 60) ? Color.Green : Color.Black, 1);
+					this.TerminalBlock.SetEmissiveParts("Emissive1", (MyJumpGateModSession.GameTick % 120 >= 60) ? Color.Lime : Color.Black, 1);
 				}
 				else
 				{
@@ -383,7 +390,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		{
 			if (packet == null || packet.EpochTime <= this.LastUpdateTime) return;
 			MySerializedJumpGateDrive serialized = packet.Payload<MySerializedJumpGateDrive>();
-			if (serialized == null || JumpGateUUID.FromGuid(serialized.UUID).GetBlock() != this.TerminalBlock.EntityId) return;
+			if (serialized == null || serialized.UUID.GetBlock() != this.BlockID) return;
 
 			if (MyNetworkInterface.IsMultiplayerServer && packet.PhaseFrame == 1)
 			{
@@ -436,9 +443,10 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// </summary>
 		/// <param name="drive">The serialized drive data</param>
 		/// <returns>Whether this block was updated</returns>
-		public bool FromSerialized(MySerializedJumpGateDrive drive)
+		public bool FromSerialized(MySerializedJumpGateDrive drive, MyJumpGateConstruct parent = null)
 		{
-			if (!base.FromSerialized(drive)) return false;
+			if (!base.FromSerialized(drive, parent)) return false;
+			else if (this.JumpGateGrid == null) return true;
 			this.SinkOverrideMW = drive.SinkOverrideMW;
 			this.StoredChargeMW = drive.StoredChargeMW;
 			this.WrapperWattageSinkPower = drive.WattageSinkPowerUsage;

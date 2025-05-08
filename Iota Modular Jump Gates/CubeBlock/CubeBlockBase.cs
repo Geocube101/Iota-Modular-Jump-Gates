@@ -8,6 +8,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Text;
+using VRage;
 using VRage.Game;
 using VRage.Game.Components;
 using VRage.ModAPI;
@@ -90,6 +91,16 @@ namespace IOTA.ModularJumpGates.CubeBlock
 
 		#region Public Variables
 		/// <summary>
+		/// True if this block component is initialized
+		/// </summary>
+		public readonly bool Constructed = false;
+
+		/// <summary>
+		/// Whether this block's "UpdateOnceAfterInit" was called
+		/// </summary>
+		public bool IsInitFrameCalled { get; private set; } = false;
+
+		/// <summary>
 		/// Whether this block should be synced<br/>
 		/// If true, will be synced on next component tick
 		/// </summary>
@@ -110,6 +121,41 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// Always false on singleplayer or server
 		/// </summary>
 		public bool IsNullWrapper => this.TerminalBlock == null;
+
+		/// <summary>
+		/// Whether this component or it's attached block is closed
+		/// </summary>
+		public bool IsClosed => (this.IsNullWrapper) ? (this.SerializedWrapperInfo?.IsClosed ?? true) : this.TerminalBlock == null || this.TerminalBlock.Closed || this.TerminalBlock.MarkedForClose || this.TerminalBlock.CubeGrid?.Physics == null;
+
+		/// <summary>
+		/// Whether block is powered<br />
+		/// <i>"current input >= required input"</i>
+		/// </summary>
+		public bool IsPowered
+		{
+			get
+			{
+				if (this.IsNullWrapper) return this.SerializedWrapperInfo?.IsPowered ?? false;
+				else if (this.ResourceSink == null) return true;
+				else if (this.RequiresFullInput) return this.ResourceSink.CurrentInputByType(MyResourceDistributorComponent.ElectricityId) >= this.ResourceSink.RequiredInputByType(MyResourceDistributorComponent.ElectricityId);
+				else return this.ResourceSink.RequiredInputByType(MyResourceDistributorComponent.ElectricityId) <= 0 || this.ResourceSink.CurrentInputByType(MyResourceDistributorComponent.ElectricityId) > 0;
+			}
+		}
+
+		/// <summary>
+		/// Whether block is enabled
+		/// </summary>
+		public bool IsEnabled => (this.IsNullWrapper) ? (this.SerializedWrapperInfo?.IsEnabled ?? false) : this.TerminalBlock.Enabled;
+
+		/// <summary>
+		/// Whether this block is working: (not closed, enabled, powered)
+		/// </summary>
+		public bool IsWorking => (this.IsNullWrapper) ? (this.SerializedWrapperInfo?.IsWorking ?? false) : !this.IsClosed && this.IsEnabled && this.IsPowered && this.TerminalBlock.IsFunctional;
+
+		/// <summary>
+		/// Whether this block is marked for close
+		/// </summary>
+		public new bool MarkedForClose => base.MarkedForClose || this.Closed || this.IsClosed;
 
 		/// <summary>
 		/// The block ID of this block
@@ -179,16 +225,22 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		#endregion
 
 		#region Constructors
-		public MyCubeBlockBase() : base() { }
+		public MyCubeBlockBase() : base()
+		{
+			this.Constructed = true;
+		}
 
 		/// <summary>
 		/// Creates a new null wrapper
 		/// </summary>
 		/// <param name="serialized">The serialized block data</param>
-		public MyCubeBlockBase(MySerializedCubeBlockBase serialized) : base()
+		/// <param name="parent">The containing grid or null to calculate</param>
+		public MyCubeBlockBase(MySerializedCubeBlockBase serialized, MyJumpGateConstruct parent = null) : base()
 		{
-			this.SuspendedTerminalBlockID = JumpGateUUID.FromGuid(serialized.UUID).GetBlock();
-			this.FromSerialized(serialized);
+			this.SuspendedTerminalBlockID = serialized.UUID.GetBlock();
+			this.FromSerialized(serialized, parent);
+			this.Constructed = true;
+			if (this.JumpGateGrid == null) throw new NullReferenceException("Parent construct was null");
 		}
 		#endregion
 
@@ -217,7 +269,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			if (this.TerminalBlock == null || this.TerminalBlock?.CubeGrid?.Physics == null) return;
 			this.ResourceSink?.Update();
 
-			if (!this.IsClosed() && (this.JumpGateGrid == null || !MyJumpGateModSession.Instance.IsJumpGateGridMultiplayerValid(this.JumpGateGrid) || !this.JumpGateGrid.HasCubeGrid(this.TerminalBlock.CubeGrid)))
+			if (!this.IsClosed && (this.JumpGateGrid == null || !MyJumpGateModSession.Instance.IsJumpGateGridMultiplayerValid(this.JumpGateGrid) || !this.JumpGateGrid.HasCubeGrid(this.TerminalBlock.CubeGrid)))
 			{
 				MyJumpGateConstruct new_construct = MyJumpGateModSession.Instance.GetUnclosedJumpGateGrid(this.TerminalBlock.CubeGrid);
 				if (new_construct != this.JumpGateGrid) this.OnConstructChanged();
@@ -235,6 +287,13 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		{
 			base.UpdateAfterSimulation();
 			++this.LocalGameTick;
+
+			if (!this.IsInitFrameCalled && MyJumpGateModSession.Instance.AllFirstTickComplete())
+			{
+				this.UpdateOnceAfterInit();
+				this.IsInitFrameCalled = true;
+			}
+
 			if (MyAPIGateway.Gui.GetCurrentScreen != VRage.Game.ModAPI.MyTerminalPageEnum.ControlPanel) return;
 			this.TerminalBlock.RefreshCustomInfo();
 			this.TerminalBlock.SetDetailedInfoDirty();
@@ -302,13 +361,13 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			if (block != null && block == this.TerminalBlock)
 			{
 				StringBuilder local_sb = new StringBuilder();
-				bool working = this.IsWorking();
+				bool working = this.IsWorking;
 
-				if (!working && this.TerminalBlock.IsFunctional) local_sb.Append("\n[color=#FFFF0000]- OFFLINE -[/color]\n");
+				if (!working && this.TerminalBlock.IsFunctional) local_sb.Append($"\n[color=#FFFF0000]- {MyTexts.GetString("GeneralText_Offline")} -[/color]\n");
 				else if (!working)
 				{
 					Random random = new Random((int) this.LocalGameTick);
-					foreach (char c in "\n- OFFLINE -\n") local_sb.Append($"[color=#FF{(byte) (255 - random.NextDouble() * 255):X2}0000]{c}[/color]");
+					foreach (char c in $"\n- {MyTexts.GetString("GeneralText_Offline")} -\n") local_sb.Append($"[color=#FF{(byte) (255 - random.NextDouble() * 255):X2}0000]{c}[/color]");
 				}
 
 				try
@@ -504,6 +563,12 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// Called when this block's cube grid changes
 		/// </summary>
 		protected virtual void OnConstructChanged() { }
+
+		/// <summary>
+		/// Overridable<br />
+		/// Called once when all session constructs are initialized
+		/// </summary>
+		protected virtual void UpdateOnceAfterInit() { }
 		#endregion
 
 		#region Public Methods
@@ -528,58 +593,17 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		}
 
 		/// <summary>
-		/// Gets whether this component or it's attached block is closed
-		/// </summary>
-		/// <returns>Closedness</returns>
-		public bool IsClosed()
-		{
-			if (this.IsNullWrapper) return this.SerializedWrapperInfo?.IsClosed ?? true;
-			else return this.TerminalBlock == null || this.TerminalBlock.Closed || this.TerminalBlock.MarkedForClose || this.TerminalBlock.CubeGrid?.Physics == null;
-		}
-
-		/// <summary>
-		/// Gets whether block is powered
-		/// </summary>
-		/// <returns>Whether current input >= required input</returns>
-		public bool IsPowered()
-		{
-			if (this.IsNullWrapper) return this.SerializedWrapperInfo?.IsPowered ?? false;
-			else if (this.ResourceSink == null) return true;
-			else if (this.RequiresFullInput) return this.ResourceSink.CurrentInputByType(MyResourceDistributorComponent.ElectricityId) >= this.ResourceSink.RequiredInputByType(MyResourceDistributorComponent.ElectricityId);
-			else return this.ResourceSink.RequiredInputByType(MyResourceDistributorComponent.ElectricityId) <= 0 || this.ResourceSink.CurrentInputByType(MyResourceDistributorComponent.ElectricityId) > 0;
-		}
-
-		/// <summary>
-		/// Gets whether block is enabled
-		/// </summary>
-		/// <returns>Enabledness</returns>
-		public bool IsEnabled()
-		{
-			if (this.IsNullWrapper) return this.SerializedWrapperInfo?.IsEnabled ?? false;
-			else return this.TerminalBlock.Enabled;
-		}
-
-		/// <summary>
-		/// Gets block's working status: (not closed, enabled, powered)
-		/// </summary>
-		/// <returns>Workingness</returns>
-		public bool IsWorking()
-		{
-			if (this.IsNullWrapper) return this.SerializedWrapperInfo?.IsWorking ?? false;
-			else return !this.IsClosed() && this.IsEnabled() && this.IsPowered() && this.TerminalBlock.IsFunctional;
-		}
-
-		/// <summary>
 		/// Updates this block data from a serialized block
 		/// </summary>
 		/// <param name="block">The serialized block data</param>
+		/// <param name="parent">The containing grid or null to calculate</param>
 		/// <returns>Whether this block was updated</returns>
-		public bool FromSerialized(MySerializedCubeBlockBase block)
+		public bool FromSerialized(MySerializedCubeBlockBase block, MyJumpGateConstruct parent = null)
 		{
-			if (JumpGateUUID.FromGuid(block.UUID).GetBlock() != this.BlockID || block.IsClientRequest) return false;
+			if (block == null || (this.Constructed && block.UUID.GetBlock() != this.BlockID) || block.IsClientRequest) return false;
 			this.SerializedWrapperInfo = block;
-			this.BlockWorldMatrix = BoundingEllipsoidD.FromSerialized(Convert.FromBase64String(block.WorldMatrix), 0).WorldMatrix;
-			this.JumpGateGrid = MyJumpGateModSession.Instance.GetJumpGateGrid(block.JumpGateGridID);
+			this.BlockWorldMatrix = MatrixD.CreateWorld(block.WorldMatrix[0], block.WorldMatrix[1], block.WorldMatrix[2]);
+			this.JumpGateGrid = parent ?? MyJumpGateModSession.Instance.GetJumpGateGrid(block.JumpGateGridID) ?? this.JumpGateGrid;
 			return true;
 		}
 
@@ -603,16 +627,16 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		{
 			return (as_client_request) ?
 				new T {
-					UUID = JumpGateUUID.FromBlock(this).ToGuid(),
+					UUID = JumpGateUUID.FromBlock(this),
 					IsClientRequest = true,
 				} :
 				new T {
-					UUID = JumpGateUUID.FromBlock(this).ToGuid(),
-					IsPowered = this.IsPowered(),
-					IsEnabled = this.IsEnabled(),
-					IsWorking = this.IsWorking(),
-					IsClosed = this.IsClosed(),
-					WorldMatrix = Convert.ToBase64String(new BoundingEllipsoidD(Vector3D.Zero, this.WorldMatrix).ToSerialized()),
+					UUID = JumpGateUUID.FromBlock(this),
+					IsPowered = this.IsPowered,
+					IsEnabled = this.IsEnabled,
+					IsWorking = this.IsWorking,
+					IsClosed = this.IsClosed,
+					WorldMatrix = new Vector3D[3] { this.WorldMatrix.Translation, this.WorldMatrix.Forward, this.WorldMatrix.Up },
 					CubeGridID = this.CubeGridID,
 					JumpGateGridID = this.ConstructID,
 					OwnerID = this.OwnerID,
@@ -627,14 +651,15 @@ namespace IOTA.ModularJumpGates.CubeBlock
 	[ProtoInclude(100, typeof(MySerializedJumpGateController))]
 	[ProtoInclude(200, typeof(MySerializedJumpGateCapacitor))]
 	[ProtoInclude(300, typeof(MySerializedJumpGateDrive))]
-	[ProtoInclude(400, typeof(MySerializedJumpGateServerAntenna))]
+	[ProtoInclude(400, typeof(MySerializedJumpGateRemoteAntenna))]
+	[ProtoInclude(500, typeof(MySerializedJumpGateServerAntenna))]
 	internal class MySerializedCubeBlockBase
 	{
 		/// <summary>
-		/// The block's JumpGateUUID as a Guid
+		/// The block's JumpGateUUID
 		/// </summary>
 		[ProtoMember(1)]
-		public Guid UUID;
+		public JumpGateUUID UUID;
 
 		/// <summary>
 		/// If true, this data should be used by server to identify block and send updated data
@@ -670,7 +695,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// The world matrix of this block
 		/// </summary>
 		[ProtoMember(7)]
-		public string WorldMatrix;
+		public Vector3D[] WorldMatrix;
 
 		/// <summary>
 		/// The cube grid ID of this block

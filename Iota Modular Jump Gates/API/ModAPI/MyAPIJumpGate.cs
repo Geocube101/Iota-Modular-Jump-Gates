@@ -8,7 +8,7 @@ using VRage.Game;
 using VRage.Game.Entity;
 using VRage.Game.ModAPI;
 using VRageMath;
-using static IOTA.ModularJumpGates.API.ModAPI.Util;
+using IOTA.ModularJumpGates.API.ModAPI.Util;
 
 namespace IOTA.ModularJumpGates.API.ModAPI
 {
@@ -18,12 +18,12 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 
 		internal static MyAPIJumpGate New(Dictionary<string, object> attributes)
 		{
-			return (attributes == null) ? null : new MyAPIJumpGate(attributes);
+			return MyAPIObjectBase.GetObjectOrNew<MyAPIJumpGate>(attributes, () => new MyAPIJumpGate(attributes));
 		}
 
 		private MyAPIJumpGate(Dictionary<string, object> attributes) : base(attributes) { }
 
-		public Guid Guid => this.GetAttribute<Guid>("Guid");
+		public JumpGateUUID Guid => new JumpGateUUID(this.GetAttribute<long[]>("Guid"));
 
 		/// <summary>
 		/// Whether this gate is marked for close
@@ -126,6 +126,11 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		public MyAPIJumpGateController Controller => MyAPIJumpGateController.New(this.GetAttribute<Dictionary<string, object>>("Controller"));
 
 		/// <summary>
+		/// This gate's attached remote anntena or null
+		/// </summary>
+		public MyAPIJumpGateRemoteAntenna RemoteAntenna => MyAPIJumpGateRemoteAntenna.New(this.GetAttribute<Dictionary<string, object>>("RemoteAntenna"));
+
+		/// <summary>
 		/// This gate's attached server antenna or null
 		/// </summary>
 		public MyAPIJumpGateServerAntenna ServerAntenna => MyAPIJumpGateServerAntenna.New(this.GetAttribute<Dictionary<string, object>>("ServerAntenna"));
@@ -200,9 +205,10 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		/// For clients: Sends a jump request to server
 		/// </summary>
 		/// <param name="controller">The controller to use for the jump</param>
-		public void Jump(MyAPIJumpGateController controller)
+		public void Jump(MyAPIJumpGateController controller = null)
 		{
-			this.GetMethod<Action<IMyTerminalBlock, Dictionary<string, object>>>("Jump")(controller.TerminalBlock, controller.BlockSettings.ToDictionary());
+			controller = controller ?? this.Controller;
+			this.GetMethod<Action<IMyTerminalBlock, Dictionary<string, object>>>("Jump")(controller?.TerminalBlock, controller?.BlockSettings.ToDictionary());
 		}
 
 		/// <summary>
@@ -215,7 +221,7 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		public void JumpToVoid(double distance, MyAPIJumpGateController controller = null)
 		{
 			controller = controller ?? this.Controller;
-			this.GetMethod<Action<double, IMyTerminalBlock, Dictionary<string, object>>>("JumpToVoid")(distance, controller.TerminalBlock, controller.BlockSettings.ToDictionary());
+			this.GetMethod<Action<double, IMyTerminalBlock, Dictionary<string, object>>>("JumpToVoid")(distance, controller?.TerminalBlock, controller?.BlockSettings.ToDictionary());
 		}
 
 		/// <summary>
@@ -226,10 +232,10 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		/// <param name="spawn_prefabs">A list of prefabs to spawn<br />Jump will fail if empty</param>
 		/// <param name="spawned_grids">A list containing the list of spawned grids per prefab</param>
 		/// <param name="controller">The controller to use for the jump or the attached controller if null</param>
-		public void JumpFromVoid(List<MyAPIPrefabInfo> spawn_prefabs, List<List<IMyCubeGrid>> spawned_grids, MyAPIJumpGateController controller)
+		public void JumpFromVoid(List<MyAPIPrefabInfo> spawn_prefabs, List<List<IMyCubeGrid>> spawned_grids, MyAPIJumpGateController controller = null)
 		{
 			controller = controller ?? this.Controller;
-			this.GetMethod<Action<List<Dictionary<string, object>>, List<List<IMyCubeGrid>>, IMyTerminalBlock, Dictionary<string, object>>>("JumpFromVoid")(spawn_prefabs.Select((prefab) => prefab.ToDictionary()).ToList(), spawned_grids, controller.TerminalBlock, controller.BlockSettings.ToDictionary());
+			this.GetMethod<Action<List<Dictionary<string, object>>, List<List<IMyCubeGrid>>, IMyTerminalBlock, Dictionary<string, object>>>("JumpFromVoid")(spawn_prefabs?.Select((prefab) => prefab.ToDictionary()).ToList(), spawned_grids, controller?.TerminalBlock, controller?.BlockSettings.ToDictionary());
 		}
 
 		/// <summary>
@@ -248,6 +254,15 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		public void SetJumpSpaceEllipsoidDirty()
 		{
 			this.GetMethod<Action>("SetJumpSpaceEllipsoidDirty")();
+		}
+
+		/// <summary>
+		/// Marks this jump gate as dirty<br />
+		/// It will be synced to clients on next tick
+		/// </summary>
+		public void SetDirty()
+		{
+			this.GetMethod<Action>("SetDirty")();
 		}
 
 		/// <summary>
@@ -549,7 +564,7 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		/// <returns>The required power in megawatts</returns>
 		public double CalculateTotalRequiredPower(Vector3D? endpoint = null, bool? has_target_gate = null, double? mass = null)
 		{
-			return this.GetMethod<Func<Vector3D?, bool?, double?, double>>("CalculateMaxGateDistance")(endpoint, has_target_gate, mass);
+			return this.GetMethod<Func<Vector3D?, bool?, double?, double>>("CalculateTotalRequiredPower")(endpoint, has_target_gate, mass);
 		}
 
 		/// <summary>

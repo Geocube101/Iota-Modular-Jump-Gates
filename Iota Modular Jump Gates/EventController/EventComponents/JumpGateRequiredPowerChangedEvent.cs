@@ -1,6 +1,7 @@
 ﻿using IOTA.ModularJumpGates.EventController.ObjectBuilders;
 using Sandbox.ModAPI;
 using Sandbox.ModAPI.Interfaces.Terminal;
+using VRage;
 using VRage.Game.Components;
 using VRage.Utils;
 
@@ -15,10 +16,10 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 		public override bool IsConditionSelectionUsed => true;
 		public override bool IsBlocksListUsed => false;
 		public override long UniqueSelectionId => 0x7FFFFFFFFFFFFFFA;
-		public override MyStringId EventDisplayName => MyStringId.GetOrCompute("Jump Gate Required Power Changed");
+		public override MyStringId EventDisplayName => MyStringId.GetOrCompute(MyTexts.GetString("DisplayName_JumpGateRequiredPowerChangedEvent"));
 		public override string ComponentTypeDebugString => nameof(JumpGateRequiredPowerChangedEvent);
-		public override string YesNoToolbarYesDescription => $"Total Required Power {((this.EventController.IsLowerOrEqualCondition) ? "<=" : ">=")} {MyJumpGateModSession.AutoconvertMetricUnits(this.TargetValue * 1e6, "w", 2)}";
-		public override string YesNoToolbarNoDescription => $"Total Required Power {((this.EventController.IsLowerOrEqualCondition) ? ">=" : "<=")} {MyJumpGateModSession.AutoconvertMetricUnits(this.TargetValue * 1e6, "w", 2)}";
+		public override string YesNoToolbarYesDescription => MyTexts.GetString("DisplayName_JumpGateRequiredPowerChangedEvent_YesDescription").Replace("{%0}", ((this.EventController.IsLowerOrEqualCondition) ? "<=" : ">=").Replace("{%1}", MyJumpGateModSession.AutoconvertMetricUnits(this.TargetValue * 1e6, "w", 2).ToString()));
+		public override string YesNoToolbarNoDescription => MyTexts.GetString("DisplayName_JumpGateRequiredPowerChangedEvent_NoDescription").Replace("{%0}", ((this.EventController.IsLowerOrEqualCondition) ? ">=" : "<=").Replace("{%1}", MyJumpGateModSession.AutoconvertMetricUnits(this.TargetValue * 1e6, "w", 2).ToString()));
 
 		protected override void CheckValueAgainstTarget(double new_value, double old_value, double target)
 		{
@@ -43,9 +44,9 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 		{
 			{
 				IMyTerminalControlSlider required_power_sdr = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSlider, T>(this.MODID_PREFIX + "TargetRequiredPower");
-				required_power_sdr.Title = MyStringId.GetOrCompute("Required Power (Mw)");
-				required_power_sdr.Tooltip = MyStringId.GetOrCompute("The required power (in megawatts) check against");
-				required_power_sdr.SupportsMultipleBlocks = false;
+				required_power_sdr.Title = MyStringId.GetOrCompute($"{MyTexts.GetString("Terminal_JumpGateRequiredPowerChangedEvent_Power")} (MW):");
+				required_power_sdr.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateRequiredPowerChangedEvent_Power_Tooltip"));
+				required_power_sdr.SupportsMultipleBlocks = true;
 				required_power_sdr.Visible = block => block.Components.Get<JumpGateRequiredPowerChangedEvent>()?.IsSelected ?? false;
 				required_power_sdr.SetLimits(0f, 1e24f);
 				required_power_sdr.Writer = (block, string_builder) => string_builder.Append(MyJumpGateModSession.AutoconvertMetricUnits(block.Components.Get<JumpGateRequiredPowerChangedEvent>().TargetValue * 1e6, "w", 4));
