@@ -1076,6 +1076,15 @@ namespace IOTA.ModularJumpGates.CubeBlock
 						MatrixD.CreateWorld(ref table_holo_center, ref player_facing, ref normal, out billboard_matrix);
 						MyTransparentGeometry.AddBillboardOriented(MyJumpGateModSession.MyMaterialsHolder.GateOfflineControllerIcon, intense_aqua, billboard_matrix.Translation, billboard_matrix.Left, billboard_matrix.Up, 0.75f, 0.75f);
 					}
+					else if (this.RemoteAntenna != null)
+					{
+						Vector3D normal = this.WorldMatrix.Up;
+						Vector3D player_facing = table_holo_center - MyAPIGateway.Session.Camera.Position;
+						player_facing = Vector3D.ProjectOnPlane(ref player_facing, ref normal);
+						MatrixD billboard_matrix;
+						MatrixD.CreateWorld(ref table_holo_center, ref player_facing, ref normal, out billboard_matrix);
+						MyTransparentGeometry.AddBillboardOriented(MyJumpGateModSession.MyMaterialsHolder.GateAntennaDisconnectedControllerIcon, intense_red, billboard_matrix.Translation, billboard_matrix.Left, billboard_matrix.Up, 0.75f, 0.75f);
+					}
 					else
 					{
 						Vector3D normal = this.WorldMatrix.Up;

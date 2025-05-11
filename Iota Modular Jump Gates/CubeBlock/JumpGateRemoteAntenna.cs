@@ -44,8 +44,17 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			public MyAllowedRemoteSettings AllowedRemoteSettings = MyAllowedRemoteSettings.ALL;
 			[ProtoMember(4)]
 			public double AntennaRange = MyJumpGateRemoteAntenna.MaxCollisionDistance;
+			[ProtoMember(5)]
+			public string[] JumpGateNames;
 
 			public MyRemoteAntennaBlockSettingsStruct() { }
+
+			public void Validate()
+			{
+				this.InboundConnectionJumpGates = this.InboundConnectionJumpGates ?? new long[3] { -1, -1, -1 };
+				this.OutboundConnectionControllers = this.OutboundConnectionControllers ?? new long[3] { -1, -1, -1 };
+				this.JumpGateNames = this.JumpGateNames = new string[3] { null, null, null };
+			}
 
 			public void AllowSetting(MyAllowedRemoteSettings setting, bool flag)
 			{
@@ -174,6 +183,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				if (jump_gate != null && jump_gate.RemoteAntenna == null)
 				{
 					jump_gate.RemoteAntenna = this;
+					jump_gate.RemoteAntennaChannel = i;
 					jump_gate.SetDirty();
 				}
 				else if (jump_gate != null) this.InboundConnectionJumpGates[i] = -1;
@@ -235,6 +245,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				try
 				{
 					MyRemoteAntennaBlockSettingsStruct serialized = MyAPIGateway.Utilities.SerializeFromBinary<MyRemoteAntennaBlockSettingsStruct>(Convert.FromBase64String(blockdata));
+					serialized.Validate();
 					for (byte i = 0; i < this.InboundConnectionJumpGates.Length; ++i) this.InboundConnectionJumpGates[i] = serialized.InboundConnectionJumpGates[i];
 					for (byte i = 0; i < this.OutboundConnectionControllers.Length; ++i) this.OutboundConnectionControllers[i] = serialized.OutboundConnectionControllers[i];
 					this.BlockSettings = serialized;
@@ -492,11 +503,18 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			if (gate != null && this.InboundConnectionJumpGates.Contains(gate.JumpGateID)) this.SetGateForInboundControl((byte) Array.IndexOf(this.InboundConnectionJumpGates, gate.JumpGateID), null);
 			MyJumpGate old_gate = this.GetInboundControlGate(channel);
 			this.InboundConnectionJumpGates[channel] = (gate == null || gate.Closed) ? -1 : gate.JumpGateID;
-			if (gate != null) gate.RemoteAntenna = this;
+
+			if (gate != null)
+			{
+				gate.RemoteAntenna = this;
+				gate.RemoteAntennaChannel = channel;
+			}
+
 			if (old_gate == null || old_gate == gate) return;
 			old_gate.Controller?.AttachedRemoteJumpGate(null);
 			old_gate.Controller = null;
 			old_gate.RemoteAntenna = null;
+			old_gate.RemoteAntennaChannel = 0xFF;
 		}
 
 		/// <summary>
@@ -614,6 +632,16 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		public byte GetControllerOutboundControlChannel(MyJumpGateController controller)
 		{
 			return (byte) ((controller != null && controller.JumpGateGrid == this.JumpGateGrid && this.OutboundConnectionControllers.Contains(controller.BlockID)) ? Array.IndexOf(this.OutboundConnectionControllers, controller.BlockID) : 0xFF);
+		}
+
+		/// <summary>
+		/// Gets the name of the channel attached on the specified channel
+		/// </summary>
+		/// <param name="channel">The channel to check</param>
+		/// <returns>The attached jump gate's name or null</returns>
+		public string GetJumpGateName(byte channel)
+		{
+			return (channel >= MyJumpGateRemoteAntenna.ChannelCount) ? null : this.BlockSettings.JumpGateNames[channel];
 		}
 
 		/// <summary>

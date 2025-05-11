@@ -490,6 +490,11 @@ namespace IOTA.ModularJumpGates
 		public bool IsDirty = false;
 
 		/// <summary>
+		/// The channel this jump gate's remote antenna is listening to or 255
+		/// </summary>
+		public byte RemoteAntennaChannel = 0xFF;
+
+		/// <summary>
 		/// The status of this gate
 		/// </summary>
 		public MyJumpGateStatus Status { get; private set; } = MyJumpGateStatus.NONE;
@@ -3997,7 +4002,7 @@ namespace IOTA.ModularJumpGates
 		public string GetName()
 		{
 			if (this.Closed) return null;
-			string name = this.Controller?.BlockSettings?.JumpGateName();
+			string name = this.Controller?.BlockSettings.JumpGateName() ?? this.RemoteAntenna?.GetJumpGateName(this.RemoteAntennaChannel);
 			this.LastStoredName = name ?? this.LastStoredName;
 			return name;
 		}

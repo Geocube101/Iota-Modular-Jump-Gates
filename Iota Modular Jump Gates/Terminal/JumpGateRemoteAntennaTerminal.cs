@@ -137,6 +137,47 @@ namespace IOTA.ModularJumpGates.Terminal
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(separator_hr);
 			}
 
+			// TextBox [Jump Gate Name]
+			{
+				for (byte channel_ = 0; channel_ < MyJumpGateRemoteAntenna.ChannelCount; ++channel_)
+				{
+					byte channel = channel_;
+					IMyTerminalControlTextbox jump_gate_name_tb = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlTextbox, IMyUpgradeModule>(MODID_PREFIX + $"RemoteAntennaJumpGateName_{channel}");
+					jump_gate_name_tb.Title = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateRemoteAntenna_JumpGateName").Replace("{%0}", channel.ToString()));
+					jump_gate_name_tb.SupportsMultipleBlocks = true;
+					jump_gate_name_tb.Visible = MyJumpGateModSession.IsBlockJumpGateRemoteAntenna;
+					jump_gate_name_tb.Enabled = (block) => {
+						MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
+						MyJumpGate jump_gate = antenna?.GetInboundControlGate(channel);
+						return antenna != null && antenna.IsWorking && antenna.JumpGateGrid != null && antenna.JumpGateGrid.IsValid() && jump_gate != null && jump_gate.IsValid();
+					};
+
+					jump_gate_name_tb.Getter = (block) => {
+						MyJumpGate jump_gate = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block)?.GetInboundControlGate(channel);
+						return new StringBuilder(jump_gate?.GetName() ?? "");
+					};
+
+					jump_gate_name_tb.Setter = (block, value) => {
+						if (!jump_gate_name_tb.Enabled(block)) return;
+						MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
+						if (value == null || value.Length == 0) antenna.BlockSettings.JumpGateNames[channel] = null;
+						else antenna.BlockSettings.JumpGateNames[channel] = value.ToString().Replace("\n", "↵");
+						antenna.SetDirty();
+					};
+
+					MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(jump_gate_name_tb);
+				}
+				;
+			}
+
+			// Separator
+			{
+				IMyTerminalControlSeparator separator_hr = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSeparator, IMyUpgradeModule>("");
+				separator_hr.Visible = MyJumpGateModSession.IsBlockJumpGateRemoteAntenna;
+				separator_hr.SupportsMultipleBlocks = true;
+				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(separator_hr);
+			}
+
 			// Label
 			{
 				IMyTerminalControlLabel allowed_settings_label_lb = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlLabel, IMyUpgradeModule>(MODID_PREFIX + "RemoteAntennaAllowedSettingsLabel");
