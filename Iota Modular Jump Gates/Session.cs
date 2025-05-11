@@ -206,7 +206,7 @@ namespace IOTA.ModularJumpGates
 		/// <summary>
 		/// Interface for handling API requests
 		/// </summary>
-		public MyModAPIInterface ModAPIInterface { get; private set; } = new MyModAPIInterface();
+		public MyAPIInterface ModAPIInterface { get; private set; } = new MyAPIInterface();
 		#endregion
 
 		#region Public Static Methods

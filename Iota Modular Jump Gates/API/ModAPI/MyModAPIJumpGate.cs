@@ -12,16 +12,16 @@ using IOTA.ModularJumpGates.API.ModAPI.Util;
 
 namespace IOTA.ModularJumpGates.API.ModAPI
 {
-	public class MyAPIJumpGate : MyAPIObjectBase
+	public class MyModAPIJumpGate : MyModAPIObjectBase
 	{
-		private readonly ConcurrentDictionary<Action<MyAPIJumpGate, MyEntity, bool>, Action<Dictionary<string, object>, MyEntity, bool>> EntityEnteredCallbacks = new ConcurrentDictionary<Action<MyAPIJumpGate, MyEntity, bool>, Action<Dictionary<string, object>, MyEntity, bool>>();
+		private readonly ConcurrentDictionary<Action<MyModAPIJumpGate, MyEntity, bool>, Action<Dictionary<string, object>, MyEntity, bool>> EntityEnteredCallbacks = new ConcurrentDictionary<Action<MyModAPIJumpGate, MyEntity, bool>, Action<Dictionary<string, object>, MyEntity, bool>>();
 
-		internal static MyAPIJumpGate New(Dictionary<string, object> attributes)
+		internal static MyModAPIJumpGate New(Dictionary<string, object> attributes)
 		{
-			return MyAPIObjectBase.GetObjectOrNew<MyAPIJumpGate>(attributes, () => new MyAPIJumpGate(attributes));
+			return MyModAPIObjectBase.GetObjectOrNew<MyModAPIJumpGate>(attributes, () => new MyModAPIJumpGate(attributes));
 		}
 
-		private MyAPIJumpGate(Dictionary<string, object> attributes) : base(attributes) { }
+		private MyModAPIJumpGate(Dictionary<string, object> attributes) : base(attributes) { }
 
 		public JumpGateUUID Guid => new JumpGateUUID(this.GetAttribute<long[]>("Guid"));
 
@@ -123,27 +123,27 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		/// <summary>
 		/// This gate's attached controller or null
 		/// </summary>
-		public MyAPIJumpGateController Controller => MyAPIJumpGateController.New(this.GetAttribute<Dictionary<string, object>>("Controller"));
+		public MyModAPIJumpGateController Controller => MyModAPIJumpGateController.New(this.GetAttribute<Dictionary<string, object>>("Controller"));
 
 		/// <summary>
 		/// This gate's attached remote anntena or null
 		/// </summary>
-		public MyAPIJumpGateRemoteAntenna RemoteAntenna => MyAPIJumpGateRemoteAntenna.New(this.GetAttribute<Dictionary<string, object>>("RemoteAntenna"));
+		public MyModAPIJumpGateRemoteAntenna RemoteAntenna => MyModAPIJumpGateRemoteAntenna.New(this.GetAttribute<Dictionary<string, object>>("RemoteAntenna"));
 
 		/// <summary>
 		/// This gate's attached server antenna or null
 		/// </summary>
-		public MyAPIJumpGateServerAntenna ServerAntenna => MyAPIJumpGateServerAntenna.New(this.GetAttribute<Dictionary<string, object>>("ServerAntenna"));
+		public MyModAPIJumpGateServerAntenna ServerAntenna => MyModAPIJumpGateServerAntenna.New(this.GetAttribute<Dictionary<string, object>>("ServerAntenna"));
 
 		/// <summary>
 		/// The gate jumping to this one or null
 		/// </summary>
-		public MyAPIJumpGate SenderGate => MyAPIJumpGate.New(this.GetAttribute<Dictionary<string, object>>("SenderGate"));
+		public MyModAPIJumpGate SenderGate => MyModAPIJumpGate.New(this.GetAttribute<Dictionary<string, object>>("SenderGate"));
 
 		/// <summary>
 		/// This gate's MyJumpGateConstruct construct
 		/// </summary>
-		public MyAPIJumpGateConstruct JumpGateGrid => MyAPIJumpGateConstruct.New(this.GetAttribute<Dictionary<string, object>>("JumpGateGrid"));
+		public MyModAPIJumpGateConstruct JumpGateGrid => MyModAPIJumpGateConstruct.New(this.GetAttribute<Dictionary<string, object>>("JumpGateGrid"));
 
 		/// <summary>
 		/// Gets this gate's world-aligned artificial JumpEllipse using the associated controller
@@ -205,7 +205,7 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		/// For clients: Sends a jump request to server
 		/// </summary>
 		/// <param name="controller">The controller to use for the jump</param>
-		public void Jump(MyAPIJumpGateController controller = null)
+		public void Jump(MyModAPIJumpGateController controller = null)
 		{
 			controller = controller ?? this.Controller;
 			this.GetMethod<Action<IMyTerminalBlock, Dictionary<string, object>>>("Jump")(controller?.TerminalBlock, controller?.BlockSettings.ToDictionary());
@@ -218,7 +218,7 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		/// </summary>
 		/// <param name="distance">The distance to use for power calculations</param>
 		/// <param name="controller">The controller to use for the jump or the attached controller if null</param>
-		public void JumpToVoid(double distance, MyAPIJumpGateController controller = null)
+		public void JumpToVoid(double distance, MyModAPIJumpGateController controller = null)
 		{
 			controller = controller ?? this.Controller;
 			this.GetMethod<Action<double, IMyTerminalBlock, Dictionary<string, object>>>("JumpToVoid")(distance, controller?.TerminalBlock, controller?.BlockSettings.ToDictionary());
@@ -232,7 +232,7 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		/// <param name="spawn_prefabs">A list of prefabs to spawn<br />Jump will fail if empty</param>
 		/// <param name="spawned_grids">A list containing the list of spawned grids per prefab</param>
 		/// <param name="controller">The controller to use for the jump or the attached controller if null</param>
-		public void JumpFromVoid(List<MyAPIPrefabInfo> spawn_prefabs, List<List<IMyCubeGrid>> spawned_grids, MyAPIJumpGateController controller = null)
+		public void JumpFromVoid(List<MyAPIPrefabInfo> spawn_prefabs, List<List<IMyCubeGrid>> spawned_grids, MyModAPIJumpGateController controller = null)
 		{
 			controller = controller ?? this.Controller;
 			this.GetMethod<Action<List<Dictionary<string, object>>, List<List<IMyCubeGrid>>, IMyTerminalBlock, Dictionary<string, object>>>("JumpFromVoid")(spawn_prefabs?.Select((prefab) => prefab.ToDictionary()).ToList(), spawned_grids, controller?.TerminalBlock, controller?.BlockSettings.ToDictionary());
@@ -341,9 +341,9 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		///  ... bool - True if this entity is entering the jump space
 		/// </summary>
 		/// <param name="callback">The callback to call</param>
-		public void OnEntityCollision(Action<MyAPIJumpGate, MyEntity, bool> callback)
+		public void OnEntityCollision(Action<MyModAPIJumpGate, MyEntity, bool> callback)
 		{
-			Action<Dictionary<string, object>, MyEntity, bool> _callback = (gate, entity, is_entering) => callback(MyAPIJumpGate.New(gate), entity, is_entering);
+			Action<Dictionary<string, object>, MyEntity, bool> _callback = (gate, entity, is_entering) => callback(MyModAPIJumpGate.New(gate), entity, is_entering);
 			this.EntityEnteredCallbacks[callback] = _callback;
 			this.GetMethod<Action<Action<Dictionary<string, object>, MyEntity, bool>>>("OnEntityCollision")(_callback);
 		}
@@ -356,7 +356,7 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		///  ... bool - True if this entity is entering the jump space
 		/// </summary>
 		/// <param name="callback">The callback to call</param>
-		public void OffEntityCollision(Action<MyAPIJumpGate, MyEntity, bool> callback)
+		public void OffEntityCollision(Action<MyModAPIJumpGate, MyEntity, bool> callback)
 		{
 			Action<Dictionary<string, object>, MyEntity, bool> _callback = this.EntityEnteredCallbacks.GetValueOrDefault(callback, null);
 			if (_callback != null) this.GetMethod<Action<Action<Dictionary<string, object>, MyEntity, bool>>>("OffEntityCollision")(_callback);
@@ -367,7 +367,7 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		/// </summary>
 		/// <param name="callback">The callback to check</param>
 		/// <returns>True if already registered</returns>
-		public bool IsEntityCollisionCallbackRegistered(Action<MyAPIJumpGate, MyEntity, bool> callback)
+		public bool IsEntityCollisionCallbackRegistered(Action<MyModAPIJumpGate, MyEntity, bool> callback)
 		{
 			Action<Dictionary<string, object>, MyEntity, bool> _callback;
 			if (!this.EntityEnteredCallbacks.TryGetValue(callback, out _callback)) return false;
@@ -457,7 +457,7 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 
 		public override bool Equals(object other)
 		{
-			return other != null && other is MyAPIJumpGate && base.Equals(((MyAPIJumpGate) other).Guid);
+			return other != null && other is MyModAPIJumpGate && base.Equals(((MyModAPIJumpGate) other).Guid);
 		}
 
 		/// <summary>
@@ -666,18 +666,18 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		/// Gets a list of all drives attached to this gate
 		/// </summary>
 		/// <returns>An IEnumerable referencing all attached drives</returns>
-		public IEnumerable<MyAPIJumpGateDrive> GetJumpGateDrives()
+		public IEnumerable<MyModAPIJumpGateDrive> GetJumpGateDrives()
 		{
-			return this.GetMethod<Func<IEnumerable<Dictionary<string, object>>>>("GetJumpGateDrives")().Select(MyAPIJumpGateDrive.New);
+			return this.GetMethod<Func<IEnumerable<Dictionary<string, object>>>>("GetJumpGateDrives")().Select(MyModAPIJumpGateDrive.New);
 		}
 
 		/// <summary>
 		/// Gets a list of all working drives attached to this gate
 		/// </summary>
 		/// <returns>An IEnumerable referencing all attached, working drives</returns>
-		public IEnumerable<MyAPIJumpGateDrive> GetWorkingJumpGateDrives()
+		public IEnumerable<MyModAPIJumpGateDrive> GetWorkingJumpGateDrives()
 		{
-			return this.GetMethod<Func<IEnumerable<Dictionary<string, object>>>>("GetWorkingJumpGateDrives")().Select(MyAPIJumpGateDrive.New);
+			return this.GetMethod<Func<IEnumerable<Dictionary<string, object>>>>("GetWorkingJumpGateDrives")().Select(MyModAPIJumpGateDrive.New);
 		}
 
 		/// <summary>

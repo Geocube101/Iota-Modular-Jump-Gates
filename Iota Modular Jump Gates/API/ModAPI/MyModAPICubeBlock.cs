@@ -12,15 +12,15 @@ using IOTA.ModularJumpGates.API.ModAPI.Util;
 
 namespace IOTA.ModularJumpGates.API.ModAPI
 {
-	public class MyAPICubeBlockBase : MyAPIObjectBase
+	public class MyModAPICubeBlockBase : MyModAPIObjectBase
 	{
-		internal static MyAPICubeBlockBase New(Dictionary<string, object> attributes)
+		internal static MyModAPICubeBlockBase New(Dictionary<string, object> attributes)
 		{
-			return MyAPIObjectBase.GetObjectOrNew<MyAPICubeBlockBase>(attributes, () => new MyAPICubeBlockBase(attributes));
+			return MyModAPIObjectBase.GetObjectOrNew<MyModAPICubeBlockBase>(attributes, () => new MyModAPICubeBlockBase(attributes));
 		}
 
-		private MyAPICubeBlockBase(Dictionary<string, object> attributes) : base(attributes) { }
-		protected MyAPICubeBlockBase(Dictionary<string, object> block_base_attributes, Dictionary<string, object> attributes) : base(block_base_attributes.Concat(attributes).ToDictionary(pair => pair.Key, pair => pair.Value)) { }
+		private MyModAPICubeBlockBase(Dictionary<string, object> attributes) : base(attributes) { }
+		protected MyModAPICubeBlockBase(Dictionary<string, object> block_base_attributes, Dictionary<string, object> attributes) : base(block_base_attributes.Concat(attributes).ToDictionary(pair => pair.Key, pair => pair.Value)) { }
 
 		/// <summary>
 		/// Whether this block should be synced<br/>
@@ -129,7 +129,7 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		/// <summary>
 		/// The jump gate grid this component is bound to
 		/// </summary>
-		public MyAPIJumpGateConstruct JumpGateGrid => MyAPIJumpGateConstruct.New(this.GetAttribute<Dictionary<string, object>>("JumpGateGrid"));
+		public MyModAPIJumpGateConstruct JumpGateGrid => MyModAPIJumpGateConstruct.New(this.GetAttribute<Dictionary<string, object>>("JumpGateGrid"));
 
 		/// <summary>
 		/// Sets the internal "IsDirty" flag to true
@@ -143,7 +143,7 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 
 		public override bool Equals(object other)
 		{
-			return other != null && other is MyAPICubeBlockBase && base.Equals(((MyAPICubeBlockBase) other).TerminalBlock);
+			return other != null && other is MyModAPICubeBlockBase && base.Equals(((MyModAPICubeBlockBase) other).TerminalBlock);
 		}
 
 		public override int GetHashCode()
@@ -152,14 +152,14 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		}
 	}
 
-	public class MyAPIJumpGateController : MyAPICubeBlockBase
+	public class MyModAPIJumpGateController : MyModAPICubeBlockBase
 	{
-		internal static new MyAPIJumpGateController New(Dictionary<string, object> attributes)
+		internal static new MyModAPIJumpGateController New(Dictionary<string, object> attributes)
 		{
-			return MyAPIObjectBase.GetObjectOrNew<MyAPIJumpGateController>(attributes, () => new MyAPIJumpGateController(attributes));
+			return MyModAPIObjectBase.GetObjectOrNew<MyModAPIJumpGateController>(attributes, () => new MyModAPIJumpGateController(attributes));
 		}
 
-		private MyAPIJumpGateController(Dictionary<string, object> attributes) : base((Dictionary<string, object>) (attributes["BlockBase"]), attributes) { }
+		private MyModAPIJumpGateController(Dictionary<string, object> attributes) : base((Dictionary<string, object>) (attributes["BlockBase"]), attributes) { }
 
 		/// <summary>
 		/// Stores block data for this block type
@@ -217,7 +217,7 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 			private readonly object WriterLock = new object();
 
 			public MyAPIControllerBlockSettings() { }
-			public MyAPIControllerBlockSettings(MyAPIJumpGateController controller, Dictionary<string, object> mapping)
+			public MyAPIControllerBlockSettings(MyModAPIJumpGateController controller, Dictionary<string, object> mapping)
 			{
 				this.FromDictionary(controller, mapping);
 			}
@@ -231,7 +231,7 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 				if (Monitor.IsEntered(this.WriterLock)) Monitor.Exit(this.WriterLock);
 			}
 
-			public void FromDictionary(MyAPIJumpGateController controller, Dictionary<string, object> mapping)
+			public void FromDictionary(MyModAPIJumpGateController controller, Dictionary<string, object> mapping)
 			{
 				if (mapping == null || controller == null) return;
 
@@ -261,12 +261,12 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 						}
 						else if (selected_waypoint is long[])
 						{
-							MyAPIJumpGate target_gate = MyAPISession.Instance.GetJumpGate(new JumpGateUUID((long[]) selected_waypoint));
+							MyModAPIJumpGate target_gate = MyModAPISession.Instance.GetJumpGate(new JumpGateUUID((long[]) selected_waypoint));
 							if (target_gate == null) throw new KeyNotFoundException("The specified jump gate does not exist");
 							result_waypoint = new MyAPIJumpGateWaypoint(target_gate);
 						}
 
-						MyAPIJumpGate attached_gate = controller.AttachedJumpGate;
+						MyModAPIJumpGate attached_gate = controller.AttachedJumpGate;
 						Vector3D? endpoint = result_waypoint?.GetEndpoint();
 						Vector3D? node = attached_gate?.WorldJumpNode;
 
@@ -646,11 +646,11 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		/// <summary>
 		/// Sets or gets this controller's attached jump gate
 		/// </summary>
-		public MyAPIJumpGate AttachedJumpGate
+		public MyModAPIJumpGate AttachedJumpGate
 		{
 			get
 			{
-				return MyAPIJumpGate.New(this.GetMethod<Func<Dictionary<string, object>>>("GetAttachedJumpGate")());
+				return MyModAPIJumpGate.New(this.GetMethod<Func<Dictionary<string, object>>>("GetAttachedJumpGate")());
 			}
 			set
 			{
@@ -677,24 +677,24 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		/// <summary>
 		/// The antenna and channel this controller is searching for jump gates through
 		/// </summary>
-		public KeyValuePair<MyAPIJumpGateRemoteAntenna, byte> RemoteAntennaChannel
+		public KeyValuePair<MyModAPIJumpGateRemoteAntenna, byte> RemoteAntennaChannel
 		{
 			get
 			{
 				KeyValuePair<Dictionary<string, object>, byte> remote_antenna_channel = this.GetAttribute<KeyValuePair<Dictionary<string, object>, byte>>("RemoteAntennaChannel");
-				return new KeyValuePair<MyAPIJumpGateRemoteAntenna, byte>(MyAPIJumpGateRemoteAntenna.New(remote_antenna_channel.Key), remote_antenna_channel.Value);
+				return new KeyValuePair<MyModAPIJumpGateRemoteAntenna, byte>(MyModAPIJumpGateRemoteAntenna.New(remote_antenna_channel.Key), remote_antenna_channel.Value);
 			}
 		}
 
 		/// <summary>
 		/// The antenna this controller is searching for jump gates through
 		/// </summary>
-		public MyAPIJumpGateRemoteAntenna RemoteAntenna => MyAPIJumpGateRemoteAntenna.New(this.GetAttribute<Dictionary<string, object>>("RemoteAntenna"));
+		public MyModAPIJumpGateRemoteAntenna RemoteAntenna => MyModAPIJumpGateRemoteAntenna.New(this.GetAttribute<Dictionary<string, object>>("RemoteAntenna"));
 
 		/// <summary>
 		/// The antenna this controller's antenna is connected to or null
 		/// </summary>
-		public MyAPIJumpGateRemoteAntenna ConnectedRemoteAntenna => MyAPIJumpGateRemoteAntenna.New(this.GetAttribute<Dictionary<string, object>>("ConnectedRemoteAntenna"));
+		public MyModAPIJumpGateRemoteAntenna ConnectedRemoteAntenna => MyModAPIJumpGateRemoteAntenna.New(this.GetAttribute<Dictionary<string, object>>("ConnectedRemoteAntenna"));
 
 		/// <summary>
 		/// </summary>
@@ -715,14 +715,14 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		}
 	}
 
-	public class MyAPIJumpGateDrive : MyAPICubeBlockBase
+	public class MyModAPIJumpGateDrive : MyModAPICubeBlockBase
 	{
-		internal static new MyAPIJumpGateDrive New(Dictionary<string, object> attributes)
+		internal static new MyModAPIJumpGateDrive New(Dictionary<string, object> attributes)
 		{
-			return MyAPIObjectBase.GetObjectOrNew<MyAPIJumpGateDrive>(attributes, () => new MyAPIJumpGateDrive(attributes));
+			return MyModAPIObjectBase.GetObjectOrNew<MyModAPIJumpGateDrive>(attributes, () => new MyModAPIJumpGateDrive(attributes));
 		}
 
-		private MyAPIJumpGateDrive(Dictionary<string, object> attributes) : base((Dictionary<string, object>) (attributes["BlockBase"]), attributes) { }
+		private MyModAPIJumpGateDrive(Dictionary<string, object> attributes) : base((Dictionary<string, object>) (attributes["BlockBase"]), attributes) { }
 
 		/// <summary>
 		/// The stored capacitor charge in MegaWatts
@@ -838,14 +838,14 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		}
 	}
 
-	public class MyAPIJumpGateCapacitor : MyAPICubeBlockBase
+	public class MyModAPIJumpGateCapacitor : MyModAPICubeBlockBase
 	{
-		internal static new MyAPIJumpGateCapacitor New(Dictionary<string, object> attributes)
+		internal static new MyModAPIJumpGateCapacitor New(Dictionary<string, object> attributes)
 		{
-			return MyAPIObjectBase.GetObjectOrNew<MyAPIJumpGateCapacitor>(attributes, () => new MyAPIJumpGateCapacitor(attributes));
+			return MyModAPIObjectBase.GetObjectOrNew<MyModAPIJumpGateCapacitor>(attributes, () => new MyModAPIJumpGateCapacitor(attributes));
 		}
 
-		private MyAPIJumpGateCapacitor(Dictionary<string, object> attributes) : base((Dictionary<string, object>) (attributes["BlockBase"]), attributes) { }
+		private MyModAPIJumpGateCapacitor(Dictionary<string, object> attributes) : base((Dictionary<string, object>) (attributes["BlockBase"]), attributes) { }
 
 		/// <summary>
 		/// The stored capacitor charge in MegaWatts
@@ -873,14 +873,14 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		}
 	}
 
-	public class MyAPIJumpGateRemoteAntenna : MyAPICubeBlockBase
+	public class MyModAPIJumpGateRemoteAntenna : MyModAPICubeBlockBase
 	{
-		internal static new MyAPIJumpGateRemoteAntenna New(Dictionary<string, object> attributes)
+		internal static new MyModAPIJumpGateRemoteAntenna New(Dictionary<string, object> attributes)
 		{
-			return MyAPIObjectBase.GetObjectOrNew<MyAPIJumpGateRemoteAntenna>(attributes, () => new MyAPIJumpGateRemoteAntenna(attributes));
+			return MyModAPIObjectBase.GetObjectOrNew<MyModAPIJumpGateRemoteAntenna>(attributes, () => new MyModAPIJumpGateRemoteAntenna(attributes));
 		}
 
-		private MyAPIJumpGateRemoteAntenna(Dictionary<string, object> attributes) : base((Dictionary<string, object>) (attributes["BlockBase"]), attributes) { }
+		private MyModAPIJumpGateRemoteAntenna(Dictionary<string, object> attributes) : base((Dictionary<string, object>) (attributes["BlockBase"]), attributes) { }
 
 		/// <summary>
 		/// A bit flag of settings allowed to be modified by a controller
@@ -905,7 +905,7 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		/// </summary>
 		/// <param name="channel">The channel or 255 for next available</param>
 		/// <param name="gate">The gate to bind</param>
-		public void SetGateForInboundControl(byte channel, MyAPIJumpGate gate)
+		public void SetGateForInboundControl(byte channel, MyModAPIJumpGate gate)
 		{
 			this.GetMethod<Action<byte, long>>("SetGateForInboundControl")(channel, gate?.JumpGateID ?? -1);
 		}
@@ -915,7 +915,7 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		/// </summary>
 		/// <param name="channel">The channel or 255 for next available</param>
 		/// <param name="controller">The controller to bind</param>
-		public void SetControllerForOutboundControl(byte channel, MyAPIJumpGateController controller)
+		public void SetControllerForOutboundControl(byte channel, MyModAPIJumpGateController controller)
 		{
 			this.GetMethod<Action<byte, long>>("SetControllerForOutboundControl")(channel, controller?.BlockID ?? -1);
 		}
@@ -925,7 +925,7 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		/// </summary>
 		/// <param name="gate">The gate to check</param>
 		/// <returns>The control channel or 255 if not registered</returns>
-		public byte GetJumpGateInboundControlChannel(MyAPIJumpGate gate)
+		public byte GetJumpGateInboundControlChannel(MyModAPIJumpGate gate)
 		{
 			return (gate == null) ? (byte) 0xFF : this.GetMethod<Func<long[], byte>>("GetJumpGateInboundControlChannel")(gate.Guid.Packed());
 		}
@@ -935,7 +935,7 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		/// </summary>
 		/// <param name="controller">The controller to check</param>
 		/// <returns>The control channel or 255 if not registered</returns>
-		public byte GetControllerOutboundControlChannel(MyAPIJumpGateController controller)
+		public byte GetControllerOutboundControlChannel(MyModAPIJumpGateController controller)
 		{
 			return (controller == null || !controller.HandleValid) ? (byte) 0xFF : this.GetMethod<Func<long[], byte>>("GetControllerOutboundControlChannel")(controller.ObjectID.Value.Packed());
 		}
@@ -944,9 +944,9 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		/// </summary>
 		/// <param name="channel">The channel to check</param>
 		/// <returns>The gate listening on the specified inbound channel or null</returns>
-		public MyAPIJumpGate GetInboundControlGate(byte channel)
+		public MyModAPIJumpGate GetInboundControlGate(byte channel)
 		{
-			return MyAPIJumpGate.New(this.GetMethod<Func<byte, Dictionary<string, object>>>("GetInboundControlGate")(channel));
+			return MyModAPIJumpGate.New(this.GetMethod<Func<byte, Dictionary<string, object>>>("GetInboundControlGate")(channel));
 		}
 
 		/// <summary>
@@ -954,18 +954,18 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		/// </summary>
 		/// <param name="channel">The channel to check</param>
 		/// <returns>The connected gate</returns>
-		public MyAPIJumpGate GetConnectedControlledJumpGate(byte channel)
+		public MyModAPIJumpGate GetConnectedControlledJumpGate(byte channel)
 		{
-			return MyAPIJumpGate.New(this.GetMethod<Func<byte, Dictionary<string, object>>>("GetConnectedControlledJumpGate")(channel));
+			return MyModAPIJumpGate.New(this.GetMethod<Func<byte, Dictionary<string, object>>>("GetConnectedControlledJumpGate")(channel));
 		}
 
 		/// <summary>
 		/// </summary>
 		/// <param name="channel">The channel to check</param>
 		/// <returns>The controller listening on the specified outbound channel or null</returns>
-		public MyAPIJumpGateController GetOutboundControlController(byte channel)
+		public MyModAPIJumpGateController GetOutboundControlController(byte channel)
 		{
-			return MyAPIJumpGateController.New(this.GetMethod<Func<byte, Dictionary<string, object>>>("GetOutboundControlController")(channel));
+			return MyModAPIJumpGateController.New(this.GetMethod<Func<byte, Dictionary<string, object>>>("GetOutboundControlController")(channel));
 		}
 
 		/// <summary>
@@ -973,9 +973,9 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		/// </summary>
 		/// <param name="channel">The channel to check</param>
 		/// <returns>The connected antenna or null</returns>
-		public MyAPIJumpGateRemoteAntenna GetConnectedRemoteAntenna(byte channel)
+		public MyModAPIJumpGateRemoteAntenna GetConnectedRemoteAntenna(byte channel)
 		{
-			return MyAPIJumpGateRemoteAntenna.New(this.GetMethod<Func<byte, Dictionary<string, object>>>("GetConnectedRemoteAntenna")(channel));
+			return MyModAPIJumpGateRemoteAntenna.New(this.GetMethod<Func<byte, Dictionary<string, object>>>("GetConnectedRemoteAntenna")(channel));
 		}
 
 		/// <summary>
@@ -997,36 +997,36 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		/// <summary>
 		/// </summary>
 		/// <returns>Gets all inbound registered jump gates</returns>
-		public IEnumerable<MyAPIJumpGate> RegisteredInboundControlGates()
+		public IEnumerable<MyModAPIJumpGate> RegisteredInboundControlGates()
 		{
-			return this.GetMethod<Func<IEnumerable<Dictionary<string, object>>>>("RegisteredInboundControlGates")().Select(MyAPIJumpGate.New);
+			return this.GetMethod<Func<IEnumerable<Dictionary<string, object>>>>("RegisteredInboundControlGates")().Select(MyModAPIJumpGate.New);
 		}
 
 		/// <summary>
 		/// </summary>
 		/// <returns>Gets all inbound registered jump gate controllers</returns>
-		public IEnumerable<MyAPIJumpGateController> RegisteredOutboundControlControllers()
+		public IEnumerable<MyModAPIJumpGateController> RegisteredOutboundControlControllers()
 		{
-			return this.GetMethod<Func<IEnumerable<Dictionary<string, object>>>>("RegisteredOutboundControlControllers")().Select(MyAPIJumpGateController.New);
+			return this.GetMethod<Func<IEnumerable<Dictionary<string, object>>>>("RegisteredOutboundControlControllers")().Select(MyModAPIJumpGateController.New);
 		}
 
 		/// <summary>
 		/// Gets all working antennas within range of this one
 		/// </summary>
 		/// <returns>An enumerable containing all nearby working antennas</returns>
-		public IEnumerable<MyAPIJumpGateRemoteAntenna> GetNearbyAntennas()
+		public IEnumerable<MyModAPIJumpGateRemoteAntenna> GetNearbyAntennas()
 		{
-			return this.GetMethod<Func<IEnumerable<Dictionary<string, object>>>>("GetNearbyAntennas")().Select(MyAPIJumpGateRemoteAntenna.New);
+			return this.GetMethod<Func<IEnumerable<Dictionary<string, object>>>>("GetNearbyAntennas")().Select(MyModAPIJumpGateRemoteAntenna.New);
 		}
 	}
 
-	public class MyAPIJumpGateServerAntenna : MyAPICubeBlockBase
+	public class MyModAPIJumpGateServerAntenna : MyModAPICubeBlockBase
 	{
-		internal static new MyAPIJumpGateServerAntenna New(Dictionary<string, object> attributes)
+		internal static new MyModAPIJumpGateServerAntenna New(Dictionary<string, object> attributes)
 		{
-			return MyAPIObjectBase.GetObjectOrNew<MyAPIJumpGateServerAntenna>(attributes, () => new MyAPIJumpGateServerAntenna(attributes));
+			return MyModAPIObjectBase.GetObjectOrNew<MyModAPIJumpGateServerAntenna>(attributes, () => new MyModAPIJumpGateServerAntenna(attributes));
 		}
 
-		private MyAPIJumpGateServerAntenna(Dictionary<string, object> attributes) : base((Dictionary<string, object>) (attributes["BlockBase"]), attributes) { }
+		private MyModAPIJumpGateServerAntenna(Dictionary<string, object> attributes) : base((Dictionary<string, object>) (attributes["BlockBase"]), attributes) { }
 	}
 }

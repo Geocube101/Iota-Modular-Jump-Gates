@@ -8,11 +8,11 @@ using VRageMath;
 
 namespace IOTA.ModularJumpGates.API.ModAPI
 {
-	public class MyAPISession : MyAPIObjectBase
+	public class MyModAPISession : MyModAPIObjectBase
 	{
 		public static readonly long ModAPIID = 3313236685;
 		public static readonly int[] ModAPIVersion = new int[2] { 1, 0 };
-		public static MyAPISession Instance { get; private set; } = null;
+		public static MyModAPISession Instance { get; private set; } = null;
 
 		/// <summary>
 		/// Initializes the Mod API Session
@@ -22,17 +22,18 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		public static bool Init(IMyModContext context)
 		{
 			bool result = false;
-			MyAPIGateway.Utilities.SendModMessage(MyAPISession.ModAPIID, new Dictionary<string, object>() {
+			MyAPIGateway.Utilities.SendModMessage(MyModAPISession.ModAPIID, new Dictionary<string, object>() {
+				["Type"] = "modapi",
 				["Callback"] = (Action<Dictionary<string, object>>) ((attributes) => {
-					if (result = attributes != null) MyAPISession.Instance = new MyAPISession(attributes);
+					if (result = attributes != null) MyModAPISession.Instance = new MyModAPISession(attributes);
 				}),
-				["Version"] = MyAPISession.ModAPIVersion,
+				["Version"] = MyModAPISession.ModAPIVersion,
 				["ModContext"] = context,
 			});
 			return result;
 		}
 
-		private MyAPISession(Dictionary<string, object> attributes) : base(attributes) { }
+		private MyModAPISession(Dictionary<string, object> attributes) : base(attributes) { }
 
 		/// <summary>
 		/// The current, session local game tick
@@ -110,7 +111,7 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		/// </summary>
 		/// <param name="grid">The grid to check</param>
 		/// <returns>True if this grid should be considered valid</returns>
-		public bool IsJumpGateGridMultiplayerValid(MyAPIJumpGateConstruct grid)
+		public bool IsJumpGateGridMultiplayerValid(MyModAPIJumpGateConstruct grid)
 		{
 			return (grid == null) ? false : this.GetMethod<Func<long, bool>>("IsJumpGateGridMultiplayerValid")(grid.CubeGridID);
 		}
@@ -119,7 +120,7 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		/// </summary>
 		/// <param name="grid">The grid construct</param>
 		/// <returns>True if this grid has a duplicate construct</returns>
-		public bool HasDuplicateGrid(MyAPIJumpGateConstruct grid)
+		public bool HasDuplicateGrid(MyModAPIJumpGateConstruct grid)
 		{
 			return (grid == null) ? false : this.GetMethod<Func<long, bool>>("HasDuplicateGrid")(grid.CubeGridID);
 		}
@@ -131,7 +132,7 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		/// <param name="grid">The unclosed construct to move</param>
 		/// <param name="new_id">The subgrid ID to move to</param>
 		/// <returns>Whether the grid was moved</returns>
-		public bool MoveGrid(MyAPIJumpGateConstruct grid, long new_id)
+		public bool MoveGrid(MyModAPIJumpGateConstruct grid, long new_id)
 		{
 			return (grid == null) ? false : this.GetMethod<Func<long, long, bool>>("MoveGrid")(grid.CubeGridID, new_id);
 		}
@@ -233,9 +234,9 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		/// </summary>
 		/// <param name="block">The block to convert</param>
 		/// <returns>The "CubeBlockBase" game logic component or null</returns>
-		public MyAPICubeBlockBase GetBlockAsCubeBlockBase(IMyTerminalBlock block)
+		public MyModAPICubeBlockBase GetBlockAsCubeBlockBase(IMyTerminalBlock block)
 		{
-			return MyAPICubeBlockBase.New(this.GetMethod<Func<IMyTerminalBlock, Dictionary<string, object>>>("GetBlockAsCubeBlockBase")(block));
+			return MyModAPICubeBlockBase.New(this.GetMethod<Func<IMyTerminalBlock, Dictionary<string, object>>>("GetBlockAsCubeBlockBase")(block));
 		}
 
 		/// <summary>
@@ -243,9 +244,9 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		/// </summary>
 		/// <param name="block">The block to convert</param>
 		/// <returns>The "JumpGateController" game logic component or null</returns>
-		public MyAPIJumpGateController GetBlockAsJumpGateController(IMyTerminalBlock block)
+		public MyModAPIJumpGateController GetBlockAsJumpGateController(IMyTerminalBlock block)
 		{
-			return MyAPIJumpGateController.New(this.GetMethod<Func<IMyTerminalBlock, Dictionary<string, object>>>("GetBlockAsJumpGateController")(block));
+			return MyModAPIJumpGateController.New(this.GetMethod<Func<IMyTerminalBlock, Dictionary<string, object>>>("GetBlockAsJumpGateController")(block));
 		}
 
 		/// <summary>
@@ -253,9 +254,9 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		/// </summary>
 		/// <param name="block">The block to convert</param>
 		/// <returns>The "JumpGateDrive" game logic component or null</returns>
-		public MyAPIJumpGateDrive GetBlockAsJumpGateDrive(IMyTerminalBlock block)
+		public MyModAPIJumpGateDrive GetBlockAsJumpGateDrive(IMyTerminalBlock block)
 		{
-			return MyAPIJumpGateDrive.New(this.GetMethod<Func<IMyTerminalBlock, Dictionary<string, object>>>("GetBlockAsJumpGateDrive")(block));
+			return MyModAPIJumpGateDrive.New(this.GetMethod<Func<IMyTerminalBlock, Dictionary<string, object>>>("GetBlockAsJumpGateDrive")(block));
 		}
 
 		/// <summary>
@@ -263,9 +264,9 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		/// </summary>
 		/// <param name="block">The block to convert</param>
 		/// <returns>The "JumpGateCapacitor" game logic component or null</returns>
-		public MyAPIJumpGateCapacitor GetBlockAsJumpGateCapacitor(IMyTerminalBlock block)
+		public MyModAPIJumpGateCapacitor GetBlockAsJumpGateCapacitor(IMyTerminalBlock block)
 		{
-			return MyAPIJumpGateCapacitor.New(this.GetMethod<Func<IMyTerminalBlock, Dictionary<string, object>>>("GetBlockAsJumpGateCapacitor")(block));
+			return MyModAPIJumpGateCapacitor.New(this.GetMethod<Func<IMyTerminalBlock, Dictionary<string, object>>>("GetBlockAsJumpGateCapacitor")(block));
 		}
 
 		/// <summary>
@@ -273,9 +274,9 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		/// </summary>
 		/// <param name="block">The block to convert</param>
 		/// <returns>The "JumpGateRemoteAntenna" game logic component or null</returns>
-		public MyAPIJumpGateRemoteAntenna GetBlockAsJumpGateRemoteAntenna(IMyTerminalBlock block)
+		public MyModAPIJumpGateRemoteAntenna GetBlockAsJumpGateRemoteAntenna(IMyTerminalBlock block)
 		{
-			return MyAPIJumpGateRemoteAntenna.New(this.GetMethod<Func<IMyTerminalBlock, Dictionary<string, object>>>("GetBlockAsJumpGateRemoteAntenna")(block));
+			return MyModAPIJumpGateRemoteAntenna.New(this.GetMethod<Func<IMyTerminalBlock, Dictionary<string, object>>>("GetBlockAsJumpGateRemoteAntenna")(block));
 		}
 
 		/// <summary>
@@ -283,9 +284,9 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		/// </summary>
 		/// <param name="block">The block to convert</param>
 		/// <returns>The "JumpGateServerAntenna" game logic component or null</returns>
-		public MyAPIJumpGateServerAntenna GetBlockAsJumpGateServerAntenna(IMyTerminalBlock block)
+		public MyModAPIJumpGateServerAntenna GetBlockAsJumpGateServerAntenna(IMyTerminalBlock block)
 		{
-			return MyAPIJumpGateServerAntenna.New(this.GetMethod<Func<IMyTerminalBlock, Dictionary<string, object>>>("GetBlockAsJumpGateServerAntenna")(block));
+			return MyModAPIJumpGateServerAntenna.New(this.GetMethod<Func<IMyTerminalBlock, Dictionary<string, object>>>("GetBlockAsJumpGateServerAntenna")(block));
 		}
 
 		/// <summary>
@@ -293,9 +294,9 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		/// </summary>
 		/// <param name="id">The cube grid ID</param>
 		/// <returns>The matching MyJumpGateConstruct or null if not found</returns>
-		public MyAPIJumpGateConstruct GetJumpGateGrid(long id)
+		public MyModAPIJumpGateConstruct GetJumpGateGrid(long id)
 		{
-			return MyAPIJumpGateConstruct.New(this.GetMethod<Func<long, Dictionary<string, object>>>("GetJumpGateGridL")(id));
+			return MyModAPIJumpGateConstruct.New(this.GetMethod<Func<long, Dictionary<string, object>>>("GetJumpGateGridL")(id));
 		}
 
 		/// <summary>
@@ -303,9 +304,9 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		/// </summary>
 		/// <param name="cube_grid">The cube grid</param>
 		/// <returns>The matching MyJumpGateConstruct or null if not found</returns>
-		public MyAPIJumpGateConstruct GetJumpGateGrid(IMyCubeGrid cube_grid)
+		public MyModAPIJumpGateConstruct GetJumpGateGrid(IMyCubeGrid cube_grid)
 		{
-			return MyAPIJumpGateConstruct.New(this.GetMethod<Func<IMyCubeGrid, Dictionary<string, object>>>("GetJumpGateGridC")(cube_grid));
+			return MyModAPIJumpGateConstruct.New(this.GetMethod<Func<IMyCubeGrid, Dictionary<string, object>>>("GetJumpGateGridC")(cube_grid));
 		}
 
 		/// <summary>
@@ -313,9 +314,9 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		/// </summary>
 		/// <param name="uuid">The cube grid UUID</param>
 		/// <returns>The matching MyJumpGateConstruct or null if not found</returns>
-		public MyAPIJumpGateConstruct GetJumpGateGrid(JumpGateUUID uuid)
+		public MyModAPIJumpGateConstruct GetJumpGateGrid(JumpGateUUID uuid)
 		{
-			return MyAPIJumpGateConstruct.New(this.GetMethod<Func<long[], Dictionary<string, object>>>("GetJumpGateGridG")(uuid.Packed()));
+			return MyModAPIJumpGateConstruct.New(this.GetMethod<Func<long[], Dictionary<string, object>>>("GetJumpGateGridG")(uuid.Packed()));
 		}
 
 		/// <summary>
@@ -323,9 +324,9 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		/// </summary>
 		/// <param name="id">The cube grid ID</param>
 		/// <returns>The matching MyJumpGateConstruct or null if not found or marked closed</returns>
-		public MyAPIJumpGateConstruct GetUnclosedJumpGateGrid(long id)
+		public MyModAPIJumpGateConstruct GetUnclosedJumpGateGrid(long id)
 		{
-			return MyAPIJumpGateConstruct.New(this.GetMethod<Func<long, Dictionary<string, object>>>("GetUnclosedJumpGateGridL")(id));
+			return MyModAPIJumpGateConstruct.New(this.GetMethod<Func<long, Dictionary<string, object>>>("GetUnclosedJumpGateGridL")(id));
 		}
 
 		/// <summary>
@@ -333,9 +334,9 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		/// </summary>
 		/// <param name="cube_grid">The cube grid</param>
 		/// <returns>The matching MyJumpGateConstruct or null if not found or marked closed</returns>
-		public MyAPIJumpGateConstruct GetUnclosedJumpGateGrid(IMyCubeGrid cube_grid)
+		public MyModAPIJumpGateConstruct GetUnclosedJumpGateGrid(IMyCubeGrid cube_grid)
 		{
-			return MyAPIJumpGateConstruct.New(this.GetMethod<Func<IMyCubeGrid, Dictionary<string, object>>>("GetUnclosedJumpGateGridC")(cube_grid));
+			return MyModAPIJumpGateConstruct.New(this.GetMethod<Func<IMyCubeGrid, Dictionary<string, object>>>("GetUnclosedJumpGateGridC")(cube_grid));
 		}
 
 		/// <summary>
@@ -343,9 +344,9 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		/// </summary>
 		/// <param name="uuid">The cube grid UUID</param>
 		/// <returns>The matching MyJumpGateConstruct or null if not found or marked closed</returns>
-		public MyAPIJumpGateConstruct GetUnclosedJumpGateGrid(JumpGateUUID uuid)
+		public MyModAPIJumpGateConstruct GetUnclosedJumpGateGrid(JumpGateUUID uuid)
 		{
-			return MyAPIJumpGateConstruct.New(this.GetMethod<Func<long[], Dictionary<string, object>>>("GetUnclosedJumpGateGridG")(uuid.Packed()));
+			return MyModAPIJumpGateConstruct.New(this.GetMethod<Func<long[], Dictionary<string, object>>>("GetUnclosedJumpGateGridG")(uuid.Packed()));
 		}
 
 		/// <summary>
@@ -353,17 +354,17 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		/// </summary>
 		/// <param name="uuid">The jump gate's JumpGateUUID</param>
 		/// <returns>The matching MyJumpGate or null if not found</returns>
-		public MyAPIJumpGate GetJumpGate(JumpGateUUID uuid)
+		public MyModAPIJumpGate GetJumpGate(JumpGateUUID uuid)
 		{
-			return MyAPIJumpGate.New(this.GetMethod<Func<long[], Dictionary<string, object>>>("GetJumpGate")(uuid.Packed()));
+			return MyModAPIJumpGate.New(this.GetMethod<Func<long[], Dictionary<string, object>>>("GetJumpGate")(uuid.Packed()));
 		}
 
 		/// <summary>
 		/// Gets all valid jump gates stored by all grids in this session
 		/// </summary>
-		public IEnumerable<MyAPIJumpGate> GetAllJumpGates()
+		public IEnumerable<MyModAPIJumpGate> GetAllJumpGates()
 		{
-			return this.GetMethod<Func<IEnumerable<Dictionary<string, object>>>>("GetAllJumpGates")().Select(MyAPIJumpGate.New);
+			return this.GetMethod<Func<IEnumerable<Dictionary<string, object>>>>("GetAllJumpGates")().Select(MyModAPIJumpGate.New);
 		}
 
 		/// <summary>
@@ -371,9 +372,9 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		/// </summary>
 		/// <param name="filter">A predicate to match jump gate grids against</param>
 		/// <param name="grids">All jump gate grid constructs<br />List will be cleared</param>
-		public IEnumerable<MyAPIJumpGateConstruct> GetAllJumpGateGrids()
+		public IEnumerable<MyModAPIJumpGateConstruct> GetAllJumpGateGrids()
 		{
-			return this.GetMethod<Func<IEnumerable<Dictionary<string, object>>>>("GetAllJumpGateGrids")().Select(MyAPIJumpGateConstruct.New);
+			return this.GetMethod<Func<IEnumerable<Dictionary<string, object>>>>("GetAllJumpGateGrids")().Select(MyModAPIJumpGateConstruct.New);
 		}
 	}
 }

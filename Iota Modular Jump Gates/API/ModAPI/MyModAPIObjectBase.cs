@@ -5,27 +5,27 @@ using System.Collections.Generic;
 
 namespace IOTA.ModularJumpGates.API.ModAPI
 {
-	public abstract class MyAPIObjectBase : IDisposable, IEquatable<MyAPIObjectBase>
+	public abstract class MyModAPIObjectBase : IDisposable, IEquatable<MyModAPIObjectBase>
 	{
-		private static readonly ConcurrentDictionary<JumpGateUUID, MyAPIObjectBase> APIObjects = new ConcurrentDictionary<JumpGateUUID, MyAPIObjectBase>();
+		private static readonly ConcurrentDictionary<JumpGateUUID, MyModAPIObjectBase> APIObjects = new ConcurrentDictionary<JumpGateUUID, MyModAPIObjectBase>();
 
 		private readonly Dictionary<string, object> ObjectAttributes = new Dictionary<string, object>();
 
 		public bool HandleValid => this.ObjectID != null;
 		public JumpGateUUID? ObjectID { get; private set; } = null;
 
-		public static bool operator== (MyAPIObjectBase a, MyAPIObjectBase b)
+		public static bool operator== (MyModAPIObjectBase a, MyModAPIObjectBase b)
 		{
 			if (object.ReferenceEquals(a, b)) return true;
 			else if (object.ReferenceEquals(a, null)) return object.ReferenceEquals(b, null);
 			else return a.Equals(b);
 		}
-		public static bool operator!= (MyAPIObjectBase a, MyAPIObjectBase b)
+		public static bool operator!= (MyModAPIObjectBase a, MyModAPIObjectBase b)
 		{
 			return !(a == b);
 		}
 
-		protected static T GetObjectOrNew<T>(Dictionary<string, object> attributes, Func<T> factory) where T : MyAPIObjectBase
+		protected static T GetObjectOrNew<T>(Dictionary<string, object> attributes, Func<T> factory) where T : MyModAPIObjectBase
 		{
 			if (attributes == null) return null;
 			JumpGateUUID guid = new JumpGateUUID((long[]) attributes["GUID"]);
@@ -33,18 +33,18 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 
 			for (byte i = 0; i < 100; ++i)
 			{
-				try { return (T) MyAPIObjectBase.APIObjects.GetValueOrDefault(guid, dynamic = (dynamic ?? factory())); }
+				try { return (T) MyModAPIObjectBase.APIObjects.GetValueOrDefault(guid, dynamic = (dynamic ?? factory())); }
 				catch (ArgumentException _) { }
 			}
 
 			return null;
 		}
 
-		protected MyAPIObjectBase(Dictionary<string, object> attributes)
+		protected MyModAPIObjectBase(Dictionary<string, object> attributes)
 		{
 			this.ObjectID = new JumpGateUUID((long[]) attributes["GUID"]);
 			this.ObjectAttributes = attributes;
-			MyAPIObjectBase.APIObjects[this.ObjectID.Value] = this;
+			MyModAPIObjectBase.APIObjects[this.ObjectID.Value] = this;
 		}
 
 		protected T GetMethod<T>(string name)
@@ -80,7 +80,7 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		{
 			if (this.ObjectID == null) return;
 			else if (this.ObjectAttributes != null && this.ObjectAttributes.ContainsKey("#DEINIT")) ((Action) this.ObjectAttributes["#DEINIT"])();
-			MyAPIObjectBase.APIObjects.Remove(this.ObjectID.Value);
+			MyModAPIObjectBase.APIObjects.Remove(this.ObjectID.Value);
 			this.ObjectID = null;
 			this.ObjectAttributes.Clear();
 		}
@@ -88,9 +88,9 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		public override bool Equals(object other)
 		{
 			if (this.ObjectAttributes.ContainsKey("#EQUALS")) return this.GetMethod<Func<object, bool>>("#EQUALS")(other);
-			else return other is MyAPIObjectBase && this.Equals((MyAPIObjectBase) other);
+			else return other is MyModAPIObjectBase && this.Equals((MyModAPIObjectBase) other);
 		}
-		public bool Equals(MyAPIObjectBase other)
+		public bool Equals(MyModAPIObjectBase other)
 		{
 			if (this.ObjectAttributes.ContainsKey("#EQUALS")) return this.GetMethod<Func<object, bool>>("#EQUALS")(other);
 			else return other != null && other.ObjectID == this.ObjectID;

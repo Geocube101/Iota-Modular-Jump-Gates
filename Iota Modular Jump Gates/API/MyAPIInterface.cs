@@ -1,5 +1,6 @@
 ﻿using IOTA.ModularJumpGates.CubeBlock;
 using IOTA.ModularJumpGates.Util;
+using IOTA.ModularJumpGates.Util.ConcurrentCollections;
 using Sandbox.ModAPI;
 using System;
 using System.Collections.Concurrent;
@@ -14,9 +15,10 @@ using VRageMath;
 
 namespace IOTA.ModularJumpGates.API
 {
-	internal class MyModAPIInterface
+	internal class MyAPIInterface
 	{
-		public static readonly int[] APIVersion = new int[2] { 1, 0 };
+		public static readonly int[] ModAPIVersion = new int[2] { 1, 0 };
+		public static readonly int[] AnimationAPIVersion = new int[2] { 1, 0 };
 
 		private bool Registered = false;
 		private readonly ConcurrentDictionary<long, Dictionary<string, object>> ConstructWrappers = new ConcurrentDictionary<long, Dictionary<string, object>>();
@@ -28,7 +30,9 @@ namespace IOTA.ModularJumpGates.API
 		private readonly ConcurrentDictionary<long, Dictionary<string, object>> RemoteAntennaWrappers = new ConcurrentDictionary<long, Dictionary<string, object>>();
 		private readonly ConcurrentDictionary<long, Dictionary<string, object>> ServerAntennaWrappers = new ConcurrentDictionary<long, Dictionary<string, object>>();
 
-		public MyModAPIInterface() { }
+		public readonly Dictionary<IMyModContext, List<AnimationDef>> ModAnimationDefinitions = new Dictionary<IMyModContext, List<AnimationDef>>();
+
+		public MyAPIInterface() { }
 
 		public void Init()
 		{
@@ -50,31 +54,64 @@ namespace IOTA.ModularJumpGates.API
 			this.CapacitorWrppers.Clear();
 			this.RemoteAntennaWrappers.Clear();
 			this.ServerAntennaWrappers.Clear();
+			this.ModAnimationDefinitions.Clear();
 			this.Registered = false;
 			Logger.Log("ModAPI Closed");
 		}
 
 		private void OnModMessage(object obj)
 		{
-			IMyModContext context = this.HandleModApiInit(obj);
-			if (context == null) Logger.Error($"Failed to connect Mod API - Malformed payload");
-			else Logger.Log($"Mod API connected - \"{context.ModName}\"");
+			string api_type;
+			IMyModContext context = this.HandleApiInit(obj, out api_type);
+			if (context == null) Logger.Error($"Failed to connect API - Malformed payload");
+			else if (api_type == "modapi") Logger.Log($"Mod API connected - \"{context.ModName}\"");
+			else if (api_type == "animationapi") Logger.Log($"Animation API connected - \"{context.ModName}\"");
+			else Logger.Warn($"Unknown API connected - \"{context.ModName}\"");
 		}
 
-		private IMyModContext HandleModApiInit(object obj)
+		private IMyModContext HandleApiInit(object obj, out string api_type)
 		{
+			api_type = null;
 			if (obj == null || !(obj is Dictionary<string, object>)) return null;
 			Dictionary<string, object> payload = (Dictionary<string, object>) obj;
-			if (!payload.ContainsKey("Callback") || !(payload["Callback"] is Action<Dictionary<string, object>>)) return null;
-			Action<Dictionary<string, object>> callback = (Action<Dictionary<string, object>>) payload["Callback"];
-			if (!payload.ContainsKey("Version") || !(payload["Version"] is int[])) return null;
-			int[] version = (int[]) payload["Version"];
-			if (version.Length != 2 || version[0] != MyModAPIInterface.APIVersion[0]) return null;
-			else if (version[1] < MyModAPIInterface.APIVersion[1]) Logger.Warn("ModAPI version is not latest - Current");
-			if (!payload.ContainsKey("ModContext") || !(payload["ModContext"] is MyModContext)) return null;
-			IMyModContext context = (IMyModContext) payload["ModContext"];
-			callback(this.ReturnSessionWrapper());
-			return context;
+			if (!payload.ContainsKey("Type")) return null;
+			api_type = ((string) payload["Type"]).ToLower();
+
+			if (api_type == "modapi")
+			{
+				if (!payload.ContainsKey("Callback") || !(payload["Callback"] is Action<Dictionary<string, object>>)) return null;
+				Action<Dictionary<string, object>> callback = (Action<Dictionary<string, object>>) payload["Callback"];
+				if (!payload.ContainsKey("Version") || !(payload["Version"] is int[])) return null;
+				int[] version = (int[]) payload["Version"];
+				if (version.Length != 2 || version[0] != MyAPIInterface.ModAPIVersion[0]) return null;
+				else if (version[1] < MyAPIInterface.ModAPIVersion[1]) Logger.Warn("ModAPI version is not latest - Current");
+				if (!payload.ContainsKey("ModContext") || !(payload["ModContext"] is MyModContext)) return null;
+				IMyModContext context = (IMyModContext) payload["ModContext"];
+				callback(this.ReturnSessionWrapper());
+				return context;
+			}
+			else if (api_type == "animationapi")
+			{
+				if (!payload.ContainsKey("Callback") || !(payload["Callback"] is Action<Action<IMyModContext, byte[]>>)) return null;
+				Action<Action<IMyModContext, byte[]>> callback = (Action<Action<IMyModContext, byte[]>>) payload["Callback"];
+				if (!payload.ContainsKey("Version") || !(payload["Version"] is int[])) return null;
+				int[] version = (int[]) payload["Version"];
+				if (version.Length != 2 || version[0] != MyAPIInterface.ModAPIVersion[0]) return null;
+				else if (version[1] < MyAPIInterface.ModAPIVersion[1]) Logger.Warn("AnimationAPI version is not latest - Current");
+				if (!payload.ContainsKey("ModContext") || !(payload["ModContext"] is MyModContext)) return null;
+				IMyModContext context = (IMyModContext) payload["ModContext"];
+				callback(this.OnModAnimationAdd);
+				return context;
+			}
+			else throw new InvalidOperationException($"Invalid API type: \"{api_type}\"");
+		}
+
+		private void OnModAnimationAdd(IMyModContext context, byte[] definition)
+		{
+			AnimationDef animation = MyAPIGateway.Utilities.SerializeFromBinary<AnimationDef>(definition);
+			animation.SourceMod = context.ModName;
+			if (this.ModAnimationDefinitions.ContainsKey(context)) this.ModAnimationDefinitions[context].Add(animation);
+			else this.ModAnimationDefinitions[context] = new List<AnimationDef> { animation };
 		}
 
 		private Dictionary<string, object> ReturnSessionWrapper()
@@ -485,8 +522,8 @@ namespace IOTA.ModularJumpGates.API
 		{
 			bool version_ok = false;
 			if (version == null || callback == null || !(version is int[]) || !(callback is Action<Dictionary<string, object>>)) return new KeyValuePair<bool, bool>(false, false);
-			else if (version.Length != 2 || version[0] != MyModAPIInterface.APIVersion[0]) return new KeyValuePair<bool, bool>(false, false);
-			else if (version[1] < MyModAPIInterface.APIVersion[1]) Logger.Warn("Scripting ModAPI version is not latest - Current");
+			else if (version.Length != 2 || version[0] != MyAPIInterface.ModAPIVersion[0]) return new KeyValuePair<bool, bool>(false, false);
+			else if (version[1] < MyAPIInterface.ModAPIVersion[1]) Logger.Warn("Scripting ModAPI version is not latest - Current");
 			else version_ok = true;
 			callback(this.ReturnSessionWrapper());
 			return new KeyValuePair<bool, bool>(true, version_ok);

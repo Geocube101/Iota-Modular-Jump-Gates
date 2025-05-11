@@ -1077,7 +1077,7 @@ namespace IOTA.ModularJumpGates.API.ModAPI.Util
 		/// Creates a new waypoint targeting the specified jump gate
 		/// </summary>
 		/// <param name="jump_gate">The non-null jump gate</param>
-		internal MyAPIJumpGateWaypoint(MyAPIJumpGate jump_gate)
+		internal MyAPIJumpGateWaypoint(MyModAPIJumpGate jump_gate)
 		{
 			this.JumpGate = jump_gate.Guid;
 			this.WaypointType = MyAPIWaypointType.JUMP_GATE;
@@ -1152,7 +1152,7 @@ namespace IOTA.ModularJumpGates.API.ModAPI.Util
 		/// <param name="target_jump_gate">The targeted jump gate or null if target is not a jump gate</param>
 		/// <returns>The target's world coordinates<br />null if this waypoint is None<br />Vector3D.Zero if this waypoint targets a server</returns>
 		/// <exception cref="InvalidOperationException"></exception>
-		public Vector3D? GetEndpoint(out MyAPIJumpGate target_jump_gate)
+		public Vector3D? GetEndpoint(out MyModAPIJumpGate target_jump_gate)
 		{
 			target_jump_gate = null;
 
@@ -1161,7 +1161,7 @@ namespace IOTA.ModularJumpGates.API.ModAPI.Util
 				case MyAPIWaypointType.NONE:
 					return null;
 				case MyAPIWaypointType.JUMP_GATE:
-					target_jump_gate = MyAPISession.Instance.GetJumpGate(this.JumpGate);
+					target_jump_gate = MyModAPISession.Instance.GetJumpGate(this.JumpGate);
 					if (target_jump_gate == null || !target_jump_gate.IsValid()) return null;
 					return target_jump_gate.WorldJumpNode;
 				case MyAPIWaypointType.GPS:
@@ -1216,7 +1216,7 @@ namespace IOTA.ModularJumpGates.API.ModAPI.Util
 					return null;
 				case MyAPIWaypointType.JUMP_GATE:
 				{
-					MyAPIJumpGate jump_gate = MyAPISession.Instance.GetJumpGate(this.JumpGate);
+					MyModAPIJumpGate jump_gate = MyModAPISession.Instance.GetJumpGate(this.JumpGate);
 					if (jump_gate == null || !jump_gate.IsValid()) return null;
 					return jump_gate.WorldJumpNode;
 				}
@@ -1294,7 +1294,7 @@ namespace IOTA.ModularJumpGates.API.ModAPI.Util
 		/// </summary>
 		/// <param name="jump_gate">The non-null logic component</param>
 		/// <returns>The associated UUID</returns>
-		public static JumpGateUUID FromBlock(MyAPICubeBlockBase block)
+		public static JumpGateUUID FromBlock(MyModAPICubeBlockBase block)
 		{
 			if (block == null) throw new ArgumentNullException("block was null");
 			long grid_id = block.JumpGateGrid?.CubeGridID ?? -1;
@@ -1306,7 +1306,7 @@ namespace IOTA.ModularJumpGates.API.ModAPI.Util
 		/// </summary>
 		/// <param name="cube_grid">The non-null grid construct</param>
 		/// <returns>The associated UUID</returns>
-		public static JumpGateUUID FromJumpGateGrid(MyAPIJumpGateConstruct cube_grid)
+		public static JumpGateUUID FromJumpGateGrid(MyModAPIJumpGateConstruct cube_grid)
 		{
 			if (cube_grid == null) throw new ArgumentNullException("cube_grid was null");
 			return new JumpGateUUID(0, cube_grid.CubeGridID);
@@ -1317,7 +1317,7 @@ namespace IOTA.ModularJumpGates.API.ModAPI.Util
 		/// </summary>
 		/// <param name="jump_gate">The non-null jump gate</param>
 		/// <returns>The associated UUID</returns>
-		public static JumpGateUUID FromJumpGate(MyAPIJumpGate jump_gate)
+		public static JumpGateUUID FromJumpGate(MyModAPIJumpGate jump_gate)
 		{
 			if (jump_gate == null) throw new ArgumentNullException("jump_gate was null");
 			return new JumpGateUUID(jump_gate.JumpGateGrid.CubeGridID, -jump_gate.JumpGateID);
