@@ -1,6 +1,5 @@
 ﻿using IOTA.ModularJumpGates.CubeBlock;
 using IOTA.ModularJumpGates.Util;
-using IOTA.ModularJumpGates.Util.ConcurrentCollections;
 using Sandbox.ModAPI;
 using System;
 using System.Collections.Concurrent;
@@ -64,9 +63,9 @@ namespace IOTA.ModularJumpGates.API
 			string api_type;
 			IMyModContext context = this.HandleApiInit(obj, out api_type);
 			if (context == null) Logger.Error($"Failed to connect API - Malformed payload");
-			else if (api_type == "modapi") Logger.Log($"Mod API connected - \"{context.ModName}\"");
-			else if (api_type == "animationapi") Logger.Log($"Animation API connected - \"{context.ModName}\"");
-			else Logger.Warn($"Unknown API connected - \"{context.ModName}\"");
+			else if (api_type == "modapi") Logger.Log($"Mod API connected - \"{context.ModItem.FriendlyName}\"");
+			else if (api_type == "animationapi") Logger.Log($"Animation API connected - \"{context.ModItem.FriendlyName}\"");
+			else Logger.Warn($"Unknown API connected - \"{context.ModItem.FriendlyName}\"");
 		}
 
 		private IMyModContext HandleApiInit(object obj, out string api_type)
@@ -109,7 +108,7 @@ namespace IOTA.ModularJumpGates.API
 		private void OnModAnimationAdd(IMyModContext context, byte[] definition)
 		{
 			AnimationDef animation = MyAPIGateway.Utilities.SerializeFromBinary<AnimationDef>(definition);
-			animation.SourceMod = context.ModName;
+			animation.SourceMod = context.ModItem.Name;
 			if (this.ModAnimationDefinitions.ContainsKey(context)) this.ModAnimationDefinitions[context].Add(animation);
 			else this.ModAnimationDefinitions[context] = new List<AnimationDef> { animation };
 		}
@@ -155,6 +154,9 @@ namespace IOTA.ModularJumpGates.API
 				["GetUnclosedJumpGateGridL"] = (Func<long, Dictionary<string, object>>) ((grid_id) => this.ReturnConstructWrapper(MyJumpGateModSession.Instance.GetUnclosedJumpGateGrid(grid_id))),
 				["GetUnclosedJumpGateGridC"] = (Func<IMyCubeGrid, Dictionary<string, object>>) ((grid) => this.ReturnConstructWrapper(MyJumpGateModSession.Instance.GetUnclosedJumpGateGrid(grid))),
 				["GetUnclosedJumpGateGridG"] = (Func<long[], Dictionary<string, object>>) ((grid_id) => this.ReturnConstructWrapper(MyJumpGateModSession.Instance.GetUnclosedJumpGateGrid(new JumpGateUUID(grid_id)))),
+				["GetDirectJumpGateGridL"] = (Func<long, Dictionary<string, object>>) ((grid_id) => this.ReturnConstructWrapper(MyJumpGateModSession.Instance.GetDirectJumpGateGrid(grid_id))),
+				["GetDirectJumpGateGridC"] = (Func<IMyCubeGrid, Dictionary<string, object>>) ((grid) => this.ReturnConstructWrapper(MyJumpGateModSession.Instance.GetDirectJumpGateGrid(grid))),
+				["GetDirectJumpGateGridG"] = (Func<long[], Dictionary<string, object>>) ((grid_id) => this.ReturnConstructWrapper(MyJumpGateModSession.Instance.GetDirectJumpGateGrid(new JumpGateUUID(grid_id)))),
 				["GetJumpGate"] = (Func<long[], Dictionary<string, object>>) ((gate_id) => this.ReturnJumpGateWrapper(MyJumpGateModSession.Instance.GetJumpGate(new JumpGateUUID(gate_id)))),
 			};
 		}
@@ -216,6 +218,7 @@ namespace IOTA.ModularJumpGates.API
 				["IsPlayerFactionRelationValid"] = (Func<long, bool>) block.IsFactionRelationValid,
 				["IsSteamFactionRelationValid"] = (Func<ulong, bool>) block.IsFactionRelationValid,
 				["GetAttachedJumpGate"] = (Func<Dictionary<string, object>>) (() => this.ReturnJumpGateWrapper(block.AttachedJumpGate())),
+				["GetWaypointsList"] = (Func<IEnumerable<byte[]>>) (() => block.GetWaypointsList().Select(MyAPIGateway.Utilities.SerializeToBinary)),
 			};
 			this.ControllerWrappers[block.BlockID] = attributes;
 			return attributes;
@@ -288,6 +291,10 @@ namespace IOTA.ModularJumpGates.API
 				["RegisteredOutboundControlControllerIDs"] = (Func<IEnumerable<long>>) block.RegisteredOutboundControlControllerIDs,
 				["RegisteredInboundControlGates"] = (Func<IEnumerable<Dictionary<string, object>>>) (() => block.RegisteredInboundControlGates().Select(this.ReturnJumpGateWrapper)),
 				["RegisteredOutboundControlControllers"] = (Func<IEnumerable<Dictionary<string, object>>>) (() => block.RegisteredOutboundControlControllers().Select(this.ReturnCubeBlockControllerWrapper)),
+				["GetNearbyAntennas"] = (Func<IEnumerable<Dictionary<string, object>>>) (() => block.GetNearbyAntennas().Select(this.ReturnCubeBlockRemoteAntennaWrapper)),
+				["IsPlayerFactionRelationValid"] = (Func<byte, long, bool>) block.IsFactionRelationValid,
+				["IsSteamFactionRelationValid"] = (Func<byte, ulong, bool>) block.IsFactionRelationValid,
+				["GetWaypointsList"] = (Func<byte, IEnumerable<byte[]>>) ((channel) => block.GetWaypointsList(channel).Select(MyAPIGateway.Utilities.SerializeToBinary)),
 			};
 			this.RemoteAntennaWrappers[block.BlockID] = attributes;
 			return attributes;
@@ -300,7 +307,7 @@ namespace IOTA.ModularJumpGates.API
 			else if (this.ServerAntennaWrappers.TryGetValue(block.BlockID, out attributes)) return attributes;
 			attributes = new Dictionary<string, object> {
 				["GUID"] = JumpGateUUID.FromBlock(block).Packed(),
-				["BlockBase"] = this.ReturnCubeBlockBaseWrapper(block),
+				["BlockBase"] = this.ReturnCubeBlockBaseWrapper(block)
 			};
 			this.ServerAntennaWrappers[block.BlockID] = attributes;
 			return attributes;
@@ -475,6 +482,7 @@ namespace IOTA.ModularJumpGates.API
 				["IsPointInHudBroadcastRange"] = (Func<Vector3D, bool>) ((pos) => gate.IsPointInHudBroadcastRange(ref pos)),
 				["IsEntityValidForJumpSpace"] = (Func<MyEntity, bool>) gate.IsEntityValidForJumpSpace,
 				["IsValid"] = (Func<bool>) gate.IsValid,
+				["IsControlled"] = (Func<bool>) gate.IsControlled,
 				["IsComplete"] = (Func<bool>) gate.IsComplete,
 				["IsIdle"] = (Func<bool>) gate.IsIdle,
 				["IsJumping"] = (Func<bool>) gate.IsJumping,

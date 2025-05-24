@@ -20,7 +20,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 	/// <summary>
 	/// Class representing the base logic component for jump gate blocks
 	/// </summary>
-	internal class MyCubeBlockBase : MyGameLogicComponent
+	internal class MyCubeBlockBase : MyGameLogicComponent, IEquatable<MyCubeBlockBase>
 	{
 		#region Public Static Variables
 		/// <summary>
@@ -125,13 +125,13 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// <summary>
 		/// Whether this component or it's attached block is closed
 		/// </summary>
-		public bool IsClosed => (this.IsNullWrapper) ? (this.SerializedWrapperInfo?.IsClosed ?? true) : this.TerminalBlock == null || this.TerminalBlock.Closed || this.TerminalBlock.MarkedForClose || this.TerminalBlock.CubeGrid?.Physics == null;
+		public virtual bool IsClosed => (this.IsNullWrapper) ? (this.SerializedWrapperInfo?.IsClosed ?? true) : this.TerminalBlock == null || this.TerminalBlock.Closed || this.TerminalBlock.MarkedForClose || this.TerminalBlock.CubeGrid?.Physics == null;
 
 		/// <summary>
 		/// Whether block is powered<br />
 		/// <i>"current input >= required input"</i>
 		/// </summary>
-		public bool IsPowered
+		public virtual bool IsPowered
 		{
 			get
 			{
@@ -145,17 +145,17 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// <summary>
 		/// Whether block is enabled
 		/// </summary>
-		public bool IsEnabled => (this.IsNullWrapper) ? (this.SerializedWrapperInfo?.IsEnabled ?? false) : this.TerminalBlock.Enabled;
+		public virtual bool IsEnabled => (this.IsNullWrapper) ? (this.SerializedWrapperInfo?.IsEnabled ?? false) : this.TerminalBlock.Enabled;
 
 		/// <summary>
 		/// Whether this block is working: (not closed, enabled, powered)
 		/// </summary>
-		public bool IsWorking => (this.IsNullWrapper) ? (this.SerializedWrapperInfo?.IsWorking ?? false) : !this.IsClosed && this.IsEnabled && this.IsPowered && this.TerminalBlock.IsFunctional;
+		public virtual bool IsWorking => (this.IsNullWrapper) ? (this.SerializedWrapperInfo?.IsWorking ?? false) : !this.IsClosed && this.IsEnabled && this.IsPowered && this.TerminalBlock.IsFunctional;
 
 		/// <summary>
 		/// Whether this block is marked for close
 		/// </summary>
-		public new bool MarkedForClose => base.MarkedForClose || this.Closed || this.IsClosed;
+		public virtual new bool MarkedForClose => base.MarkedForClose || this.Closed || this.IsClosed;
 
 		/// <summary>
 		/// The block ID of this block
@@ -224,6 +224,33 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		public MyJumpGateConstruct JumpGateGrid { get; private set; }
 		#endregion
 
+		#region Public Static Operators
+		/// <summary>
+		/// Overloads equality operator "==" to check equality
+		/// </summary>
+		/// <param name="a">The first MyCubeBlockBase operand</param>
+		/// <param name="b">The second MyCubeBlockBase operand</param>
+		/// <returns>Equality</returns>
+		public static bool operator ==(MyCubeBlockBase a, MyCubeBlockBase b)
+		{
+			if (object.ReferenceEquals(a, b)) return true;
+			else if (object.ReferenceEquals(a, null)) return object.ReferenceEquals(b, null);
+			else if (object.ReferenceEquals(b, null)) return object.ReferenceEquals(a, null);
+			else return a.Equals(b);
+		}
+
+		/// <summary>
+		/// Overloads inequality operator "!=" to check inequality
+		/// </summary>
+		/// <param name="a">The first MyCubeBlockBase operand</param>
+		/// <param name="b">The second MyCubeBlockBase operand</param>
+		/// <returns>Inequality</returns>
+		public static bool operator !=(MyCubeBlockBase a, MyCubeBlockBase b)
+		{
+			return !(a == b);
+		}
+		#endregion
+
 		#region Constructors
 		public MyCubeBlockBase() : base()
 		{
@@ -288,10 +315,11 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			base.UpdateAfterSimulation();
 			++this.LocalGameTick;
 
-			if (!this.IsInitFrameCalled && MyJumpGateModSession.Instance.AllFirstTickComplete())
+			if (!this.IsInitFrameCalled && MyJumpGateModSession.Instance.InitializationComplete)
 			{
 				this.UpdateOnceAfterInit();
 				this.IsInitFrameCalled = true;
+				Logger.Debug($"[{this.BlockID}] ({this.ToString()}) UPDATE_ONCE_AFTER_INIT", 5);
 			}
 
 			if (MyAPIGateway.Gui.GetCurrentScreen != VRage.Game.ModAPI.MyTerminalPageEnum.ControlPanel) return;
@@ -337,7 +365,17 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// <returns>Equality</returns>
 		public override bool Equals(object obj)
 		{
-			return obj != null && obj is MyCubeBlockBase && ((MyCubeBlockBase) obj).BlockID == this.BlockID;
+			return obj is MyCubeBlockBase && this.Equals((MyCubeBlockBase) obj);
+		}
+
+		/// <summary>
+		/// Checks if this block equals another
+		/// </summary>
+		/// <param name="obj">The object to check</param>
+		/// <returns>Equality</returns>
+		public bool Equals(MyCubeBlockBase other)
+		{
+			return object.ReferenceEquals(this, other) || (other != null && other.BlockID == this.BlockID);
 		}
 
 		/// <summary>

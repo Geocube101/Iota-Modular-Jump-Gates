@@ -49,9 +49,10 @@ namespace IOTA.ModularJumpGates.Util
 		/// <returns>Equality</returns>
 		public static bool operator ==(MyGpsWrapper a, MyGpsWrapper b)
         {
-            if (object.ReferenceEquals(a, b)) return true;
-            else if (object.ReferenceEquals(a, null) || object.ReferenceEquals(b, null)) return false;
-            else return a.Equals(b);
+			if (object.ReferenceEquals(a, b)) return true;
+			else if (object.ReferenceEquals(a, null)) return object.ReferenceEquals(b, null);
+			else if (object.ReferenceEquals(b, null)) return object.ReferenceEquals(a, null);
+			else return a.Equals(b);
         }
 
 		/// <summary>
@@ -96,8 +97,8 @@ namespace IOTA.ModularJumpGates.Util
 		/// <returns>Equality</returns>
 		public override bool Equals(object obj)
         {
-            return this.Equals(obj as MyGpsWrapper);
-        }
+			return object.ReferenceEquals(this, obj) || (obj != null && obj is MyGpsWrapper && this.Equals(obj as MyGpsWrapper));
+		}
 
 		/// <summary>
 		/// The hashcode for this object
@@ -157,7 +158,8 @@ namespace IOTA.ModularJumpGates.Util
 		public static bool operator ==(MyServerJumpGate a, MyServerJumpGate b)
 		{
 			if (object.ReferenceEquals(a, b)) return true;
-			else if (object.ReferenceEquals(a, null) || object.ReferenceEquals(b, null)) return false;
+			else if (object.ReferenceEquals(a, null)) return object.ReferenceEquals(b, null);
+			else if (object.ReferenceEquals(b, null)) return object.ReferenceEquals(a, null);
 			else return a.Equals(b);
 		}
 
@@ -201,7 +203,7 @@ namespace IOTA.ModularJumpGates.Util
 		/// <returns>Equality</returns>
 		public override bool Equals(object obj)
 		{
-			return this.Equals(obj as MyServerJumpGate);
+			return object.ReferenceEquals(this, obj) || (obj != null && obj is MyServerJumpGate && this.Equals(obj as MyServerJumpGate));
 		}
 
 		/// <summary>
@@ -349,7 +351,7 @@ namespace IOTA.ModularJumpGates.Util
 		/// <returns>Equality</returns>
 		public override bool Equals(object obj)
 		{
-			return this.Equals(obj as MyJumpGateWaypoint);
+			return object.ReferenceEquals(this, obj) || (obj != null && obj is MyJumpGateWaypoint && this.Equals(obj as MyJumpGateWaypoint));
 		}
 
 		/// <summary>

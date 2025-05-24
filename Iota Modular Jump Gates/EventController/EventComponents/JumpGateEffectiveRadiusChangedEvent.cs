@@ -16,6 +16,7 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 		public override bool IsThresholdUsed => false;
 		public override bool IsConditionSelectionUsed => true;
 		public override bool IsBlocksListUsed => false;
+		public override bool IsJumpGateSelectionUsed => true;
 		public override long UniqueSelectionId => 0x7FFFFFFFFFFFFFF7;
 		public override MyStringId EventDisplayName => MyStringId.GetOrCompute(MyTexts.GetString("DisplayName_JumpGateEffectiveRadiusChangedEvent"));
 		public override string ComponentTypeDebugString => nameof(JumpGateEffectiveRadiusChangedEvent);
@@ -33,7 +34,7 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 
 		protected override bool IsJumpGateValidForList(MyJumpGate jump_gate)
 		{
-			return base.IsJumpGateValidForList(jump_gate) && jump_gate.IsComplete();
+			return base.IsJumpGateValidForList(jump_gate) && jump_gate.IsControlled();
 		}
 
 		protected override double GetValueFromJumpGate(MyJumpGate jump_gate)

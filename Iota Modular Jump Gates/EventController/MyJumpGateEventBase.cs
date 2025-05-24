@@ -1,4 +1,5 @@
-﻿using IOTA.ModularJumpGates.Util;
+﻿using IOTA.ModularJumpGates.CubeBlock;
+using IOTA.ModularJumpGates.Util;
 using ProtoBuf;
 using Sandbox.Game.Entities;
 using Sandbox.Game.EntityComponents;
@@ -34,6 +35,8 @@ namespace IOTA.ModularJumpGates.EventController
 			[ProtoMember(2)]
 			public List<long> SelectedJumpGates;
 			[ProtoMember(3)]
+			public List<KeyValuePair<long, byte>> SelectedRemoteJumpGates;
+			[ProtoMember(4)]
 			public Dictionary<string, string> MetaData;
 
 			public void SetValue<T>(string key, T value)
@@ -64,6 +67,8 @@ namespace IOTA.ModularJumpGates.EventController
 		private ulong LastUpdateTimeEpoch = 0;
 		private MySerializedJumpGateEventInfo DeserializedInfo = null;
 		private readonly Dictionary<MyJumpGate, TargetedGateValueType> TargetedJumpGates = new Dictionary<MyJumpGate, TargetedGateValueType>();
+		private readonly Dictionary<MyJumpGate, TargetedGateValueType> TargetedRemoteJumpGates = new Dictionary<MyJumpGate, TargetedGateValueType>();
+		private readonly List<KeyValuePair<MyJumpGateRemoteAntenna, byte>> TargetedRemoteAntennas = new List<KeyValuePair<MyJumpGateRemoteAntenna, byte>>();
 
 		protected bool IsDirty = false;
 		protected int LastActionTriggered { get; private set; } = 0;
@@ -74,6 +79,7 @@ namespace IOTA.ModularJumpGates.EventController
 		public abstract bool IsThresholdUsed { get; }
 		public abstract bool IsConditionSelectionUsed { get; }
 		public abstract bool IsBlocksListUsed { get; }
+		public abstract bool IsJumpGateSelectionUsed { get; }
 		public abstract long UniqueSelectionId { get; }
 		public abstract MyStringId EventDisplayName { get; }
 		public bool IsSelected
@@ -84,19 +90,19 @@ namespace IOTA.ModularJumpGates.EventController
 			}
 			set
 			{
-				IMyEventControllerBlock event_controller = this.EventController;
-				if (this._IsSelected == value || event_controller == null || event_controller.MarkedForClose) return;
+				if (this._IsSelected == value) return;
 				this._IsSelected = value;
+				MyCubeGrid grid = (MyCubeGrid) this.EventController?.CubeGrid;
 
 				if (value)
 				{
-					((MyCubeGrid) event_controller.CubeGrid).Schedule(MyCubeGrid.UpdateQueue.BeforeSimulation, this.Update);
+					grid?.Schedule(MyCubeGrid.UpdateQueue.BeforeSimulation, this.Update);
 					this.OnSelected();
 					this.SetDirty();
 				}
 				else
 				{
-					((MyCubeGrid) event_controller.CubeGrid).DeSchedule(MyCubeGrid.UpdateQueue.BeforeSimulation, this.Update);
+					grid?.DeSchedule(MyCubeGrid.UpdateQueue.BeforeSimulation, this.Update);
 					this.OnUnselected();
 					this.SetDirty();
 				}
@@ -110,7 +116,7 @@ namespace IOTA.ModularJumpGates.EventController
 		private void OnNetworkUpdate(MyNetworkInterface.Packet packet)
 		{
 			MySerializedJumpGateEvent info = packet?.Payload<MySerializedJumpGateEvent>();
-			if (info == null || info.EntityID != this.Entity.EntityId) return;
+			if (info == null || this.Entity == null || info.EntityID != this.Entity.EntityId) return;
 
 			if (MyNetworkInterface.IsMultiplayerServer && packet.PhaseFrame == 1)
 			{
@@ -133,18 +139,35 @@ namespace IOTA.ModularJumpGates.EventController
 		private void Init()
 		{
 			if (this.NetworkRegistered || !MyJumpGateModSession.Network.Registered) return;
-			MyJumpGateModSession.Network.On(MyPacketTypeEnum.UPDATE_EVENT_CONTROLLER_EVENT, this.OnNetworkUpdate);
 			this.NetworkRegistered = true;
+			MyJumpGateModSession.Network.On(MyPacketTypeEnum.UPDATE_EVENT_CONTROLLER_EVENT, this.OnNetworkUpdate);
 		}
 
 		private void Release()
 		{
 			IMyEventControllerBlock event_controller = this.EventController;
-			if (event_controller == null || event_controller.MarkedForClose) return;
-			if (this._IsSelected) ((MyCubeGrid) event_controller.CubeGrid).DeSchedule(MyCubeGrid.UpdateQueue.BeforeSimulation, this.Update);
-			if (!this.NetworkRegistered || !MyJumpGateModSession.Network.Registered) return;
-			MyJumpGateModSession.Network.Off(MyPacketTypeEnum.UPDATE_EVENT_CONTROLLER_EVENT, this.OnNetworkUpdate);
+			if (event_controller != null && this._IsSelected) ((MyCubeGrid) event_controller.CubeGrid).DeSchedule(MyCubeGrid.UpdateQueue.BeforeSimulation, this.Update);
+			if (this.NetworkRegistered && MyJumpGateModSession.Network.Registered) MyJumpGateModSession.Network.Off(MyPacketTypeEnum.UPDATE_EVENT_CONTROLLER_EVENT, this.OnNetworkUpdate);
+			foreach (KeyValuePair<MyJumpGate, TargetedGateValueType> pair in this.TargetedJumpGates.Concat(this.TargetedRemoteJumpGates)) this.OnJumpGateRemoved(pair.Key);
+			foreach (KeyValuePair<MyJumpGateRemoteAntenna, byte> pair in this.TargetedRemoteAntennas) pair.Key.OnAntennaConnection -= this.OnAntennaConnectionChanged;
+			this.TargetedJumpGates.Clear();
+			this.TargetedRemoteAntennas.Clear();
+			this.TargetedRemoteJumpGates.Clear();
 			this.NetworkRegistered = false;
+		}
+
+		private void OnAntennaConnectionChanged(MyJumpGateRemoteAntenna antenna, MyJumpGateController remote_controller, MyJumpGate remote_gate, byte channel, bool is_connecting)
+		{
+			if (is_connecting)
+			{
+				this.TargetedRemoteJumpGates[remote_gate] = this.GetValueFromJumpGate(remote_gate);
+				this.OnJumpGateAdded(remote_gate);
+			}
+			else if (remote_gate != null)
+			{
+				this.TargetedRemoteJumpGates.Remove(remote_gate);
+				this.OnJumpGateRemoved(remote_gate);
+			}
 		}
 
 		protected virtual void AppendCustomInfo(StringBuilder sb)
@@ -154,7 +177,7 @@ namespace IOTA.ModularJumpGates.EventController
 			sb.Append($"{header}\n\n");
 			string condition = (event_controller.IsLowerOrEqualCondition) ? "<=" : ">=";
 
-			foreach (KeyValuePair<MyJumpGate, TargetedGateValueType> pair in this.TargetedJumpGates)
+			foreach (KeyValuePair<MyJumpGate, TargetedGateValueType> pair in this.TargetedJumpGates.Concat(this.TargetedRemoteJumpGates))
 			{
 				if (this.IsConditionSelectionUsed)
 				{
@@ -167,14 +190,14 @@ namespace IOTA.ModularJumpGates.EventController
 						.Replace("{%3}", condition)
 						.Replace("{%4}", this.TargetValue.ToString())
 						.Replace("{%5}", (matched ? "0" : "1"));
-					sb.Append(entry);
+					sb.AppendLine(entry);
 				}
 				else
 				{
 					string entry = MyTexts.GetString("DetailedInfo_JumpGateEventBase_StandardEntry")
 						.Replace("{%0}", pair.Key.GetPrintableName())
 						.Replace("{%1}", pair.Key.JumpGateID.ToString());
-					sb.Append(entry);
+					sb.AppendLine(entry);
 				}
 			}
 		}
@@ -204,6 +227,47 @@ namespace IOTA.ModularJumpGates.EventController
 					{
 						this.OnJumpGateRemoved(gate);
 						this.TargetedJumpGates.Remove(gate);
+					}
+				}
+
+				if (this.DeserializedInfo.SelectedRemoteJumpGates != null)
+				{
+					List<KeyValuePair<MyJumpGateRemoteAntenna, byte>> closed_antennas = new List<KeyValuePair<MyJumpGateRemoteAntenna, byte>>(this.TargetedRemoteAntennas);
+					List<MyJumpGate> closed_gates = new List<MyJumpGate>(this.TargetedRemoteJumpGates.Keys);
+
+					foreach (KeyValuePair<long, byte> pair in this.DeserializedInfo.SelectedRemoteJumpGates)
+					{
+						MyJumpGateRemoteAntenna antenna = construct.GetRemoteAntenna(pair.Key);
+						if (antenna == null || antenna.Closed) continue;
+						KeyValuePair<MyJumpGateRemoteAntenna, byte> new_pair = new KeyValuePair<MyJumpGateRemoteAntenna, byte>(antenna, pair.Value);
+
+						if (this.TargetedRemoteAntennas.Contains(new_pair))
+						{
+							closed_antennas.Remove(new_pair);
+						}
+						else
+						{
+							this.TargetedRemoteAntennas.Add(new_pair);
+							antenna.OnAntennaConnection += this.OnAntennaConnectionChanged;
+						}
+
+						MyJumpGate remote_gate = antenna.GetConnectedControlledJumpGate(pair.Value);
+						if (remote_gate == null || remote_gate.Closed) continue;
+						if (!this.TargetedRemoteJumpGates.ContainsKey(remote_gate)) this.OnJumpGateAdded(remote_gate);
+						closed_gates.Remove(remote_gate);
+						this.TargetedRemoteJumpGates[remote_gate] = this.GetValueFromJumpGate(remote_gate);
+					}
+
+					foreach (KeyValuePair<MyJumpGateRemoteAntenna, byte> pair in closed_antennas)
+					{
+						pair.Key.OnAntennaConnection -= this.OnAntennaConnectionChanged;
+						this.TargetedRemoteAntennas.Remove(pair);
+					}
+
+					foreach (MyJumpGate gate in closed_gates)
+					{
+						this.OnJumpGateRemoved(gate);
+						this.TargetedRemoteJumpGates.Remove(gate);
 					}
 				}
 
@@ -248,6 +312,7 @@ namespace IOTA.ModularJumpGates.EventController
 
 		protected void TriggerAction(int index)
 		{
+			if (index == this.LastActionTriggered) return;
 			this.EventController?.TriggerAction(index);
 			this.LastActionTriggered = index;
 		}
@@ -284,6 +349,35 @@ namespace IOTA.ModularJumpGates.EventController
 				}
 				else this.TargetedJumpGates[pair.Key] = pair.Value;
 			}
+
+			closed.Clear();
+			updates.Clear();
+
+			foreach (KeyValuePair<MyJumpGate, TargetedGateValueType> pair in this.TargetedRemoteJumpGates)
+			{
+				MyJumpGate jump_gate = pair.Key;
+
+				if (jump_gate.Closed)
+				{
+					closed.Add(jump_gate);
+					continue;
+				}
+
+				TargetedGateValueType value = this.GetValueFromJumpGate(jump_gate);
+				if (!force_check && (object.Equals(pair.Value, value) || value.CompareTo(pair.Value) == 0)) continue;
+				updates[pair.Key] = value;
+				this.CheckValueAgainstTarget(value, pair.Value, this.TargetValue);
+			}
+
+			foreach (KeyValuePair<MyJumpGate, TargetedGateValueType> pair in updates)
+			{
+				if (closed.Contains(pair.Key))
+				{
+					this.OnJumpGateRemoved(pair.Key);
+					this.TargetedRemoteJumpGates.Remove(pair.Key);
+				}
+				else this.TargetedRemoteJumpGates[pair.Key] = pair.Value;
+			}
 		}
 
 		protected void ReloadJumpGateValues()
@@ -298,6 +392,7 @@ namespace IOTA.ModularJumpGates.EventController
 
 		protected void CreateTerminalControls<T, EventType>() where T : IMyTerminalBlock where EventType : MyJumpGateEventBase<TargetedGateValueType>
 		{
+			if (this.IsJumpGateSelectionUsed)
 			{
 				IMyTerminalControlListbox choose_jump_gate_lb = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlListbox, T>(this.MODID_PREFIX + "JumpGate");
 				choose_jump_gate_lb.Title = MyStringId.GetOrCompute(MyTexts.GetString($"Terminal_JumpGateEventBase_JumpGates"));
@@ -316,9 +411,24 @@ namespace IOTA.ModularJumpGates.EventController
 						if (!jump_gate.Closed && this.IsJumpGateValidForList(jump_gate))
 						{
 							string tooltip = $"{MyTexts.GetString("Terminal_JumpGateController_ActiveJumpGateTooltip0").Replace("{%0}", jump_gate.GetJumpGateDrives().Count().ToString()).Replace("{%1}", jump_gate.JumpGateID.ToString())}";
-							MyTerminalControlListBoxItem item = new MyTerminalControlListBoxItem(MyStringId.GetOrCompute($"{jump_gate.GetPrintableName()}"), MyStringId.GetOrCompute(tooltip), jump_gate.JumpGateID);
+							MyTerminalControlListBoxItem item = new MyTerminalControlListBoxItem(MyStringId.GetOrCompute($"{jump_gate.GetPrintableName()}"), MyStringId.GetOrCompute(tooltip), jump_gate);
 							content_list.Add(item);
 							if (event_block.TargetedJumpGates.ContainsKey(jump_gate)) preselect_list.Add(item);
+						}
+					}
+
+					foreach (MyJumpGateRemoteAntenna antenna in construct.GetAttachedJumpGateRemoteAntennas())
+					{
+						string name = ((antenna.TerminalBlock?.CustomName?.Length ?? 0) == 0) ? antenna.BlockID.ToString() : antenna.TerminalBlock.CustomName;
+
+						for (byte channel = 0; channel < MyJumpGateRemoteAntenna.ChannelCount; ++channel)
+						{
+							if (antenna.Closed) continue;
+							KeyValuePair<MyJumpGateRemoteAntenna, byte> pair = new KeyValuePair<MyJumpGateRemoteAntenna, byte>(antenna, channel);
+							string tooltip = MyTexts.GetString("Terminal_JumpGateController_ActiveJumpGateTooltip1").Replace("{%0}", channel.ToString());
+							MyTerminalControlListBoxItem item = new MyTerminalControlListBoxItem(MyStringId.GetOrCompute($"{name}"), MyStringId.GetOrCompute(tooltip), pair);
+							content_list.Add(item);
+							if (event_block.TargetedRemoteAntennas.Contains(pair)) preselect_list.Add(item);
 						}
 					}
 				};
@@ -328,26 +438,49 @@ namespace IOTA.ModularJumpGates.EventController
 					IMyEventControllerBlock event_controller = event_block?.EventController;
 					MyJumpGateConstruct construct;
 					if (event_controller == null || event_controller.MarkedForClose || (construct = MyJumpGateModSession.Instance.GetJumpGateGrid(event_controller.CubeGrid)) == null) return;
-					List<MyJumpGate> removed_gates = new List<MyJumpGate>(this.TargetedJumpGates.Keys);
+					List<MyJumpGate> removed_gates = new List<MyJumpGate>(event_block.TargetedJumpGates.Keys);
+					List<KeyValuePair<MyJumpGateRemoteAntenna, byte>> removed_remote_gates = new List<KeyValuePair<MyJumpGateRemoteAntenna, byte>>(event_block.TargetedRemoteAntennas);
 
 					foreach (MyTerminalControlListBoxItem item in selected)
 					{
-						long selected_id = (long) item.UserData;
-						MyJumpGate jump_gate = construct.GetJumpGate(selected_id);
-						if (jump_gate == null || jump_gate.Closed || this.TargetedJumpGates.ContainsKey(jump_gate)) continue;
-						event_block.TargetedJumpGates[jump_gate] = this.GetValueFromJumpGate(jump_gate);
-						this.OnJumpGateAdded(jump_gate);
-						removed_gates.Remove(jump_gate);
+						if (item.UserData is MyJumpGate)
+						{
+							MyJumpGate jump_gate = (MyJumpGate) item.UserData;
+							if (jump_gate == null || jump_gate.Closed || event_block.TargetedJumpGates.ContainsKey(jump_gate)) continue;
+							event_block.TargetedJumpGates[jump_gate] = event_block.GetValueFromJumpGate(jump_gate);
+							event_block.OnJumpGateAdded(jump_gate);
+							removed_gates.Remove(jump_gate);
+						}
+						else if (item.UserData is KeyValuePair<MyJumpGateRemoteAntenna, byte>)
+						{
+							KeyValuePair<MyJumpGateRemoteAntenna, byte> pair = (KeyValuePair<MyJumpGateRemoteAntenna, byte>) item.UserData;
+							if (pair.Key == null || pair.Key.Closed || pair.Value >= MyJumpGateRemoteAntenna.ChannelCount || event_block.TargetedRemoteAntennas.Contains(pair)) continue;
+							event_block.TargetedRemoteAntennas.Add(pair);
+							removed_remote_gates.Remove(pair);
+							MyJumpGate remote_gate = pair.Key.GetConnectedControlledJumpGate(pair.Value);
+							if (remote_gate == null) continue;
+							event_block.OnJumpGateAdded(remote_gate);
+							event_block.TargetedRemoteJumpGates[remote_gate] = event_block.GetValueFromJumpGate(remote_gate);
+						}
 					}
 
 					foreach (MyJumpGate closed in removed_gates)
 					{
-						this.OnJumpGateRemoved(closed);
+						event_block.OnJumpGateRemoved(closed);
 						event_block.TargetedJumpGates.Remove(closed);
 					}
 
-					this.Poll(true);
-					this.SetDirty();
+					foreach (KeyValuePair<MyJumpGateRemoteAntenna, byte> pair in removed_remote_gates)
+					{
+						event_block.TargetedRemoteAntennas.Remove(pair);
+						MyJumpGate remote_gate = pair.Key.GetConnectedControlledJumpGate(pair.Value);
+						if (remote_gate == null) continue;
+						event_block.OnJumpGateRemoved(remote_gate);
+						event_block.TargetedRemoteJumpGates.Remove(remote_gate);
+					}
+
+					event_block.Poll(true);
+					event_block.SetDirty();
 				};
 
 				MyAPIGateway.TerminalControls.AddControl<T>(choose_jump_gate_lb);
@@ -358,9 +491,15 @@ namespace IOTA.ModularJumpGates.EventController
 
 		protected virtual void OnLoad(MySerializedJumpGateEventInfo info) { }
 
-		protected virtual void OnSelected() { }
+		protected virtual void OnSelected()
+		{
+			foreach (KeyValuePair<MyJumpGateRemoteAntenna, byte> pair in this.TargetedRemoteAntennas) pair.Key.OnAntennaConnection += this.OnAntennaConnectionChanged;
+		}
 
-		protected virtual void OnUnselected() { }
+		protected virtual void OnUnselected()
+		{
+			foreach (KeyValuePair<MyJumpGateRemoteAntenna, byte> pair in this.TargetedRemoteAntennas) pair.Key.OnAntennaConnection -= this.OnAntennaConnectionChanged;
+		}
 
 		protected virtual void OnJumpGateAdded(MyJumpGate jump_gate) { }
 
@@ -370,12 +509,12 @@ namespace IOTA.ModularJumpGates.EventController
 
 		protected virtual bool IsJumpGateValidForList(MyJumpGate jump_gate)
 		{
-			return !jump_gate.Closed;
+			return jump_gate != null && !jump_gate.Closed;
 		}
 
 		protected bool IsListeningToJumpGate(MyJumpGate jump_gate)
 		{
-			return this.TargetedJumpGates.ContainsKey(jump_gate);
+			return jump_gate != null && (this.TargetedJumpGates.ContainsKey(jump_gate) || this.TargetedRemoteJumpGates.ContainsKey(jump_gate));
 		}
 
 		protected virtual TargetedGateValueType GetValueFromJumpGate(MyJumpGate jump_gate)
@@ -385,19 +524,7 @@ namespace IOTA.ModularJumpGates.EventController
 
 		protected List<MyJumpGate> GetTargetedJumpGates()
 		{
-			return new List<MyJumpGate>(this.TargetedJumpGates.Keys);
-		}
-
-		protected TargetedGateValueType this[MyJumpGate jump_gate]
-		{
-			get
-			{
-				return this.TargetedJumpGates[jump_gate];
-			}
-			set
-			{
-				this.TargetedJumpGates[jump_gate] = value;
-			}
+			return this.TargetedJumpGates.Concat(this.TargetedRemoteJumpGates).Select((pair) => pair.Key).ToList();
 		}
 
 		public MyJumpGateEventBase()
@@ -454,6 +581,7 @@ namespace IOTA.ModularJumpGates.EventController
 			MySerializedJumpGateEventInfo info = new MySerializedJumpGateEventInfo {
 				TargetValue = this.TargetValue,
 				SelectedJumpGates = this.TargetedJumpGates.Select((pair) => pair.Key.JumpGateID).ToList(),
+				SelectedRemoteJumpGates = this.TargetedRemoteAntennas.Select((pair) => new KeyValuePair<long, byte>(pair.Key.BlockID, pair.Value)).ToList(),
 				MetaData = new Dictionary<string, string>(),
 			};
 

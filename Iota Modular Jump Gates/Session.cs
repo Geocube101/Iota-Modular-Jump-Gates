@@ -115,6 +115,11 @@ namespace IOTA.ModularJumpGates
 		private ushort GridNetworkUpdateDelay = 30 * 60;
 
 		/// <summary>
+		/// The gameplay frame counter's value 1 tick ago
+		/// </summary>
+		private int LastGameplayFrameCounter = 0;
+
+		/// <summary>
 		/// Stores the next index for queued animations
 		/// </summary>
 		private ulong AnimationQueueIndex = 0;
@@ -603,7 +608,7 @@ namespace IOTA.ModularJumpGates
 			MyJumpGateModSession.SessionStatus = MySessionStatusEnum.LOADING;
 			MyJumpGateModSession.Instance = this;
 			MyJumpGateModSession.Configuration = Configuration.Load();
-			MyJumpGateModSession.Network = new MyNetworkInterface(0xFFFF);
+			MyJumpGateModSession.Network = new MyNetworkInterface(0xFFFF, this.ModContext.ModId);
 			if (MyNetworkInterface.IsServerLike && !MyAPIGateway.Utilities.GetVariable($"{MyJumpGateModSession.MODID}.DebugMode", out MyJumpGateModSession.DebugMode)) MyJumpGateModSession.DebugMode = false;
 			this.UpdateOnPause = true;
 
@@ -709,8 +714,8 @@ namespace IOTA.ModularJumpGates
 
 				if (!this.InitializationComplete && ((MyNetworkInterface.IsServerLike && this.AllFirstTickComplete()) || (MyNetworkInterface.IsStandaloneMultiplayerClient && MyJumpGateModSession.GameTick == this.FirstUpdateTimeTicks)))
 				{
-					MyAPIGateway.Utilities.ShowMessage(MyJumpGateModSession.MODID, "Initialization Complete!");
 					this.InitializationComplete = true;
+					MyAPIGateway.Utilities.ShowMessage(MyJumpGateModSession.MODID, "Initialization Complete!");
 				}
 				
 				if (this.ActiveGridUpdateThreads < MyJumpGateModSession.Configuration.GeneralConfiguration.ConcurrentGridUpdateThreads)
@@ -720,21 +725,25 @@ namespace IOTA.ModularJumpGates
 				}
 
 				// Redraw Terminal Controls
-				if (MyNetworkInterface.IsClientLike && (MyJumpGateModSession.GameTick % 60 == 0 || this.__RedrawAllTerminalControls))
+				if (MyNetworkInterface.IsClientLike && this.InitializationComplete && (MyJumpGateModSession.GameTick % 60 == 0 || this.__RedrawAllTerminalControls))
 				{
 					MyAPIGateway.TerminalControls.GetControls<IMyUpgradeModule>(out this.TEMP_ControlsList);
 					foreach (IMyTerminalControl control in this.TEMP_ControlsList) control.UpdateVisual();
 					this.TEMP_ControlsList.Clear();
 					this.__RedrawAllTerminalControls = false;
 				}
-				if (MyAPIGateway.Gui.GetCurrentScreen != MyTerminalPageEnum.ControlPanel) MyJumpGateControllerTerminal.ResetSearchInputs();
+				if (MyAPIGateway.Gui.GetCurrentScreen != MyTerminalPageEnum.ControlPanel)
+				{
+					MyJumpGateControllerTerminal.ResetSearchInputs();
+					MyJumpGateRemoteAntennaTerminal.ResetSearchInputs();
+				}
 
 				// Update grid non-threadable
 				foreach (KeyValuePair<long, MyJumpGateConstruct> pair in this.GridMap)
 				{
 					MyJumpGateConstruct grid = pair.Value;
 
-					if (!grid.MarkClosed && !grid.IsSuspended && grid.AtLeastOneUpdate())
+					if (!grid.MarkClosed && !grid.IsSuspended && grid.FullyInitialized)
 					{
 						try
 						{
@@ -746,6 +755,10 @@ namespace IOTA.ModularJumpGates
 						}
 					}
 				}
+
+				bool paused = MyNetworkInterface.IsSingleplayer && MyAPIGateway.Session.GameplayFrameCounter == this.LastGameplayFrameCounter;
+				this.LastGameplayFrameCounter = MyAPIGateway.Session.GameplayFrameCounter;
+				if (paused) return;
 
 				// Tick queued animations
 				foreach (KeyValuePair<ulong, AnimationInfo> pair in this.JumpGateAnimations)
@@ -897,7 +910,9 @@ namespace IOTA.ModularJumpGates
 							MySimpleObjectDraw.DrawTransparentBox(ref jump_ellipse.WorldMatrix, ref ellipse_aabb, ref color, MySimpleObjectRasterizer.Wireframe, 1, 0.01f, null, line_material);
 
 							// Display gate normal override
-							if (complete && gate.Controller.BlockSettings.HasVectorNormalOverride())
+							MyJumpGateControlObject control_object = gate.ControlObject;
+
+							if (control_object != null && control_object.BlockSettings.HasVectorNormalOverride())
 							{
 								color4 = Color.Magenta;
 								Vector3D normal = gate.GetWorldMatrix(false, true).Forward;
@@ -1490,7 +1505,7 @@ namespace IOTA.ModularJumpGates
 			MyJumpGateConstruct jump_gate_grid;
 			if (this.GridMap.TryGetValue(cube_grid.EntityId, out jump_gate_grid)) return jump_gate_grid;
 			List<IMyCubeGrid> connected_grids = new List<IMyCubeGrid>();
-			cube_grid.GetGridGroup(GridLinkTypeEnum.Logical | GridLinkTypeEnum.Mechanical).GetGrids(connected_grids);
+			cube_grid.GetGridGroup(GridLinkTypeEnum.Logical).GetGrids(connected_grids);
 
 			foreach (IMyCubeGrid grid in connected_grids)
 			{
@@ -1548,6 +1563,40 @@ namespace IOTA.ModularJumpGates
 		{
 			if (uuid == null) return null;
 			return this.GetUnclosedJumpGateGrid(uuid.GetJumpGateGrid());
+		}
+
+		/// <summary>
+		/// Gets the equivilent MyJumpGateConstruct given a cube grid ID<br />
+		/// This will not check subgrids
+		/// </summary>
+		/// <param name="id">The cube grid ID</param>
+		/// <returns>The matching MyJumpGateConstruct or null if not found</returns>
+		public MyJumpGateConstruct GetDirectJumpGateGrid(long id)
+		{
+			return this.GridMap.GetValueOrDefault(id, null);
+		}
+
+		/// <summary>
+		/// Gets the equivilent MyJumpGateConstruct given a cube grid<br />
+		/// This will not check subgrids
+		/// </summary>
+		/// <param name="cube_grid">The cube grid</param>
+		/// <returns>The matching MyJumpGateConstruct or null if not found</returns>
+		public MyJumpGateConstruct GetDirectJumpGateGrid(IMyCubeGrid cube_grid)
+		{
+			return (cube_grid == null || cube_grid.Closed || cube_grid.MarkedForClose) ? null : this.GridMap.GetValueOrDefault(cube_grid.EntityId, null);
+		}
+
+		/// <summary>
+		/// Gets the equivilent MyJumpGateConstruct given a JumpGateUUID<br />
+		/// This will not check subgrids
+		/// </summary>
+		/// <param name="uuid">The cube grid UUID</param>
+		/// <returns>The matching MyJumpGateConstruct or null if not found</returns>
+		public MyJumpGateConstruct GetDirectJumpGateGrid(JumpGateUUID uuid)
+		{
+			if (uuid == null) return null;
+			return this.GetDirectJumpGateGrid(uuid.GetJumpGateGrid());
 		}
 
 		/// <summary>

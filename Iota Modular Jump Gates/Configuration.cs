@@ -172,29 +172,47 @@ namespace IOTA.ModularJumpGates
 			public double MaxSmallDriveChargeRateMW = 2d;
 
 			/// <summary>
-			/// The base input wattage (in MegaWatts) for large grid drives
+			/// The base input wattage (in MegaWatts) for large grid drives while idle
 			/// Cannot be NaN or Infinity<br />
 			/// Should not be 0<br />
 			/// Defaults to 100<br />
 			/// </summary>
 			[ProtoMember(9, IsRequired = true)]
-			public double LargeDriveInputWattageMW = 100d;
+			public double LargeDriveIdleInputWattageMW = 50d;
 
 			/// <summary>
-			/// The base input wattage (in MegaWatts) for small grid drives
+			/// The base input wattage (in MegaWatts) for small grid drives while idle
 			/// Cannot be NaN or Infinity<br />
 			/// Should not be 0<br />
 			/// Defaults to 25<br />
 			/// </summary>
 			[ProtoMember(10, IsRequired = true)]
-			public double SmallDriveInputWattageMW = 25d;
+			public double SmallDriveIdleInputWattageMW = 15d;
+
+			/// <summary>
+			/// The base input wattage (in MegaWatts) for large grid drives while active
+			/// Cannot be NaN or Infinity<br />
+			/// Should not be 0<br />
+			/// Defaults to 100<br />
+			/// </summary>
+			[ProtoMember(11, IsRequired = true)]
+			public double LargeDriveActiveInputWattageMW = 75d;
+
+			/// <summary>
+			/// The base input wattage (in MegaWatts) for small grid drives while active
+			/// Cannot be NaN or Infinity<br />
+			/// Should not be 0<br />
+			/// Defaults to 25<br />
+			/// </summary>
+			[ProtoMember(12, IsRequired = true)]
+			public double SmallDriveActiveInputWattageMW = 45d;
 
 			/// <summary>
 			/// The power transfer efficiency of large grid drives when charging<br />
 			/// Cannot be NaN, Infinity, negative, or higher than 1<br />
 			/// Defaults to 0.99
 			/// </summary>
-			[ProtoMember(11, IsRequired = true)]
+			[ProtoMember(13, IsRequired = true)]
 			public double LargeDriveChargeEfficiency = 0.99;
 
 			/// <summary>
@@ -202,7 +220,7 @@ namespace IOTA.ModularJumpGates
 			/// Cannot be NaN, Infinity, negative, or higher than 1<br />
 			/// Defaults to 0.95
 			/// </summary>
-			[ProtoMember(12, IsRequired = true)]
+			[ProtoMember(14, IsRequired = true)]
 			public double SmallDriveChargeEfficiency = 0.95;
 
 			/// <summary>
@@ -219,8 +237,10 @@ namespace IOTA.ModularJumpGates
 				this.MaxSmallDriveChargeMW = ValidateDoubleValue(this.MaxSmallDriveChargeMW, defaults.MaxSmallDriveChargeMW, 1);
 				this.MaxLargeDriveChargeRateMW = ValidateDoubleValue(this.MaxLargeDriveChargeRateMW, defaults.MaxLargeDriveChargeRateMW, 0);
 				this.MaxSmallDriveChargeRateMW = ValidateDoubleValue(this.MaxSmallDriveChargeRateMW, defaults.MaxSmallDriveChargeRateMW, 0);
-				this.LargeDriveInputWattageMW = ValidateDoubleValue(this.LargeDriveInputWattageMW, defaults.LargeDriveInputWattageMW, 0);
-				this.SmallDriveInputWattageMW = ValidateDoubleValue(this.SmallDriveInputWattageMW, defaults.SmallDriveInputWattageMW, 0);
+				this.LargeDriveIdleInputWattageMW = ValidateDoubleValue(this.LargeDriveIdleInputWattageMW, defaults.LargeDriveIdleInputWattageMW, 0);
+				this.SmallDriveIdleInputWattageMW = ValidateDoubleValue(this.SmallDriveIdleInputWattageMW, defaults.SmallDriveIdleInputWattageMW, 0);
+				this.LargeDriveActiveInputWattageMW = ValidateDoubleValue(this.LargeDriveActiveInputWattageMW, defaults.LargeDriveActiveInputWattageMW, 0);
+				this.SmallDriveActiveInputWattageMW = ValidateDoubleValue(this.SmallDriveActiveInputWattageMW, defaults.SmallDriveActiveInputWattageMW, 0);
 				this.LargeDriveChargeEfficiency = ValidateDoubleValue(this.LargeDriveChargeEfficiency, defaults.LargeDriveChargeEfficiency, 0, 1);
 				this.SmallDriveChargeEfficiency = ValidateDoubleValue(this.SmallDriveChargeEfficiency, defaults.SmallDriveChargeEfficiency, 0, 1);
 			}
@@ -528,7 +548,7 @@ namespace IOTA.ModularJumpGates
 			/// Defaults to 3
 			/// </summary>
 			[ProtoMember(1, IsRequired = true)]
-			public byte DebugLogVerbosity = 3;
+			public byte DebugLogVerbosity = 5;
 
 			/// <summary>
 			/// The maximum distance (in meters) in which clients will be shown debug draw and gate particles<br />
@@ -662,9 +682,14 @@ namespace IOTA.ModularJumpGates
 			public readonly double MaxDriveChargeRateMW;
 
 			/// <summary>
-			/// The base input wattage (in Mega-Watts) for this drive
+			/// The base input wattage (in Mega-Watts) for this drive while idle
 			/// </summary>
-			public readonly double BaseInputWattageMW;
+			public readonly double BaseIdleInputWattageMW;
+
+			/// <summary>
+			/// The base input wattage (in Mega-Watts) for this drive while active
+			/// </summary>
+			public readonly double BaseActiveInputWattageMW;
 
 			/// <summary>
 			/// The power transfer efficiency of this drive when charging
@@ -680,7 +705,8 @@ namespace IOTA.ModularJumpGates
 					this.DriveRaycastWidth = config.LargeDriveRaycastWidth;
 					this.MaxDriveChargeMW = config.MaxLargeDriveChargeMW;
 					this.MaxDriveChargeRateMW = config.MaxLargeDriveChargeRateMW;
-					this.BaseInputWattageMW = config.LargeDriveInputWattageMW;
+					this.BaseIdleInputWattageMW = config.LargeDriveIdleInputWattageMW;
+					this.BaseActiveInputWattageMW = config.LargeDriveActiveInputWattageMW;
 					this.DriveChargeEfficiency = config.LargeDriveChargeEfficiency;
 				}
 				else
@@ -689,7 +715,8 @@ namespace IOTA.ModularJumpGates
 					this.DriveRaycastWidth = config.SmallDriveRaycastWidth;
 					this.MaxDriveChargeMW = config.MaxSmallDriveChargeMW;
 					this.MaxDriveChargeRateMW = config.MaxSmallDriveChargeRateMW;
-					this.BaseInputWattageMW = config.SmallDriveInputWattageMW;
+					this.BaseIdleInputWattageMW = config.SmallDriveIdleInputWattageMW;
+					this.BaseActiveInputWattageMW = config.SmallDriveActiveInputWattageMW;
 					this.DriveChargeEfficiency = config.SmallDriveChargeEfficiency;
 				}
 			}
@@ -701,7 +728,8 @@ namespace IOTA.ModularJumpGates
 					["DriveRaycastWidth"] = this.DriveRaycastWidth,
 					["MaxDriveChargeMW"] = this.MaxDriveChargeMW,
 					["MaxDriveChargeRateMW"] = this.MaxDriveChargeRateMW,
-					["BaseInputWattageMW"] = this.BaseInputWattageMW,
+					["BaseIdleInputWattageMW"] = this.BaseIdleInputWattageMW,
+					["BaseActiveInputWattageMW"] = this.BaseActiveInputWattageMW,
 					["DriveChargeEfficiency"] = this.DriveChargeEfficiency,
 				};
 			}

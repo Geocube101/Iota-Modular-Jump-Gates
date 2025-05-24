@@ -306,11 +306,11 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// <param name="packet">The update request packet</param>
 		private void OnNetworkBlockUpdate(MyNetworkInterface.Packet packet)
         {
-			if (packet == null || packet.EpochTime <= this.LastUpdateTime) return;
+			if (packet == null) return;
 			MySerializedJumpGateCapacitor serialized = packet.Payload<MySerializedJumpGateCapacitor>();
 			if (serialized == null || serialized.UUID.GetBlock() != this.BlockID) return;
 
-			if (MyNetworkInterface.IsMultiplayerServer && packet.PhaseFrame == 1)
+			if (MyNetworkInterface.IsMultiplayerServer && packet.PhaseFrame == 1 && packet.EpochTime > this.LastUpdateTime)
 			{
 				if (serialized.IsClientRequest)
 				{

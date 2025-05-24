@@ -897,16 +897,4 @@ namespace IOTA.ModularJumpGates.Util
 			};
 		}
 	}
-
-	public sealed class Pair<T1, T2>
-	{
-		public T1 First;
-		public T2 Second;
-
-		public Pair(T1 first = default(T1), T2 second = default(T2))
-		{
-			this.First = first;
-			this.Second = second;
-		}
-	}
 }

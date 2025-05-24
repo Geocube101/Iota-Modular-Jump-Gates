@@ -30,6 +30,11 @@ namespace IOTA.ModularJumpGates.CubeBlock
 
 		#region Private Variables
 		/// <summary>
+		/// The number of ticks this drive should ignore power checks
+		/// </summary>
+		private byte IsPowerInvalid = 0;
+
+		/// <summary>
 		/// Sets a wattage override when greater than 0<br />
 		/// The input for this block will instead be this value (and the radiator emissives enabled)
 		/// </summary>
@@ -77,6 +82,8 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		#endregion
 
 		#region Public Variables
+		public override bool IsPowered => (this.IsPowerInvalid > 0) ? true : base.IsPowered;
+
 		/// <summary>
 		/// The stored capacitor charge in MegaWatts
 		/// </summary>
@@ -91,6 +98,18 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// The brightness for the emitter emissives
 		/// </summary>
 		public double EmitterEmissiveBrightness = 1;
+
+		/// <summary>
+		/// Gets the base power draw of this block (in Megawatts) from config
+		/// </summary>
+		public double BasePowerDrawMW
+		{
+			get
+			{
+				MyJumpGate jump_gate = this.JumpGateGrid?.GetJumpGate(this.JumpGateID);
+				return (jump_gate == null || jump_gate.Phase == MyJumpGatePhase.NONE || jump_gate.Phase == MyJumpGatePhase.IDLE || jump_gate.Status == MyJumpGateStatus.INBOUND) ? this.DriveConfiguration.BaseIdleInputWattageMW : this.DriveConfiguration.BaseActiveInputWattageMW;
+			}
+		}
 
 		/// <summary>
 		/// The ID of the jump gate this drive is linked to or -1 if not linked
@@ -148,14 +167,16 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				bool jump_gate_valid = jump_gate?.IsValid() ?? false;
 
 				double input_wattage = this.ResourceSink.CurrentInputByType(MyResourceDistributorComponent.ElectricityId);
+				double required_input = this.ResourceSink.RequiredInputByType(MyResourceDistributorComponent.ElectricityId);
 				double charge_ratio = this.StoredChargeMW / this.DriveConfiguration.MaxDriveChargeMW;
 				double charge_time = Math.Log((1 - charge_ratio) / 0.0005) * (this.DriveConfiguration.MaxDriveChargeMW / this.DriveConfiguration.MaxDriveChargeRateMW);
 
 				string stored_power = Math.Round(this.StoredChargeMW, 4).ToString("#.0000");
 				info.Append($"\n-=-=-=( {MyTexts.GetString("DisplayName_CubeBlock_JumpGateDrive")} )=-=-=-\n");
 				info.Append($" {MyTexts.GetString("DetailedInfo_BlockBase_Input")}: {Math.Round(input_wattage, 4)} MW/s\n");
-				info.Append($" {MyTexts.GetString("DetailedInfo_BlockBase_RequiredInput")}: {Math.Round(this.ResourceSink.RequiredInputByType(MyResourceDistributorComponent.ElectricityId), 4)} MW/s\n");
-				info.Append($" {MyTexts.GetString("DetailedInfo_BlockBase_InputRatio")}: {stored_power} MW\n");
+				info.Append($" {MyTexts.GetString("DetailedInfo_BlockBase_RequiredInput")}: {Math.Round(required_input, 4)} MW/s\n");
+				info.Append($" {MyTexts.GetString("DetailedInfo_BlockBase_InputRatio")}: {Math.Round(MathHelperD.Clamp(input_wattage / required_input, 0, 1) * 100, 2):#.00}%\n");
+				info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateCapacitor_StoredPower")}: {stored_power} MW\n");
 				info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateCapacitor_Charge")}: {Math.Round(charge_ratio * 100, 1)}%\n");
 				info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateCapacitor_BufferSize")}: {MyJumpGateModSession.AutoconvertMetricUnits(this.DriveConfiguration.MaxDriveChargeMW * 1e6, "w", 4)}\n");
 				info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateCapacitor_ChargeEfficiency")}: {Math.Round(this.DriveConfiguration.DriveChargeEfficiency * 100, 2)}%\n");
@@ -191,7 +212,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				else if (this.TerminalBlock.IsWorking)
 				{
 					double capacity_ratio = MathHelperD.Clamp(this.StoredChargeMW / this.DriveConfiguration.MaxDriveChargeMW, 0, 1);
-					return (float) (this.DriveConfiguration.MaxDriveChargeRateMW * (1 - capacity_ratio));
+					return (float) (this.DriveConfiguration.MaxDriveChargeRateMW * (1 - capacity_ratio) + this.BasePowerDrawMW);
 				}
 				else return 0f;
 			}, MyJumpGateModSession.BlockComponentDataGUID);
@@ -258,6 +279,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			base.UpdateAfterSimulation();
 
 			// Skip update if a projection or closed
+			if (this.IsPowerInvalid > 0) --this.IsPowerInvalid;
 			if (this.TerminalBlock?.CubeGrid?.Physics == null || this.IsClosed) return;
 
 			// Update emissives
@@ -388,11 +410,11 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// <param name="packet">The update request packet</param>
 		private void OnNetworkBlockUpdate(MyNetworkInterface.Packet packet)
 		{
-			if (packet == null || packet.EpochTime <= this.LastUpdateTime) return;
+			if (packet == null) return;
 			MySerializedJumpGateDrive serialized = packet.Payload<MySerializedJumpGateDrive>();
 			if (serialized == null || serialized.UUID.GetBlock() != this.BlockID) return;
 
-			if (MyNetworkInterface.IsMultiplayerServer && packet.PhaseFrame == 1)
+			if (MyNetworkInterface.IsMultiplayerServer && packet.PhaseFrame == 1 && packet.EpochTime > this.LastUpdateTime)
 			{
 				if (serialized.IsClientRequest)
 				{
@@ -463,7 +485,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			if (this.IsNullWrapper) return;
 			else if (override_mw <= 0)
 			{
-				this.ResourceSink.SetMaxRequiredInputByType(MyResourceDistributorComponent.ElectricityId, (float) (this.DriveConfiguration.BaseInputWattageMW + this.DriveConfiguration.MaxDriveChargeRateMW));
+				this.ResourceSink.SetMaxRequiredInputByType(MyResourceDistributorComponent.ElectricityId, (float) (this.BasePowerDrawMW + this.DriveConfiguration.MaxDriveChargeRateMW));
 				this.SinkOverrideMW = -1;
 			}
 			else
@@ -517,6 +539,14 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		}
 
 		/// <summary>
+		/// Invalidates this drive's power check for the next tick
+		/// </summary>
+		public void PrepareDriveForGateJump()
+		{
+			this.IsPowerInvalid = 5;
+		}
+
+		/// <summary>
 		/// Whether this drive's emitter emissives are being animated
 		/// </summary>
 		/// <returns>Animatedness</returns>
@@ -540,7 +570,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// <returns>The current input power in MW</returns>
 		public double GetCurrentWattageSinkInput()
 		{
-			return (this.IsNullWrapper) ? this.WrapperWattageSinkPower : ((double) this.ResourceSink.CurrentInputByType(MyResourceDistributorComponent.ElectricityId) - this.DriveConfiguration.BaseInputWattageMW);
+			return (this.IsNullWrapper) ? this.WrapperWattageSinkPower : ((double) this.ResourceSink.CurrentInputByType(MyResourceDistributorComponent.ElectricityId) - this.BasePowerDrawMW);
 		}
 
 		/// <summary>

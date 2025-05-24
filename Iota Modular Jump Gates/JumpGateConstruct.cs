@@ -109,6 +109,11 @@ namespace IOTA.ModularJumpGates
 		private Queue<long> ClosedJumpGateIDs = new Queue<long>();
 
 		/// <summary>
+		/// Temporary list of comm-linked grids used to update actual listing
+		/// </summary>
+		private Queue<MyJumpGateConstruct> CommLinkedGridsPoll = new Queue<MyJumpGateConstruct>();
+
+		/// <summary>
 		/// A list of all grids reachable from this grid by antenna
 		/// </summary>
 		private List<MyJumpGateConstruct> CommLinkedGrids = null;
@@ -815,6 +820,8 @@ namespace IOTA.ModularJumpGates
 			this.CubeGrids.Clear();
 			this.DriveCombinations?.Clear();
 			this.GridBlocks.Clear();
+			this.CommLinkedGridsPoll.Clear();
+			using (this.CommLinkedLock.WithWriter()) this.CommLinkedGrids?.Clear();
 
 			this.ClosedJumpGateIDs = null;
 			this.JumpGates = null;
@@ -825,6 +832,8 @@ namespace IOTA.ModularJumpGates
 			this.CubeGrids = null;
 			this.DriveCombinations = null;
 			this.GridBlocks = null;
+			this.CommLinkedGridsPoll = null;
+			this.CommLinkedGrids = null;
 
 			this.BatchingGate = null;
 			this.CubeGrid = null;
@@ -1170,57 +1179,62 @@ namespace IOTA.ModularJumpGates
 				// Update comm linked grids
 				if (this.UpdateCommLinkedGrids && MyNetworkInterface.IsServerLike)
 				{
-					using (this.CommLinkedLock.WithWriter())
+					this.CommLinkedGridsPoll.Enqueue(this);
+					List<MyEntity> broadcast_entities = new List<MyEntity>();
+					List<MyJumpGateConstruct> new_comm_linked = new List<MyJumpGateConstruct>(this.CommLinkedGrids?.Count ?? 0);
+
+					while (this.CommLinkedGridsPoll.Count > 0)
 					{
-						int list_index = 0;
-						if (this.CommLinkedGrids == null) this.CommLinkedGrids = new List<MyJumpGateConstruct>();
-						else this.CommLinkedGrids.Clear();
-						this.CommLinkedGrids.Add(this);
-						List<MyEntity> broadcast_entities = new List<MyEntity>();
+						MyJumpGateConstruct grid = this.CommLinkedGridsPoll.Dequeue();
+						if (grid == null || grid.Closed || grid.MarkClosed || (grid.LaserAntennas.Count == 0 && grid.RadioAntennas.Count == 0)) continue;
 
-						while (list_index < this.CommLinkedGrids.Count)
+						foreach (KeyValuePair<long, IMyLaserAntenna> pair in grid.LaserAntennas)
 						{
-							MyJumpGateConstruct grid = this.CommLinkedGrids[list_index++];
-							if (grid.Closed || grid.MarkClosed || (grid.LaserAntennas.Count == 0 && grid.RadioAntennas.Count == 0)) continue;
+							if (pair.Value.MarkedForClose || !pair.Value.IsWorking || pair.Value.Status != Sandbox.ModAPI.Ingame.MyLaserAntennaStatus.Connected) continue;
+							MyJumpGateConstruct other = MyJumpGateModSession.Instance.GetUnclosedJumpGateGrid(pair.Value.Other.CubeGrid);
+							if (other == null || new_comm_linked.Contains(other)) continue;
+							new_comm_linked.Add(other);
+							this.CommLinkedGridsPoll.Enqueue(other);
+						}
 
-							foreach (KeyValuePair<long, IMyLaserAntenna> pair in grid.LaserAntennas)
+						if (grid.RadioAntennas.Count == 0 || grid.RadioAntennas.All((pair) => pair.Value.MarkedForClose || !pair.Value.IsWorking || !pair.Value.IsBroadcasting)) continue;
+						BoundingBoxD world_aabb = grid.GetCombinedAABB();
+						BoundingSphereD broadcast_sphere = new BoundingSphereD(world_aabb.Center, 50000 + world_aabb.Extents.Max());
+						MyGamePruningStructure.GetAllTopMostEntitiesInSphere(ref broadcast_sphere, broadcast_entities);
+
+						foreach (KeyValuePair<long, IMyRadioAntenna> pair in grid.RadioAntennas)
+						{
+							if (pair.Value.MarkedForClose || !pair.Value.IsWorking || !pair.Value.IsBroadcasting) continue;
+
+							foreach (MyEntity entity in broadcast_entities)
 							{
-								if (pair.Value.MarkedForClose || !pair.Value.IsWorking || pair.Value.Status != Sandbox.ModAPI.Ingame.MyLaserAntennaStatus.Connected) continue;
-								MyJumpGateConstruct other = MyJumpGateModSession.Instance.GetJumpGateGrid(pair.Value.Other.CubeGrid);
-								if (other != null && !this.CommLinkedGrids.Contains(other)) this.CommLinkedGrids.Add(other);
-							}
+								IMyCubeGrid target = (entity is IMyCubeGrid) ? (MyCubeGrid) entity : null;
+								MyJumpGateConstruct target_grid = (target == null) ? null : MyJumpGateModSession.Instance.GetJumpGateGrid(target);
+								if (entity.Physics == null || target_grid == null || target_grid == this || new_comm_linked.Contains(target_grid)) continue;
 
-							if (grid.RadioAntennas.Count == 0 || grid.RadioAntennas.All((pair) => pair.Value.MarkedForClose || !pair.Value.IsWorking || !pair.Value.IsBroadcasting)) continue;
-							BoundingBoxD world_aabb = grid.GetCombinedAABB();
-							BoundingSphereD broadcast_sphere = new BoundingSphereD(world_aabb.Center, 50000 + world_aabb.Extents.Max());
-							MyGamePruningStructure.GetAllTopMostEntitiesInSphere(ref broadcast_sphere, broadcast_entities);
-
-							foreach (KeyValuePair<long, IMyRadioAntenna> pair in grid.RadioAntennas)
-							{
-								if (pair.Value.MarkedForClose || !pair.Value.IsWorking || !pair.Value.IsBroadcasting) continue;
-
-								foreach (MyEntity entity in broadcast_entities)
+								foreach (KeyValuePair<long, IMyRadioAntenna> target_pair in grid.RadioAntennas)
 								{
-									IMyCubeGrid target = (entity is IMyCubeGrid) ? (MyCubeGrid) entity : null;
-									MyJumpGateConstruct target_grid = (target == null) ? null : MyJumpGateModSession.Instance.GetJumpGateGrid(target);
-									if (entity.Physics == null || target_grid == null || target_grid == this || this.CommLinkedGrids.Contains(target_grid)) continue;
-
-									foreach (KeyValuePair<long, IMyRadioAntenna> target_pair in grid.RadioAntennas)
+									if (target_pair.Value.IsWorking && target_pair.Value.IsBroadcasting && Vector3D.Distance(pair.Value.WorldMatrix.Translation, target_pair.Value.WorldMatrix.Translation) < Math.Min(pair.Value.Radius, target_pair.Value.Radius))
 									{
-										if (target_pair.Value.IsWorking && target_pair.Value.IsBroadcasting && Vector3D.Distance(pair.Value.WorldMatrix.Translation, target_pair.Value.WorldMatrix.Translation) < Math.Min(pair.Value.Radius, target_pair.Value.Radius))
-										{
-											this.CommLinkedGrids.Add(target_grid);
-											break;
-										}
+										new_comm_linked.Add(target_grid);
+										this.CommLinkedGridsPoll.Enqueue(target_grid);
+										break;
 									}
 								}
 							}
-
-							broadcast_entities.Clear();
 						}
 
-						this.LastCommLinkUpdate = DateTime.Now;
-						this.UpdateCommLinkedGrids = false;
+						broadcast_entities.Clear();
+					}
+
+					this.LastCommLinkUpdate = DateTime.Now;
+					this.UpdateCommLinkedGrids = false;
+
+					using (this.CommLinkedLock.WithWriter())
+					{
+						if (this.CommLinkedGrids == null) this.CommLinkedGrids = new List<MyJumpGateConstruct>();
+						else this.CommLinkedGrids.Clear();
+						this.CommLinkedGrids.AddList(new_comm_linked);
 					}
 				}
 
@@ -2030,6 +2044,7 @@ namespace IOTA.ModularJumpGates
 		public MyPhysicsComponentBase GetCubeGridPhysics()
 		{
 			if (this.Closed) return null;
+			else if (this.CubeGrid.Physics != null) return this.CubeGrid.Physics;
 			foreach (KeyValuePair<long, IMyCubeGrid> pair in this.CubeGrids) if (pair.Value.Physics != null) return pair.Value.Physics;
 			return null;
 		}
@@ -2150,7 +2165,7 @@ namespace IOTA.ModularJumpGates
 		/// <returns>An IEnumerable referencing all grids</returns>
 		public IEnumerable<IMyCubeGrid> GetCubeGrids()
 		{
-			return this.CubeGrids?.Values.AsEnumerable() ?? Enumerable.Empty<IMyCubeGrid>();
+			return this.CubeGrids?.Select((pair) => pair.Value) ?? Enumerable.Empty<IMyCubeGrid>();
 		}
 
 		/// <summary>

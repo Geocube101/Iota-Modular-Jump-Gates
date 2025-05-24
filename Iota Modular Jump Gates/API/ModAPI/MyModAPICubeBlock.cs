@@ -1,4 +1,5 @@
-﻿using ProtoBuf;
+﻿using IOTA.ModularJumpGates.API.ModAPI.Util;
+using ProtoBuf;
 using Sandbox.ModAPI;
 using System;
 using System.Collections.Generic;
@@ -8,7 +9,6 @@ using System.Threading;
 using VRage.Game;
 using VRage.Game.ModAPI;
 using VRageMath;
-using IOTA.ModularJumpGates.API.ModAPI.Util;
 
 namespace IOTA.ModularJumpGates.API.ModAPI
 {
@@ -713,6 +713,16 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		{
 			return this.GetMethod<Func<long, bool>>("IsPlayerFactionRelationValid")(player_identity);
 		}
+
+		/// <summary>
+		/// Gets the list of waypoints this controller has<br />
+		/// This is client dependent
+		/// </summary>
+		/// <returns>An enumerable containing this controller's waypoints</returns>
+		public IEnumerable<MyAPIJumpGateWaypoint> GetWaypointsList()
+		{
+			return this.GetMethod<Func<IEnumerable<byte[]>>>("GetWaypointsList")().Select(MyAPIGateway.Utilities.SerializeFromBinary<MyAPIJumpGateWaypoint>);
+		}
 	}
 
 	public class MyModAPIJumpGateDrive : MyModAPICubeBlockBase
@@ -921,6 +931,26 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		}
 
 		/// <summary>
+		/// </summary>
+		/// <param name="channel">The channel to check</param>
+		/// <param name="steam_id">The player's steam ID to check</param>
+		/// <returns>True if the caller's faction can jump to this gate</returns>
+		public bool IsFactionRelationValid(byte channel, ulong steam_id)
+		{
+			return this.GetMethod<Func<byte, ulong, bool>>("IsSteamFactionRelationValid")(channel, steam_id);
+		}
+
+		/// <summary>
+		/// </summary>
+		/// <param name="channel">The channel to check</param>
+		/// <param name="player_identity">The player's identiy to check</param>
+		/// <returns>True if the caller's faction can jump to this gate</returns>
+		public bool IsFactionRelationValid(byte channel, long player_identity)
+		{
+			return this.GetMethod<Func<byte, long, bool>>("IsPlayerFactionRelationValid")(channel, player_identity);
+		}
+
+		/// <summary>
 		/// Gets the control channel this jump gate is bound to
 		/// </summary>
 		/// <param name="gate">The gate to check</param>
@@ -1017,6 +1047,17 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		public IEnumerable<MyModAPIJumpGateRemoteAntenna> GetNearbyAntennas()
 		{
 			return this.GetMethod<Func<IEnumerable<Dictionary<string, object>>>>("GetNearbyAntennas")().Select(MyModAPIJumpGateRemoteAntenna.New);
+		}
+
+		/// <summary>
+		/// Gets the list of waypoints this controller has<br />
+		/// This is client dependent
+		/// </summary>
+		/// <param name="channel">The channel who's visible waypoints to get</param>
+		/// <returns>An enumerable containing this controller's waypoints</returns>
+		public IEnumerable<MyAPIJumpGateWaypoint> GetWaypointsList(byte channel)
+		{
+			return this.GetMethod<Func<byte, IEnumerable<byte[]>>>("GetWaypointsList")(channel).Select(MyAPIGateway.Utilities.SerializeFromBinary<MyAPIJumpGateWaypoint>);
 		}
 	}
 

@@ -21,7 +21,7 @@ namespace IOTA.ModularJumpGates.Animations
 						Duration = 600,
 						Animations = new AttributeAnimationDef {
 							ParticleScaleAnimation = new DoubleKeyframe[] {
-								new DoubleKeyframe(0, 0.1) * AnimationExpression.VectorMax(AnimationSourceEnum.ENTITY_FACING_EXTENTS),
+								new DoubleKeyframe(0, 0.01) * AnimationExpression.VectorMax(AnimationSourceEnum.ENTITY_FACING_EXTENTS),
 							},
 							ParticleOffsetAnimation = new VectorKeyframe[] {
 								new VectorKeyframe(0, new Vector4D(0, 0, 1.5, 0)) * AnimationExpression.VectorMax(AnimationSourceEnum.ENTITY_EXTENTS),

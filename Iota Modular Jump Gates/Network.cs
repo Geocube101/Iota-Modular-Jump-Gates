@@ -17,7 +17,7 @@ namespace IOTA.ModularJumpGates
 		/// <summary>
 		/// Class for sending data
 		/// </summary>
-		[ProtoContract]
+		[ProtoContract(UseProtoMembersOnly = true)]
 		internal class Packet
 		{
 			#region Private Variables
@@ -66,9 +66,15 @@ namespace IOTA.ModularJumpGates
 			public bool Broadcast = false;
 
 			/// <summary>
-			/// The base64 string containing this packet's payload
+			/// The mod ID that sent this packet
 			/// </summary>
 			[ProtoMember(8)]
+			public string ModID { get; private set; } = null;
+
+			/// <summary>
+			/// The base64 string containing this packet's payload
+			/// </summary>
+			[ProtoMember(9)]
 			public string Buffer { get; private set; }
 
 			/// <summary>
@@ -97,6 +103,7 @@ namespace IOTA.ModularJumpGates
 				this.EpochTime = (ulong) (DateTime.UtcNow - DateTime.MinValue).Ticks;
 				this.SenderID = MyAPIGateway.Multiplayer.MyId;
 				this.TargetID = this.Broadcast || this.TargetID == 0 ? server : this.TargetID;
+				this.ModID = MyJumpGateModSession.Network.ModID;
 				++this.PhaseFrame;
 				byte[] data = MyAPIGateway.Utilities.SerializeToBinary(this);
 
@@ -232,6 +239,11 @@ namespace IOTA.ModularJumpGates
 		/// The channel this network interface was registered on
 		/// </summary>
 		public readonly ushort ChannelID;
+
+		/// <summary>
+		/// The mod ID of this mod
+		/// </summary>
+		public readonly string ModID;
 		#endregion
 
 		#region Constructors
@@ -240,9 +252,11 @@ namespace IOTA.ModularJumpGates
 		/// This does not register the interface
 		/// </summary>
 		/// <param name="channel_id">The channel to initialize on</param>
-		public MyNetworkInterface(ushort channel_id)
+		public MyNetworkInterface(ushort channel_id, string modid)
 		{
 			this.ChannelID = channel_id;
+			this.ModID = modid;
+			if (modid == null) Logger.Warn($"Network interface mod id was null, packets may contain interference data");
 		}
 		#endregion
 
@@ -275,7 +289,7 @@ namespace IOTA.ModularJumpGates
 				return;
 			}
 
-			if (packet.SenderID == MyAPIGateway.Multiplayer.MyId || !packet.Broadcast && packet.TargetID != MyAPIGateway.Multiplayer.MyId) return;
+			if (packet.SenderID == MyAPIGateway.Multiplayer.MyId || (!packet.Broadcast && packet.TargetID != MyAPIGateway.Multiplayer.MyId) || packet.ModID != this.ModID) return;
 			else if (MyNetworkInterface.IsMultiplayerServer)
 			{
 				double this_epoch = (ulong) (DateTime.UtcNow - DateTime.MinValue).Ticks;
@@ -370,10 +384,8 @@ namespace IOTA.ModularJumpGates
 		public void On(MyPacketTypeEnum type, Action<Packet> callback)
 		{
 			if (!this.Registered) return;
-			this.EventCallbacks.AddOrUpdate(type, new List<Action<Packet>>() { callback }, (old_type, callbacks) => {
-				lock (this.MutexLock) callbacks.Add(callback);
-				return callbacks;
-			});
+			List<Action<Packet>> callbacks = this.EventCallbacks.GetOrAdd(type, new List<Action<Packet>>());
+			lock (this.MutexLock) if (!callbacks.Contains(callback)) callbacks.Add(callback);
 		}
 
 		/// <summary>
@@ -383,8 +395,9 @@ namespace IOTA.ModularJumpGates
 		/// <param name="callback">The callback to unbind</param>
 		public void Off(MyPacketTypeEnum type, Action<Packet> callback)
 		{
-			if (!this.EventCallbacks.ContainsKey(type)) return;
-			lock (this.MutexLock) if (this.EventCallbacks[type].Contains(callback)) this.EventCallbacks[type].Remove(callback);
+			List<Action<Packet>> callbacks;
+			if (!this.EventCallbacks.TryGetValue(type, out callbacks)) return;
+			lock (this.MutexLock) if (callbacks.Contains(callback)) callbacks.Remove(callback);
 		}
 		#endregion
 	}

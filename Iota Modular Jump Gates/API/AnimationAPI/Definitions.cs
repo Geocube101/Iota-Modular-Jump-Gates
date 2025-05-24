@@ -616,17 +616,6 @@ namespace IOTA.ModularJumpGates.API.AnimationAPI.Definitions
 		[ProtoMember(11)]
 		public NodePhysicsDef AntiNodePhysics = null;
 		#endregion
-
-		#region Internal Methods
-		/// <summary>
-		/// Finalizes this animation<br />
-		/// MyAnimation keyframes are sorted by position
-		/// </summary>
-		internal void Prepare()
-		{
-
-		}
-		#endregion
 	}
 
 	/// <summary>
@@ -737,17 +726,6 @@ namespace IOTA.ModularJumpGates.API.AnimationAPI.Definitions
 		[ProtoMember(15)]
 		public NodePhysicsDef AntiNodePhysics = null;
 		#endregion
-
-		#region Internal Methods
-		/// <summary>
-		/// Finalizes this animation<br />
-		/// MyAnimation keyframes are sorted by position
-		/// </summary>
-		internal void Prepare()
-		{
-
-		}
-		#endregion
 	}
 
 	/// <summary>
@@ -832,17 +810,6 @@ namespace IOTA.ModularJumpGates.API.AnimationAPI.Definitions
 		/// </summary>
 		[ProtoMember(11)]
 		public NodePhysicsDef AntiNodePhysics = null;
-		#endregion
-
-		#region Internal Methods
-		/// <summary>
-		/// Finalizes this animation<br />
-		/// MyAnimation keyframes are sorted by position
-		/// </summary>
-		internal void Prepare()
-		{
-
-		}
 		#endregion
 	}
 
@@ -943,19 +910,6 @@ namespace IOTA.ModularJumpGates.API.AnimationAPI.Definitions
 			this.Description = description;
 			this.SerializeOnEnd = serialize;
 			MyAnimationAPISession.AddAnimation(this);
-		}
-		#endregion
-
-		#region Internal Methods
-		/// <summary>
-		/// Finalizes this animation<br />
-		/// MyAnimation keyframes are sorted by position
-		/// </summary>
-		internal void Prepare()
-		{
-			this.JumpingAnimationDef?.Prepare();
-			this.JumpedAnimationDef?.Prepare();
-			this.FailedAnimationDef?.Prepare();
 		}
 		#endregion
 	}

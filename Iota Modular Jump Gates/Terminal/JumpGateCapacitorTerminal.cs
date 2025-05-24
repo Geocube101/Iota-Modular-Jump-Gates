@@ -1,4 +1,5 @@
 ﻿using IOTA.ModularJumpGates.CubeBlock;
+using IOTA.ModularJumpGates.Util;
 using Sandbox.ModAPI;
 using Sandbox.ModAPI.Interfaces.Terminal;
 using System.Collections.Generic;
@@ -173,7 +174,9 @@ namespace IOTA.ModularJumpGates.Terminal
 
 		public static void Load(IMyModContext context)
 		{
-			if (MyJumpGateCapacitorTerminal.IsLoaded) return;
+			List<IMyTerminalControl> controls;
+			MyAPIGateway.TerminalControls.GetControls<IMyUpgradeModule>(out controls);
+			if (MyJumpGateCapacitorTerminal.IsLoaded || controls.Count == 0) return;
 			MyJumpGateCapacitorTerminal.IsLoaded = true;
 			MyJumpGateCapacitorTerminal.SetupJumpGateCapacitorTerminalControls();
 			MyJumpGateCapacitorTerminal.SetupJumpGateCapacitorTerminalActions();

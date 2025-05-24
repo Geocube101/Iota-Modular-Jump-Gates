@@ -5,7 +5,8 @@ using System.Collections.Generic;
 namespace IOTA.ModularJumpGates.Util.ConcurrentCollections
 {
 	/// <summary>
-	/// A concurrent hashset allowing iteration with a single linked list
+	/// A concurrent hashset allowing iteration with a single linked list<br />
+	/// Operations are locked with an RW lock
 	/// </summary>
 	/// <typeparam name="T">The type of elements stored</typeparam>
 	public class ConcurrentLinkedHashSet<T> : ICollection<T>
@@ -52,52 +53,6 @@ namespace IOTA.ModularJumpGates.Util.ConcurrentCollections
 				LinkedNode clone = new LinkedNode(this.Value, this.Bucket, null, prev);
 				clone.Next = this.Next?.CloneStack(clone);
 				return clone;
-			}
-		}
-
-		public class ConcurrentLinkedHashSetIterator : IEnumerator<T>
-		{
-			private LinkedNode Root;
-			private LinkedNode CurrentNode;
-
-			public ConcurrentLinkedHashSetIterator(ConcurrentLinkedHashSet<T> hashset)
-			{
-				if (hashset == null) throw new ArgumentNullException(nameof(hashset));
-				this.Root = new LinkedNode(default(T), -1, hashset.FirstEntry, null);
-				this.CurrentNode = this.Root;
-			}
-
-			public T Current
-			{
-				get
-				{
-					return this.CurrentNode.Value;
-				}
-			}
-
-			object IEnumerator.Current
-			{
-				get
-				{
-					return this.CurrentNode.Value;
-				}
-			}
-
-			public void Dispose()
-			{
-				this.Root = null;
-				this.CurrentNode = null;
-			}
-
-			public bool MoveNext()
-			{
-				this.CurrentNode = this.CurrentNode.Next;
-				return this.CurrentNode != null;
-			}
-
-			public void Reset()
-			{
-				this.CurrentNode = this.Root;
 			}
 		}
 
@@ -279,64 +234,63 @@ namespace IOTA.ModularJumpGates.Util.ConcurrentCollections
 
 		public bool Remove(T item)
 		{
-			if (item == null) return false;
+			if (item == null || this.FirstEntry == null) return false;
 			int bucket = item.GetHashCode();
 
 			using (this.RWLock.WithWriter())
 			{
 				LinkedNode curr = this.Buckets.GetValueOrDefault(bucket, null);
 				if (curr == null) return false;
-				LinkedNode last = null;
-				LinkedNode next = null;
-
+				
 				while (curr != null)
 				{
-					bool found = object.Equals(curr.Value, item);
-					next = curr.NextNode;
-
-					if (found && curr == this.FirstEntry)
-					{
-						if (next == null) this.Buckets.Remove(bucket);
-						else this.Buckets[bucket] = next;
-						this.FirstEntry = curr.Next;
-						--this.Count;
-						return true;
-					}
-					else if (found && last == null)
-					{
-						if (next == null) this.Buckets.Remove(bucket);
-						else this.Buckets[bucket] = next;
-						curr.Prev.Next = next;
-						this.LastEntry = (curr == this.LastEntry) ? curr.Prev : this.LastEntry;
-						this.FirstEntry = (curr == this.FirstEntry) ? curr.Next : this.FirstEntry;
-						--this.Count;
-						return true;
-					}
-					else if (found)
-					{
-						last.Next = curr.Next;
-						this.LastEntry = (curr == this.LastEntry) ? curr.Prev : this.LastEntry;
-						this.FirstEntry = (curr == this.FirstEntry) ? curr.Next : this.FirstEntry;
-						--this.Count;
-						return true;
-					}
-
-					last = curr;
-					curr = next;
+					if (!object.Equals(curr.Value, item)) break;
+					curr = curr.NextNode;
 				}
 
-				return false;
+				if (curr == null) return false;
+				else if (curr == this.FirstEntry && curr.Next != null)
+				{
+					this.FirstEntry = curr.Next;
+					curr.Next.Prev = null;
+				}
+				else if (curr == this.FirstEntry) this.FirstEntry = curr.Next;
+				else if (curr == this.LastEntry && curr.Prev != null)
+				{
+					this.LastEntry = curr.Prev;
+					curr.Prev.Next = null;
+				}
+				else if (curr == this.LastEntry) this.LastEntry = curr.Prev;
+				else
+				{
+					curr.Prev.Next = curr.Next;
+					curr.Next.Prev = curr.Prev;
+				}
+
+				return true;
 			}
 		}
 
 		public IEnumerator<T> GetEnumerator()
 		{
-			return new ConcurrentLinkedHashSetIterator(this);
+			LinkedNode node = this.FirstEntry;
+
+			while (node != null)
+			{
+				yield return node.Value;
+				node = node.Next;
+			}
 		}
 
 		IEnumerator IEnumerable.GetEnumerator()
 		{
-			return new ConcurrentLinkedHashSetIterator(this);
+			LinkedNode node = this.FirstEntry;
+
+			while (node != null)
+			{
+				yield return node.Value;
+				node = node.Next;
+			}
 		}
 	}
 }

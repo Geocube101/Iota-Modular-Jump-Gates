@@ -350,6 +350,39 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		}
 
 		/// <summary>
+		/// Gets the equivilent MyJumpGateConstruct given a cube grid ID<br />
+		/// This will not check subgrids
+		/// </summary>
+		/// <param name="id">The cube grid ID</param>
+		/// <returns>The matching MyJumpGateConstruct or null if not found or marked closed</returns>
+		public MyModAPIJumpGateConstruct GetDirectJumpGateGrid(long id)
+		{
+			return MyModAPIJumpGateConstruct.New(this.GetMethod<Func<long, Dictionary<string, object>>>("GetDirectJumpGateGridL")(id));
+		}
+
+		/// <summary>
+		/// Gets the equivilent MyJumpGateConstruct given a cube grid<br />
+		/// This will not check subgrids
+		/// </summary>
+		/// <param name="cube_grid">The cube grid</param>
+		/// <returns>The matching MyJumpGateConstruct or null if not found or marked closed</returns>
+		public MyModAPIJumpGateConstruct GetDirectJumpGateGrid(IMyCubeGrid cube_grid)
+		{
+			return MyModAPIJumpGateConstruct.New(this.GetMethod<Func<IMyCubeGrid, Dictionary<string, object>>>("GetDirectJumpGateGridC")(cube_grid));
+		}
+
+		/// <summary>
+		/// Gets the equivilent MyJumpGateConstruct given a JumpGateUUID<br />
+		/// This will not check subgrids
+		/// </summary>
+		/// <param name="uuid">The cube grid UUID</param>
+		/// <returns>The matching MyJumpGateConstruct or null if not found or marked closed</returns>
+		public MyModAPIJumpGateConstruct GetDirectJumpGateGrid(JumpGateUUID uuid)
+		{
+			return MyModAPIJumpGateConstruct.New(this.GetMethod<Func<long[], Dictionary<string, object>>>("GetDirectJumpGateGridG")(uuid.Packed()));
+		}
+
+		/// <summary>
 		/// Gets the equivilent MyJumpGate given a JumpGateUUID
 		/// </summary>
 		/// <param name="uuid">The jump gate's JumpGateUUID</param>

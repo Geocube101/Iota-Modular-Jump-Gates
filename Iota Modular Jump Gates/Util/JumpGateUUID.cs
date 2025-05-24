@@ -1,6 +1,5 @@
 ﻿using IOTA.ModularJumpGates.CubeBlock;
 using ProtoBuf;
-using Sandbox.ModAPI;
 using System;
 
 namespace IOTA.ModularJumpGates.Util
@@ -123,8 +122,7 @@ namespace IOTA.ModularJumpGates.Util
 		/// <returns>Equality</returns>
 		public override bool Equals(object other)
 		{
-			if (other == null || !(other is JumpGateUUID)) return false;
-			else return this.Equals((JumpGateUUID) other);
+			return other != null && other is JumpGateUUID && this.Equals((JumpGateUUID) other);
 		}
 
 		/// <summary>

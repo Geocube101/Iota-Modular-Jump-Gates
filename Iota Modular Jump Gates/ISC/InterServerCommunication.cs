@@ -31,6 +31,7 @@ namespace IOTA.ModularJumpGates.ISC
 	 * 
 	 * Server Config - ISCAllowed:
 	 * An integer value representing what ISC connections are allowed
+	 * Server config window may use a dropdown menu here
 	 * This setting may be read by the modding API
 	 * Default is decidable but should probably be 1 or 2
 	 * See below for possible values
@@ -98,13 +99,13 @@ namespace IOTA.ModularJumpGates.ISC
 	 */
 	public static class MyInterServerCommunication
 	{
-		/* Called at end of session
+		/* Called at end of session internally by game after all mod session components unloaded
 		 * Closes all open "CommSockets" and unregisters all handlers
 		 * Any further connection is refused
 		 */
 		internal static void Close() { }
 
-		/* Called at beginning of session
+		/* Called at beginning of session internally by game before any mod session component loaded
 		 * Opens a listener to listen for incoming connections depending on server ISC config
 		 */
 		internal static void Init() { }
@@ -165,13 +166,12 @@ namespace IOTA.ModularJumpGates.ISC
 	 * Connection is a pipe for transmitting bytes
 	 * Instance is created with underlying connection already established by the "MyInterServerCommunication" class
 	 */
-	public class CommSocket
+	public class CommSocket : IDisposable
 	{
 		/* ~ Destructor ~
 		 * Close the connection when instance is garbage collected and if connection is still open
-		 * Theoretically, connection should already be closed from "MyInterServerCommunication"
 		 */
-		~CommSocket() { }
+		public void Dispose() { }
 
 		/* bool IsSender - True if this server initiated the connection or can write to the pipe
 		 * ... If the implentation is a duplex pipe, this can be skipped or always true

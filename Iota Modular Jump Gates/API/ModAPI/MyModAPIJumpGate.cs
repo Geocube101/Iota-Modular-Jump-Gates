@@ -407,6 +407,15 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		/// Whether this grid is valid and a controller attached
 		/// </summary>
 		/// <returns>True if complete</returns>
+		public bool IsControlled()
+		{
+			return this.GetMethod<Func<bool>>("IsControlled")();
+		}
+
+		/// <summary>
+		/// Whether this grid is valid and a controller attached
+		/// </summary>
+		/// <returns>True if controlled</returns>
 		public bool IsComplete()
 		{
 			return this.GetMethod<Func<bool>>("IsComplete")();

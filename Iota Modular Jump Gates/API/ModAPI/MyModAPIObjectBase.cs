@@ -34,7 +34,7 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 			for (byte i = 0; i < 100; ++i)
 			{
 				try { return (T) MyModAPIObjectBase.APIObjects.GetValueOrDefault(guid, dynamic = (dynamic ?? factory())); }
-				catch (ArgumentException _) { }
+				catch (ArgumentException) { }
 			}
 
 			return null;

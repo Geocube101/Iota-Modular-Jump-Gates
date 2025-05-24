@@ -18,8 +18,10 @@ namespace IOTA.ModularJumpGates.Util
         {
             if (!MyJumpGateModSession.DebugMode && (MyJumpGateModSession.Configuration != null && verbosity > MyJumpGateModSession.Configuration.GeneralConfiguration.DebugLogVerbosity)) return;
             message = string.Join("\n  ...  ", message.Split('\n').Where((s) => s.Trim().Length > 0));
-            MyLog.Default.WriteLineAndConsole($"[ {MyJumpGateModSession.MODID} ] [ DEBUG -> {verbosity} ]: {message}");
-        }
+            message = $"[ {MyJumpGateModSession.MODID} ] [ DEBUG -> {verbosity} ]: {message}";
+			MyLog.Default.WriteLine(message);
+            if (verbosity < 3) MyLog.Default.WriteLineToConsole(message);
+		}
 
         /// <summary>
         /// Writes a message with the "Log" prefix

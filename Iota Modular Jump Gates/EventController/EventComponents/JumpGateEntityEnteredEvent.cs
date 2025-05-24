@@ -14,11 +14,12 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 	internal class JumpGateEntityEnteredEvent : MyJumpGateEventBase<bool>
 	{
 		private bool? TriggerIndex = null;
-		private readonly List<MyJumpGate> ListiningJumpGates = new List<MyJumpGate>();
+		private readonly List<MyJumpGate> ListeningJumpGates = new List<MyJumpGate>();
 
 		public override bool IsThresholdUsed => false;
 		public override bool IsConditionSelectionUsed => false;
 		public override bool IsBlocksListUsed => false;
+		public override bool IsJumpGateSelectionUsed => true;
 		public override long UniqueSelectionId => 0x7FFFFFFFFFFFFFFC;
 		public override MyStringId EventDisplayName => MyStringId.GetOrCompute(MyTexts.GetString("DisplayName_JumpGateEntityEnteredEvent"));
 		public override string ComponentTypeDebugString => nameof(JumpGateEntityEnteredEvent);
@@ -27,7 +28,12 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 
 		private void OnEntityCollision(MyJumpGate caller, MyEntity entity, bool is_entering)
 		{
-			if (!this.IsListeningToJumpGate(caller)) return;
+			if (!this.IsListeningToJumpGate(caller))
+			{
+				caller.EntityEnterered -= this.OnEntityCollision;
+				return;
+			}
+			
 			this.TriggerIndex = is_entering;
 		}
 
@@ -49,7 +55,7 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 
 		protected override bool GetValueFromJumpGate(MyJumpGate jump_gate)
 		{
-			if (this.ListiningJumpGates.Contains(jump_gate)) return true;
+			if (this.ListeningJumpGates.Contains(jump_gate)) return true;
 			this.OnJumpGateAdded(jump_gate);
 			return true;
 		}
@@ -61,18 +67,34 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 
 		protected override void OnJumpGateAdded(MyJumpGate jump_gate)
 		{
+			MyAPIGateway.Utilities.ShowNotification("GATE_ADDED_0");
 			base.OnJumpGateAdded(jump_gate);
-			if (!MyNetworkInterface.IsServerLike) return;
+			if (!MyNetworkInterface.IsServerLike || this.ListeningJumpGates.Contains(jump_gate)) return;
 			jump_gate.EntityEnterered += this.OnEntityCollision;
-			this.ListiningJumpGates.Add(jump_gate);
+			this.ListeningJumpGates.Add(jump_gate);
+			MyAPIGateway.Utilities.ShowNotification("GATE_ADDED_1");
 		}
 
 		protected override void OnJumpGateRemoved(MyJumpGate jump_gate)
 		{
+			MyAPIGateway.Utilities.ShowNotification("GATE_REMOVED_0");
 			base.OnJumpGateAdded(jump_gate);
 			if (!MyNetworkInterface.IsServerLike) return;
 			jump_gate.EntityEnterered -= this.OnEntityCollision;
-			this.ListiningJumpGates.Remove(jump_gate);
+			this.ListeningJumpGates.Remove(jump_gate);
+			MyAPIGateway.Utilities.ShowNotification("GATE_REMOVED_1");
+		}
+
+		protected override void OnSelected()
+		{
+			base.OnSelected();
+			foreach (MyJumpGate listener in this.ListeningJumpGates) listener.EntityEnterered += this.OnEntityCollision;
+		}
+
+		protected override void OnUnselected()
+		{
+			base.OnUnselected();
+			foreach (MyJumpGate listener in this.ListeningJumpGates) listener.EntityEnterered -= this.OnEntityCollision;
 		}
 
 		public override void CreateTerminalInterfaceControls<T>()

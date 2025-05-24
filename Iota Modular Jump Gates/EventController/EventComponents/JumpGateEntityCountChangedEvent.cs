@@ -17,6 +17,7 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 		public override bool IsThresholdUsed => false;
 		public override bool IsConditionSelectionUsed => true;
 		public override bool IsBlocksListUsed => false;
+		public override bool IsJumpGateSelectionUsed => true;
 		public override long UniqueSelectionId => 0x7FFFFFFFFFFFFFFD;
 		public override MyStringId EventDisplayName => MyStringId.GetOrCompute(MyTexts.GetString("DisplayName_JumpGateEntityCountChangedEvent"));
 
@@ -47,7 +48,7 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 
 		protected override bool IsJumpGateValidForList(MyJumpGate jump_gate)
 		{
-			return base.IsJumpGateValidForList(jump_gate) && jump_gate.IsComplete();
+			return base.IsJumpGateValidForList(jump_gate) && jump_gate.IsControlled();
 		}
 
 		protected override int GetValueFromJumpGate(MyJumpGate jump_gate)

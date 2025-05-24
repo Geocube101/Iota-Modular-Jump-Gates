@@ -16,6 +16,7 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 		public override bool IsThresholdUsed => false;
 		public override bool IsConditionSelectionUsed => true;
 		public override bool IsBlocksListUsed => false;
+		public override bool IsJumpGateSelectionUsed => true;
 		public override long UniqueSelectionId => 0x7FFFFFFFFFFFFFF5;
 		public override MyStringId EventDisplayName => MyStringId.GetOrCompute(MyTexts.GetString("DisplayName_JumpGateTargetDistanceChangedEvent"));
 		public override string ComponentTypeDebugString => nameof(JumpGateTargetDistanceChangedEvent);

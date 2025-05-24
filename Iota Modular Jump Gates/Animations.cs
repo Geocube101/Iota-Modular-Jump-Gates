@@ -3850,13 +3850,14 @@ namespace IOTA.ModularJumpGates
 		/// <summary>
 		/// Ticks this animation, ticking all sounds, particles, physics, and other effects
 		/// </summary>
+		/// <param name="caller">Entity who this animation is for</param>
 		/// <param name="endpoint">The calling jump gate's targeted endpoint (may be affected by normal override)</param>
 		/// <param name="anti_node">The calling jump gate's true targeted endpoint</param>
 		/// <param name="jump_gate_drives">The calling jump gate's associated drives</param>
 		/// <param name="target_jump_gate_drives">The targeted jump gate's associated drives</param>
 		/// <param name="jump_gate_entities">The calling jump gate's jump space entities</param>
 		/// <param name="world_jump_node">The calling jump gate's world jump node</param>
-		public virtual void Tick(ref Vector3D endpoint, ref Vector3D anti_node, ref Vector3D world_jump_node, List<MyJumpGateDrive> jump_gate_drives, List<MyJumpGateDrive> target_jump_gate_drives, List<MyEntity> jump_gate_entities) { }
+		public virtual void Tick(IMyPlayer caller, ref Vector3D endpoint, ref Vector3D anti_node, ref Vector3D world_jump_node, List<MyJumpGateDrive> jump_gate_drives, List<MyJumpGateDrive> target_jump_gate_drives, List<MyEntity> jump_gate_entities) { }
 
 		/// <summary>
 		/// Stops this animation
@@ -4029,9 +4030,9 @@ namespace IOTA.ModularJumpGates
 		#endregion
 
 		#region Public Methods
-		public override void Tick(ref Vector3D endpoint, ref Vector3D anti_node, ref Vector3D world_jump_node, List<MyJumpGateDrive> jump_gate_drives, List<MyJumpGateDrive> target_jump_gate_drives, List<MyEntity> jump_gate_entities)
+		public override void Tick(IMyPlayer caller, ref Vector3D endpoint, ref Vector3D anti_node, ref Vector3D world_jump_node, List<MyJumpGateDrive> jump_gate_drives, List<MyJumpGateDrive> target_jump_gate_drives, List<MyEntity> jump_gate_entities)
 		{
-			base.Tick(ref endpoint, ref anti_node, ref world_jump_node, jump_gate_drives, target_jump_gate_drives, jump_gate_entities);
+			base.Tick(caller, ref endpoint, ref anti_node, ref world_jump_node, jump_gate_drives, target_jump_gate_drives, jump_gate_entities);
 
 			if (this.CurrentTick > this.AnimationDefinition.Duration || this.StopActive)
 			{
@@ -4039,7 +4040,10 @@ namespace IOTA.ModularJumpGates
 				return;
 			}
 
-			if (!MyNetworkInterface.IsDedicatedMultiplayerServer)
+			Vector3D current_pos = MyAPIGateway.Session.Camera.Position;
+			double distance = MyJumpGateModSession.Configuration.GeneralConfiguration.DrawSyncDistance * MyJumpGateModSession.Configuration.GeneralConfiguration.DrawSyncDistance;
+
+			if (!MyNetworkInterface.IsDedicatedMultiplayerServer && (jump_gate_entities.Contains((IMyEntity) caller.Character) || Vector3D.DistanceSquared(current_pos, world_jump_node) <= distance || Vector3D.DistanceSquared(current_pos, endpoint) <= distance))
 			{
 				if (this.AnimationDefinition.PerEntityParticles != null && (this.JumpType == MyJumpTypeEnum.STANDARD || this.JumpType == MyJumpTypeEnum.OUTBOUND_VOID))
 				{
@@ -4199,9 +4203,9 @@ namespace IOTA.ModularJumpGates
 		#endregion
 
 		#region Public Methods
-		public override void Tick(ref Vector3D endpoint, ref Vector3D anti_node, ref Vector3D world_jump_node, List<MyJumpGateDrive> jump_gate_drives, List<MyJumpGateDrive> target_jump_gate_drives, List<MyEntity> jump_gate_entities)
+		public override void Tick(IMyPlayer caller, ref Vector3D endpoint, ref Vector3D anti_node, ref Vector3D world_jump_node, List<MyJumpGateDrive> jump_gate_drives, List<MyJumpGateDrive> target_jump_gate_drives, List<MyEntity> jump_gate_entities)
 		{
-			base.Tick(ref endpoint, ref anti_node, ref world_jump_node, jump_gate_drives, target_jump_gate_drives, jump_gate_entities);
+			base.Tick(caller, ref endpoint, ref anti_node, ref world_jump_node, jump_gate_drives, target_jump_gate_drives, jump_gate_entities);
 
 			if (this.CurrentTick > this.AnimationDefinition.Duration || this.StopActive)
 			{
@@ -4209,7 +4213,10 @@ namespace IOTA.ModularJumpGates
 				return;
 			}
 
-			if (!MyNetworkInterface.IsDedicatedMultiplayerServer)
+			Vector3D current_pos = MyAPIGateway.Session.Camera.Position;
+			double distance = MyJumpGateModSession.Configuration.GeneralConfiguration.DrawSyncDistance * MyJumpGateModSession.Configuration.GeneralConfiguration.DrawSyncDistance;
+
+			if (!MyNetworkInterface.IsDedicatedMultiplayerServer && (jump_gate_entities.Contains((IMyEntity) caller.Character) || Vector3D.DistanceSquared(current_pos, world_jump_node) <= distance || Vector3D.DistanceSquared(current_pos, endpoint) <= distance))
 			{
 				if (this.AnimationDefinition.PerEntityParticles != null && (this.JumpType == MyJumpTypeEnum.STANDARD || this.JumpType == MyJumpTypeEnum.OUTBOUND_VOID))
 				{
@@ -4419,9 +4426,9 @@ namespace IOTA.ModularJumpGates
 		#endregion
 
 		#region Public Methods
-		public override void Tick(ref Vector3D endpoint, ref Vector3D anti_node, ref Vector3D world_jump_node, List<MyJumpGateDrive> jump_gate_drives, List<MyJumpGateDrive> target_jump_gate_drives, List<MyEntity> jump_gate_entities)
+		public override void Tick(IMyPlayer caller, ref Vector3D endpoint, ref Vector3D anti_node, ref Vector3D world_jump_node, List<MyJumpGateDrive> jump_gate_drives, List<MyJumpGateDrive> target_jump_gate_drives, List<MyEntity> jump_gate_entities)
 		{
-			base.Tick(ref endpoint, ref anti_node, ref world_jump_node, jump_gate_drives, target_jump_gate_drives, jump_gate_entities);
+			base.Tick(caller, ref endpoint, ref anti_node, ref world_jump_node, jump_gate_drives, target_jump_gate_drives, jump_gate_entities);
 
 			if (this.CurrentTick > this.AnimationDefinition.Duration || this.StopActive)
 			{
@@ -4429,7 +4436,10 @@ namespace IOTA.ModularJumpGates
 				return;
 			}
 
-			if (!MyNetworkInterface.IsDedicatedMultiplayerServer)
+			Vector3D current_pos = MyAPIGateway.Session.Camera.Position;
+			double distance = MyJumpGateModSession.Configuration.GeneralConfiguration.DrawSyncDistance * MyJumpGateModSession.Configuration.GeneralConfiguration.DrawSyncDistance;
+
+			if (!MyNetworkInterface.IsDedicatedMultiplayerServer && (jump_gate_entities.Contains((IMyEntity) caller.Character) || Vector3D.DistanceSquared(current_pos, world_jump_node) <= distance || Vector3D.DistanceSquared(current_pos, endpoint) <= distance))
 			{
 				if (this.AnimationDefinition.PerEntityParticles != null && (this.JumpType == MyJumpTypeEnum.STANDARD || this.JumpType == MyJumpTypeEnum.OUTBOUND_VOID))
 				{
@@ -4571,6 +4581,8 @@ namespace IOTA.ModularJumpGates
 		#endregion
 
 		#region Public Variables
+		public readonly IMyPlayer Caller;
+
 		/// <summary>
 		/// The calling jump gate
 		/// </summary>
@@ -4655,12 +4667,13 @@ namespace IOTA.ModularJumpGates
 		/// </summary>
 		/// <param name="def">The animation definition</param>
 		/// <param name="full_name">The animation's full name</param>
+		/// <param name="caller">Player activating this animation</param>
 		/// <param name="jump_gate">The calling jump gate</param>
 		/// <param name="target_gate">The targeted jump gate or null</param>
 		/// <param name="controller_settings">The controller settings used to activate said jump gate</param>
 		/// <param name="endpoint">The jump gate's targeted endpoint</param>
 		/// <param name="jump_type">The jump type of the calling gate</param>
-		public MyJumpGateAnimation(AnimationDef def, string full_name, MyJumpGate jump_gate, MyJumpGate target_gate, MyJumpGateController.MyControllerBlockSettingsStruct controller_settings, MyJumpGateController.MyControllerBlockSettingsStruct target_controller_settings, ref Vector3D endpoint, MyJumpTypeEnum jump_type)
+		public MyJumpGateAnimation(AnimationDef def, string full_name, IMyPlayer caller, MyJumpGate jump_gate, MyJumpGate target_gate, MyJumpGateController.MyControllerBlockSettingsStruct controller_settings, MyJumpGateController.MyControllerBlockSettingsStruct target_controller_settings, ref Vector3D endpoint, MyJumpTypeEnum jump_type)
 		{
 			this.GateJumpingAnimationDef = def.JumpingAnimationDef;
 			this.GateJumpedAnimationDef = def.JumpedAnimationDef;
@@ -4673,6 +4686,7 @@ namespace IOTA.ModularJumpGates
 			this.FullAnimationName = full_name;
 			this.ImmediateCancel = def.ImmediateCancel;
 			this.GateJumpType = jump_type;
+			this.Caller = caller;
 		}
 		#endregion
 
@@ -4802,15 +4816,15 @@ namespace IOTA.ModularJumpGates
 				{
 					case 0:
 						if (this.GateJumpingAnimation == null) this.GateJumpingAnimation = (this.GateJumpingAnimationDef == null) ? null : new MyJumpGateJumpingAnimation(this.GateJumpingAnimationDef, this.JumpGate, this.TargetGate, this.ControllerSettings, ref endpoint, ref anti_node, this.GateJumpType);
-						this.GateJumpingAnimation?.Tick(ref endpoint, ref anti_node, ref target_world_jump_node, drives, anti_drives, this.TEMP_JumpGateEntitiesL);
+						this.GateJumpingAnimation?.Tick(this.Caller, ref endpoint, ref anti_node, ref target_world_jump_node, drives, anti_drives, this.TEMP_JumpGateEntitiesL);
 						break;
 					case 1:
 						if (this.GateJumpedAnimation == null) this.GateJumpedAnimation = (this.GateJumpedAnimationDef == null) ? null : new MyJumpGateJumpedAnimation(this.GateJumpedAnimationDef, this.JumpGate, this.TargetGate, this.ControllerSettings, ref endpoint, ref anti_node, this.GateJumpType);
-						this.GateJumpedAnimation?.Tick(ref endpoint, ref anti_node, ref target_world_jump_node, drives, anti_drives, this.TEMP_JumpGateEntitiesL);
+						this.GateJumpedAnimation?.Tick(this.Caller, ref endpoint, ref anti_node, ref target_world_jump_node, drives, anti_drives, this.TEMP_JumpGateEntitiesL);
 						break;
 					case 2:
 						if (this.GateFailedAnimation == null) this.GateFailedAnimation = (this.GateFailedAnimationDef == null) ? null : new MyJumpGateFailedAnimation(this.GateFailedAnimationDef, this.JumpGate, this.TargetGate, this.ControllerSettings, ref endpoint, ref anti_node, this.GateJumpType);
-						this.GateFailedAnimation?.Tick(ref endpoint, ref anti_node, ref target_world_jump_node, drives, anti_drives, this.TEMP_JumpGateEntitiesL);
+						this.GateFailedAnimation?.Tick(this.Caller, ref endpoint, ref anti_node, ref target_world_jump_node, drives, anti_drives, this.TEMP_JumpGateEntitiesL);
 						break;
 				}
 			}
@@ -5141,16 +5155,17 @@ namespace IOTA.ModularJumpGates
 		/// Gets a playable animation
 		/// </summary>
 		/// <param name="name">The animation's full name</param>
+		/// <param name="caller">PLayer who activated this animation</param>
 		/// <param name="jump_gate">The calling jump gate</param>
 		/// <param name="target_gate">The targeted jump gate or null</param>
 		/// <param name="controller_settings">The controller settings used to activate the jump gate</param>
 		/// <param name="endpoint">The jump gate's targeted endpoint</param>
 		/// <returns>The playabe animation wrapper</returns>
-		public static MyJumpGateAnimation GetAnimation(string name, MyJumpGate jump_gate, MyJumpGate target_gate, MyJumpGateController.MyControllerBlockSettingsStruct controller_settings, MyJumpGateController.MyControllerBlockSettingsStruct target_controller_settings, ref Vector3D endpoint, MyJumpTypeEnum jump_type)
+		public static MyJumpGateAnimation GetAnimation(string name, IMyPlayer caller, MyJumpGate jump_gate, MyJumpGate target_gate, MyJumpGateController.MyControllerBlockSettingsStruct controller_settings, MyJumpGateController.MyControllerBlockSettingsStruct target_controller_settings, ref Vector3D endpoint, MyJumpTypeEnum jump_type)
 		{
 			AnimationDef animation_def = MyAnimationHandler.GetAnimationDef(name, jump_gate);
 			if (animation_def == null || jump_gate == null || (!MyNetworkInterface.IsStandaloneMultiplayerClient && !jump_gate.IsValid())) return null;
-			return new MyJumpGateAnimation(animation_def, name, jump_gate, target_gate, controller_settings, target_controller_settings, ref endpoint, jump_type);
+			return new MyJumpGateAnimation(animation_def, name, caller, jump_gate, target_gate, controller_settings, target_controller_settings, ref endpoint, jump_type);
 		}
 		#endregion
 	}
