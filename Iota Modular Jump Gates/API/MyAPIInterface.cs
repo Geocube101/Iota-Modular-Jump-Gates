@@ -205,7 +205,7 @@ namespace IOTA.ModularJumpGates.API
 				["BlockBase"] = this.ReturnCubeBlockBaseWrapper(block),
 				["UseGenericLcd"] = new object[2] { (Func<bool>) (() => block.UseGenericLcd), null },
 				["SurfaceCount"] = new object[2] { (Func<int>) (() => block.SurfaceCount), null },
-				["BlockSettings"] = new object[2] { (Func<Dictionary<string, object>>) (() => block.BlockSettings.ToDictionary()), (Action<Dictionary<string, object>>) ((settings) => block.BlockSettings.FromDictionary(block, settings)) },
+				["BlockSettings"] = new object[2] { (Func<Dictionary<string, object>>) (() => block.BlockSettings.ToDictionary()), (Action<Dictionary<string, object>>) ((settings) => block.BlockSettings.FromDictionary(block.AttachedJumpGate(), settings)) },
 				["SelectedWaypoint"] = new object[2] { (Func<byte[]>) (() => MyAPIGateway.Utilities.SerializeToBinary(block.BlockSettings.SelectedWaypoint())), (Action<byte[]>) ((waypoint) => block.BlockSettings.SelectedWaypoint(MyAPIGateway.Utilities.SerializeFromBinary<MyJumpGateWaypoint>(waypoint))) },
 				["RemoteAntenna"] = new object[2] { (Func<Dictionary<string, object>>) (() => this.ReturnCubeBlockRemoteAntennaWrapper(block.RemoteAntenna)), null },
 				["RemoteAntennaChannel"] = new object[2] { (Func<KeyValuePair<Dictionary<string, object>, byte>>) (() => {
@@ -235,6 +235,7 @@ namespace IOTA.ModularJumpGates.API
 				["StoredChargeMW"] = new object[2] { (Func<double>) (() => block.StoredChargeMW), null },
 				["MaxRaycastDistance"] = new object[2] { (Func<double>) (() => block.MaxRaycastDistance), null },
 				["EmitterEmissiveBrightness"] = new object[2] { (Func<double>) (() => block.EmitterEmissiveBrightness), null },
+				["BasePowerDrawMW"] = new object[2] { (Func<double>) (() => block.BasePowerDrawMW), null },
 				["JumpGateID"] = new object[2] { (Func<long>) (() => block.JumpGateID), null },
 				["DriveEmitterColor"] = new object[2] { (Func<Color>) (() => block.DriveEmitterColor), null },
 				["Configuration"] = new object[2] { (Func<Dictionary<string, object>>) (() => block.DriveConfiguration.ToDictionary()), null },
@@ -279,6 +280,14 @@ namespace IOTA.ModularJumpGates.API
 				["BlockBase"] = this.ReturnCubeBlockBaseWrapper(block),
 				["AllowedRemoteSettings"] = new object[2] { (Func<ushort>) (() => (ushort) block.BlockSettings.AllowedRemoteSettings), (Action<ushort>) ((flag) => block.BlockSettings.AllowedRemoteSettings = (MyAllowedRemoteSettings) flag) },
 				["BroadcastRange"] = new object[2] { (Func<double>) (() => block.BlockSettings.AntennaRange), (Action<double>) ((range) => block.BlockSettings.AntennaRange = MathHelper.Clamp(range, 0, 1500)) },
+				["JumpGateNames"] = new object[2] { (Func<string[]>) (() => block.BlockSettings.JumpGateNames), (Action<string[]>) ((names) => {
+					if (names == null || names.Length != MyJumpGateRemoteAntenna.ChannelCount) throw new ArgumentException($"Expected array of length {MyJumpGateRemoteAntenna.ChannelCount}, got array of length {(names?.Length.ToString() ?? "NULL")}");
+					block.BlockSettings.JumpGateNames = names;
+				}) },
+				["ControllerBlockSettings"] = new object[2] { (Func<Dictionary<string, object>[]>) (() => block.BlockSettings.BaseControllerSettings.Select((settings) => settings.ToDictionary()).ToArray()), (Action<Dictionary<string, object>[]>) ((settings) => {
+					if (settings == null || settings.Length != MyJumpGateRemoteAntenna.ChannelCount) throw new ArgumentException($"Expected array of length {MyJumpGateRemoteAntenna.ChannelCount}, got array of length {(settings?.Length.ToString() ?? "NULL")}");
+					for (byte i = 0; i < MyJumpGateRemoteAntenna.ChannelCount; ++i) block.BlockSettings.BaseControllerSettings[i].FromDictionary(block.GetInboundControlGate(i), settings[i]);
+				}) },
 				["SetGateForInboundControl"] = (Action<byte, long>) ((channel, id) => block.SetGateForInboundControl(channel, block.JumpGateGrid?.GetJumpGate(id))),
 				["SetControllerForOutboundControl"] = (Action<byte, long>) ((channel, id) => block.SetControllerForOutboundControl(channel, block.JumpGateGrid?.GetController(id))),
 				["GetJumpGateInboundControlChannel"] = (Func<long[], byte>) ((id) => block.GetJumpGateInboundControlChannel(MyJumpGateModSession.Instance.GetJumpGate(new JumpGateUUID(id)))),
@@ -295,6 +304,7 @@ namespace IOTA.ModularJumpGates.API
 				["IsPlayerFactionRelationValid"] = (Func<byte, long, bool>) block.IsFactionRelationValid,
 				["IsSteamFactionRelationValid"] = (Func<byte, ulong, bool>) block.IsFactionRelationValid,
 				["GetWaypointsList"] = (Func<byte, IEnumerable<byte[]>>) ((channel) => block.GetWaypointsList(channel).Select(MyAPIGateway.Utilities.SerializeToBinary)),
+				["GetJumpGateName"] = (Func<byte, string>) block.GetJumpGateName,
 			};
 			this.RemoteAntennaWrappers[block.BlockID] = attributes;
 			return attributes;

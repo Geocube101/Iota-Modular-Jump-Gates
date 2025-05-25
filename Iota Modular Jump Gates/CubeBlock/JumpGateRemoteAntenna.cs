@@ -1013,7 +1013,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		}
 
 		/// <summary>
-		/// Gets the name of the channel attached on the specified channel
+		/// Gets the name of the jump gate attached on the specified channel
 		/// </summary>
 		/// <param name="channel">The channel to check</param>
 		/// <returns>The attached jump gate's name or null</returns>

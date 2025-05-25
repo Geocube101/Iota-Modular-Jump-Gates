@@ -41,6 +41,12 @@ namespace IOTA.ModularJumpGates.CubeBlock
 
 		#region Private Variables
 		/// <summary>
+		/// Whether "UpdateOnceAfterInit" may be called<br />
+		/// Will be false as long as block didn't complete "UpdateOnceBeforeFrame"
+		/// </summary>
+		private bool InitFrameAvailable = false;
+
+		/// <summary>
 		/// The offset scroll value for this block's detailed info
 		/// </summary>
 		private int ScrollOffset = 0;
@@ -281,7 +287,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		{
 			base.UpdateOnceBeforeFrame();
 			MyCubeBlockBase.ModelBoundingBoxSize = (MyCubeBlockBase.ModelBoundingBoxSize == Vector3D.Zero && !this.IsNullWrapper) ? new Vector3D(this.TerminalBlock.Model.BoundingBoxSize) : MyCubeBlockBase.ModelBoundingBoxSize;
-			MyCubeBlockTerminal.Load(this.ModContext);
+			this.InitFrameAvailable = true;
 		}
 
 		/// <summary>
@@ -315,7 +321,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			base.UpdateAfterSimulation();
 			++this.LocalGameTick;
 
-			if (!this.IsInitFrameCalled && MyJumpGateModSession.Instance.InitializationComplete)
+			if (!this.IsInitFrameCalled && MyJumpGateModSession.Instance.InitializationComplete && this.InitFrameAvailable)
 			{
 				this.UpdateOnceAfterInit();
 				this.IsInitFrameCalled = true;
@@ -606,7 +612,10 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// Overridable<br />
 		/// Called once when all session constructs are initialized
 		/// </summary>
-		protected virtual void UpdateOnceAfterInit() { }
+		protected virtual void UpdateOnceAfterInit()
+		{
+			MyCubeBlockTerminal.Load(this.ModContext);
+		}
 		#endregion
 
 		#region Public Methods
@@ -629,6 +638,11 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		{
 			this.ScrollOffset = Math.Max(0, scroll_y);
 		}
+
+		/// <summary>
+		/// Reloads this block's internal configuration values if applicable
+		/// </summary>
+		public virtual void ReloadConfigurations() { }
 
 		/// <summary>
 		/// Updates this block data from a serialized block

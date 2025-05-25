@@ -94,7 +94,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			public MyControllerBlockSettingsStruct() { }
 			public MyControllerBlockSettingsStruct(MyJumpGateController controller, Dictionary<string, object> mapping)
 			{
-				this.FromDictionary(controller, mapping);
+				this.FromDictionary(controller?.AttachedJumpGate(), mapping);
 			}
 
 			public void AcquireLock()
@@ -106,9 +106,9 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				if (Monitor.IsEntered(this.WriterLock)) Monitor.Exit(this.WriterLock);
 			}
 
-			public void FromDictionary(MyJumpGateController controller, Dictionary<string, object> mapping)
+			public void FromDictionary(MyJumpGate attached_gate, Dictionary<string, object> mapping)
 			{
-				if (mapping == null || controller == null) return;
+				if (mapping == null || attached_gate == null) return;
 
 				lock (this.WriterLock)
 				{
@@ -144,7 +144,6 @@ namespace IOTA.ModularJumpGates.CubeBlock
 							result_waypoint = new MyJumpGateWaypoint(target_gate);
 						}
 
-						MyJumpGate attached_gate = controller.AttachedJumpGate();
 						Vector3D? endpoint = result_waypoint?.GetEndpoint();
 						Vector3D? node = attached_gate?.WorldJumpNode;
 

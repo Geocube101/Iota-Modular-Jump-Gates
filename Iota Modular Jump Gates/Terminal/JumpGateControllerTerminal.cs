@@ -19,6 +19,8 @@ namespace IOTA.ModularJumpGates.Terminal
 {
 	internal static class MyJumpGateControllerTerminal
 	{
+		private static readonly List<IMyTerminalControl> TerminalControls = new List<IMyTerminalControl>();
+
 		public static bool IsLoaded { get; private set; } = false;
 		public static readonly string MODID_PREFIX = MyJumpGateModSession.MODID + ".JumpGateController.";
 
@@ -102,7 +104,6 @@ namespace IOTA.ModularJumpGates.Terminal
 						}
 					}
 				};
-
 				choose_jump_gate_lb.ItemSelected = (block, selected) => {
 					if (!choose_jump_gate_lb.Enabled(block)) return;
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
@@ -125,7 +126,7 @@ namespace IOTA.ModularJumpGates.Terminal
 					controller.RemoteAntenna?.SetDirty();
 					MyJumpGateModSession.Instance.RedrawAllTerminalControls();
 				};
-
+				MyJumpGateControllerTerminal.TerminalControls.Add(choose_jump_gate_lb);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(choose_jump_gate_lb);
 			}
 
@@ -140,12 +141,10 @@ namespace IOTA.ModularJumpGates.Terminal
 					MyAllowedRemoteSettings allowed_settings = controller?.ConnectedRemoteAntenna?.BlockSettings.AllowedRemoteSettings ?? MyAllowedRemoteSettings.ALL;
 					return controller != null && controller.IsWorking && controller.JumpGateGrid != null && controller.JumpGateGrid.IsValid() && (allowed_settings & MyAllowedRemoteSettings.NAME) != 0;
 				};
-
 				jump_gate_name_tb.Getter = (block) => {
 					MyJumpGate jump_gate = MyJumpGateModSession.GetBlockAsJumpGateController(block)?.AttachedJumpGate();
 					return new StringBuilder(jump_gate?.GetName() ?? "");
 				};
-
 				jump_gate_name_tb.Setter = (block, value) => {
 					if (!jump_gate_name_tb.Enabled(block)) return;
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
@@ -153,7 +152,7 @@ namespace IOTA.ModularJumpGates.Terminal
 					else controller.BaseBlockSettings.JumpGateName(value.ToString().Replace("\n", "↵"));
 					controller.SetDirty();
 				};
-
+				MyJumpGateControllerTerminal.TerminalControls.Add(jump_gate_name_tb);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(jump_gate_name_tb);
 			}
 		}
@@ -192,6 +191,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				};
 				search_waypoint_tb.Getter = (block) => new StringBuilder(MyJumpGateControllerTerminal.ControllerSearchInputs.GetValueOrDefault(block.EntityId, ""));
 				search_waypoint_tb.Setter = (block, input) => MyJumpGateControllerTerminal.ControllerSearchInputs[block.EntityId] = input.ToString();
+				MyJumpGateControllerTerminal.TerminalControls.Add(search_waypoint_tb);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(search_waypoint_tb);
 			}
 
@@ -284,7 +284,6 @@ namespace IOTA.ModularJumpGates.Terminal
 						content_list.Add(item);
 					}
 				};
-
 				choose_waypoint_lb.ItemSelected = (block, selected) => {
 					if (!choose_waypoint_lb.Enabled(block)) return;
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
@@ -293,7 +292,7 @@ namespace IOTA.ModularJumpGates.Terminal
 					controller.SetDirty();
 					MyJumpGateModSession.Instance.RedrawAllTerminalControls();
 				};
-
+				MyJumpGateControllerTerminal.TerminalControls.Add(choose_waypoint_lb);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(choose_waypoint_lb);
 			}
 
@@ -343,7 +342,6 @@ namespace IOTA.ModularJumpGates.Terminal
 						else if ((selected_animation == null || selected_animation.Length == 0) && full_name == _default) preselect_list.Add(item);
 					}
 				};
-
 				choose_animation_lb.ItemSelected = (block, selected) => {
 					if (!choose_animation_lb.Enabled(block)) return;
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
@@ -351,7 +349,7 @@ namespace IOTA.ModularJumpGates.Terminal
 					controller.SetDirty();
 					MyJumpGateModSession.Instance.RedrawAllTerminalControls();
 				};
-
+				MyJumpGateControllerTerminal.TerminalControls.Add(choose_animation_lb);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(choose_animation_lb);
 			}
 
@@ -374,7 +372,6 @@ namespace IOTA.ModularJumpGates.Terminal
 					MyAllowedRemoteSettings allowed_settings = MyJumpGateModSession.GetBlockAsJumpGateController(block)?.ConnectedRemoteAntenna?.BlockSettings.AllowedRemoteSettings ?? MyAllowedRemoteSettings.ALL;
 					return(allowed_settings & MyAllowedRemoteSettings.ROUTING) != 0;
 				};
-
 				do_allow_inbound.Getter = (block) => MyJumpGateModSession.GetBlockAsJumpGateController(block)?.BlockSettings.CanBeInbound() ?? false;
 				do_allow_inbound.Setter = (block, value) => {
 					if (!do_allow_inbound.Enabled(block)) return;
@@ -382,7 +379,7 @@ namespace IOTA.ModularJumpGates.Terminal
 					controller.BaseBlockSettings.CanBeInbound(value);
 					controller.SetDirty();
 				};
-
+				MyJumpGateControllerTerminal.TerminalControls.Add(do_allow_inbound);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(do_allow_inbound);
 			}
 
@@ -397,7 +394,6 @@ namespace IOTA.ModularJumpGates.Terminal
 					MyAllowedRemoteSettings allowed_settings = MyJumpGateModSession.GetBlockAsJumpGateController(block)?.ConnectedRemoteAntenna?.BlockSettings.AllowedRemoteSettings ?? MyAllowedRemoteSettings.ALL;
 					return (allowed_settings & MyAllowedRemoteSettings.ROUTING) != 0;
 				};
-
 				do_allow_outbound.Getter = (block) => MyJumpGateModSession.GetBlockAsJumpGateController(block)?.BlockSettings.CanBeOutbound() ?? false;
 				do_allow_outbound.Setter = (block, value) => {
 					if (!do_allow_outbound.Enabled(block)) return;
@@ -405,7 +401,7 @@ namespace IOTA.ModularJumpGates.Terminal
 					controller.BaseBlockSettings.CanBeOutbound(value);
 					controller.SetDirty();
 				};
-
+				MyJumpGateControllerTerminal.TerminalControls.Add(do_allow_outbound);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(do_allow_outbound);
 			}
 		}
@@ -464,7 +460,6 @@ namespace IOTA.ModularJumpGates.Terminal
 						if (!blacklisted.Contains(pair.Key.EntityId)) preselect_list.Add(item);
 					}
 				};
-
 				choose_allowed_entities_lb.ItemSelected = (block, selected) => {
 					if (!choose_allowed_entities_lb.Enabled(block)) return;
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
@@ -475,7 +470,7 @@ namespace IOTA.ModularJumpGates.Terminal
 					controller.SetDirty();
 					MyJumpGateModSession.Instance.RedrawAllTerminalControls();
 				};
-
+				MyJumpGateControllerTerminal.TerminalControls.Add(choose_allowed_entities_lb);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(choose_allowed_entities_lb);
 			}
 
@@ -492,14 +487,12 @@ namespace IOTA.ModularJumpGates.Terminal
 					return controller != null && controller.IsWorking && controller.JumpGateGrid != null && !controller.JumpGateGrid.Closed && (allowed_settings & MyAllowedRemoteSettings.ENTITY_FILTER) != 0;
 				};
 				allowed_entity_mass_min.SetLimits(0f, 999e24f);
-
 				allowed_entity_mass_min.Writer = (block, string_builder) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					if (controller == null) return;
 					else if (controller.IsWorking) string_builder.Append($"{MyJumpGateModSession.AutoconvertSciNotUnits(controller.BlockSettings.AllowedEntityMass().Key, 4)} Kg");
 					else string_builder.Append($"- {MyTexts.GetString("GeneralText_Offline")} -");
 				};
-
 				allowed_entity_mass_min.Getter = (block) => MyJumpGateModSession.GetBlockAsJumpGateController(block)?.BlockSettings.AllowedEntityMass().Key ?? 0;
 				allowed_entity_mass_min.Setter = (block, value) => {
 					if (!allowed_entity_mass_min.Enabled(block)) return;
@@ -507,7 +500,7 @@ namespace IOTA.ModularJumpGates.Terminal
 					controller.BaseBlockSettings.AllowedEntityMass(value);
 					controller.SetDirty();
 				};
-
+				MyJumpGateControllerTerminal.TerminalControls.Add(allowed_entity_mass_min);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(allowed_entity_mass_min);
 
 				IMyTerminalControlSlider allowed_entity_mass_max = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSlider, IMyUpgradeModule>(MODID_PREFIX + "ControllerAllowedEntityMaximumMass");
@@ -521,14 +514,12 @@ namespace IOTA.ModularJumpGates.Terminal
 					return controller != null && controller.IsWorking && controller.JumpGateGrid != null && !controller.JumpGateGrid.Closed && (allowed_settings & MyAllowedRemoteSettings.ENTITY_FILTER) != 0;
 				};
 				allowed_entity_mass_max.SetLimits(0f, 999e24f);
-
 				allowed_entity_mass_max.Writer = (block, string_builder) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					if (controller == null) return;
 					else if (controller.IsWorking) string_builder.Append($"{MyJumpGateModSession.AutoconvertSciNotUnits(controller.BlockSettings.AllowedEntityMass().Value, 4)} Kg");
 					else string_builder.Append($"- {MyTexts.GetString("GeneralText_Offline")} -");
 				};
-
 				allowed_entity_mass_max.Getter = (block) => MyJumpGateModSession.GetBlockAsJumpGateController(block)?.BlockSettings.AllowedEntityMass().Value ?? 0;
 				allowed_entity_mass_max.Setter = (block, value) => {
 					if (!allowed_entity_mass_max.Enabled(block)) return;
@@ -536,7 +527,7 @@ namespace IOTA.ModularJumpGates.Terminal
 					controller.BaseBlockSettings.AllowedEntityMass(null, value);
 					controller.SetDirty();
 				};
-
+				MyJumpGateControllerTerminal.TerminalControls.Add(allowed_entity_mass_max);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(allowed_entity_mass_max);
 			}
 
@@ -553,7 +544,6 @@ namespace IOTA.ModularJumpGates.Terminal
 					return controller != null && controller.IsWorking && controller.JumpGateGrid != null && !controller.JumpGateGrid.Closed && (allowed_settings & MyAllowedRemoteSettings.ENTITY_FILTER) != 0;
 				};
 				allowed_cubegrid_size_min.SetLimits(0f, uint.MaxValue);
-
 				allowed_cubegrid_size_min.Writer = (block, string_builder) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					if (controller == null) return;
@@ -565,7 +555,6 @@ namespace IOTA.ModularJumpGates.Terminal
 					}
 					else string_builder.Append($"- {MyTexts.GetString("GeneralText_Offline")} -");
 				};
-
 				allowed_cubegrid_size_min.Getter = (block) => MyJumpGateModSession.GetBlockAsJumpGateController(block)?.BlockSettings.AllowedCubeGridSize().Key ?? 0;
 				allowed_cubegrid_size_min.Setter = (block, value) => {
 					if (!allowed_cubegrid_size_min.Enabled(block)) return;
@@ -573,7 +562,7 @@ namespace IOTA.ModularJumpGates.Terminal
 					controller.BaseBlockSettings.AllowedCubeGridSize((uint) value);
 					controller.SetDirty();
 				};
-
+				MyJumpGateControllerTerminal.TerminalControls.Add(allowed_cubegrid_size_min);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(allowed_cubegrid_size_min);
 
 				IMyTerminalControlSlider allowed_cubegrid_size_max = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSlider, IMyUpgradeModule>(MODID_PREFIX + "ControllerAllowedCubeGridMaximumSize");
@@ -587,7 +576,6 @@ namespace IOTA.ModularJumpGates.Terminal
 					return controller != null && controller.IsWorking && controller.JumpGateGrid != null && !controller.JumpGateGrid.Closed && (allowed_settings & MyAllowedRemoteSettings.ENTITY_FILTER) != 0;
 				};
 				allowed_cubegrid_size_max.SetLimits(0f, uint.MaxValue);
-
 				allowed_cubegrid_size_max.Writer = (block, string_builder) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					if (controller == null) return;
@@ -599,7 +587,6 @@ namespace IOTA.ModularJumpGates.Terminal
 					}
 					else string_builder.Append($"- {MyTexts.GetString("GeneralText_Offline")} -");
 				};
-
 				allowed_cubegrid_size_max.Getter = (block) => MyJumpGateModSession.GetBlockAsJumpGateController(block)?.BlockSettings.AllowedCubeGridSize().Value ?? 0;
 				allowed_cubegrid_size_max.Setter = (block, value) => {
 					if (!allowed_cubegrid_size_max.Enabled(block)) return;
@@ -607,7 +594,7 @@ namespace IOTA.ModularJumpGates.Terminal
 					controller.BaseBlockSettings.AllowedCubeGridSize(null, (uint) value);
 					controller.SetDirty();
 				};
-
+				MyJumpGateControllerTerminal.TerminalControls.Add(allowed_cubegrid_size_max);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(allowed_cubegrid_size_max);
 			}
 		}
@@ -654,7 +641,6 @@ namespace IOTA.ModularJumpGates.Terminal
 				};
 				do_auto_activate.OnText = MyStringId.GetOrCompute(MyTexts.GetString("GeneralText_On"));
 				do_auto_activate.OffText = MyStringId.GetOrCompute(MyTexts.GetString("GeneralText_Off"));
-
 				do_auto_activate.Getter = (block) => MyJumpGateModSession.GetBlockAsJumpGateController(block)?.BlockSettings.CanAutoActivate() ?? false;
 				do_auto_activate.Setter = (block, value) => {
 					if (!do_auto_activate.Enabled(block)) return;
@@ -663,7 +649,7 @@ namespace IOTA.ModularJumpGates.Terminal
 					controller.SetDirty();
 					MyJumpGateModSession.Instance.RedrawAllTerminalControls();
 				};
-
+				MyJumpGateControllerTerminal.TerminalControls.Add(do_auto_activate);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(do_auto_activate);
 			}
 
@@ -680,7 +666,6 @@ namespace IOTA.ModularJumpGates.Terminal
 					return controller != null && controller.IsWorking && controller.JumpGateGrid != null && !controller.JumpGateGrid.Closed && controller.BlockSettings.CanAutoActivate() && (allowed_settings & MyAllowedRemoteSettings.AUTO_ACTIVATE) != 0;
 				};
 				autoactivate_mass_min.SetLimits(0f, 999e24f);
-
 				autoactivate_mass_min.Writer = (block, string_builder) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					if (controller == null) return;
@@ -688,7 +673,6 @@ namespace IOTA.ModularJumpGates.Terminal
 					else if (controller.IsWorking) string_builder.Append($"{MyJumpGateModSession.AutoconvertSciNotUnits(controller.BlockSettings.AutoActivateMass().Key, 4)} Kg");
 					else string_builder.Append($"- {MyTexts.GetString("GeneralText_Offline")} -");
 				};
-
 				autoactivate_mass_min.Getter = (block) => MyJumpGateModSession.GetBlockAsJumpGateController(block)?.BlockSettings.AutoActivateMass().Key ?? 0;
 				autoactivate_mass_min.Setter = (block, value) => {
 					if (!autoactivate_mass_min.Enabled(block)) return;
@@ -696,7 +680,7 @@ namespace IOTA.ModularJumpGates.Terminal
 					controller.BaseBlockSettings.AutoActivateMass(value);
 					controller.SetDirty();
 				};
-
+				MyJumpGateControllerTerminal.TerminalControls.Add(autoactivate_mass_min);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(autoactivate_mass_min);
 
 				IMyTerminalControlSlider autoactivate_mass_max = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSlider, IMyUpgradeModule>(MODID_PREFIX + "ControllerAutoActivateMaximumMass");
@@ -710,7 +694,6 @@ namespace IOTA.ModularJumpGates.Terminal
 					return controller != null && controller.IsWorking && controller.JumpGateGrid != null && !controller.JumpGateGrid.Closed && controller.BlockSettings.CanAutoActivate() && (allowed_settings & MyAllowedRemoteSettings.AUTO_ACTIVATE) != 0;
 				};
 				autoactivate_mass_max.SetLimits(0f, 999e24f);
-
 				autoactivate_mass_max.Writer = (block, string_builder) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					if (controller == null) return;
@@ -718,7 +701,6 @@ namespace IOTA.ModularJumpGates.Terminal
 					else if (controller.IsWorking) string_builder.Append($"{MyJumpGateModSession.AutoconvertSciNotUnits(controller.BlockSettings.AutoActivateMass().Value, 4)} Kg");
 					else string_builder.Append($"- {MyTexts.GetString("GeneralText_Offline")} -");
 				};
-
 				autoactivate_mass_max.Getter = (block) => MyJumpGateModSession.GetBlockAsJumpGateController(block)?.BlockSettings.AutoActivateMass().Value ?? 0;
 				autoactivate_mass_max.Setter = (block, value) => {
 					if (!autoactivate_mass_max.Enabled(block)) return;
@@ -726,7 +708,7 @@ namespace IOTA.ModularJumpGates.Terminal
 					controller.BaseBlockSettings.AutoActivateMass(null, value);
 					controller.SetDirty();
 				};
-
+				MyJumpGateControllerTerminal.TerminalControls.Add(autoactivate_mass_max);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(autoactivate_mass_max);
 			}
 
@@ -743,7 +725,6 @@ namespace IOTA.ModularJumpGates.Terminal
 					return controller != null && controller.IsWorking && controller.JumpGateGrid != null && !controller.JumpGateGrid.Closed && controller.BlockSettings.CanAutoActivate() && (allowed_settings & MyAllowedRemoteSettings.AUTO_ACTIVATE) != 0;
 				};
 				autoactivate_power_min.SetLimits(0f, 999e24f);
-
 				autoactivate_power_min.Writer = (block, string_builder) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					if (controller == null) return;
@@ -751,7 +732,6 @@ namespace IOTA.ModularJumpGates.Terminal
 					else if (controller.IsWorking) string_builder.Append($"{MyJumpGateModSession.AutoconvertSciNotUnits(controller.BlockSettings.AutoActivatePower().Key, 4)} MW");
 					else string_builder.Append($"- {MyTexts.GetString("GeneralText_Offline")} -");
 				};
-
 				autoactivate_power_min.Getter = (block) => (float) (MyJumpGateModSession.GetBlockAsJumpGateController(block)?.BlockSettings.AutoActivatePower().Key ?? 0);
 				autoactivate_power_min.Setter = (block, value) => {
 					if (!autoactivate_power_min.Enabled(block)) return;
@@ -759,7 +739,7 @@ namespace IOTA.ModularJumpGates.Terminal
 					controller.BaseBlockSettings.AutoActivatePower(value);
 					controller.SetDirty();
 				};
-
+				MyJumpGateControllerTerminal.TerminalControls.Add(autoactivate_power_min);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(autoactivate_power_min);
 
 				IMyTerminalControlSlider auto_activate_power_max = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSlider, IMyUpgradeModule>(MODID_PREFIX + "ControllerAutoActivateMaximumPower");
@@ -773,7 +753,6 @@ namespace IOTA.ModularJumpGates.Terminal
 					return controller != null && controller.IsWorking && controller.JumpGateGrid != null && !controller.JumpGateGrid.Closed && controller.BlockSettings.CanAutoActivate() && (allowed_settings & MyAllowedRemoteSettings.AUTO_ACTIVATE) != 0;
 				};
 				auto_activate_power_max.SetLimits(0f, 999e24f);
-
 				auto_activate_power_max.Writer = (block, string_builder) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					if (controller == null) return;
@@ -781,7 +760,6 @@ namespace IOTA.ModularJumpGates.Terminal
 					else if (controller.IsWorking) string_builder.Append($"{MyJumpGateModSession.AutoconvertSciNotUnits(controller.BlockSettings.AutoActivatePower().Value, 4)} MW");
 					else string_builder.Append($"- {MyTexts.GetString("GeneralText_Offline")} -");
 				};
-
 				auto_activate_power_max.Getter = (block) => (float) (MyJumpGateModSession.GetBlockAsJumpGateController(block)?.BlockSettings.AutoActivatePower().Value ?? 0);
 				auto_activate_power_max.Setter = (block, value) => {
 					if (!auto_activate_power_max.Enabled(block)) return;
@@ -789,7 +767,7 @@ namespace IOTA.ModularJumpGates.Terminal
 					controller.BaseBlockSettings.AutoActivatePower(null, value);
 					controller.SetDirty();
 				};
-
+				MyJumpGateControllerTerminal.TerminalControls.Add(auto_activate_power_max);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(auto_activate_power_max);
 			}
 
@@ -806,7 +784,6 @@ namespace IOTA.ModularJumpGates.Terminal
 					return controller != null && controller.IsWorking && controller.JumpGateGrid != null && !controller.JumpGateGrid.Closed && controller.BlockSettings.CanAutoActivate() && (allowed_settings & MyAllowedRemoteSettings.AUTO_ACTIVATE) != 0;
 				};
 				autoactivate_delay.SetLimits(0, 60);
-
 				autoactivate_delay.Writer = (block, string_builder) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					if (controller == null) return;
@@ -814,7 +791,6 @@ namespace IOTA.ModularJumpGates.Terminal
 					else if (controller.IsWorking) string_builder.Append($"{controller.BlockSettings.AutoActivationDelay()} s");
 					else string_builder.Append($"- {MyTexts.GetString("GeneralText_Offline")} -");
 				};
-
 				autoactivate_delay.Getter = (block) => MyJumpGateModSession.GetBlockAsJumpGateController(block)?.BlockSettings.AutoActivationDelay() ?? 0;
 				autoactivate_delay.Setter = (block, value) => {
 					if (!autoactivate_delay.Enabled(block)) return;
@@ -822,7 +798,7 @@ namespace IOTA.ModularJumpGates.Terminal
 					controller.BaseBlockSettings.AutoActivationDelay(value);
 					controller.SetDirty();
 				};
-
+				MyJumpGateControllerTerminal.TerminalControls.Add(autoactivate_delay);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(autoactivate_delay);
 			}
 		}
@@ -863,7 +839,6 @@ namespace IOTA.ModularJumpGates.Terminal
 					MyAllowedRemoteSettings allowed_settings = MyJumpGateModSession.GetBlockAsJumpGateController(block)?.ConnectedRemoteAntenna?.BlockSettings.AllowedRemoteSettings ?? MyAllowedRemoteSettings.ALL;
 					return do_display_owned.Visible(block) && (allowed_settings & MyAllowedRemoteSettings.COMM_LINKAGE) != 0;
 				};
-
 				do_display_owned.Getter = (block) => MyJumpGateModSession.GetBlockAsJumpGateController(block)?.BlockSettings.CanAcceptOwned() ?? false;
 				do_display_owned.Setter = (block, value) => {
 					if (!do_display_owned.Enabled(block)) return;
@@ -871,7 +846,7 @@ namespace IOTA.ModularJumpGates.Terminal
 					controller.BaseBlockSettings.CanAcceptOwned(value);
 					controller.SetDirty();
 				};
-
+				MyJumpGateControllerTerminal.TerminalControls.Add(do_display_owned);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(do_display_owned);
 			}
 
@@ -889,7 +864,6 @@ namespace IOTA.ModularJumpGates.Terminal
 					MyAllowedRemoteSettings allowed_settings = MyJumpGateModSession.GetBlockAsJumpGateController(block)?.ConnectedRemoteAntenna?.BlockSettings.AllowedRemoteSettings ?? MyAllowedRemoteSettings.ALL;
 					return do_display_friendly.Visible(block) && (allowed_settings & MyAllowedRemoteSettings.COMM_LINKAGE) != 0;
 				};
-
 				do_display_friendly.Getter = (block) => MyJumpGateModSession.GetBlockAsJumpGateController(block)?.BlockSettings.CanAcceptFriendly() ?? false;
 				do_display_friendly.Setter = (block, value) => {
 					if (!do_display_friendly.Enabled(block)) return;
@@ -897,7 +871,7 @@ namespace IOTA.ModularJumpGates.Terminal
 					controller.BaseBlockSettings.CanAcceptFriendly(value);
 					controller.SetDirty();
 				};
-
+				MyJumpGateControllerTerminal.TerminalControls.Add(do_display_friendly);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(do_display_friendly);
 			}
 
@@ -915,7 +889,6 @@ namespace IOTA.ModularJumpGates.Terminal
 					MyAllowedRemoteSettings allowed_settings = MyJumpGateModSession.GetBlockAsJumpGateController(block)?.ConnectedRemoteAntenna?.BlockSettings.AllowedRemoteSettings ?? MyAllowedRemoteSettings.ALL;
 					return do_display_neutral.Visible(block) && (allowed_settings & MyAllowedRemoteSettings.COMM_LINKAGE) != 0;
 				};
-
 				do_display_neutral.Getter = (block) => MyJumpGateModSession.GetBlockAsJumpGateController(block)?.BlockSettings.CanAcceptNeutral() ?? false;
 				do_display_neutral.Setter = (block, value) => {
 					if (!do_display_neutral.Enabled(block)) return;
@@ -923,7 +896,7 @@ namespace IOTA.ModularJumpGates.Terminal
 					controller.BaseBlockSettings.CanAcceptNeutral(value);
 					controller.SetDirty();
 				};
-
+				MyJumpGateControllerTerminal.TerminalControls.Add(do_display_neutral);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(do_display_neutral);
 			}
 
@@ -941,7 +914,6 @@ namespace IOTA.ModularJumpGates.Terminal
 					MyAllowedRemoteSettings allowed_settings = MyJumpGateModSession.GetBlockAsJumpGateController(block)?.ConnectedRemoteAntenna?.BlockSettings.AllowedRemoteSettings ?? MyAllowedRemoteSettings.ALL;
 					return do_display_enemy.Visible(block) && (allowed_settings & MyAllowedRemoteSettings.COMM_LINKAGE) != 0;
 				};
-
 				do_display_enemy.Getter = (block) => MyJumpGateModSession.GetBlockAsJumpGateController(block)?.BlockSettings.CanAcceptEnemy() ?? false;
 				do_display_enemy.Setter = (block, value) => {
 					if (!do_display_enemy.Enabled(block)) return;
@@ -949,7 +921,7 @@ namespace IOTA.ModularJumpGates.Terminal
 					controller.BaseBlockSettings.CanAcceptEnemy(value);
 					controller.SetDirty();
 				};
-
+				MyJumpGateControllerTerminal.TerminalControls.Add(do_display_enemy);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(do_display_enemy);
 			}
 
@@ -967,7 +939,6 @@ namespace IOTA.ModularJumpGates.Terminal
 					MyAllowedRemoteSettings allowed_settings = MyJumpGateModSession.GetBlockAsJumpGateController(block)?.ConnectedRemoteAntenna?.BlockSettings.AllowedRemoteSettings ?? MyAllowedRemoteSettings.ALL;
 					return do_display_unowned.Visible(block) && (allowed_settings & MyAllowedRemoteSettings.COMM_LINKAGE) != 0;
 				};
-
 				do_display_unowned.Getter = (block) => MyJumpGateModSession.GetBlockAsJumpGateController(block)?.BlockSettings.CanAcceptUnowned() ?? false;
 				do_display_unowned.Setter = (block, value) => {
 					if (!do_display_unowned.Enabled(block)) return;
@@ -975,7 +946,7 @@ namespace IOTA.ModularJumpGates.Terminal
 					controller.BaseBlockSettings.CanAcceptUnowned(value);
 					controller.SetDirty();
 				};
-
+				MyJumpGateControllerTerminal.TerminalControls.Add(do_display_unowned);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(do_display_unowned);
 			}
 		}
@@ -1009,7 +980,6 @@ namespace IOTA.ModularJumpGates.Terminal
 				do_debug_mode_of.Enabled = (block) => true;
 				do_debug_mode_of.OnText = MyStringId.GetOrCompute(MyTexts.GetString("GeneralText_On"));
 				do_debug_mode_of.OffText = MyStringId.GetOrCompute(MyTexts.GetString("GeneralText_Off"));
-
 				do_debug_mode_of.Getter = (block) => MyJumpGateModSession.DebugMode;
 				do_debug_mode_of.Setter = (block, value) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
@@ -1017,7 +987,7 @@ namespace IOTA.ModularJumpGates.Terminal
 					MyJumpGateModSession.DebugMode = value;
 					MyJumpGateModSession.Instance.RedrawAllTerminalControls();
 				};
-
+				MyJumpGateControllerTerminal.TerminalControls.Add(do_debug_mode_of);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(do_debug_mode_of);
 			}
 
@@ -1040,6 +1010,7 @@ namespace IOTA.ModularJumpGates.Terminal
 					MyJumpGate jump_gate = controller.AttachedJumpGate();
 					jump_gate?.SetColliderDirty();
 				};
+				MyJumpGateControllerTerminal.TerminalControls.Add(do_rescan_entities);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(do_rescan_entities);
 			}
 
@@ -1072,6 +1043,7 @@ namespace IOTA.ModularJumpGates.Terminal
 						packet.Send();
 					}
 				};
+				MyJumpGateControllerTerminal.TerminalControls.Add(do_staticify_construct);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(do_staticify_construct);
 			}
 
@@ -1104,6 +1076,7 @@ namespace IOTA.ModularJumpGates.Terminal
 						packet.Send();
 					}
 				};
+				MyJumpGateControllerTerminal.TerminalControls.Add(do_unstaticify_construct);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(do_unstaticify_construct);
 			}
 
@@ -1123,6 +1096,7 @@ namespace IOTA.ModularJumpGates.Terminal
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					controller.JumpGateGrid.MarkGatesForUpdate();
 				};
+				MyJumpGateControllerTerminal.TerminalControls.Add(do_reconstruct_grid_gates);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(do_reconstruct_grid_gates);
 			}
 
@@ -1147,6 +1121,7 @@ namespace IOTA.ModularJumpGates.Terminal
 					};
 					packet.Send();
 				};
+				MyJumpGateControllerTerminal.TerminalControls.Add(do_reset_client_grids);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(do_reset_client_grids);
 			}
 
@@ -1180,6 +1155,7 @@ namespace IOTA.ModularJumpGates.Terminal
 					else if (jump_gate != null && !jump_gate.Closed && !jump_gate.IsIdle()) MyAPIGateway.Utilities.ShowNotification(MyTexts.GetString("Terminal_JumpGateController_GateNotIdleError"), 5000, "Red");
 					else MyAPIGateway.Utilities.ShowNotification(MyTexts.GetString("Terminal_JumpGateController_GateNotConnectedError"), 5000, "Red");
 				};
+				MyJumpGateControllerTerminal.TerminalControls.Add(do_jump_bt);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(do_jump_bt);
 			}
 
@@ -1211,6 +1187,7 @@ namespace IOTA.ModularJumpGates.Terminal
 					else if (jump_gate != null && !jump_gate.Closed && !jump_gate.IsIdle()) MyAPIGateway.Utilities.ShowNotification(MyTexts.GetString("Terminal_JumpGateController_GateNotIdleError"), 5000, "Red");
 					else MyAPIGateway.Utilities.ShowNotification(MyTexts.GetString("Terminal_JumpGateController_GateNotConnectedError"), 5000, "Red");
 				};
+				MyJumpGateControllerTerminal.TerminalControls.Add(do_jump_bt);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(do_jump_bt);
 			}
 		}
@@ -1251,21 +1228,18 @@ namespace IOTA.ModularJumpGates.Terminal
 					if (controller == null || !controller.IsWorking || controller.JumpGateGrid == null || controller.JumpGateGrid.Closed) return false;
 					else return (jump_gate == null || jump_gate.IsIdle()) && (allowed_settings & MyAllowedRemoteSettings.JUMPSPACE) != 0;
 				};
-
 				jump_sphere_radius_sd.SetLimits((block) => 1f, (block) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					if (controller == null) return 0f;
 					float raycast_distance = (float) ((controller.IsLargeGrid) ? MyJumpGateModSession.Configuration.DriveConfiguration.LargeDriveRaycastDistance : MyJumpGateModSession.Configuration.DriveConfiguration.SmallDriveRaycastDistance);
 					return 2f * raycast_distance;
 				});
-
 				jump_sphere_radius_sd.Writer = (block, string_builder) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					if (controller == null) return;
 					else if (controller.IsWorking) string_builder.Append(Math.Round(controller.BlockSettings.JumpSpaceRadius(), 4));
 					else string_builder.Append($"- {MyTexts.GetString("GeneralText_Offline")} -");
 				};
-
 				jump_sphere_radius_sd.Getter = (block) => (float) (MyJumpGateModSession.GetBlockAsJumpGateController(block)?.BlockSettings.JumpSpaceRadius() ?? 0);
 				jump_sphere_radius_sd.Setter = (block, value) => {
 					if (!jump_sphere_radius_sd.Enabled(block)) return;
@@ -1273,7 +1247,7 @@ namespace IOTA.ModularJumpGates.Terminal
 					controller.BaseBlockSettings.JumpSpaceRadius(value);
 					controller.SetDirty();
 				};
-
+				MyJumpGateControllerTerminal.TerminalControls.Add(jump_sphere_radius_sd);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(jump_sphere_radius_sd);
 			}
 
@@ -1292,14 +1266,12 @@ namespace IOTA.ModularJumpGates.Terminal
 					else return (jump_gate == null || jump_gate.IsIdle()) && (allowed_settings & MyAllowedRemoteSettings.JUMPSPACE) != 0;
 				};
 				jump_space_depth.SetLimits(10f, 100f);
-
 				jump_space_depth.Writer = (block, string_builder) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					if (controller == null) return;
 					else if (controller.IsWorking) string_builder.Append(Math.Round(controller.BlockSettings.JumpSpaceDepthPercent() * 100, 4));
 					else string_builder.Append($"- {MyTexts.GetString("GeneralText_Offline")} -");
 				};
-
 				jump_space_depth.Getter = (block) => (float) (MyJumpGateModSession.GetBlockAsJumpGateController(block)?.BlockSettings.JumpSpaceDepthPercent() * 100 ?? 0);
 				jump_space_depth.Setter = (block, value) => {
 					if (!jump_space_depth.Enabled(block)) return;
@@ -1307,7 +1279,7 @@ namespace IOTA.ModularJumpGates.Terminal
 					controller.BaseBlockSettings.JumpSpaceDepthPercent(value / 100d);
 					controller.SetDirty();
 				};
-
+				MyJumpGateControllerTerminal.TerminalControls.Add(jump_space_depth);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(jump_space_depth);
 			}
 
@@ -1324,7 +1296,6 @@ namespace IOTA.ModularJumpGates.Terminal
 					MyAllowedRemoteSettings allowed_settings = controller?.ConnectedRemoteAntenna?.BlockSettings.AllowedRemoteSettings ?? MyAllowedRemoteSettings.ALL;
 					return controller != null && controller.IsWorking && controller.JumpGateGrid != null && !controller.JumpGateGrid.Closed && (jump_gate == null || jump_gate.IsControlled()) && (allowed_settings & MyAllowedRemoteSettings.COLOR_OVERRIDE) != 0;
 				};
-
 				effect_color_shift_cl.Getter = (block) => MyJumpGateModSession.GetBlockAsJumpGateController(block)?.BlockSettings.JumpEffectAnimationColorShift() ?? Color.White;
 				effect_color_shift_cl.Setter = (block, value) => {
 					if (!effect_color_shift_cl.Enabled(block)) return;
@@ -1332,7 +1303,7 @@ namespace IOTA.ModularJumpGates.Terminal
 					controller.BaseBlockSettings.JumpEffectAnimationColorShift(value);
 					controller.SetDirty();
 				};
-
+				MyJumpGateControllerTerminal.TerminalControls.Add(effect_color_shift_cl);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(effect_color_shift_cl);
 			}
 
@@ -1363,7 +1334,6 @@ namespace IOTA.ModularJumpGates.Terminal
 				};
 				do_normal_vector_override_off.OnText = MyStringId.GetOrCompute(MyTexts.GetString("GeneralText_On"));
 				do_normal_vector_override_off.OffText = MyStringId.GetOrCompute(MyTexts.GetString("GeneralText_Off"));
-
 				do_normal_vector_override_off.Getter = (block) => MyJumpGateModSession.GetBlockAsJumpGateController(block)?.BlockSettings.HasVectorNormalOverride() ?? false;
 				do_normal_vector_override_off.Setter = (block, value) => {
 					if (!do_normal_vector_override_off.Enabled(block)) return;
@@ -1372,7 +1342,7 @@ namespace IOTA.ModularJumpGates.Terminal
 					controller.SetDirty();
 					MyJumpGateModSession.Instance.RedrawAllTerminalControls();
 				};
-
+				MyJumpGateControllerTerminal.TerminalControls.Add(do_normal_vector_override_off);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(do_normal_vector_override_off);
 			}
 
@@ -1399,7 +1369,6 @@ namespace IOTA.ModularJumpGates.Terminal
 					return controller != null && controller.IsWorking && controller.BlockSettings.HasVectorNormalOverride() && controller.JumpGateGrid != null && !controller.JumpGateGrid.Closed && (jump_gate == null || (!jump_gate.Closed && jump_gate.IsIdle())) && (allowed_settings & MyAllowedRemoteSettings.VECTOR_OVERRIDE) != 0;
 				};
 				vector_normal_x_sd.SetLimits(0, 360);
-
 				vector_normal_x_sd.Writer = (block, string_builder) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					if (controller == null) return;
@@ -1407,7 +1376,6 @@ namespace IOTA.ModularJumpGates.Terminal
 					else if (!controller.BlockSettings.HasVectorNormalOverride()) string_builder.Append("- DISABLED -");
 					else string_builder.Append(Math.Round(controller.BlockSettings.VectorNormalOverride().Value.X * (180d / Math.PI), 4));
 				};
-
 				vector_normal_x_sd.Getter = (block) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					if (controller == null || !controller.BlockSettings.HasVectorNormalOverride()) return 0;
@@ -1421,7 +1389,7 @@ namespace IOTA.ModularJumpGates.Terminal
 					controller.BaseBlockSettings.VectorNormalOverride(normal_override);
 					controller.SetDirty();
 				};
-
+				MyJumpGateControllerTerminal.TerminalControls.Add(vector_normal_x_sd);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(vector_normal_x_sd);
 			}
 
@@ -1439,7 +1407,6 @@ namespace IOTA.ModularJumpGates.Terminal
 					return controller != null && controller.IsWorking && controller.BlockSettings.HasVectorNormalOverride() && controller.JumpGateGrid != null && !controller.JumpGateGrid.Closed && (jump_gate == null || (!jump_gate.Closed && jump_gate.IsIdle())) && (allowed_settings & MyAllowedRemoteSettings.VECTOR_OVERRIDE) != 0;
 				};
 				vector_normal_y_sd.SetLimits(0, 360);
-
 				vector_normal_y_sd.Writer = (block, string_builder) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					if (controller == null) return;
@@ -1447,7 +1414,6 @@ namespace IOTA.ModularJumpGates.Terminal
 					else if (!controller.BlockSettings.HasVectorNormalOverride()) string_builder.Append("- DISABLED -");
 					else string_builder.Append(Math.Round(controller.BlockSettings.VectorNormalOverride().Value.Y * (180d / Math.PI), 4));
 				};
-
 				vector_normal_y_sd.Getter = (block) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					if (controller == null || !controller.BlockSettings.HasVectorNormalOverride()) return 0;
@@ -1461,7 +1427,7 @@ namespace IOTA.ModularJumpGates.Terminal
 					controller.BaseBlockSettings.VectorNormalOverride(normal_override);
 					controller.SetDirty();
 				};
-
+				MyJumpGateControllerTerminal.TerminalControls.Add(vector_normal_y_sd);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(vector_normal_y_sd);
 			}
 
@@ -1479,7 +1445,6 @@ namespace IOTA.ModularJumpGates.Terminal
 					return controller != null && controller.IsWorking && controller.BlockSettings.HasVectorNormalOverride() && controller.JumpGateGrid != null && !controller.JumpGateGrid.Closed && (jump_gate == null || (!jump_gate.Closed && jump_gate.IsIdle())) && (allowed_settings & MyAllowedRemoteSettings.VECTOR_OVERRIDE) != 0;
 				};
 				vector_normal_z_sd.SetLimits(0, 360);
-
 				vector_normal_z_sd.Writer = (block, string_builder) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					if (controller == null) return;
@@ -1487,7 +1452,6 @@ namespace IOTA.ModularJumpGates.Terminal
 					else if (!controller.BlockSettings.HasVectorNormalOverride()) string_builder.Append("- DISABLED -");
 					else string_builder.Append(Math.Round(controller.BlockSettings.VectorNormalOverride().Value.Z * (180d / Math.PI), 4));
 				};
-
 				vector_normal_z_sd.Getter = (block) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					if (controller == null || !controller.BlockSettings.HasVectorNormalOverride()) return 0;
@@ -1501,7 +1465,7 @@ namespace IOTA.ModularJumpGates.Terminal
 					controller.BaseBlockSettings.VectorNormalOverride(normal_override);
 					controller.SetDirty();
 				};
-
+				MyJumpGateControllerTerminal.TerminalControls.Add(vector_normal_z_sd);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(vector_normal_z_sd);
 			}
 		}
@@ -1555,6 +1519,7 @@ namespace IOTA.ModularJumpGates.Terminal
 					else if (jump_gate != null && !jump_gate.Closed && !jump_gate.IsIdle()) MyAPIGateway.Utilities.ShowNotification(MyTexts.GetString("Terminal_JumpGateController_GateNotIdleError"), 5000, "Red");
 					else MyAPIGateway.Utilities.ShowNotification(MyTexts.GetString("Terminal_JumpGateController_GateNotConnectedError"), 5000, "Red");
 				};
+				MyJumpGateControllerTerminal.TerminalControls.Add(do_jump_bt);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(do_jump_bt);
 			}
 
@@ -1579,6 +1544,7 @@ namespace IOTA.ModularJumpGates.Terminal
 					else if (jump_gate != null && !jump_gate.Closed && !jump_gate.IsJumping()) MyAPIGateway.Utilities.ShowNotification(MyTexts.GetString("Terminal_JumpGateController_GateNotJumpingError"), 5000, "Red");
 					else MyAPIGateway.Utilities.ShowNotification(MyTexts.GetString("Terminal_JumpGateController_GateNotConnectedError"), 5000, "Red");
 				};
+				MyJumpGateControllerTerminal.TerminalControls.Add(do_jump_bt);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(do_jump_bt);
 			}
 
@@ -2067,13 +2033,18 @@ namespace IOTA.ModularJumpGates.Terminal
 
 		public static void Load(IMyModContext context)
 		{
-			List<IMyTerminalControl> controls;
-			MyAPIGateway.TerminalControls.GetControls<IMyUpgradeModule>(out controls);
-			if (MyJumpGateControllerTerminal.IsLoaded || controls.Count == 0) return;
+			if (MyJumpGateControllerTerminal.IsLoaded) return;
 			MyJumpGateControllerTerminal.IsLoaded = true;
 			MyJumpGateControllerTerminal.SetupJumpGateControllerTerminalControls();
 			MyJumpGateControllerTerminal.SetupJumpGateControllerTerminalActions();
 			MyJumpGateControllerTerminal.SetupJumpGateControllerTerminalProperties();
+		}
+
+		public static void Unload()
+		{
+			if (!MyJumpGateControllerTerminal.IsLoaded) return;
+			MyJumpGateControllerTerminal.IsLoaded = false;
+			MyJumpGateControllerTerminal.TerminalControls.Clear();
 		}
 
 		public static void ResetSearchInputs()
@@ -2162,6 +2133,12 @@ namespace IOTA.ModularJumpGates.Terminal
 			}
 
 			return matched;
+		}
+
+		public static void UpdateRedrawControls()
+		{
+			if (!MyJumpGateControllerTerminal.IsLoaded) return;
+			foreach (IMyTerminalControl control in MyJumpGateControllerTerminal.TerminalControls) control.UpdateVisual();
 		}
 	}
 }

@@ -1107,7 +1107,7 @@ namespace IOTA.ModularJumpGates
 			MyJumpGate target_gate = null;
 			MyJumpGateAnimation gate_animation = null;
 			MyJumpGateWaypoint dst = controller_settings.SelectedWaypoint();
-			List<KeyValuePair<MyEntity, bool>> entities_to_jump = null;
+			List<MyEntity> entities_to_jump = null;
 			List<MyJumpGate> other_gates = new List<MyJumpGate>();
 			Func<MyJumpGateDrive, bool> working_src_drive_filter = (drive) => drive.JumpGateID == this.JumpGateID && drive.IsWorking;
 			Func<MyJumpGateDrive, bool> working_dst_drive_filter = (drive) => target_gate != null && drive.JumpGateID == target_gate.JumpGateID && drive.IsWorking;
@@ -1164,7 +1164,6 @@ namespace IOTA.ModularJumpGates
 					this.EntityBatches.Clear();
 					if (target_gate != null && !target_gate.Closed && !target_gate.MarkClosed) target_gate.Reset();
 					else if (!this.Closed) this.Reset();
-					if (entities_to_jump != null) foreach (KeyValuePair<MyEntity, bool> entity in entities_to_jump) entity.Key.Render.Visible = entity.Value;
 				};
 
 				if (gate_animation != null) MyJumpGateModSession.Instance.PlayAnimation(gate_animation, (result_status) ? MyJumpGateAnimation.AnimationTypeEnum.JUMPED : MyJumpGateAnimation.AnimationTypeEnum.FAILED, null, onend);
@@ -1419,7 +1418,7 @@ namespace IOTA.ModularJumpGates
 						this.Phase = MyJumpGatePhase.JUMPING;
 						this.LastAutojumpAttemptTime = DateTime.MinValue;
 						if (target_gate != null) target_gate.Phase = MyJumpGatePhase.JUMPING;
-						entities_to_jump = this.GetEntitiesInJumpSpace(true).Select((pair) => new KeyValuePair<MyEntity, bool>(pair.Key, pair.Key.Render.Visible)).ToList();
+						entities_to_jump = this.GetEntitiesInJumpSpace(true).Select((pair) => pair.Key).ToList();
 						Random prng = new Random();
 
 						if (entities_to_jump.Count == 0)
@@ -1524,9 +1523,9 @@ namespace IOTA.ModularJumpGates
 						Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} JUMP_ENTITY_TRANSIT - Assembling batches...", 3);
 
 						// Assemble batches
-						foreach (KeyValuePair<MyEntity, bool> pair in entities_to_jump)
+						foreach (MyEntity root in entities_to_jump)
 						{
-							MyEntity entity = pair.Key;
+							MyEntity entity = root;
 							List<MyEntity> batch = new List<MyEntity>() { entity };
 							MatrixD entity_final_matrix;
 							BoundingBoxD obstruction_aabb;
@@ -1757,9 +1756,11 @@ namespace IOTA.ModularJumpGates
 							// Teleport batch
 							// Calculate end position and velocity
 							MatrixD entity_matrix = entity.WorldMatrix;
-							Vector3D velocity = MyJumpGateModSession.WorldVectorToLocalVectorD(ref this_matrix, entity.Physics.LinearVelocity);
-							velocity = MyJumpGateModSession.LocalVectorToWorldVectorD(ref target_matrix, velocity);
-							MyJumpGateModSession.Instance.WarpEntityBatchOverTime(this, batch.Batch, ref entity_matrix, ref batch.ParentFinalMatrix, ref batch.ParentTargetPosition, Math.Max((ushort) 1, jump_duration), velocity.Length(), (batch_) => { foreach (MyEntity child in batch_) if (child != null && !child.MarkedForClose && child.Physics != null) child.Physics.LinearVelocity = velocity; });
+							Vector3D velocity = entity.Physics.LinearVelocity - this.JumpNodeVelocity;
+							velocity = MyJumpGateModSession.WorldVectorToLocalVectorD(ref this_matrix, entity.Physics.LinearVelocity);
+							velocity = MyJumpGateModSession.LocalVectorToWorldVectorD(ref target_matrix, -velocity);
+							velocity += target_gate?.JumpNodeVelocity ?? Vector3D.Zero;
+							MyJumpGateModSession.Instance.WarpEntityBatchOverTime(this, batch.Batch, ref entity_matrix, ref batch.ParentFinalMatrix, ref batch.ParentTargetPosition, jump_duration, velocity.Length(), (batch_) => { foreach (MyEntity child in batch_) if (child != null && !child.MarkedForClose && child.Physics != null) child.Physics.LinearVelocity = velocity; });
 							Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} ... TP_SUCCESS_BATCH_{entity.EntityId} - ENDPOINT={batch.ParentFinalMatrix.Translation}", 4);
 						}
 
@@ -3051,6 +3052,7 @@ namespace IOTA.ModularJumpGates
 					List<MyJumpGateDrive> drives = this.GetJumpGateDrives().ToList();
 					this.ForceUpdateJumpEllipsoid = false;
 					Vector3D jump_node = this.WorldJumpNode;
+					Vector3D volume_center = this.JumpGateGrid.ConstructVolumeCenter();
 
 					for (int start_index = 0; start_index < drives.Count; ++start_index)
 					{
@@ -3065,7 +3067,8 @@ namespace IOTA.ModularJumpGates
 							if (!drive_plane.Normal.IsValid()) continue;
 							Vector3D normal = drive_plane.Normal;
 							Vector3D normal_inv = -normal;
-							Vector3D primary_normal = (Vector3D.Angle(normal, this.ConstructMatrix.Up) <= Vector3D.Angle(normal_inv, this.ConstructMatrix.Up)) ? normal : -normal_inv;
+							Vector3D facing = volume_center - normal;
+							Vector3D primary_normal = (Vector3D.Angle(normal, facing) <= Vector3D.Angle(normal_inv, facing)) ? normal : -normal_inv;
 							JumpDriveIntersectPlane plane;
 
 							if (this.DriveIntersectionPlanes.ContainsKey(primary_normal)) plane = this.DriveIntersectionPlanes[primary_normal];
@@ -3528,6 +3531,14 @@ namespace IOTA.ModularJumpGates
 				ControllerSettings = this.Controller?.BlockSettings,
 			});
 			packet.Send();
+		}
+
+		/// <summary>
+		/// Reloads this gate's internal configuration values
+		/// </summary>
+		public void ReloadConfigurations()
+		{
+			this.JumpGateConfiguration = new Configuration.LocalJumpGateConfiguration(this, MyJumpGateModSession.Configuration.JumpGateConfiguration);
 		}
 
 		/// <summary>

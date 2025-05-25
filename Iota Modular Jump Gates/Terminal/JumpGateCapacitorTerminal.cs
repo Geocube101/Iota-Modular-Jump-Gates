@@ -1,5 +1,4 @@
 ﻿using IOTA.ModularJumpGates.CubeBlock;
-using IOTA.ModularJumpGates.Util;
 using Sandbox.ModAPI;
 using Sandbox.ModAPI.Interfaces.Terminal;
 using System.Collections.Generic;
@@ -14,6 +13,8 @@ namespace IOTA.ModularJumpGates.Terminal
 {
 	internal static class MyJumpGateCapacitorTerminal
 	{
+		private static readonly List<IMyTerminalControl> TerminalControls = new List<IMyTerminalControl>();
+
 		public static bool IsLoaded { get; private set; } = false;
 		public static readonly string MODID_PREFIX = MyJumpGateModSession.MODID + ".JumpGateCapacitor.";
 
@@ -49,7 +50,6 @@ namespace IOTA.ModularJumpGates.Terminal
 				};
 				do_capacitor_recharge.OnText = MyStringId.GetOrCompute(MyTexts.GetString("GeneralText_On"));
 				do_capacitor_recharge.OffText = MyStringId.GetOrCompute(MyTexts.GetString("GeneralText_Off"));
-
 				do_capacitor_recharge.Getter = (block) => MyJumpGateModSession.GetBlockAsJumpGateCapacitor(block)?.BlockSettings?.RechargeEnabled ?? false;
 				do_capacitor_recharge.Setter = (block, value) => {
 					MyJumpGateCapacitor capacitor = MyJumpGateModSession.GetBlockAsJumpGateCapacitor(block);
@@ -57,7 +57,7 @@ namespace IOTA.ModularJumpGates.Terminal
 					capacitor.BlockSettings.RechargeEnabled = value;
 					capacitor.SetDirty();
 				};
-
+				MyJumpGateCapacitorTerminal.TerminalControls.Add(do_capacitor_recharge);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(do_capacitor_recharge);
 			}
 
@@ -76,7 +76,7 @@ namespace IOTA.ModularJumpGates.Terminal
 					capacitor.BlockSettings.EmissiveColor = value;
 					capacitor.SetDirty();
 				};
-
+				MyJumpGateCapacitorTerminal.TerminalControls.Add(effect_color_shift_cl);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(effect_color_shift_cl);
 			}
 		}
@@ -174,13 +174,24 @@ namespace IOTA.ModularJumpGates.Terminal
 
 		public static void Load(IMyModContext context)
 		{
-			List<IMyTerminalControl> controls;
-			MyAPIGateway.TerminalControls.GetControls<IMyUpgradeModule>(out controls);
-			if (MyJumpGateCapacitorTerminal.IsLoaded || controls.Count == 0) return;
+			if (MyJumpGateCapacitorTerminal.IsLoaded) return;
 			MyJumpGateCapacitorTerminal.IsLoaded = true;
 			MyJumpGateCapacitorTerminal.SetupJumpGateCapacitorTerminalControls();
 			MyJumpGateCapacitorTerminal.SetupJumpGateCapacitorTerminalActions();
 			MyJumpGateCapacitorTerminal.SetupJumpGateCapacitorTerminalProperties();
+		}
+
+		public static void Unload()
+		{
+			if (!MyJumpGateCapacitorTerminal.IsLoaded) return;
+			MyJumpGateCapacitorTerminal.IsLoaded = false;
+			MyJumpGateCapacitorTerminal.TerminalControls.Clear();
+		}
+
+		public static void UpdateRedrawControls()
+		{
+			if (!MyJumpGateCapacitorTerminal.IsLoaded) return;
+			foreach (IMyTerminalControl control in MyJumpGateCapacitorTerminal.TerminalControls) control.UpdateVisual();
 		}
 	}
 }

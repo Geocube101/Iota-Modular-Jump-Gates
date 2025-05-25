@@ -1,5 +1,4 @@
 ﻿using IOTA.ModularJumpGates.Animations;
-using IOTA.ModularJumpGates.API;
 using IOTA.ModularJumpGates.CubeBlock;
 using IOTA.ModularJumpGates.Extensions;
 using IOTA.ModularJumpGates.Util;
@@ -4215,8 +4214,9 @@ namespace IOTA.ModularJumpGates
 
 			Vector3D current_pos = MyAPIGateway.Session.Camera.Position;
 			double distance = MyJumpGateModSession.Configuration.GeneralConfiguration.DrawSyncDistance * MyJumpGateModSession.Configuration.GeneralConfiguration.DrawSyncDistance;
+			MyEntity controller = (MyNetworkInterface.IsDedicatedMultiplayerServer) ? null : MyAPIGateway.Session.CameraController?.Entity?.GetTopMostParent();
 
-			if (!MyNetworkInterface.IsDedicatedMultiplayerServer && (jump_gate_entities.Contains((IMyEntity) caller.Character) || Vector3D.DistanceSquared(current_pos, world_jump_node) <= distance || Vector3D.DistanceSquared(current_pos, endpoint) <= distance))
+			if (!MyNetworkInterface.IsDedicatedMultiplayerServer && (jump_gate_entities.Contains(controller) || Vector3D.DistanceSquared(current_pos, world_jump_node) <= distance || Vector3D.DistanceSquared(current_pos, endpoint) <= distance))
 			{
 				if (this.AnimationDefinition.PerEntityParticles != null && (this.JumpType == MyJumpTypeEnum.STANDARD || this.JumpType == MyJumpTypeEnum.OUTBOUND_VOID))
 				{
@@ -4244,9 +4244,8 @@ namespace IOTA.ModularJumpGates
 					this.ClosedEntities.Clear();
 				}
 				
-				MyEntity controller = (MyNetworkInterface.IsDedicatedMultiplayerServer) ? null : MyAPIGateway.Session.CameraController?.Entity?.GetTopMostParent();
 				MyEntity parent = this.JumpGate.GetEntityBatchFromEntity(controller)?.Parent;
-
+				
 				if (parent == null && this.TravelParticles != null)
 				{
 					foreach (Particle particle in this.TravelParticles) particle.Stop();
@@ -4769,7 +4768,7 @@ namespace IOTA.ModularJumpGates
 			if ((this.JumpGate?.Closed ?? true) || (this.JumpGate.JumpGateGrid?.Closed ?? true)) return;
 			List<MyJumpGateDrive> drives = null;
 			this.TEMP_JumpGateDrives.AddRange(this.JumpGate.GetJumpGateDrives());
-			if (this.JumpGate.Phase == MyJumpGatePhase.JUMPING) foreach (KeyValuePair<MyEntity, EntityBatch> pair in this.JumpGate.EntityBatches) this.TEMP_JumpGateEntitiesL.AddRange(pair.Value.Batch);
+			if (this.JumpGate.Phase == MyJumpGatePhase.JUMPING || this.JumpGate.Phase == MyJumpGatePhase.RESETTING) foreach (KeyValuePair<MyEntity, EntityBatch> pair in this.JumpGate.EntityBatches) this.TEMP_JumpGateEntitiesL.AddList(pair.Value.Batch);
 			else this.TEMP_JumpGateEntitiesL.AddRange(this.JumpGate.GetEntitiesInJumpSpace(true).Select((pair) => pair.Key));
 			drives = this.TEMP_JumpGateDrives;
 

@@ -1,9 +1,11 @@
 ﻿using IOTA.ModularJumpGates.API;
+using IOTA.ModularJumpGates.Commands;
 using IOTA.ModularJumpGates.CubeBlock;
 using IOTA.ModularJumpGates.ISC;
 using IOTA.ModularJumpGates.Terminal;
 using IOTA.ModularJumpGates.Util;
 using IOTA.ModularJumpGates.Util.ConcurrentCollections;
+using Sandbox.Engine.Utils;
 using Sandbox.ModAPI;
 using Sandbox.ModAPI.Interfaces.Terminal;
 using System;
@@ -12,6 +14,7 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Linq;
+using VRage;
 using VRage.Game;
 using VRage.Game.Components;
 using VRage.Game.Entity;
@@ -69,6 +72,11 @@ namespace IOTA.ModularJumpGates
 		/// The Mod ID string used for terminal controls
 		/// </summary>
 		public static readonly string MODID = "IOTA.ModularJumpGatesMod";
+
+		/// <summary>
+		/// The display name used for chat messages
+		/// </summary>
+		public static readonly string DISPLAYNAME = "[ IMJG ]";
 
 		/// <summary>
 		/// Configuration variables as loaded from file or recieved from server
@@ -178,10 +186,6 @@ namespace IOTA.ModularJumpGates
 		/// Master map for storing entity warps
 		/// </summary>
 		private ConcurrentDictionary<long, EntityWarpInfo> EntityWarps = new ConcurrentDictionary<long, EntityWarpInfo>();
-		#endregion
-
-		#region Temporary Containers
-		private List<IMyTerminalControl> TEMP_ControlsList = new List<IMyTerminalControl>();
 		#endregion
 
 		#region Internal Variables
@@ -528,6 +532,7 @@ namespace IOTA.ModularJumpGates
 			base.UnloadData();
 			this.ModAPIInterface.Close();
 			MyAnimationHandler.Unload();
+			MyChatCommandHandler.Close();
 
 			if (MyJumpGateModSession.Network != null && MyJumpGateModSession.Network.Registered)
 			{
@@ -536,6 +541,7 @@ namespace IOTA.ModularJumpGates
 				MyJumpGateModSession.Network.Off(MyPacketTypeEnum.DOWNLOAD_GRID, this.OnNetworkGridDownload);
 				MyJumpGateModSession.Network.Off(MyPacketTypeEnum.COMM_LINKED, this.OnNetworkCommLinkedUpdate);
 				MyJumpGateModSession.Network.Off(MyPacketTypeEnum.BEACON_LINKED, this.OnNetworkBeaconLinkedUpdate);
+				MyJumpGateModSession.Network.Off(MyPacketTypeEnum.UPDATE_CONFIG, this.OnConfigurationUpdate);
 				MyJumpGateModSession.Network.Unregister();
 			}
 
@@ -575,6 +581,12 @@ namespace IOTA.ModularJumpGates
 			MyAPIGateway.Entities.OnEntityAdd -= this.OnEntityAdd;
 			MyAPIGateway.Entities.OnEntityRemove -= this.OnEntityRemove;
 			MyAPIGateway.TerminalControls.CustomControlGetter -= this.OnTerminalSelector;
+
+			MyCubeBlockTerminal.Unload();
+			MyJumpGateCapacitorTerminal.Unload();
+			MyJumpGateControllerTerminal.Unload();
+			MyJumpGateDriveTerminal.Unload();
+			MyJumpGateRemoteAntennaTerminal.Unload();
 
 			MyJumpGateModSession.Configuration.Save();
 			MyJumpGateModSession.Configuration = null;
@@ -618,6 +630,7 @@ namespace IOTA.ModularJumpGates
 				MyJumpGateModSession.Network.On(MyPacketTypeEnum.UPDATE_GRIDS, this.OnNetworkGridsUpdate);
 				MyJumpGateModSession.Network.On(MyPacketTypeEnum.CLOSE_GRID, this.OnNetworkGridClose);
 				MyJumpGateModSession.Network.On(MyPacketTypeEnum.DOWNLOAD_GRID, this.OnNetworkGridDownload);
+				MyJumpGateModSession.Network.On(MyPacketTypeEnum.UPDATE_CONFIG, this.OnConfigurationUpdate);
 			}
 
 			if (MyNetworkInterface.IsMultiplayerServer)
@@ -644,8 +657,9 @@ namespace IOTA.ModularJumpGates
 			Logger.Log("INIT - Loading Data...");
 			MyAnimationHandler.Load();
 			if (MyJumpGateModSession.Network.Registered && MyNetworkInterface.IsStandaloneMultiplayerClient) this.RequestGridsDownload();
-			if (!MyNetworkInterface.IsDedicatedMultiplayerServer) MyAPIGateway.Utilities.ShowMessage(MyJumpGateModSession.MODID, "Initializing Constructs...");
+			if (!MyNetworkInterface.IsDedicatedMultiplayerServer) MyAPIGateway.Utilities.ShowMessage(MyJumpGateModSession.DISPLAYNAME, "Initializing Constructs...");
 			MyAPIGateway.TerminalControls.CustomControlGetter += this.OnTerminalSelector;
+			MyChatCommandHandler.Init();
 			Logger.Log("INIT - Loaded.");
 		}
 
@@ -715,7 +729,7 @@ namespace IOTA.ModularJumpGates
 				if (!this.InitializationComplete && ((MyNetworkInterface.IsServerLike && this.AllFirstTickComplete()) || (MyNetworkInterface.IsStandaloneMultiplayerClient && MyJumpGateModSession.GameTick == this.FirstUpdateTimeTicks)))
 				{
 					this.InitializationComplete = true;
-					MyAPIGateway.Utilities.ShowMessage(MyJumpGateModSession.MODID, "Initialization Complete!");
+					MyAPIGateway.Utilities.ShowMessage(MyJumpGateModSession.DISPLAYNAME, "Initialization Complete!");
 				}
 				
 				if (this.ActiveGridUpdateThreads < MyJumpGateModSession.Configuration.GeneralConfiguration.ConcurrentGridUpdateThreads)
@@ -727,9 +741,11 @@ namespace IOTA.ModularJumpGates
 				// Redraw Terminal Controls
 				if (MyNetworkInterface.IsClientLike && this.InitializationComplete && (MyJumpGateModSession.GameTick % 60 == 0 || this.__RedrawAllTerminalControls))
 				{
-					MyAPIGateway.TerminalControls.GetControls<IMyUpgradeModule>(out this.TEMP_ControlsList);
-					foreach (IMyTerminalControl control in this.TEMP_ControlsList) control.UpdateVisual();
-					this.TEMP_ControlsList.Clear();
+					MyCubeBlockTerminal.UpdateRedrawControls();
+					MyJumpGateCapacitorTerminal.UpdateRedrawControls();
+					MyJumpGateControllerTerminal.UpdateRedrawControls();
+					MyJumpGateDriveTerminal.UpdateRedrawControls();
+					MyJumpGateRemoteAntennaTerminal.UpdateRedrawControls();
 					this.__RedrawAllTerminalControls = false;
 				}
 				if (MyAPIGateway.Gui.GetCurrentScreen != MyTerminalPageEnum.ControlPanel)
@@ -1119,6 +1135,24 @@ namespace IOTA.ModularJumpGates
 		}
 
 		/// <summary>
+		/// Event handler for configuration update
+		/// </summary>
+		/// <param name="packet">The received packet</param>
+		private void OnConfigurationUpdate(MyNetworkInterface.Packet packet)
+		{
+			if (packet == null || packet.PhaseFrame != 1) return;
+			else if (MyNetworkInterface.IsServerLike) this.ReloadConfigurations(Configuration.Load());
+			else
+			{
+				Configuration config = packet.Payload<Configuration>();
+				if (config == null) return;
+				MyJumpGateModSession.Configuration = config;
+				foreach (KeyValuePair<long, MyJumpGateConstruct> pair in this.GridMap) pair.Value.ReloadConfigurations();
+				MyAPIGateway.Utilities.ShowMessage(MyJumpGateModSession.DISPLAYNAME, MyTexts.GetString("Session_OnConfigReload"));
+			}
+		}
+
+		/// <summary>
 		/// Updates all stored grids and sends grid update packet every second
 		/// </summary>
 		private void TickUpdateGrids()
@@ -1209,6 +1243,29 @@ namespace IOTA.ModularJumpGates
 		#endregion
 
 		#region Public Methods
+		/// <summary>
+		/// Reloads the configurations of all constructs in this session<br />
+		/// New config will be sent to all clients<br />
+		/// Does nothing if standalone multiplayer client
+		/// </summary>
+		public void ReloadConfigurations(Configuration config)
+		{
+			if (MyNetworkInterface.IsStandaloneMultiplayerClient) return;
+			config.Validate();
+			MyJumpGateModSession.Configuration = config;
+			foreach (KeyValuePair<long, MyJumpGateConstruct> pair in this.GridMap) pair.Value.ReloadConfigurations();
+
+			MyNetworkInterface.Packet packet = new MyNetworkInterface.Packet {
+				PacketType = MyPacketTypeEnum.UPDATE_CONFIG,
+				Broadcast = true,
+				TargetID = 0,
+			};
+
+			packet.Payload(config);
+			packet.Send();
+			Logger.Log("Global mod configuration was modified");
+		}
+
 		/// <summary>
 		/// Plays an animation on this session's game thread
 		/// </summary>

@@ -219,7 +219,7 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 			public MyAPIControllerBlockSettings() { }
 			public MyAPIControllerBlockSettings(MyModAPIJumpGateController controller, Dictionary<string, object> mapping)
 			{
-				this.FromDictionary(controller, mapping);
+				this.FromDictionary(controller?.AttachedJumpGate, mapping);
 			}
 
 			public void AcquireLock()
@@ -231,9 +231,9 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 				if (Monitor.IsEntered(this.WriterLock)) Monitor.Exit(this.WriterLock);
 			}
 
-			public void FromDictionary(MyModAPIJumpGateController controller, Dictionary<string, object> mapping)
+			public void FromDictionary(MyModAPIJumpGate attached_gate, Dictionary<string, object> mapping)
 			{
-				if (mapping == null || controller == null) return;
+				if (mapping == null || attached_gate == null) return;
 
 				lock (this.WriterLock)
 				{
@@ -266,7 +266,6 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 							result_waypoint = new MyAPIJumpGateWaypoint(target_gate);
 						}
 
-						MyModAPIJumpGate attached_gate = controller.AttachedJumpGate;
 						Vector3D? endpoint = result_waypoint?.GetEndpoint();
 						Vector3D? node = attached_gate?.WorldJumpNode;
 
@@ -634,7 +633,7 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 			get
 			{
 				MyAPIControllerBlockSettings settings = new MyAPIControllerBlockSettings();
-				settings.FromDictionary(this, this.GetAttribute<Dictionary<string, object>>("BlockSettings"));
+				settings.FromDictionary(this.AttachedJumpGate, this.GetAttribute<Dictionary<string, object>>("BlockSettings"));
 				return settings;
 			}
 			set
@@ -748,6 +747,11 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		/// The brightness for the emitter emissives
 		/// </summary>
 		public double EmitterEmissiveBrightness => this.GetAttribute<double>("EmitterEmissiveBrightness");
+
+		/// <summary>
+		/// Gets the base power draw of this block (in Megawatts) from config
+		/// </summary>
+		public double BasePowerDrawMW => this.GetAttribute<double>("BasePowerDrawMW");
 
 		/// <summary>
 		/// Gets or sets this block's wattage sink override (in megawatts)<br />
@@ -911,6 +915,32 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		}
 
 		/// <summary>
+		/// The names to be given to jump gates on this antenna<br />
+		/// Names are by channel
+		/// </summary>
+		public string[] JumpGateNames
+		{
+			get { return this.GetAttribute<string[]>("JumpGateNames"); }
+			set { this.SetAttribute<string[]>("JumpGateNames", value); }
+		}
+
+		/// <summary>
+		/// Gets the base controller settings for each channel of this antenna
+		/// </summary>
+		public MyModAPIJumpGateController.MyAPIControllerBlockSettings[] BaseControllerSettings
+		{
+			get {
+				byte channel = 0;
+				return this.GetAttribute<Dictionary<string, object>[]>("ControllerBlockSettings").Select((setting) => {
+					MyModAPIJumpGateController.MyAPIControllerBlockSettings settings = new MyModAPIJumpGateController.MyAPIControllerBlockSettings();
+					settings.FromDictionary(this.GetInboundControlGate(channel++), setting);
+					return settings;
+				}).ToArray();
+			}
+			set { this.SetAttribute<Dictionary<string, object>[]>("ControllerBlockSettings", value.Select((settings) => settings.ToDictionary()).ToArray()); }
+		}
+
+		/// <summary>
 		/// Sets the channel to a specified jump gate or clears the channel if the gate is null or closed
 		/// </summary>
 		/// <param name="channel">The channel or 255 for next available</param>
@@ -968,6 +998,16 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		public byte GetControllerOutboundControlChannel(MyModAPIJumpGateController controller)
 		{
 			return (controller == null || !controller.HandleValid) ? (byte) 0xFF : this.GetMethod<Func<long[], byte>>("GetControllerOutboundControlChannel")(controller.ObjectID.Value.Packed());
+		}
+
+		/// <summary>
+		/// Gets the name of the jump gate attached on the specified channel
+		/// </summary>
+		/// <param name="channel">The channel to check</param>
+		/// <returns>The attached jump gate's name or null</returns>
+		public string GetJumpGateName(byte channel)
+		{
+			return this.GetMethod<Func<byte, string>>("GetJumpGateName")(channel);
 		}
 
 		/// <summary>

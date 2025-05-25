@@ -277,7 +277,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		public override void UpdateAfterSimulation()
 		{
 			base.UpdateAfterSimulation();
-
+			
 			// Skip update if a projection or closed
 			if (this.IsPowerInvalid > 0) --this.IsPowerInvalid;
 			if (this.TerminalBlock?.CubeGrid?.Physics == null || this.IsClosed) return;
@@ -324,18 +324,18 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				}
 				else if (jump_gate != null)
 				{
-					if (this.DriveEmitterColor != Color.Black && !this.DriveEmitterCycling()) this.CycleDriveEmitter(this.DriveEmitterColor, Color.Black, 300);
+					if (this.DriveEmitterColor != Color.Black && !this.DriveEmitterCycling()) this.CycleDriveEmitter(this.DriveEmitterColor, Color.Black, 0);
 					this.TerminalBlock.SetEmissiveParts("Emissive1", (MyJumpGateModSession.GameTick % 120 >= 60) ? Color.Lime : Color.Black, 1);
 				}
 				else
 				{
-					if (this.DriveEmitterColor != Color.Black && !this.DriveEmitterCycling()) this.CycleDriveEmitter(this.DriveEmitterColor, Color.Black, 300);
+					if (this.DriveEmitterColor != Color.Black && !this.DriveEmitterCycling()) this.CycleDriveEmitter(this.DriveEmitterColor, Color.Black, 0);
 					this.TerminalBlock.SetEmissiveParts("Emissive1", Color.Gold, 1);
 				}
 			}
 			else
 			{
-				if (this.DriveEmitterColor != Color.Black && !this.DriveEmitterCycling()) this.CycleDriveEmitter(this.DriveEmitterColor, Color.Black, 300);
+				if (this.DriveEmitterColor != Color.Black && !this.DriveEmitterCycling()) this.CycleDriveEmitter(this.DriveEmitterColor, Color.Black, 0);
 				this.TerminalBlock.SetEmissiveParts("Emissive2", Color.Black, 0);
 			}
 
@@ -544,6 +544,11 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		public void PrepareDriveForGateJump()
 		{
 			this.IsPowerInvalid = 5;
+		}
+
+		public override void ReloadConfigurations()
+		{
+			this.DriveConfiguration = new Configuration.LocalDriveConfiguration(this, MyJumpGateModSession.Configuration.DriveConfiguration);
 		}
 
 		/// <summary>

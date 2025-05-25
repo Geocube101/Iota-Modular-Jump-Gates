@@ -1,8 +1,4 @@
-﻿using IOTA.ModularJumpGates.Util;
-using Sandbox.ModAPI.Interfaces.Terminal;
-using Sandbox.ModAPI;
-using System.Collections.Generic;
-using VRage.Game.ModAPI;
+﻿using VRage.Game.ModAPI;
 
 namespace IOTA.ModularJumpGates.Terminal
 {
@@ -28,13 +24,22 @@ namespace IOTA.ModularJumpGates.Terminal
 
 		public static void Load(IMyModContext context)
 		{
-			List<IMyTerminalControl> controls;
-			MyAPIGateway.TerminalControls.GetControls<IMyUpgradeModule>(out controls);
-			if (MyJumpGateDriveTerminal.IsLoaded || controls.Count == 0) return;
+			if (MyJumpGateDriveTerminal.IsLoaded) return;
 			MyJumpGateDriveTerminal.IsLoaded = true;
 			MyJumpGateDriveTerminal.SetupJumpGateDriveTerminalControls();
 			MyJumpGateDriveTerminal.SetupJumpGateDriveTerminalActions();
 			MyJumpGateDriveTerminal.SetupJumpGateDriveTerminalProperties();
+		}
+
+		public static void Unload()
+		{
+			if (!MyJumpGateDriveTerminal.IsLoaded) return;
+			MyJumpGateDriveTerminal.IsLoaded = false;
+		}
+
+		public static void UpdateRedrawControls()
+		{
+
 		}
 	}
 }

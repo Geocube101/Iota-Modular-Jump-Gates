@@ -319,12 +319,18 @@ namespace IOTA.ModularJumpGates.Animations
 						Duration = 180,
 						ParticleNames = new string[] { "IOTA.TravelEffect.WarpField" },
 						ParticleOrientation = new ParticleOrientationDef(ParticleOrientationEnum.GATE_TRUE_ENDPOINT_NORMAL),
-						ParticleOffset = new Vector3D(0, 0, -312.5),
 
 						Animations = new AttributeAnimationDef {
 							ParticleColorAnimation = new VectorKeyframe[] {
-								new VectorKeyframe(0, new Vector4D(0.5, 0.625, 1, 1), EasingCurveEnum.EXPONENTIAL, EasingTypeEnum.EASE_IN),
-								new VectorKeyframe(150, new Vector4D(0.5, 0.625, 1, 0)),
+								new VectorKeyframe(0, new Vector4D(1, 1, 1, 1)),
+								new VectorKeyframe(120, new Vector4D(1, 1, 1, 1), EasingCurveEnum.EXPONENTIAL, EasingTypeEnum.EASE_IN),
+								new VectorKeyframe(150, new Vector4D(1, 1, 1, 0)),
+							},
+							ParticleVelocityAnimation = new DoubleKeyframe[] {
+								new DoubleKeyframe(0, AnimationSourceEnum.DISTANCE_GATE_TO_ENDPOINT) * 5e-3,
+							},
+							ParticleOffsetAnimation = new VectorKeyframe[] {
+								new VectorKeyframe(0, new Vector4D(0, 0, -1, 0)) * AnimationSourceEnum.DISTANCE_GATE_TO_ENDPOINT * 6.5e-3,
 							},
 						},
 					},

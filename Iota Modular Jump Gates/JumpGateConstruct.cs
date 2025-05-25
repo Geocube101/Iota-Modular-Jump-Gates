@@ -1447,6 +1447,16 @@ namespace IOTA.ModularJumpGates
 		}
 
 		/// <summary>
+		/// Reloads the configurations of all gates, drives, and capacitors on this construct
+		/// </summary>
+		public void ReloadConfigurations()
+		{
+			foreach (KeyValuePair<long, MyJumpGate> pair in this.JumpGates) pair.Value.ReloadConfigurations();
+			foreach (KeyValuePair<long, MyJumpGateDrive> pair in this.JumpGateDrives) pair.Value.ReloadConfigurations();
+			foreach (KeyValuePair<long, MyJumpGateCapacitor> pair in this.JumpGateCapacitors) pair.Value.ReloadConfigurations();
+		}
+
+		/// <summary>
 		/// Gets a list of blocks from this construct that intersect the specified bounding ellipsoid
 		/// </summary>
 		/// <param name="ellipsoid">The bounding ellipsoid</param>

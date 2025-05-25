@@ -219,7 +219,7 @@ namespace IOTA.ModularJumpGates.Util
 			this.JumpGate = jump_gate;
 			this.Duration = time;
 			this.CurrentTick = 0;
-			this.EntityBatch = entity_batch;
+			this.EntityBatch = new List<MyEntity>(entity_batch);
 			this.StartPos = current_position.Translation;
 			this.EndPos = target_position;
 			this.FinalPos = final_position;
@@ -343,7 +343,7 @@ namespace IOTA.ModularJumpGates.Util
 				if (entity.MarkedForClose) continue;
 				MatrixD relative_offsets = this.RelativeEntityOffsets[i];
 				MatrixD result = relative_offsets * parent.WorldMatrix;
-				if (!complete || entity is IMyPlayer) result.SetRotationAndScale(entity.WorldMatrix);
+				if (!complete && entity is IMyPlayer) result.SetRotationAndScale(entity.WorldMatrix);
 				entity.Teleport(result);
 			}
 

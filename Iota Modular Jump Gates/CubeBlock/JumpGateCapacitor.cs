@@ -10,7 +10,6 @@ using System.Text;
 using VRage;
 using VRage.Game.Components;
 using VRage.ObjectBuilders;
-using VRage.Utils;
 using VRageMath;
 
 namespace IOTA.ModularJumpGates.CubeBlock
@@ -355,6 +354,11 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		#endregion
 
 		#region Public Methods
+		public override void ReloadConfigurations()
+		{
+			this.CapacitorConfiguration = new Configuration.LocalCapacitorConfiguration(this, MyJumpGateModSession.Configuration.CapacitorConfiguration);
+		}
+
 		/// <summary>
 		/// Updates this block data from a serialized capacitor
 		/// </summary>

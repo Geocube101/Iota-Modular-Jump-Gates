@@ -22,6 +22,11 @@ namespace IOTA.ModularJumpGates.Terminal
 			
 		}
 
+		private static void SetupBasicBlockTerminalControls()
+		{
+
+		}
+
 		public static void Load(IMyModContext context)
 		{
 			if (MyCubeBlockTerminal.IsLoaded) return;
@@ -29,6 +34,17 @@ namespace IOTA.ModularJumpGates.Terminal
 			MyCubeBlockTerminal.SetupJumpGateBlockTerminalControls();
 			MyCubeBlockTerminal.SetupJumpGateBlockTerminalActions();
 			MyCubeBlockTerminal.SetupJumpGateBlockTerminalProperties();
+		}
+
+		public static void Unload()
+		{
+			if (!MyCubeBlockTerminal.IsLoaded) return;
+			MyCubeBlockTerminal.IsLoaded = false;
+		}
+
+		public static void UpdateRedrawControls()
+		{
+
 		}
 	}
 }
