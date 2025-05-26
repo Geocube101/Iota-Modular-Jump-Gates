@@ -1615,6 +1615,14 @@ namespace IOTA.ModularJumpGates
 								}
 
 								obstructing.Clear();
+
+								// Gather attached child grids
+								foreach (IMyCubeGrid subgrid in parent.GetCubeGrids())
+								{
+									subgrid.GetGridGroup(GridLinkTypeEnum.Physical).GetGrids(grids);
+									batch.AddRange(grids.Select((child) => (MyEntity) child).Where((child) => !batch.Contains(child)));
+									grids.Clear();
+								}
 							}
 							else
 							{
@@ -1624,9 +1632,8 @@ namespace IOTA.ModularJumpGates
 
 							// Merge batches
 							List<MyEntity> mergers = new List<MyEntity>();
-							int i, j;
 
-							for (i = 0, j = batch.Count; i < j; ++i)
+							for (int i = 0; i < batch.Count; ++i)
 							{
 								MyEntity child = batch[i];
 								EntityBatch child_batch = this.EntityBatches.GetValueOrDefault(child, null);

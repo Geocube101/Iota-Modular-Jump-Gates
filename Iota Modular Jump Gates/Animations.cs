@@ -4260,7 +4260,7 @@ namespace IOTA.ModularJumpGates
 					foreach (Particle particle in this.TravelParticles)
 					{
 						MatrixD source = ParticleOrientationDef.GetJumpGateMatrix(this.JumpGate, this.TargetGate, false, ref endpoint, particle.ParticleDefinition.ParticleOrientation);
-						source.Translation = parent.WorldMatrix.Translation;
+						source.Translation = ((IMyEntity) parent).WorldVolume.Center;
 						particle.Tick(this.CurrentTick, source, jump_gate_drives, this.JumpedEntities, ref endpoint, parent);
 					}
 				}

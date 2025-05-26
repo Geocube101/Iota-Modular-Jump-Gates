@@ -776,6 +776,16 @@ namespace IOTA.ModularJumpGates
 				this.LastGameplayFrameCounter = MyAPIGateway.Session.GameplayFrameCounter;
 				if (paused) return;
 
+				// Tick queued entity warps
+				foreach (KeyValuePair<long, EntityWarpInfo> pair in this.EntityWarps)
+				{
+					if (pair.Value.Update())
+					{
+						pair.Value.Close();
+						this.EntityWarps.Remove(pair.Key);
+					}
+				}
+
 				// Tick queued animations
 				foreach (KeyValuePair<ulong, AnimationInfo> pair in this.JumpGateAnimations)
 				{
@@ -807,16 +817,6 @@ namespace IOTA.ModularJumpGates
 						if (stop) animation.Stop();
 					}
 					else if (animation.JumpGate.Closed) animation.Stop();
-				}
-
-				// Tick queued entity warps
-				foreach (KeyValuePair<long, EntityWarpInfo> pair in this.EntityWarps)
-				{
-					if (pair.Value.Update())
-					{
-						pair.Value.Close();
-						this.EntityWarps.Remove(pair.Key);
-					}
 				}
 			}
 			finally

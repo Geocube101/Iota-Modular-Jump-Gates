@@ -1812,12 +1812,6 @@ namespace IOTA.ModularJumpGates.Animations
 								new VectorKeyframe(210, new Vector4D(1, 1, 1, 1), EasingCurveEnum.EXPONENTIAL, EasingTypeEnum.EASE_IN),
 								new VectorKeyframe(240, new Vector4D(1, 1, 1, 0)),
 							},
-							ParticleVelocityAnimation = new DoubleKeyframe[] {
-								new DoubleKeyframe(0, AnimationSourceEnum.DISTANCE_GATE_TO_ENDPOINT) * 5e-3,
-							},
-							ParticleOffsetAnimation = new VectorKeyframe[] {
-								new VectorKeyframe(0, new Vector4D(0, 0, -1, 0)) * AnimationSourceEnum.DISTANCE_GATE_TO_ENDPOINT * 5e-3,
-							},
 						},
 					},
 				},
