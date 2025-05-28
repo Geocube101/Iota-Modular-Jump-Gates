@@ -22,6 +22,13 @@ namespace IOTA.ModularJumpGates.CubeBlock
 	/// </summary>
 	internal class MyCubeBlockBase : MyGameLogicComponent, IEquatable<MyCubeBlockBase>
 	{
+		public struct MyBlockPowerInfo
+		{
+			public double CurrentInput;
+			public double RequiredInput;
+			public double MaxRequiredInput;
+		}
+
 		#region Public Static Variables
 		/// <summary>
 		/// The number of game ticks between network block syncs
@@ -66,6 +73,11 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// The world matrix of this block
 		/// </summary>
 		private MatrixD BlockWorldMatrix;
+
+		/// <summary>
+		/// Contains information on this block's current power draw
+		/// </summary>
+		private MyBlockPowerInfo BlockPowerInfo = new MyBlockPowerInfo();
 
 		/// <summary>
 		/// The last detailed info string
@@ -131,7 +143,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// <summary>
 		/// Whether this component or it's attached block is closed
 		/// </summary>
-		public virtual bool IsClosed => (this.IsNullWrapper) ? (this.SerializedWrapperInfo?.IsClosed ?? true) : this.TerminalBlock == null || this.TerminalBlock.Closed || this.TerminalBlock.MarkedForClose || this.TerminalBlock.CubeGrid?.Physics == null;
+		public virtual bool IsClosed => (this.IsNullWrapper) ? (this.SerializedWrapperInfo?.IsClosed ?? true) : (this.TerminalBlock.Closed || this.TerminalBlock.MarkedForClose || this.TerminalBlock.CubeGrid?.Physics == null);
 
 		/// <summary>
 		/// Whether block is powered<br />
@@ -143,8 +155,8 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			{
 				if (this.IsNullWrapper) return this.SerializedWrapperInfo?.IsPowered ?? false;
 				else if (this.ResourceSink == null) return true;
-				else if (this.RequiresFullInput) return this.ResourceSink.CurrentInputByType(MyResourceDistributorComponent.ElectricityId) >= this.ResourceSink.RequiredInputByType(MyResourceDistributorComponent.ElectricityId);
-				else return this.ResourceSink.RequiredInputByType(MyResourceDistributorComponent.ElectricityId) <= 0 || this.ResourceSink.CurrentInputByType(MyResourceDistributorComponent.ElectricityId) > 0;
+				else if (this.RequiresFullInput) return this.BlockPowerInfo.CurrentInput >= this.BlockPowerInfo.RequiredInput;
+				else return this.BlockPowerInfo.RequiredInput <= 0 || this.BlockPowerInfo.CurrentInput > 0;
 			}
 		}
 
@@ -156,7 +168,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// <summary>
 		/// Whether this block is working: (not closed, enabled, powered)
 		/// </summary>
-		public virtual bool IsWorking => (this.IsNullWrapper) ? (this.SerializedWrapperInfo?.IsWorking ?? false) : !this.IsClosed && this.IsEnabled && this.IsPowered && this.TerminalBlock.IsFunctional;
+		public virtual bool IsWorking => (this.IsNullWrapper) ? (this.SerializedWrapperInfo?.IsWorking ?? false) : (!this.IsClosed && this.IsEnabled && this.IsPowered && this.TerminalBlock.IsFunctional);
 
 		/// <summary>
 		/// Whether this block is marked for close
@@ -326,6 +338,14 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				this.UpdateOnceAfterInit();
 				this.IsInitFrameCalled = true;
 				Logger.Debug($"[{this.BlockID}] ({this.ToString()}) UPDATE_ONCE_AFTER_INIT", 5);
+			}
+
+			if (this.ResourceSink != null)
+			{
+				MyDefinitionId id = MyResourceDistributorComponent.ElectricityId;
+				this.BlockPowerInfo.CurrentInput = this.ResourceSink.CurrentInputByType(id);
+				this.BlockPowerInfo.RequiredInput = this.ResourceSink.RequiredInputByType(id);
+				this.BlockPowerInfo.MaxRequiredInput = this.ResourceSink.MaxRequiredInputByType(id);
 			}
 
 			if (MyAPIGateway.Gui.GetCurrentScreen != VRage.Game.ModAPI.MyTerminalPageEnum.ControlPanel) return;

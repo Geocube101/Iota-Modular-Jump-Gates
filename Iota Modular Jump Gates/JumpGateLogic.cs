@@ -1,4 +1,5 @@
 ﻿using IOTA.ModularJumpGates.CubeBlock;
+using IOTA.ModularJumpGates.Extensions;
 using IOTA.ModularJumpGates.Util;
 using IOTA.ModularJumpGates.Util.ConcurrentCollections;
 using ProtoBuf;
@@ -3683,7 +3684,7 @@ namespace IOTA.ModularJumpGates
 		public bool IsLargeGrid()
 		{
 			if (this.Closed) return false;
-			else if (this.DriveGridSize == null) return this.GetWorkingJumpGateDrives().Any((drive) => drive.IsLargeGrid);
+			else if (this.DriveGridSize == null) return this.GetJumpGateDrives().Any((drive) => drive.IsLargeGrid);
 			else return this.DriveGridSize.Value == MyCubeSize.Large;
 		}
 
@@ -3693,7 +3694,7 @@ namespace IOTA.ModularJumpGates
 		public bool IsSmallGrid()
 		{
 			if (this.Closed) return false;
-			else if (this.DriveGridSize == null) return this.GetWorkingJumpGateDrives().Any((drive) => drive.IsSmallGrid);
+			else if (this.DriveGridSize == null) return this.GetJumpGateDrives().Any((drive) => drive.IsSmallGrid);
 			else return this.DriveGridSize.Value == MyCubeSize.Small;
 		}
 
@@ -3739,7 +3740,7 @@ namespace IOTA.ModularJumpGates
 			else if (this.JumpGateID < 0) return MyGateInvalidationReason.INVALID_ID;
 			else if (this.InnerDriveIntersectNodes.Count < 1) return MyGateInvalidationReason.INSUFFICIENT_NODES;
 			else if (this.MarkClosed) return MyGateInvalidationReason.CLOSED;
-			else if (this.GetJumpGateDrives().Count() < 2) return MyGateInvalidationReason.INSUFFICIENT_DRIVES;
+			else if (!this.GetJumpGateDrives().AtLeast(2)) return MyGateInvalidationReason.INSUFFICIENT_DRIVES;
 			else return MyGateInvalidationReason.NONE;
 		}
 

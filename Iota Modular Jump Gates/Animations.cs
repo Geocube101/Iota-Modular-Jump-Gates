@@ -4213,7 +4213,7 @@ namespace IOTA.ModularJumpGates
 			}
 
 			Vector3D current_pos = MyAPIGateway.Session.Camera.Position;
-			double distance = MyJumpGateModSession.Configuration.GeneralConfiguration.DrawSyncDistance * MyJumpGateModSession.Configuration.GeneralConfiguration.DrawSyncDistance;
+			double distance = MyJumpGateModSession.Configuration.GeneralConfiguration.DrawSyncDistance * MyJumpGateModSession.Configuration.GeneralConfiguration.DrawSyncDistance * 4;
 			MyEntity controller = (MyNetworkInterface.IsDedicatedMultiplayerServer) ? null : MyAPIGateway.Session.CameraController?.Entity?.GetTopMostParent();
 
 			if (!MyNetworkInterface.IsDedicatedMultiplayerServer && (jump_gate_entities.Contains(controller) || Vector3D.DistanceSquared(current_pos, world_jump_node) <= distance || Vector3D.DistanceSquared(current_pos, endpoint) <= distance))
