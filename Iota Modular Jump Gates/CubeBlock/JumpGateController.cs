@@ -709,7 +709,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		}
 		#endregion
 
-		#region CubeBlockBase Methods
+		#region "CubeBlockBase" Methods
 		/// <summary>
 		/// CubeBlockBase Method<br />
 		/// Appends info to the detailed info screen
@@ -883,7 +883,6 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		protected override void UpdateOnceAfterInit()
 		{
 			base.UpdateOnceAfterInit();
-			if (!MyJumpGateControllerTerminal.IsLoaded) MyJumpGateControllerTerminal.Load(this.ModContext);
 			KeyValuePair<MyJumpGateRemoteAntenna, byte> remote_antenna = this.RemoteAntennaChannel;
 			if (remote_antenna.Key != null && remote_antenna.Value != 0xFF) remote_antenna.Key.SetControllerForOutboundControl(remote_antenna.Value, this);
 		}
@@ -971,6 +970,12 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			if (MyJumpGateModSession.Network.Registered) MyJumpGateModSession.Network.Off(MyPacketTypeEnum.UPDATE_CAPACITOR, this.OnNetworkBlockUpdate);
 			this.BaseBlockSettings.JumpGateID(-1);
 			this.BaseBlockSettings.SelectedWaypoint(null);
+		}
+
+		public override void UpdateOnceBeforeFrame()
+		{
+			base.UpdateOnceBeforeFrame();
+			if (!MyJumpGateControllerTerminal.IsLoaded) MyJumpGateControllerTerminal.Load(this.ModContext);
 		}
 
 		/// <summary>
@@ -1087,7 +1092,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				if (view_distance <= 250d && Vector3D.Angle(MyAPIGateway.Session.Camera.WorldMatrix.Forward, table_camera_dir) < MyJumpGateController.MaxHoloViewAngle)
 				{
 					jump_gate_valid = jump_gate != null && jump_gate.IsControlled();
-					BoundingEllipsoidD jump_ellipse = jump_gate?.JumpEllipse ?? BoundingEllipsoidD.Zero;
+					BoundingEllipsoidD jump_ellipse = jump_gate?.GetEffectiveJumpEllipse() ?? BoundingEllipsoidD.Zero;
 
 					Color aqua = new Color(97, 205, 202);
 					Color red = Color.Red;

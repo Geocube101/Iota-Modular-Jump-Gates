@@ -438,18 +438,18 @@ namespace IOTA.ModularJumpGates
 			/// <summary>
 			/// The force (in Newtons) applied for every drive in a large grid jump gate away from the jump node when the gate is charging<br />
 			/// Cannot be NaN or Infinite<br />
-			/// Defaults to 10000
+			/// Defaults to 1000
 			/// </summary>
 			[ProtoMember(20, IsRequired = true)]
-			public double ChargingLargeDriveEffectorForceN = 10000;
+			public double ChargingLargeDriveEffectorForceN = 1000;
 
 			/// <summary>
 			/// The force (in Newtons) applied for every drive in a large grid jump gate away from the jump node when the gate is charging<br />
 			/// Cannot be NaN or Infinite<br />
-			/// Defaults to 5000
+			/// Defaults to 250
 			/// </summary>
 			[ProtoMember(21, IsRequired = true)]
-			public double ChargingSmallDriveEffectorForceN = 5000;
+			public double ChargingSmallDriveEffectorForceN = 250;
 
 			/// <summary>
 			/// The maximum number of total jumps that are allowed at a time<br />

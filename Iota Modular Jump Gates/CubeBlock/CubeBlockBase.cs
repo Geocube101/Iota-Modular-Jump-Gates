@@ -299,6 +299,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		{
 			base.UpdateOnceBeforeFrame();
 			MyCubeBlockBase.ModelBoundingBoxSize = (MyCubeBlockBase.ModelBoundingBoxSize == Vector3D.Zero && !this.IsNullWrapper) ? new Vector3D(this.TerminalBlock.Model.BoundingBoxSize) : MyCubeBlockBase.ModelBoundingBoxSize;
+			MyCubeBlockTerminal.Load(this.ModContext);
 			this.InitFrameAvailable = true;
 		}
 
@@ -632,10 +633,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// Overridable<br />
 		/// Called once when all session constructs are initialized
 		/// </summary>
-		protected virtual void UpdateOnceAfterInit()
-		{
-			MyCubeBlockTerminal.Load(this.ModContext);
-		}
+		protected virtual void UpdateOnceAfterInit() { }
 		#endregion
 
 		#region Public Methods

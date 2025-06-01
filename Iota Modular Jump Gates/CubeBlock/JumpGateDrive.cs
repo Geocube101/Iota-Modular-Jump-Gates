@@ -152,7 +152,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		}
 		#endregion
 
-		#region CubeBlockBase Methods
+		#region "CubeBlockBase" Methods
 		/// <summary>
 		/// Appends info to the detailed info screen
 		/// </summary>
@@ -193,12 +193,6 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		{
 			base.Clean();
 			this.DriveConfiguration = null;
-		}
-
-		protected override void UpdateOnceAfterInit()
-		{
-			base.UpdateOnceAfterInit();
-			if (!MyJumpGateDriveTerminal.IsLoaded) MyJumpGateDriveTerminal.Load(this.ModContext);
 		}
 
 		/// <summary>
@@ -266,6 +260,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			base.UpdateOnceBeforeFrame();
 			this.TerminalBlock?.SetEmissiveParts("Emissive0", Color.Black, 0);
 			this.TerminalBlock?.SetEmissiveParts("Emissive2", Color.Black, 0);
+			if (!MyJumpGateDriveTerminal.IsLoaded) MyJumpGateDriveTerminal.Load(this.ModContext);
 		}
 
 		/// <summary>

@@ -1304,25 +1304,25 @@ namespace IOTA.ModularJumpGates
 				switch (this.Operation)
 				{
 					case MathOperationEnum.ADD:
-						final = Vector4D.Zero;
-						foreach (EvaluatedResult result in results) final += result.AsVector();
+						final = results[0].AsVector();
+						foreach (EvaluatedResult result in results.Skip(1)) final += result.AsVector();
 						break;
 					case MathOperationEnum.SUBTRACT:
-						final = Vector4D.Zero;
-						foreach (EvaluatedResult result in results) final -= result.AsVector();
+						final = results[0].AsVector();
+						foreach (EvaluatedResult result in results.Skip(1)) final -= result.AsVector();
 						break;
 					case MathOperationEnum.MULTIPLY:
-						final = Vector4D.One;
-						foreach (EvaluatedResult result in results) final *= result.AsVector();
+						final = results[0].AsVector();
+						foreach (EvaluatedResult result in results.Skip(1)) final *= result.AsVector();
 						break;
 					case MathOperationEnum.DIVIDE:
-						final = Vector4D.One;
-						foreach (EvaluatedResult result in results) final /= result.AsVector();
+						final = results[0].AsVector();
+						foreach (EvaluatedResult result in results.Skip(1)) final /= result.AsVector();
 						break;
 					case MathOperationEnum.MODULO:
-						final = Vector4D.One;
+						final = results[0].AsVector();
 
-						foreach (EvaluatedResult result in results)
+						foreach (EvaluatedResult result in results.Skip(1))
 						{
 							Vector4D vector = result.AsVector();
 							final = new Vector4D(final.X % vector.X, final.Y % vector.Y, final.Z % vector.Z, final.W % vector.W);
@@ -1330,9 +1330,9 @@ namespace IOTA.ModularJumpGates
 
 						break;
 					case MathOperationEnum.POWER:
-						final = Vector4D.One;
+						final = results[0].AsVector();
 
-						foreach (EvaluatedResult result in results)
+						foreach (EvaluatedResult result in results.Skip(1))
 						{
 							Vector4D vector = result.AsVector();
 							final = new Vector4D(Math.Pow(final.X, vector.X), Math.Pow(final.Y, vector.Y), Math.Pow(final.Z, vector.Z), Math.Pow(final.W, vector.W));
@@ -2934,7 +2934,7 @@ namespace IOTA.ModularJumpGates
 	/// <summary>
 	/// Implementation holding functionality for particle definitions
 	/// </summary>
-	internal class Particle
+	internal class Particle : IEquatable<Particle>
 	{
 		private sealed class TransientParticle
 		{
@@ -2950,12 +2950,85 @@ namespace IOTA.ModularJumpGates
 
 		#region Private Static Variables
 		/// <summary>
+		/// The number of active effects to play at a given time
+		/// </summary>
+		private static readonly uint RenderQueueLength = 50;
+
+		/// <summary>
+		/// The next particle ID
+		/// </summary>
+		private static int NextParticleID = 0;
+
+		/// <summary>
+		/// Master list of active particle effects on this client
+		/// </summary>
+		private static readonly List<Particle> ActiveParticlesQueue = new List<Particle>();
+
+		/// <summary>
 		/// Master map storing transient particles
 		/// </summary>
 		private static Dictionary<MyJumpGate, Dictionary<byte, TransientParticle>> TransientParticles = new Dictionary<MyJumpGate, Dictionary<byte, TransientParticle>>();
 		#endregion
 
+		#region Private Static Methods
+		/// <summary>
+		/// Adds a particle from the active queue
+		/// </summary>
+		/// <param name="particle">The particle ro add</param>
+		private static void QueueParticleForRender(Particle particle)
+		{
+			lock (Particle.ActiveParticlesQueue)
+			{
+				if (particle == null || Particle.ActiveParticlesQueue.Contains(particle)) return;
+				particle.IsPlayableInQueue = false;
+				Particle.ActiveParticlesQueue.Add(particle);
+			}
+		}
+
+		/// <summary>
+		/// Removes a particle from the active queue
+		/// </summary>
+		/// <param name="particle">The particle ro remove</param>
+		private static void DequeueParticleForRender(Particle particle)
+		{
+			lock (Particle.ActiveParticlesQueue)
+			{
+				if (particle == null) return;
+				Particle.ActiveParticlesQueue.Remove(particle);
+				particle.IsPlayableInQueue = false;
+			}
+		}
+		#endregion
+
+		#region Public Static Methods
+		/// <summary>
+		/// Updates the state of all active particles
+		/// </summary>
+		public static void Render()
+		{
+			if (MyNetworkInterface.IsDedicatedMultiplayerServer) return;
+			uint index = 0;
+			Vector3D camera_pos = MyAPIGateway.Session.Camera.Position;
+
+			lock (Particle.ActiveParticlesQueue)
+			{
+				foreach (Particle particle in Particle.ActiveParticlesQueue.OrderBy((particle) => Vector3D.DistanceSquared(camera_pos, particle.EffectPosition)))
+					particle.IsPlayableInQueue = index++ < Particle.RenderQueueLength;
+			}
+		}
+		#endregion
+
 		#region Private Variables
+		/// <summary>
+		/// Whether this particle effect is in the queue and should be played
+		/// </summary>
+		private bool IsPlayableInQueue = true;
+
+		/// <summary>
+		/// Whether this particle is stopped
+		/// </summary>
+		private bool Stopped = true;
+
 		/// <summary>
 		/// Whether this particle should be spawned at the gate's anti-node
 		/// </summary>
@@ -2965,6 +3038,16 @@ namespace IOTA.ModularJumpGates
 		/// The duration of this particle effect in game ticks
 		/// </summary>
 		private readonly ushort Duration;
+
+		/// <summary>
+		/// This particle's ID
+		/// </summary>
+		private readonly int ParticleID;
+
+		/// <summary>
+		/// The current effect's position
+		/// </summary>
+		private Vector3D EffectPosition;
 
 		/// <summary>
 		/// The last particle rotations
@@ -3020,6 +3103,7 @@ namespace IOTA.ModularJumpGates
 		public Particle(ParticleDef def, ushort animation_duration, MyJumpGate jump_gate, MyJumpGate target_gate, MyJumpGateController.MyControllerBlockSettingsStruct controller_settings, MatrixD matrix, Vector3D position, bool anti_node)
 		{
 			if (def == null) throw new ArgumentNullException("ParticleDef cannot be null");
+			this.ParticleID = Particle.NextParticleID++;
 			this.Duration = (def.Duration == 0) ? animation_duration : def.Duration;
 			this.ParticleDefinition = def;
 			this.JumpGate = jump_gate;
@@ -3058,6 +3142,25 @@ namespace IOTA.ModularJumpGates
 					this.ParticleRotations.Add(Vector3D.Zero);
 				}
 			}
+
+			Particle.QueueParticleForRender(this);
+		}
+		#endregion
+
+		#region "object" Methods
+		public override bool Equals(object obj)
+		{
+			return obj != null && obj is Particle && this.Equals((Particle) obj);
+		}
+
+		public bool Equals(Particle particle)
+		{
+			return particle != null && this.ParticleID == particle.ParticleID;
+		}
+
+		public override int GetHashCode()
+		{
+			return this.ParticleID;
 		}
 		#endregion
 
@@ -3073,9 +3176,13 @@ namespace IOTA.ModularJumpGates
 		/// <param name="this_entity">This entity or null if not bound to an entity</param>
 		public void Tick(ushort current_tick, MatrixD? source, List<MyJumpGateDrive> drives, List<MyEntity> entities, ref Vector3D endpoint, MyEntity this_entity = null)
 		{
+			MatrixD base_matrix = source ?? ParticleOrientationDef.GetJumpGateMatrix(this.JumpGate, this.TargetGate, this.IsAntiNode, ref endpoint, this.ParticleDefinition.ParticleOrientation);
+			this.EffectPosition = base_matrix.Translation;
+
 			if (this.ParticleEffects == null || this.ParticleEffects.Count == 0) return;
-			else if (current_tick >= this.ParticleDefinition.StartTime && current_tick <= this.ParticleDefinition.StartTime + this.Duration)
+			else if (this.IsPlayableInQueue && current_tick >= this.ParticleDefinition.StartTime && current_tick <= this.ParticleDefinition.StartTime + this.Duration)
 			{
+				this.Stopped = false;
 				ushort local_tick = (ushort) (current_tick - this.ParticleDefinition.StartTime);
 				Vector3D rotations_per_second = Vector3D.Zero;
 				Vector3D offset = this.ParticleDefinition.ParticleOffset;
@@ -3089,7 +3196,7 @@ namespace IOTA.ModularJumpGates
 				float radius_mp = (float) AttributeAnimationDef.GetAnimatedDoubleValue(this.ParticleDefinition.Animations?.ParticleRadiusAnimation, arguments, 1);
 				float scale_mp = (float) AttributeAnimationDef.GetAnimatedDoubleValue(this.ParticleDefinition.Animations?.ParticleScaleAnimation, arguments, 1);
 				float velocity_mp = (float) AttributeAnimationDef.GetAnimatedDoubleValue(this.ParticleDefinition.Animations?.ParticleVelocityAnimation, arguments, 1);
-				
+
 				Vector4D color = AttributeAnimationDef.GetAnimatedVectorValue(this.ParticleDefinition.Animations?.ParticleColorAnimation, arguments, Vector4D.One);
 				color *= this.ControllerSettings?.JumpEffectAnimationColorShift().ToVector4D() ?? Vector4D.One;
 
@@ -3099,8 +3206,6 @@ namespace IOTA.ModularJumpGates
 				off = AttributeAnimationDef.GetAnimatedVectorValue(this.ParticleDefinition.Animations?.ParticleOffsetAnimation, arguments, new Vector4D(offset, 0));
 				offset = new Vector3D(off.X, off.Y, off.Z);
 
-				MatrixD base_matrix = source ?? ParticleOrientationDef.GetJumpGateMatrix(this.JumpGate, this.TargetGate, this.IsAntiNode, ref endpoint, this.ParticleDefinition.ParticleOrientation);
-				
 				for (int i = 0; i < this.ParticleEffects.Count; ++i)
 				{
 					MyParticleEffect effect = this.ParticleEffects[i];
@@ -3126,6 +3231,7 @@ namespace IOTA.ModularJumpGates
 				this.Stop();
 				if (this.ParticleDefinition.CleanOnEffectEnd) this.Clean();
 			}
+			else if (!this.IsPlayableInQueue && !this.Stopped) this.Stop();
 		}
 
 		/// <summary>
@@ -3151,6 +3257,8 @@ namespace IOTA.ModularJumpGates
 			this.JumpGate = null;
 			this.TargetGate = null;
 			this.ControllerSettings = null;
+			this.Stopped = true;
+			Particle.DequeueParticleForRender(this);
 		}
 
 		/// <summary>
@@ -3158,7 +3266,7 @@ namespace IOTA.ModularJumpGates
 		/// </summary>
 		public void Stop()
 		{
-			if (this.ParticleEffects == null) return;
+			if (this.ParticleEffects == null || this.Stopped) return;
 			Dictionary<byte, TransientParticle> transient_particles = Particle.TransientParticles.GetValueOrNew(this.JumpGate);
 
 			for (int i = 0; i < this.ParticleEffects.Count; ++i)
@@ -3172,6 +3280,8 @@ namespace IOTA.ModularJumpGates
 				if (old_effect != null && old_effect.ParticleEffect != effect) old_effect.ParticleEffect.Stop();
 				transient_particles[transient_id] = new TransientParticle(effect, this.ParticleRotations[i]);
 			}
+
+			this.Stopped = true;
 		}
 		#endregion
 	}
@@ -3423,7 +3533,7 @@ namespace IOTA.ModularJumpGates
 				beam_length = (beam_length < 0) ? (beam_dir.Length() * tick_ratio) : beam_length;
 				Vector3D beam_end = jump_node + beam_dir * tick_ratio;
 				Vector3D beam_start = ((Vector3D.Distance(beam_end, jump_node) <= beam_length) ? jump_node : (beam_end - beam_dir_n * beam_length)) + offset_vec;
-
+				
 				double beam_width;
 				Vector4 beam_color;
 
@@ -3433,7 +3543,7 @@ namespace IOTA.ModularJumpGates
 					flash_matrix.Translation = beam_end;
 					foreach (Particle particle in this.FlashPointParticles) particle.Tick(current_tick, flash_matrix, drives, entities, ref endpoint, null);
 				}
-
+				
 				if (frequency == 0)
 				{
 					beam_width = Math.Abs(beam_width = AttributeAnimationDef.GetAnimatedDoubleValue(this.BeamPulseDefinition.Animations?.ParticleRadiusAnimation, arguments, this.BeamPulseDefinition.BeamWidth));
@@ -3441,7 +3551,7 @@ namespace IOTA.ModularJumpGates
 					MySimpleObjectDraw.DrawLine(beam_start, beam_end, this.BeamMaterial, ref beam_color, (float) beam_width);
 					return;
 				}
-
+				
 				double beam_dir_length = beam_dir.Length();
 				double waveform = (beam_dir_length - (beam_dir_length - beam_length)) / frequency;
 				double w0 = waveform * duty_cycle;
@@ -3861,7 +3971,7 @@ namespace IOTA.ModularJumpGates
 		/// <summary>
 		/// Stops this animation
 		/// </summary>
-		/// <param name="full_close">Whther to clean this animation</param>
+		/// <param name="full_close">Whether to clean this animation</param>
 		public void Stop(bool full_close = false)
 		{
 			this.StopActive = true;
@@ -4202,6 +4312,14 @@ namespace IOTA.ModularJumpGates
 		#endregion
 
 		#region Public Methods
+		public bool IsPointWithinBeamPulseCylinder(ref Vector3D point, ref Vector3D gate_world_jump_node, ref Vector3D gate_world_target)
+		{
+			Vector3D dir = point - gate_world_jump_node;
+			Vector3D normal = gate_world_target - gate_world_jump_node;
+			double distance = MyJumpGateModSession.Configuration.GeneralConfiguration.DrawSyncDistance * MyJumpGateModSession.Configuration.GeneralConfiguration.DrawSyncDistance * 4;
+			return Vector3D.ProjectOnPlane(ref dir, ref normal).LengthSquared() <= distance;
+		}
+
 		public override void Tick(IMyPlayer caller, ref Vector3D endpoint, ref Vector3D anti_node, ref Vector3D world_jump_node, List<MyJumpGateDrive> jump_gate_drives, List<MyJumpGateDrive> target_jump_gate_drives, List<MyEntity> jump_gate_entities)
 		{
 			base.Tick(caller, ref endpoint, ref anti_node, ref world_jump_node, jump_gate_drives, target_jump_gate_drives, jump_gate_entities);
@@ -4213,8 +4331,14 @@ namespace IOTA.ModularJumpGates
 			}
 
 			Vector3D current_pos = MyAPIGateway.Session.Camera.Position;
-			double distance = MyJumpGateModSession.Configuration.GeneralConfiguration.DrawSyncDistance * MyJumpGateModSession.Configuration.GeneralConfiguration.DrawSyncDistance * 4;
+			double distance = MyJumpGateModSession.Configuration.GeneralConfiguration.DrawSyncDistance * MyJumpGateModSession.Configuration.GeneralConfiguration.DrawSyncDistance;
 			MyEntity controller = (MyNetworkInterface.IsDedicatedMultiplayerServer) ? null : MyAPIGateway.Session.CameraController?.Entity?.GetTopMostParent();
+			MyEntity parent = this.JumpGate.GetEntityBatchFromEntity(controller)?.Parent;
+
+			if (!MyNetworkInterface.IsDedicatedMultiplayerServer && parent == null && this.IsPointWithinBeamPulseCylinder(ref current_pos, ref world_jump_node, ref anti_node))
+			{
+				this.Beam?.Tick(this.CurrentTick, jump_gate_drives, jump_gate_entities, ref endpoint, ref world_jump_node);
+			}
 
 			if (!MyNetworkInterface.IsDedicatedMultiplayerServer && (jump_gate_entities.Contains(controller) || Vector3D.DistanceSquared(current_pos, world_jump_node) <= distance || Vector3D.DistanceSquared(current_pos, endpoint) <= distance))
 			{
@@ -4243,8 +4367,6 @@ namespace IOTA.ModularJumpGates
 
 					this.ClosedEntities.Clear();
 				}
-				
-				MyEntity parent = this.JumpGate.GetEntityBatchFromEntity(controller)?.Parent;
 				
 				if (parent == null && this.TravelParticles != null)
 				{
@@ -4323,8 +4445,6 @@ namespace IOTA.ModularJumpGates
 
 					this.ClosedDrives.Clear();
 				}
-
-				if (parent == null) this.Beam?.Tick(this.CurrentTick, jump_gate_drives, jump_gate_entities, ref endpoint, ref world_jump_node);
 
 				if (this.JumpType == MyJumpTypeEnum.STANDARD || this.JumpType == MyJumpTypeEnum.OUTBOUND_VOID)
 				{

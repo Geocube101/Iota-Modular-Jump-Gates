@@ -1851,6 +1851,11 @@ namespace IOTA.ModularJumpGates.Animations
 								ParticleScaleAnimation = new DoubleKeyframe[] {
 									new DoubleKeyframe(0, AnimationSourceEnum.JUMP_GATE_SIZE) / 4,
 								},
+								ParticleColorAnimation = new VectorKeyframe[] {
+									new VectorKeyframe(0, Vector4D.One, ratio_type: RatioTypeEnum.ENDPOINT_DISTANCE, lower: new Vector4D(0.5, 0.625, 1, 1), upper: new Vector4D(1, 0.625, 0.5, 1)),
+									new VectorKeyframe(180, Vector4D.One, ratio_type: RatioTypeEnum.ENDPOINT_DISTANCE, lower: new Vector4D(0.5, 0.625, 1, 1), upper: new Vector4D(1, 0.625, 0.5, 1)),
+									new VectorKeyframe(240, Vector4D.Zero),
+								},
 							},
 						},
 					}

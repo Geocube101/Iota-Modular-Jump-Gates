@@ -2122,11 +2122,9 @@ namespace IOTA.ModularJumpGates
 		{
 			if (this.Closed) return;
 			MyEntity topmost = (MyEntity) entity.GetTopMostParent();
-			MyJumpGateConstruct parent = null;
-			if (topmost is MyCubeGrid && (parent = MyJumpGateModSession.Instance.GetUnclosedJumpGateGrid(topmost.EntityId)) != null) topmost = (MyCubeGrid) parent.CubeGrid;
-			if (!this.IsControlled() || this.MarkClosed || topmost?.Physics == null || entity == this.JumpSpaceCollisionDetector || entity != topmost) return;
+			if (entity == this.JumpSpaceCollisionDetector) return;
 
-			if (is_entering && !this.JumpGateGrid.HasCubeGrid(topmost.EntityId)) this.JumpSpaceColliderEntities[topmost.EntityId] = topmost;
+			if (is_entering) this.JumpSpaceColliderEntities[topmost.EntityId] = topmost;
 			else if (!is_entering && !this.ForceUpdateCollider)
 			{
 				this.JumpSpaceColliderEntities.Remove(topmost.EntityId);
@@ -2949,19 +2947,12 @@ namespace IOTA.ModularJumpGates
 
 				BoundingEllipsoidD jump_ellipse = this.JumpEllipse;
 				BoundingSphereD bounding_sphere = new BoundingSphereD(jump_ellipse.WorldMatrix.Translation, jump_ellipse.Radii.Max());
-				//MyGamePruningStructure.GetAllTopMostEntitiesInSphere(ref bounding_sphere, this.ColliderPruningList);
-
+				MyGamePruningStructure.GetAllTopMostEntitiesInSphere(ref bounding_sphere, this.ColliderPruningList);
 				this.JumpSpaceColliderEntities.Clear();
 				this.JumpSpaceEntities.Clear();
-
 				foreach (MyEntity entity in this.ColliderPruningList)
-				{
-					MyEntity topmost = (MyEntity) entity.GetTopMostParent();
-					MyJumpGateConstruct parent = null;
-					if (topmost is MyCubeGrid && (parent = MyJumpGateModSession.Instance.GetUnclosedJumpGateGrid(topmost.EntityId)) != null) topmost = (MyCubeGrid) parent.CubeGrid;
-					if (this.IsControlled() && !this.MarkClosed && topmost?.Physics != null && entity != this.JumpSpaceCollisionDetector && entity == topmost && !this.JumpGateGrid.HasCubeGrid(topmost.EntityId)) this.JumpSpaceColliderEntities[topmost.EntityId] = topmost;
-				}
-
+					if (entity != this.JumpSpaceCollisionDetector)
+						this.JumpSpaceColliderEntities[entity.EntityId] = entity;
 				this.ColliderPruningList.Clear();
 			}
 			
@@ -3155,7 +3146,7 @@ namespace IOTA.ModularJumpGates
 				}
 
 				// Update jump space entities
-				if (MyNetworkInterface.IsServerLike && update_entities)
+				if (MyNetworkInterface.IsServerLike && update_entities && this.IsControlled() && !this.MarkClosed)
 				{
 					BoundingEllipsoidD jump_ellipse = this.GetEffectiveJumpEllipse();
 					List<MyEntity> closed_entities = new List<MyEntity>();
@@ -3163,9 +3154,9 @@ namespace IOTA.ModularJumpGates
 
 					foreach (KeyValuePair<long, MyEntity> pair in this.JumpSpaceColliderEntities)
 					{
-						MyEntity entity = pair.Value;
+						MyEntity entity = pair.Value.GetTopMostParent();
 
-						if (entity?.Physics == null || entity.MarkedForClose)
+						if (entity?.Physics == null || entity.MarkedForClose || this.JumpGateGrid.HasCubeGrid(entity.EntityId))
 						{
 							closed_entities.Add(entity);
 							continue;

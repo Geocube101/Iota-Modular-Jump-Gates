@@ -566,7 +566,7 @@ namespace IOTA.ModularJumpGates
 					{
 						foreach (KeyValuePair<long, MyJumpGateDrive> pair in this.JumpGateDrives)
 						{
-							if (drive != pair.Value)
+							if (drive != pair.Value && drive.CubeGridSize == pair.Value.CubeGridSize)
 							{
 								this.DriveCombinations?.Add(new KeyValuePair<MyJumpGateDrive, MyJumpGateDrive>(drive, pair.Value));
 							}
@@ -937,9 +937,16 @@ namespace IOTA.ModularJumpGates
 				// Update drive combinations
 				if (this.DriveCombinations == null)
 				{
-					List<MyJumpGateDrive> indexable_large_drives = new List<MyJumpGateDrive>(this.JumpGateDrives.Select((pair) => pair.Value).Where((drive) => drive.IsLargeGrid));
-					List<MyJumpGateDrive> indexable_small_drives = new List<MyJumpGateDrive>(this.JumpGateDrives.Select((pair) => pair.Value).Where((drive) => drive.IsSmallGrid));
+					List<MyJumpGateDrive> indexable_large_drives = new List<MyJumpGateDrive>(this.JumpGateDrives.Count);
+					List<MyJumpGateDrive> indexable_small_drives = new List<MyJumpGateDrive>(this.JumpGateDrives.Count);
 					this.DriveCombinations = new List<KeyValuePair<MyJumpGateDrive, MyJumpGateDrive>>();
+
+					foreach (KeyValuePair<long, MyJumpGateDrive> pair in this.JumpGateDrives)
+					{
+						if (pair.Value.IsLargeGrid) indexable_large_drives.Add(pair.Value);
+						else if (pair.Value.IsSmallGrid) indexable_small_drives.Add(pair.Value);
+					}
+
 
 					for (int i = 0; i < indexable_large_drives.Count - 1; ++i)
 					{
@@ -1722,6 +1729,7 @@ namespace IOTA.ModularJumpGates
 		public bool IsConstructWithinBoundingEllipsoid(ref BoundingEllipsoidD ellipsoid)
 		{
 			if (this.Closed) return false;
+			foreach (KeyValuePair<long, IMyCubeGrid> pair in this.CubeGrids) if (ellipsoid.IsPointInEllipse(pair.Value.WorldMatrix.Translation)) return true;
 			foreach (IMySlimBlock block in this.GridBlocks) if (ellipsoid.IsPointInEllipse(MyJumpGateModSession.LocalVectorToWorldVectorP(block.CubeGrid.WorldMatrix, block.Position * block.CubeGrid.GridSize))) return true;
 			return false;
 		}

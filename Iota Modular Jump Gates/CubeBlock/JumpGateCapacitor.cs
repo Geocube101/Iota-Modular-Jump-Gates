@@ -150,12 +150,6 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			this.CapacitorConfiguration = null;
 		}
 
-		protected override void UpdateOnceAfterInit()
-		{
-			base.UpdateOnceAfterInit();
-			if (!MyJumpGateCapacitorTerminal.IsLoaded) MyJumpGateCapacitorTerminal.Load(this.ModContext);
-		}
-
 		/// <summary>
 		/// CubeBlockBase Method<br />
 		/// Initializes the block's game logic
@@ -217,6 +211,12 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				request.Payload<MySerializedJumpGateCapacitor>(null);
 				request.Send();
 			}
+		}
+
+		public override void UpdateOnceBeforeFrame()
+		{
+			base.UpdateOnceBeforeFrame();
+			if (!MyJumpGateCapacitorTerminal.IsLoaded) MyJumpGateCapacitorTerminal.Load(this.ModContext);
 		}
 
 		/// <summary>

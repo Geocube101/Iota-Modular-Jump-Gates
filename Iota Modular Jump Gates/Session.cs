@@ -143,11 +143,6 @@ namespace IOTA.ModularJumpGates
 		private MyTerminalPageEnum LastTerminalPage = MyTerminalPageEnum.None;
 
 		/// <summary>
-		/// Lock for operations on closure queue and grid map
-		/// </summary>
-		private object ClosureQueueMapIteratorLock = new object();
-
-		/// <summary>
 		/// A list of the last 60 update times
 		/// </summary>
 		private ConcurrentSpinQueue<double> GridUpdateTimeTicks = new ConcurrentSpinQueue<double>(60);
@@ -787,6 +782,7 @@ namespace IOTA.ModularJumpGates
 				}
 
 				// Tick queued animations
+				Particle.Render();
 				foreach (KeyValuePair<ulong, AnimationInfo> pair in this.JumpGateAnimations)
 				{
 					AnimationInfo animation_info = pair.Value;
@@ -1212,13 +1208,10 @@ namespace IOTA.ModularJumpGates
 		/// </summary>
 		private void FlushClosureQueues()
 		{
-			lock (this.ClosureQueueMapIteratorLock)
-			{
-				KeyValuePair<MyJumpGateConstruct, bool> pair;
-				while (this.GridCloseRequests.TryDequeue(out pair)) if (!pair.Key.Closed) pair.Key.Close(pair.Value);
-				MyJumpGate gate;
-				while (this.GateCloseRequests.TryDequeue(out gate)) if (!gate.Closed) gate.Close();
-			}
+			KeyValuePair<MyJumpGateConstruct, bool> pair;
+			while (this.GridCloseRequests.TryDequeue(out pair)) if (!pair.Key.Closed) pair.Key.Close(pair.Value);
+			MyJumpGate gate;
+			while (this.GateCloseRequests.TryDequeue(out gate)) if (!gate.Closed) gate.Close();
 		}
 
 		/// <summary>

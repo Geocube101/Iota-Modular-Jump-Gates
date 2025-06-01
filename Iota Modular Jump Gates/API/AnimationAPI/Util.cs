@@ -1,11 +1,7 @@
 ﻿using ProtoBuf;
-using Sandbox.Game.Entities;
-using Sandbox.ModAPI;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using VRage.Game.Entity;
-using VRage.ModAPI;
 using VRageMath;
 
 namespace IOTA.ModularJumpGates.API.AnimationAPI.Util

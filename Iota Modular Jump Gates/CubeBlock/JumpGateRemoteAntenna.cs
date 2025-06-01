@@ -215,7 +215,6 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		protected override void UpdateOnceAfterInit()
 		{
 			base.UpdateOnceAfterInit();
-			if (!MyJumpGateRemoteAntennaTerminal.IsLoaded) MyJumpGateRemoteAntennaTerminal.Load(this.ModContext);
 			if (MyNetworkInterface.IsStandaloneMultiplayerClient || this.TerminalBlock?.CubeGrid?.Physics == null) return;
 			this.AntennaDetector = new MyEntity();
 			this.AntennaDetector.EntityId = 0;
@@ -436,6 +435,12 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				request.Payload<MySerializedJumpGateCapacitor>(null);
 				request.Send();
 			}
+		}
+
+		public override void UpdateOnceBeforeFrame()
+		{
+			base.UpdateOnceBeforeFrame();
+			if (!MyJumpGateRemoteAntennaTerminal.IsLoaded) MyJumpGateRemoteAntennaTerminal.Load(this.ModContext);
 		}
 
 		/// <summary>
