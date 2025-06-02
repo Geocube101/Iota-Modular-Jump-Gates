@@ -3176,11 +3176,11 @@ namespace IOTA.ModularJumpGates
 		/// <param name="this_entity">This entity or null if not bound to an entity</param>
 		public void Tick(ushort current_tick, MatrixD? source, List<MyJumpGateDrive> drives, List<MyEntity> entities, ref Vector3D endpoint, MyEntity this_entity = null)
 		{
-			if (this.ParticleEffects == null || this.ParticleDefinition == null || this.ParticleEffects.Count == 0) return;
-			MatrixD base_matrix = source ?? ParticleOrientationDef.GetJumpGateMatrix(this.JumpGate, this.TargetGate, this.IsAntiNode, ref endpoint, this.ParticleDefinition.ParticleOrientation);
+			MatrixD base_matrix = (this.JumpGate == null) ? MyJumpGateModSession.WorldMatrix : (source ?? ParticleOrientationDef.GetJumpGateMatrix(this.JumpGate, this.TargetGate, this.IsAntiNode, ref endpoint, this.ParticleDefinition?.ParticleOrientation));
 			this.EffectPosition = base_matrix.Translation;
 
-			if (this.IsPlayableInQueue && current_tick >= this.ParticleDefinition.StartTime && current_tick <= this.ParticleDefinition.StartTime + this.Duration)
+			if (this.ParticleEffects == null || this.ParticleEffects.Count == 0) return;
+			else if (this.IsPlayableInQueue && current_tick >= this.ParticleDefinition.StartTime && current_tick <= this.ParticleDefinition.StartTime + this.Duration)
 			{
 				this.Stopped = false;
 				ushort local_tick = (ushort) (current_tick - this.ParticleDefinition.StartTime);
