@@ -462,6 +462,8 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			// Update remote antenna connections
 			if (MyNetworkInterface.IsServerLike && this.IsInitFrameCalled)
 			{
+				double connection_distance = this.BlockSettings.AntennaRange * this.BlockSettings.AntennaRange;
+
 				for (byte i = 0; i < MyJumpGateRemoteAntenna.ChannelCount; ++i)
 				{
 					MyJumpGateRemoteAntenna antenna = this.ConnectionThreads[i];
@@ -471,21 +473,37 @@ namespace IOTA.ModularJumpGates.CubeBlock
 					MyJumpGate remote_gate = antenna?.GetInboundControlGate(i);
 					MyJumpGate controlled_gate = outbound_controller?.AttachedJumpGate();
 					KeyValuePair<MyJumpGateRemoteAntenna, byte> controller_channel;
-
-					if (antenna == null)
+					
+					if (antenna == null || Vector3D.DistanceSquared(this.WorldMatrix.Translation, antenna.WorldMatrix.Translation) > connection_distance)
 					{
-						if (outbound_controller?.AttachedJumpGate() != null)
+						if (controlled_gate != null)
 						{
 							outbound_controller.AttachedRemoteJumpGate(null);
 							outbound_controller.SetDirty();
 						}
-
+						
 						if (inbound_controllee != null)
 						{
+							if ((remote_controller = inbound_controllee.Controller) != null)
+							{
+								remote_controller.AttachedRemoteJumpGate(null);
+								remote_controller.SetDirty();
+							}
+							
 							inbound_controllee.Controller = null;
 							inbound_controllee.SetDirty();
 						}
-
+						
+						if (antenna != null)
+						{
+							this.ConnectionThreads[i] = null;
+							antenna.ConnectionThreads[i] = null;
+							antenna.SetDirty();
+							this.OnAntennaConnection?.Invoke(this, outbound_controller, inbound_controllee, i, false);
+							antenna.OnAntennaConnection?.Invoke(antenna, outbound_controller, inbound_controllee, i, false);
+						}
+						
+						this.SetDirty();
 						continue;
 					}
 					
@@ -499,7 +517,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 						this.SetDirty();
 						antenna.SetDirty();
 						this.OnAntennaConnection?.Invoke(this, outbound_controller, inbound_controllee, i, false);
-						antenna.OnAntennaConnection?.Invoke(this, outbound_controller, inbound_controllee, i, false);
+						antenna.OnAntennaConnection?.Invoke(antenna, outbound_controller, inbound_controllee, i, false);
 					}
 					else if (outbound_controller == null && remote_gate != null)
 					{
@@ -514,7 +532,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 						this.SetDirty();
 						antenna.SetDirty();
 						this.OnAntennaConnection?.Invoke(this, outbound_controller, inbound_controllee, i, false);
-						antenna.OnAntennaConnection?.Invoke(this, outbound_controller, inbound_controllee, i, false);
+						antenna.OnAntennaConnection?.Invoke(antenna, outbound_controller, inbound_controllee, i, false);
 					}
 					else if (inbound_controllee == null && remote_controller != null)
 					{
@@ -525,22 +543,34 @@ namespace IOTA.ModularJumpGates.CubeBlock
 						this.SetDirty();
 						antenna.SetDirty();
 						this.OnAntennaConnection?.Invoke(this, outbound_controller, inbound_controllee, i, false);
-						antenna.OnAntennaConnection?.Invoke(this, outbound_controller, inbound_controllee, i, false);
+						antenna.OnAntennaConnection?.Invoke(antenna, outbound_controller, inbound_controllee, i, false);
 					}
 					else if (!is_working || !antenna.IsWorking)
 					{
-						outbound_controller?.AttachedRemoteJumpGate(null);
-						outbound_controller?.SetDirty();
-						inbound_controllee?.SetDirty();
+						if (outbound_controller != null)
+						{
+							outbound_controller.AttachedRemoteJumpGate(null);
+							outbound_controller.SetDirty();
+						}
+
+						if (inbound_controllee != null)
+						{
+							remote_controller = inbound_controllee.Controller;
+							remote_controller?.AttachedRemoteJumpGate(null);
+							remote_controller?.SetDirty();
+							inbound_controllee.Controller = null;
+							inbound_controllee.SetDirty();
+						}
+
 						this.ConnectionThreads[i] = null;
 						antenna.ConnectionThreads[i] = null;
 						this.SetDirty();
 						antenna.SetDirty();
 						this.OnAntennaConnection?.Invoke(this, outbound_controller, inbound_controllee, i, false);
-						antenna.OnAntennaConnection?.Invoke(this, outbound_controller, inbound_controllee, i, false);
+						antenna.OnAntennaConnection?.Invoke(antenna, outbound_controller, inbound_controllee, i, false);
 					}
 				}
-
+				
 				if (is_working)
 				{
 					foreach (MyJumpGateRemoteAntenna antenna in this.GetNearbyAntennas().OrderBy((antenna) => Vector3D.DistanceSquared(antenna.WorldMatrix.Translation, this.WorldMatrix.Translation)))
