@@ -3176,11 +3176,11 @@ namespace IOTA.ModularJumpGates
 		/// <param name="this_entity">This entity or null if not bound to an entity</param>
 		public void Tick(ushort current_tick, MatrixD? source, List<MyJumpGateDrive> drives, List<MyEntity> entities, ref Vector3D endpoint, MyEntity this_entity = null)
 		{
+			if (this.ParticleEffects == null || this.ParticleDefinition == null || this.ParticleEffects.Count == 0) return;
 			MatrixD base_matrix = source ?? ParticleOrientationDef.GetJumpGateMatrix(this.JumpGate, this.TargetGate, this.IsAntiNode, ref endpoint, this.ParticleDefinition.ParticleOrientation);
 			this.EffectPosition = base_matrix.Translation;
 
-			if (this.ParticleEffects == null || this.ParticleEffects.Count == 0) return;
-			else if (this.IsPlayableInQueue && current_tick >= this.ParticleDefinition.StartTime && current_tick <= this.ParticleDefinition.StartTime + this.Duration)
+			if (this.IsPlayableInQueue && current_tick >= this.ParticleDefinition.StartTime && current_tick <= this.ParticleDefinition.StartTime + this.Duration)
 			{
 				this.Stopped = false;
 				ushort local_tick = (ushort) (current_tick - this.ParticleDefinition.StartTime);
@@ -3188,7 +3188,7 @@ namespace IOTA.ModularJumpGates
 				Vector3D offset = this.ParticleDefinition.ParticleOffset;
 				Vector4D rps, off;
 				AnimationExpression.ExpressionArguments arguments = new AnimationExpression.ExpressionArguments(current_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, this_entity?.WorldMatrix.Translation, this_entity);
-
+				
 				float birth_mp = (float) AttributeAnimationDef.GetAnimatedDoubleValue(this.ParticleDefinition.Animations?.ParticleBirthAnimation, arguments, 1);
 				float color_intensity_mp = (float) AttributeAnimationDef.GetAnimatedDoubleValue(this.ParticleDefinition.Animations?.ParticleColorIntensityAnimation, arguments, 1);
 				float fade_mp = (float) AttributeAnimationDef.GetAnimatedDoubleValue(this.ParticleDefinition.Animations?.ParticleFadeAnimation, arguments, 1);
@@ -3196,16 +3196,16 @@ namespace IOTA.ModularJumpGates
 				float radius_mp = (float) AttributeAnimationDef.GetAnimatedDoubleValue(this.ParticleDefinition.Animations?.ParticleRadiusAnimation, arguments, 1);
 				float scale_mp = (float) AttributeAnimationDef.GetAnimatedDoubleValue(this.ParticleDefinition.Animations?.ParticleScaleAnimation, arguments, 1);
 				float velocity_mp = (float) AttributeAnimationDef.GetAnimatedDoubleValue(this.ParticleDefinition.Animations?.ParticleVelocityAnimation, arguments, 1);
-
+				
 				Vector4D color = AttributeAnimationDef.GetAnimatedVectorValue(this.ParticleDefinition.Animations?.ParticleColorAnimation, arguments, Vector4D.One);
 				color *= this.ControllerSettings?.JumpEffectAnimationColorShift().ToVector4D() ?? Vector4D.One;
-
+				
 				rps = AttributeAnimationDef.GetAnimatedVectorValue(this.ParticleDefinition.Animations?.ParticleRotationSpeedAnimation, arguments, Vector4D.Zero);
 				rotations_per_second = new Vector3D(rps.X, rps.Y, rps.Z) * 360d / 60d * (Math.PI / 180d);
-
+				
 				off = AttributeAnimationDef.GetAnimatedVectorValue(this.ParticleDefinition.Animations?.ParticleOffsetAnimation, arguments, new Vector4D(offset, 0));
 				offset = new Vector3D(off.X, off.Y, off.Z);
-
+				
 				for (int i = 0; i < this.ParticleEffects.Count; ++i)
 				{
 					MyParticleEffect effect = this.ParticleEffects[i];
