@@ -108,6 +108,7 @@ namespace IOTA.ModularJumpGates.Terminal
 					if (!choose_jump_gate_lb.Enabled(block)) return;
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					object data = selected[0].UserData;
+
 					if (data is long && (long) data == -1)
 					{
 						controller.AttachedJumpGate(null);

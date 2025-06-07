@@ -2004,10 +2004,10 @@ namespace IOTA.ModularJumpGates
 				Action<Exception> onend = (error) => {
 					gate_animation?.Clean();
 					this.TrueEndpoint = null;
-					this.EntityBatches.Clear();
+					this.EntityBatches?.Clear();
 					if (this.ServerJumpResponse != null && this.ServerJumpResponse.Type == JumpGateInfo.TypeEnum.CLOSED) this.Dispose();
 					else if (!this.Closed) this.Reset();
-					if (!target_gate.Closed) target_gate.Reset();
+					if (target_gate != null && !target_gate.Closed) target_gate.Reset();
 					this.ServerJumpResponse = null;
 					this.OnNetworkJumpResponse = null;
 					this.OnNetworkUpdateJumpEndpoint = null;
@@ -2020,7 +2020,7 @@ namespace IOTA.ModularJumpGates
 				this.ShearBlocksWarning.Hide();
 				this.SendHudMessage(message, 3000, (result_status) ? "White" : "Red");
 				if (target_gate != null && !target_gate.Closed && !target_gate.MarkClosed) target_gate.Reset();
-				Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} END_JUMP {result_status}/{message}; ANIMATION={gate_animation}", 3);
+				Logger.Debug($"[{this.JumpGateGrid.CubeGridID}-{this.JumpGateID}] END_JUMP {result_status}/{message}; ANIMATION={gate_animation}", 3);
 			};
 
 			this.OnNetworkJumpResponse = this.OnNetworkJumpResponse ?? OnNetworkJumpResponse;

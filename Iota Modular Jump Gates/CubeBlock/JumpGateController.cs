@@ -1376,8 +1376,17 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				this.BaseBlockSettings.VectorNormalOverride(new_settings.VectorNormalOverride());
 				this.BaseBlockSettings.JumpEffectAnimationColorShift(new_settings.JumpEffectAnimationColorShift());
 				this.BaseBlockSettings.JumpSpaceDepthPercent(new_settings.JumpSpaceDepthPercent());
+
+				KeyValuePair<MyJumpGateRemoteAntenna, byte> old_antenna = this.RemoteAntennaChannel;
 				this.BaseBlockSettings.RemoteAntennaChannel(new_settings.RemoteAntennaChannel());
 				this.BaseBlockSettings.RemoteAntennaID(new_settings.RemoteAntennaID());
+				KeyValuePair<MyJumpGateRemoteAntenna, byte> new_antenna = this.RemoteAntennaChannel;
+
+				if (old_antenna.Key != new_antenna.Key || old_antenna.Value != new_antenna.Value)
+				{
+					old_antenna.Key?.SetControllerForOutboundControl(old_antenna.Value, null);
+					new_antenna.Key?.SetControllerForOutboundControl(new_antenna.Value, this);
+				}
 			}
 
 			this.BaseBlockSettings.ReleaseLock();

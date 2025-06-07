@@ -197,13 +197,13 @@ namespace IOTA.ModularJumpGates.Util
 				this.MaxSpeedCooldownTime = EntityWarpInfo.GlobalMaxSpeedCooldownTime;
 				MyEntity parent = this.EntityBatch[0];
 
-				if (parent is IMyPlayer)
+				if (!parent.MarkedForClose && parent is IMyPlayer)
 				{
 					MatrixD parent_matrix = parent.WorldMatrix;
 					parent_matrix.Translation = this.FinalPos.Translation;
 					parent.Teleport(parent_matrix);
 				}
-				else parent.Teleport(this.FinalPos);
+				else if (!parent.MarkedForClose) parent.Teleport(this.FinalPos);
 
 				MyJumpGateConstruct construct;
 				if (parent is MyCubeGrid && (construct = MyJumpGateModSession.Instance.GetUnclosedJumpGateGrid(parent.EntityId)) != null) construct.BatchingGate = null;
