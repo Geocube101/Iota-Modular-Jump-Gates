@@ -1148,7 +1148,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				do_staticify_construct.Visible = MyJumpGateModSession.IsBlockJumpGateRemoteAntenna;
 				do_staticify_construct.Enabled = (block) => {
 					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
-					return antenna != null && antenna.JumpGateGrid != null && !antenna.JumpGateGrid.Closed && antenna.JumpGateGrid.GetCubeGrids().Any((grid) => !grid.IsStatic && (grid.Speed < 1e-3 || grid.Physics.AngularVelocity.Length() < 1e-3));
+					return antenna != null && antenna.JumpGateGrid != null && !antenna.JumpGateGrid.Closed && antenna.JumpGateGrid.GetCubeGrids().Any((grid) => !grid.IsStatic && grid.Physics != null && grid.LinearVelocity.Length() < 1e-3 && grid.Physics.AngularVelocity.Length() < 1e-3);
 				};
 				do_staticify_construct.Action = (block) => {
 					MyJumpGateRemoteAntenna antenna;
@@ -1341,6 +1341,52 @@ namespace IOTA.ModularJumpGates.Terminal
 				};
 				MyJumpGateRemoteAntennaTerminal.TerminalControls.Add(jump_space_depth);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(jump_space_depth);
+			}
+
+			// Listbox [Jump Space Fit Type]
+			{
+				IMyTerminalControlListbox jump_space_fit_type = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlListbox, IMyUpgradeModule>(MODID_PREFIX + "AntennaJumpSpaceFitType");
+				jump_space_fit_type.Title = MyStringId.GetOrCompute($"{MyTexts.GetString("Terminal_JumpGateController_JumpSpaceFitType")}:");
+				jump_space_fit_type.Multiselect = false;
+				jump_space_fit_type.SupportsMultipleBlocks = true;
+				jump_space_fit_type.Visible = MyJumpGateModSession.IsBlockJumpGateRemoteAntenna;
+				jump_space_fit_type.Enabled = (block) => {
+					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
+					MyJumpGate jump_gate = antenna?.GetInboundControlGate(antenna.CurrentTerminalChannel);
+					if (antenna == null || !antenna.IsWorking || antenna.JumpGateGrid == null || antenna.JumpGateGrid.Closed) return false;
+					else return jump_gate == null || jump_gate.IsIdle();
+				};
+				jump_space_fit_type.VisibleRowsCount = 3;
+				jump_space_fit_type.ListContent = (block, content_list, preselect_list) => {
+					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
+					if (antenna == null || antenna.JumpGateGrid == null || antenna.JumpGateGrid.Closed) return;
+					MyJumpSpaceFitType selected_fit = antenna.BlockSettings.BaseControllerSettings[antenna.CurrentTerminalChannel].JumpSpaceFitType();
+
+					foreach (MyJumpSpaceFitType fit_type in Enum.GetValues(typeof(MyJumpSpaceFitType)))
+					{
+						string enum_name = Enum.GetName(typeof(MyJumpSpaceFitType), fit_type);
+						string name = MyTexts.GetString($"JumpSpaceFitType_{enum_name}");
+						string tooltip = MyTexts.GetString($"Terminal_JumpGateController_JumpSpaceFitType_{enum_name}_Tooltip");
+						MyTerminalControlListBoxItem item = new MyTerminalControlListBoxItem(MyStringId.GetOrCompute(name), MyStringId.GetOrCompute(tooltip), fit_type);
+						content_list.Add(item);
+						if (selected_fit == fit_type) preselect_list.Add(item);
+					}
+				};
+				jump_space_fit_type.ItemSelected = (block, selected) => {
+					if (!jump_space_fit_type.Enabled(block)) return;
+					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
+					MyJumpGate jump_gate = antenna.GetInboundControlGate(antenna.CurrentTerminalChannel);
+					MyJumpSpaceFitType data = (MyJumpSpaceFitType) selected[0].UserData;
+					MyJumpSpaceFitType old_data = antenna.BlockSettings.BaseControllerSettings[antenna.CurrentTerminalChannel].JumpSpaceFitType();
+					if (data == old_data) return;
+					antenna.BlockSettings.BaseControllerSettings[antenna.CurrentTerminalChannel].JumpSpaceFitType(data);
+					antenna.SetDirty();
+					jump_gate.SetJumpSpaceEllipsoidDirty();
+					jump_gate.SetDirty();
+					MyJumpGateModSession.Instance.RedrawAllTerminalControls();
+				};
+				MyJumpGateRemoteAntennaTerminal.TerminalControls.Add(jump_space_fit_type);
+				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(jump_space_fit_type);
 			}
 
 			// Color [Effect Color Shift]
@@ -1680,6 +1726,109 @@ namespace IOTA.ModularJumpGates.Terminal
 					};
 
 				MyAPIGateway.TerminalControls.AddAction<IMyUpgradeModule>(decrease_range_action);
+			}
+
+			// Staticify
+			{
+				IMyTerminalAction jump_action = MyAPIGateway.TerminalControls.CreateAction<IMyUpgradeModule>(MODID_PREFIX + "AntennaStaticifyJumpGateGridAction");
+				jump_action.Name = new StringBuilder(MyTexts.GetString("Terminal_JumpGateController_ConvertToStation"));
+				jump_action.ValidForGroups = true;
+				jump_action.Icon = @"Textures\GUI\Icons\Actions\StationSwitchOn.dds";
+				jump_action.Enabled = MyJumpGateModSession.IsBlockJumpGateRemoteAntenna;
+
+				jump_action.Action = (block) => {
+					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
+					if (antenna == null || antenna.JumpGateGrid == null || antenna.JumpGateGrid.Closed || !antenna.JumpGateGrid.GetCubeGrids().Any((grid) => !grid.IsStatic && grid.Physics != null && grid.LinearVelocity.Length() < 1e-3 && grid.Physics.AngularVelocity.Length() < 1e-3)) return;
+					else if (MyNetworkInterface.IsServerLike) antenna.JumpGateGrid.SetConstructStaticness(true);
+					else if (MyJumpGateModSession.Network.Registered)
+					{
+						MyNetworkInterface.Packet packet = new MyNetworkInterface.Packet {
+							PacketType = MyPacketTypeEnum.STATICIFY_CONSTRUCT,
+							Broadcast = false,
+							TargetID = 0,
+						};
+						packet.Payload(new KeyValuePair<long, bool>(antenna.JumpGateGrid.CubeGridID, true));
+						packet.Send();
+					}
+				};
+
+				jump_action.Writer = (block, string_builder) => {
+					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
+					if (antenna == null || antenna.JumpGateGrid == null || antenna.JumpGateGrid.Closed) return;
+					else if (!antenna.IsWorking) string_builder.Append($"- {MyTexts.GetString("GeneralText_Offline")} -");
+					else
+					{
+						int count = 0;
+						int total = 0;
+
+						foreach (IMyCubeGrid grid in antenna.JumpGateGrid.GetCubeGrids())
+						{
+							++total;
+							count += (grid.IsStatic) ? 1 : 0;
+						}
+
+						string_builder.Append($"{count}/{total}");
+					}
+				};
+
+				jump_action.InvalidToolbarTypes = new List<MyToolbarType>() {
+					MyToolbarType.Seat
+				};
+
+				MyAPIGateway.TerminalControls.AddAction<IMyUpgradeModule>(jump_action);
+			}
+
+			// Unstaticify
+			{
+				IMyTerminalAction jump_action = MyAPIGateway.TerminalControls.CreateAction<IMyUpgradeModule>(MODID_PREFIX + "AntennaUnstaticifyJumpGateGridAction");
+				jump_action.Name = new StringBuilder(MyTexts.GetString("Terminal_JumpGateController_ConvertToShip"));
+				jump_action.ValidForGroups = true;
+				jump_action.Icon = @"Textures\GUI\Icons\Actions\StationSwitchOff.dds";
+				jump_action.Enabled = MyJumpGateModSession.IsBlockJumpGateRemoteAntenna;
+
+				jump_action.Action = (block) => {
+					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
+					bool enabled = antenna != null && antenna.JumpGateGrid != null && !antenna.JumpGateGrid.Closed && antenna.JumpGateGrid.GetCubeGrids().Any((grid) => grid.IsStatic);
+					if (!enabled) return;
+					else if (MyNetworkInterface.IsServerLike) antenna.JumpGateGrid.SetConstructStaticness(false);
+					else if (MyJumpGateModSession.Network.Registered)
+					{
+						MyNetworkInterface.Packet packet = new MyNetworkInterface.Packet
+						{
+							PacketType = MyPacketTypeEnum.STATICIFY_CONSTRUCT,
+							Broadcast = false,
+							TargetID = 0,
+						};
+
+						packet.Payload(new KeyValuePair<long, bool>(antenna.JumpGateGrid.CubeGridID, false));
+						packet.Send();
+					}
+				};
+
+				jump_action.Writer = (block, string_builder) => {
+					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
+					if (antenna == null || antenna.JumpGateGrid == null || antenna.JumpGateGrid.Closed) return;
+					else if (!antenna.IsWorking) string_builder.Append($"- {MyTexts.GetString("GeneralText_Offline")} -");
+					else
+					{
+						int count = 0;
+						int total = 0;
+
+						foreach (IMyCubeGrid grid in antenna.JumpGateGrid.GetCubeGrids())
+						{
+							++total;
+							count += (grid.IsStatic) ? 1 : 0;
+						}
+
+						string_builder.Append($"{count}/{total}");
+					}
+				};
+
+				jump_action.InvalidToolbarTypes = new List<MyToolbarType>() {
+					MyToolbarType.Seat
+				};
+
+				MyAPIGateway.TerminalControls.AddAction<IMyUpgradeModule>(jump_action);
 			}
 		}
 

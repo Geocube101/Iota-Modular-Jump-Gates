@@ -176,43 +176,49 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 			[ProtoMember(4)]
 			private bool HasVectorNormalOverride_V = false;
 			[ProtoMember(5)]
-			private MyAPIFactionDisplayType FactionDisplayType_V = MyAPIFactionDisplayType.FRIENDLY | MyAPIFactionDisplayType.OWNED;
+			public byte RemoteAntennaChannel_V = 0xFF;
 			[ProtoMember(6)]
-			private double JumpSpaceRadius_V = 250d;
+			private MyAPIFactionDisplayType FactionDisplayType_V = MyAPIFactionDisplayType.FRIENDLY | MyAPIFactionDisplayType.OWNED;
 			[ProtoMember(7)]
-			private double JumpSpaceDepthPercent_V = 0.2d;
+			private double JumpSpaceRadius_V = 250d;
 			[ProtoMember(8)]
-			private long JumpGateID_V = -1;
+			private double JumpSpaceDepthPercent_V = 0.2d;
 			[ProtoMember(9)]
-			private string JumpEffectName_V = "standard";
+			private long JumpGateID_V = -1;
 			[ProtoMember(10)]
-			private string JumpGateName_V = null;
+			private long RemoteAntennaID_V = -1;
 			[ProtoMember(11)]
-			private Vector3D VectorNormal_V = Vector3D.Zero;
+			private string JumpEffectName_V = "standard";
 			[ProtoMember(12)]
-			private Color EffectColorShift_V = Color.White;
+			private string JumpGateName_V = null;
 			[ProtoMember(13)]
-			private MyAPIJumpGateWaypoint SelectedWaypoint_V = null;
+			private Vector3D VectorNormal_V = Vector3D.Zero;
 			[ProtoMember(14)]
-			private List<long> BlacklistedEntities = new List<long>();
+			private Color EffectColorShift_V = Color.White;
 			[ProtoMember(15)]
-			private float MinimumEntityMass_V = 0;
+			private MyAPIJumpGateWaypoint SelectedWaypoint_V = null;
 			[ProtoMember(16)]
-			private float MaximumEntityMass_V = float.PositiveInfinity;
+			private List<long> BlacklistedEntities = new List<long>();
 			[ProtoMember(17)]
-			private uint MinimumCubeGridSize_V = 0;
+			private float MinimumEntityMass_V = 0;
 			[ProtoMember(18)]
-			private uint MaximumCubeGridSize_V = uint.MaxValue;
+			private float MaximumEntityMass_V = float.PositiveInfinity;
 			[ProtoMember(19)]
-			private float MinimumAutoMass_V = 0;
+			private uint MinimumCubeGridSize_V = 0;
 			[ProtoMember(20)]
-			private float MaximumAutoMass_V = float.PositiveInfinity;
+			private uint MaximumCubeGridSize_V = uint.MaxValue;
 			[ProtoMember(21)]
-			private double MinimumAutoPower_V = 0;
+			private float MinimumAutoMass_V = 0;
 			[ProtoMember(22)]
-			private double MaximumAutoPower_V = double.PositiveInfinity;
+			private float MaximumAutoMass_V = float.PositiveInfinity;
 			[ProtoMember(23)]
+			private double MinimumAutoPower_V = 0;
+			[ProtoMember(24)]
+			private double MaximumAutoPower_V = double.PositiveInfinity;
+			[ProtoMember(25)]
 			private float AutoActivationDelay_V = 0;
+			[ProtoMember(26)]
+			private MyAPIJumpSpaceFitType JumpSpaceFitType_V = MyAPIJumpSpaceFitType.INNER;
 
 			private readonly object WriterLock = new object();
 
@@ -242,6 +248,7 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 					this.CanBeOutbound_V = (bool) mapping.GetValueOrDefault("CanBeOutbound", this.CanBeOutbound_V);
 					this.HasVectorNormalOverride_V = (bool) mapping.GetValueOrDefault("HasVectorNormalOverride", this.HasVectorNormalOverride_V);
 					this.FactionDisplayType_V = (MyAPIFactionDisplayType) (byte) mapping.GetValueOrDefault("FactionDisplayType", (byte) this.FactionDisplayType_V);
+					this.JumpSpaceFitType_V = (MyAPIJumpSpaceFitType) (byte) mapping.GetValueOrDefault("JumpSpaceFitType", (byte) this.JumpSpaceFitType_V);
 					this.JumpSpaceRadius_V = (double) mapping.GetValueOrDefault("JumpSpaceRadius", this.JumpSpaceRadius_V);
 					this.JumpSpaceDepthPercent_V = (double) mapping.GetValueOrDefault("JumpSpaceDepthPercent", this.JumpSpaceDepthPercent_V);
 					this.JumpEffectName_V = (string) mapping.GetValueOrDefault("JumpEffectName", this.JumpEffectName_V);
@@ -328,7 +335,8 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 						["CanBeInbound"] = this.CanBeInbound_V,
 						["CanBeOutbound"] = this.CanBeOutbound_V,
 						["HasVectorNormalOverride"] = this.HasVectorNormalOverride_V,
-						["FactionDisplayType"] = this.FactionDisplayType_V,
+						["FactionDisplayType"] = (byte) this.FactionDisplayType_V,
+						["JumpSpaceFitType"] = (byte) this.JumpSpaceFitType_V,
 						["JumpSpaceRadius"] = this.JumpSpaceRadius_V,
 						["JumpSpaceDepthPercent"] = this.JumpSpaceDepthPercent_V,
 						["JumpEffectName"] = this.JumpEffectName_V,
@@ -400,6 +408,10 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 			public void CanAccept(MyAPIFactionDisplayType value)
 			{
 				lock (this.WriterLock) this.FactionDisplayType_V = value;
+			}
+			public void JumpSpaceFitType(MyAPIJumpSpaceFitType value)
+			{
+				lock (this.WriterLock) this.JumpSpaceFitType_V = value;
 			}
 			public void HasVectorNormalOverride(bool flag)
 			{
@@ -546,6 +558,10 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 			public MyAPIFactionDisplayType CanAccept()
 			{
 				return this.FactionDisplayType_V;
+			}
+			public MyAPIJumpSpaceFitType JumpSpaceFitType()
+			{
+				return this.JumpSpaceFitType_V;
 			}
 			public bool HasVectorNormalOverride()
 			{

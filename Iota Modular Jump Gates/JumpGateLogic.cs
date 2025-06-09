@@ -34,6 +34,7 @@ namespace IOTA.ModularJumpGates
 	}
 	public enum MyGateColliderStatus : byte { NONE, ATTACHED, CLOSED };
 	public enum MyJumpTypeEnum : byte { STANDARD, INBOUND_VOID, OUTBOUND_VOID }
+	public enum MyJumpSpaceFitType : byte { INNER, OUTER, AVERAGE }
 
 	internal class MyJumpGate : IEquatable<MyJumpGate>
 	{
@@ -3119,7 +3120,11 @@ namespace IOTA.ModularJumpGates
 						}
 
 						double plane_height = MyJumpGateDrive.ModelBoundingBoxSize.Y;
-						double closest_distance = intersection_plane.JumpGateDrives.Select((drive) => Vector3D.Distance(drive.GetDriveRaycastStartpoint(), jump_node)).Min();
+						double distance = 0;
+						MyJumpGateControlObject control_object = this.ControlObject;
+						MyJumpSpaceFitType fit_type = MyJumpSpaceFitType.INNER;
+						if (control_object != null && control_object.IsController) fit_type = control_object.Controller.BlockSettings.JumpSpaceFitType();
+						else if (control_object != null) fit_type = control_object.RemoteAntenna.BlockSettings.BaseControllerSettings[this.RemoteAntennaChannel].JumpSpaceFitType();
 						Vector3D forward = Vector3D.Cross(intersection_plane.PlanePrimaryNormal, this.ConstructMatrix.Forward);
 						MatrixD plane_matrix = MatrixD.CreateWorld(jump_node, forward, intersection_plane.PlanePrimaryNormal);
 
@@ -3130,8 +3135,22 @@ namespace IOTA.ModularJumpGates
 							if (!double.IsNaN(local_pos.Y)) plane_height = Math.Max(plane_height, Math.Abs(local_pos.Y));
 						}
 
+						switch (fit_type)
+						{
+							case MyJumpSpaceFitType.OUTER:
+								distance = Math.Sqrt(intersection_plane.JumpGateDrives.Select((drive) => Vector3D.DistanceSquared(drive.GetDriveRaycastStartpoint(), jump_node)).Max());
+								break;
+							case MyJumpSpaceFitType.AVERAGE:
+								distance = Math.Sqrt(intersection_plane.JumpGateDrives.Select((drive) => Vector3D.DistanceSquared(drive.GetDriveRaycastStartpoint(), jump_node)).Average());
+								break;
+							case MyJumpSpaceFitType.INNER:
+							default:
+								distance = Math.Sqrt(intersection_plane.JumpGateDrives.Select((drive) => Vector3D.DistanceSquared(drive.GetDriveRaycastStartpoint(), jump_node)).Min());
+								break;
+						}
+
 						this.PrimaryDrivePlane = intersection_plane.Plane;
-						Vector3D radii = new Vector3D(closest_distance, plane_height, closest_distance);
+						Vector3D radii = new Vector3D(distance, plane_height, distance);
 						this.TrueWorldJumpEllipse = new BoundingEllipsoidD(ref radii, ref plane_matrix);
 						this.TrueLocalJumpEllipse = this.TrueWorldJumpEllipse.ToLocalSpace(ref this.ConstructMatrix);
 					}

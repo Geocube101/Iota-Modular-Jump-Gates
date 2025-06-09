@@ -88,6 +88,8 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			private double MaximumAutoPower_V = double.PositiveInfinity;
 			[ProtoMember(25)]
 			private float AutoActivationDelay_V = 0;
+			[ProtoMember(26)]
+			private MyJumpSpaceFitType JumpSpaceFitType_V = MyJumpSpaceFitType.INNER;
 
 			private readonly object WriterLock = new object();
 
@@ -119,6 +121,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 					this.FactionDisplayType_V = (MyFactionDisplayType) (byte) mapping.GetValueOrDefault("FactionDisplayType", (byte) this.FactionDisplayType_V);
 					this.JumpSpaceRadius_V = (double) mapping.GetValueOrDefault("JumpSpaceRadius", this.JumpSpaceRadius_V);
 					this.JumpSpaceDepthPercent_V = (double) mapping.GetValueOrDefault("JumpSpaceDepthPercent", this.JumpSpaceDepthPercent_V);
+					this.JumpSpaceFitType_V = (MyJumpSpaceFitType) (byte) mapping.GetValueOrDefault("JumpSpaceFitType", (byte) this.JumpSpaceFitType_V);
 					this.JumpEffectName_V = (string) mapping.GetValueOrDefault("JumpEffectName", this.JumpEffectName_V);
 					string name = (string) mapping.GetValueOrDefault("JumpGateName", this.JumpGateName_V);
 					this.VectorNormal_V = (Vector3D) mapping.GetValueOrDefault("VectorNormal", this.VectorNormal_V);
@@ -200,16 +203,16 @@ namespace IOTA.ModularJumpGates.CubeBlock
 							break;
 					}
 
-					return new Dictionary<string, object>()
-					{
+					return new Dictionary<string, object>() {
 						["CanAutoActivate"] = this.CanAutoActivate_V,
 						["CanBeInbound"] = this.CanBeInbound_V,
 						["CanBeOutbound"] = this.CanBeOutbound_V,
 						["HasVectorNormalOverride"] = this.HasVectorNormalOverride_V,
 						["RemoteAntennaChannel"] = this.RemoteAntennaChannel_V,
-						["FactionDisplayType"] = this.FactionDisplayType_V,
+						["FactionDisplayType"] = (byte) this.FactionDisplayType_V,
 						["JumpSpaceRadius"] = this.JumpSpaceRadius_V,
 						["JumpSpaceDepthPercent"] = this.JumpSpaceDepthPercent_V,
+						["JumpSpaceFitType"] = (byte) this.JumpSpaceFitType_V,
 						["JumpEffectName"] = this.JumpEffectName_V,
 						["JumpGateName"] = this.JumpGateName_V,
 						["VectorNormal"] = this.VectorNormal_V,
@@ -279,6 +282,10 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			public void CanAccept(MyFactionDisplayType value)
 			{
 				lock (this.WriterLock) this.FactionDisplayType_V = value;
+			}
+			public void JumpSpaceFitType(MyJumpSpaceFitType value)
+			{
+				lock (this.WriterLock) this.JumpSpaceFitType_V = value;
 			}
 			public void HasVectorNormalOverride(bool flag)
 			{
@@ -468,6 +475,10 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			{
 				return this.FactionDisplayType_V;
 			}
+			public MyJumpSpaceFitType JumpSpaceFitType()
+			{
+				return this.JumpSpaceFitType_V;
+			}
 			public bool HasVectorNormalOverride()
 			{
 				return this.HasVectorNormalOverride_V;
@@ -639,6 +650,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				this.OverlayedBlockSettings.AutoActivatePower(((allowed & MyAllowedRemoteSettings.AUTO_ACTIVATE) != 0) ? this.BaseBlockSettings.AutoActivatePower() : remote.AutoActivatePower());
 				this.OverlayedBlockSettings.AutoActivationDelay(((allowed & MyAllowedRemoteSettings.AUTO_ACTIVATE) != 0) ? this.BaseBlockSettings.AutoActivationDelay() : remote.AutoActivationDelay());
 				this.OverlayedBlockSettings.CanAccept(((allowed & MyAllowedRemoteSettings.COMM_LINKAGE) != 0) ? this.BaseBlockSettings.CanAccept() : remote.CanAccept());
+				this.OverlayedBlockSettings.JumpSpaceFitType(((allowed & MyAllowedRemoteSettings.JUMPSPACE) != 0) ? this.BaseBlockSettings.JumpSpaceFitType() : remote.JumpSpaceFitType());
 				this.OverlayedBlockSettings.JumpSpaceDepthPercent(((allowed & MyAllowedRemoteSettings.JUMPSPACE) != 0) ? this.BaseBlockSettings.JumpSpaceDepthPercent() : remote.JumpSpaceDepthPercent());
 				this.OverlayedBlockSettings.JumpSpaceRadius(((allowed & MyAllowedRemoteSettings.JUMPSPACE) != 0) ? this.BaseBlockSettings.JumpSpaceRadius() : remote.JumpSpaceRadius());
 				this.OverlayedBlockSettings.JumpEffectAnimationColorShift(((allowed & MyAllowedRemoteSettings.COLOR_OVERRIDE) != 0) ? this.BaseBlockSettings.JumpEffectAnimationColorShift() : remote.JumpEffectAnimationColorShift());
