@@ -1311,7 +1311,7 @@ namespace IOTA.ModularJumpGates
 				this.Phase = MyJumpGatePhase.CHARGING;
 				is_init = false;
 				MyJumpGateModSession.Instance.RedrawAllTerminalControls();
-				Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} JUMP_CHARGE", 3	);
+				Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} JUMP_CHARGE, TARGET_TYPE={dst.WaypointType}, ENDPOINT={endpoint}, DISTANCE={distance_to_endpoint}", 3);
 
 				// Play animation and check for invalidation of jump event
 				MyJumpGateModSession.Instance.PlayAnimation(gate_animation, MyJumpGateAnimation.AnimationTypeEnum.JUMPING, () => {
