@@ -21,7 +21,10 @@ Steps to reproduce the behavior:
 A clear and concise description of what you expected to happen.
 
 **Log File**
-If applicable, add the log file describing the crash
+If applicable, add your log file describing the crash
+
+**Config File**
+If applicable, add your configuration file used by the affected world
 
 **Additional context**
 Add any other context about the problem here.
