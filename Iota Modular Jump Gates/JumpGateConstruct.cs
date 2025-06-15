@@ -139,10 +139,10 @@ namespace IOTA.ModularJumpGates
         /// </summary>
 		private ConcurrentSpinQueue<double> UpdateTimeTicks = new ConcurrentSpinQueue<double>(60);
 
-        /// <summary>
-        /// The master map of jump gates this construct has
-        /// </summary>
-        private ConcurrentDictionary<long, MyJumpGate> JumpGates = new ConcurrentDictionary<long, MyJumpGate>();
+		/// <summary>
+		/// The master map of jump gates this construct has
+		/// </summary>
+		private ConcurrentDictionary<long, MyJumpGate> JumpGates = new ConcurrentDictionary<long, MyJumpGate>();
 
         /// <summary>
         /// The master map of CubeGrids in this construct
@@ -622,30 +622,6 @@ namespace IOTA.ModularJumpGates
         }
 
         /// <summary>
-        /// Callback for when a grid on this grid is merged with another grid
-        /// </summary>
-        /// <param name="_1">The first grid</param>
-        /// <param name="_2">The second grid</param>
-        private void OnGridMerged(IMyCubeGrid _1, IMyCubeGrid _2)
-        {
-            if (this.MarkClosed) return;
-            this.SetupConstruct();
-			this.SetDirty();
-		}
-
-		/// <summary>
-		/// Callback for when a grid on this grid is split into another grid
-		/// </summary>
-		/// <param name="_1">The first grid</param>
-		/// <param name="_2">The second grid</param>
-		private void OnGridSplit(IMyCubeGrid _1, IMyCubeGrid _2)
-		{
-			if (this.MarkClosed) return;
-            this.SetupConstruct();
-			this.SetDirty();
-		}
-
-        /// <summary>
         /// Callback for when a grid is added to this construct
         /// </summary>
         /// <param name="grid">The added grid</param>
@@ -654,8 +630,6 @@ namespace IOTA.ModularJumpGates
 			if (grid == null) return;
 			grid.OnBlockAdded += this.OnBlockAdded;
             grid.OnBlockRemoved += this.OnBlockRemoved;
-            grid.OnGridMerge += this.OnGridMerged;
-            grid.OnGridSplit += this.OnGridSplit;
 			this.SetDirty();
         }
 
@@ -668,8 +642,6 @@ namespace IOTA.ModularJumpGates
             if (grid == null) return;
 			grid.OnBlockAdded -= this.OnBlockAdded;
 			grid.OnBlockRemoved -= this.OnBlockRemoved;
-			grid.OnGridMerge -= this.OnGridMerged;
-			grid.OnGridSplit -= this.OnGridSplit;
 
             if (!this.Closed)
 			{
