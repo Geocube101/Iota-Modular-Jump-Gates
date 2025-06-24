@@ -591,6 +591,7 @@ namespace IOTA.ModularJumpGates
 
 			Logger.Log("Closed.");
 			Logger.Flush();
+			Logger.Close();
 		}
 
 		/// <summary>
@@ -611,6 +612,7 @@ namespace IOTA.ModularJumpGates
 			// System.Diagnostics.Stopwatch - for measuring code execution time.
 			// ...and many more things, ask in #programming-modding in keen's discord for what you want to do to be pointed at the available things to use.
 
+			Logger.Init();
 			Logger.Log("PREINIT - Loading Data...");
 			MyJumpGateModSession.SessionStatus = MySessionStatusEnum.LOADING;
 			MyJumpGateModSession.Instance = this;

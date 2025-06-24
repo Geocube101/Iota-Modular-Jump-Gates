@@ -3179,7 +3179,7 @@ namespace IOTA.ModularJumpGates
 						if (entity?.Physics == null || entity.MarkedForClose || is_self)
 						{
 							closed_entities.Add(entity);
-							Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} Entity marked for jump-space removal >> PHYSICS={entity?.Physics}, CLOSED={entity.MarkedForClose}, IS_SELF={is_self}", 5);
+							if (this.JumpSpaceEntities.ContainsKey(entity.EntityId)) Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} Entity marked for jump-space removal >> PHYSICS={entity?.Physics}, CLOSED={entity.MarkedForClose}, IS_SELF={is_self}", 5);
 							continue;
 						}
 
