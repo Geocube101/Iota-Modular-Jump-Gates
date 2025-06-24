@@ -136,6 +136,11 @@ namespace IOTA.ModularJumpGates.Util
 			BitConverter.GetBytes(this.EntityID).CopyTo(buffer, sizeof(long));
 			return new Guid(buffer).GetHashCode();
 		}
+
+		public override string ToString()
+		{
+			return $"{this.GridID}-{this.EntityID}";
+		}
 		#endregion
 
 		#region Public Methods

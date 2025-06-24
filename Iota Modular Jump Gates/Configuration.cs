@@ -326,17 +326,17 @@ namespace IOTA.ModularJumpGates
 			public double SmallGateDistanceScaleExponent;
 
 			/// <summary>
-			/// The maximum jump gate reachable distance (in KiloMeters) for a 50 drive large grid jump gate<br />
+			/// The maximum jump gate reachable distance (in meters) for a 50 drive large grid jump gate<br />
 			/// Cannot be NaN, Infinity, or less than 0<br />
-			/// Defaults to 10 Mm
+			/// Defaults to 100 Mm
 			/// </summary>
 			[ProtoMember(7, IsRequired = true)]
 			public double MaxLargeJumpGate50Distance = 100000000;
 
 			/// <summary>
-			/// The maximum jump gate reachable distance (in KiloMeters) for a 50 drive large grid jump gate<br />
+			/// The maximum jump gate reachable distance (in meters) for a 50 drive large grid jump gate<br />
 			/// Cannot be NaN, Infinity, or less than 0<br />
-			/// Defaults to 2 Mm
+			/// Defaults to 20 Mm
 			/// </summary>
 			[ProtoMember(8, IsRequired = true)]
 			public double MaxSmallJumpGate50Distance = 20000000;

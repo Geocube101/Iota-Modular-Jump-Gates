@@ -20,6 +20,7 @@ namespace IOTA.ModularJumpGates.Terminal
 	internal static class MyJumpGateRemoteAntennaTerminal
 	{
 		private static readonly List<IMyTerminalControl> TerminalControls = new List<IMyTerminalControl>();
+		private static readonly Dictionary<IMyTerminalControlOnOffSwitch, bool> SectionSwitches = new Dictionary<IMyTerminalControlOnOffSwitch, bool>();
 
 		public static bool IsLoaded { get; private set; } = false;
 		public static readonly string MODID_PREFIX = MyJumpGateModSession.MODID + ".JumpGateRemoteAntenna.";
@@ -276,11 +277,13 @@ namespace IOTA.ModularJumpGates.Terminal
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(separator_hr);
 			}
 
+			IMyTerminalControlOnOffSwitch section_switch = MyJumpGateRemoteAntennaTerminal.GenerateSectionSwitch("JumpGate", true);
+
 			// Label
 			{
 				IMyTerminalControlLabel settings_label_lb = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlLabel, IMyUpgradeModule>(MODID_PREFIX + "AntennaSetupLabel");
 				settings_label_lb.Label = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_JumpGateSetup"));
-				settings_label_lb.Visible = MyJumpGateModSession.IsBlockJumpGateRemoteAntenna;
+				settings_label_lb.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateRemoteAntenna(block) && MyJumpGateRemoteAntennaTerminal.SectionSwitches[section_switch];
 				settings_label_lb.SupportsMultipleBlocks = true;
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(settings_label_lb);
 			}
@@ -290,7 +293,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				IMyTerminalControlTextbox search_waypoint_tb = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlTextbox, IMyUpgradeModule>(MODID_PREFIX + "SearchAntennaWaypoint");
 				search_waypoint_tb.Title = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_SearchDestinationWaypoints"));
 				search_waypoint_tb.SupportsMultipleBlocks = false;
-				search_waypoint_tb.Visible = MyJumpGateModSession.IsBlockJumpGateRemoteAntenna;
+				search_waypoint_tb.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateRemoteAntenna(block) && MyJumpGateRemoteAntennaTerminal.SectionSwitches[section_switch];
 				search_waypoint_tb.Enabled = (block) => {
 					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
 					if (antenna == null || !antenna.IsWorking || antenna.JumpGateGrid == null || antenna.JumpGateGrid.Closed) return false;
@@ -307,7 +310,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				IMyTerminalControlListbox choose_waypoint_lb = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlListbox, IMyUpgradeModule>(MODID_PREFIX + "AntennaWaypoint");
 				choose_waypoint_lb.Title = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_DestinationWaypoints"));
 				choose_waypoint_lb.SupportsMultipleBlocks = false;
-				choose_waypoint_lb.Visible = MyJumpGateModSession.IsBlockJumpGateRemoteAntenna;
+				choose_waypoint_lb.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateRemoteAntenna(block) && MyJumpGateRemoteAntennaTerminal.SectionSwitches[section_switch];
 				choose_waypoint_lb.Enabled = (block) => {
 					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
 					MyJumpGate jump_gate = antenna?.GetInboundControlGate(antenna.CurrentTerminalChannel);
@@ -406,7 +409,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				IMyTerminalControlListbox choose_animation_lb = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlListbox, IMyUpgradeModule>(MODID_PREFIX + "AntennaAnimation");
 				choose_animation_lb.Title = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_JumpGateAnimation"));
 				choose_animation_lb.SupportsMultipleBlocks = true;
-				choose_animation_lb.Visible = MyJumpGateModSession.IsBlockJumpGateRemoteAntenna;
+				choose_animation_lb.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateRemoteAntenna(block) && MyJumpGateRemoteAntennaTerminal.SectionSwitches[section_switch];
 				choose_animation_lb.Enabled = (block) => {
 					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
 					MyJumpGate jump_gate = antenna?.GetInboundControlGate(antenna.CurrentTerminalChannel);
@@ -471,7 +474,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				do_allow_inbound.Title = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_AllowInbound"));
 				do_allow_inbound.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_AllowInbound_Tooltip"));
 				do_allow_inbound.SupportsMultipleBlocks = true;
-				do_allow_inbound.Visible = MyJumpGateModSession.IsBlockJumpGateRemoteAntenna;
+				do_allow_inbound.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateRemoteAntenna(block) && MyJumpGateRemoteAntennaTerminal.SectionSwitches[section_switch];
 				do_allow_inbound.Enabled = (block) => true;
 				do_allow_inbound.Getter = (block) => {
 					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
@@ -493,7 +496,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				do_allow_outbound.Title = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_AllowOutbound"));
 				do_allow_outbound.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_AllowOutbound_Tooltip"));
 				do_allow_outbound.SupportsMultipleBlocks = true;
-				do_allow_outbound.Visible = MyJumpGateModSession.IsBlockJumpGateRemoteAntenna;
+				do_allow_outbound.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateRemoteAntenna(block) && MyJumpGateRemoteAntennaTerminal.SectionSwitches[section_switch];
 				do_allow_outbound.Enabled = (block) => true;
 				do_allow_outbound.Getter = (block) => {
 					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
@@ -508,6 +511,15 @@ namespace IOTA.ModularJumpGates.Terminal
 				MyJumpGateRemoteAntennaTerminal.TerminalControls.Add(do_allow_outbound);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(do_allow_outbound);
 			}
+
+			// Spacer
+			{
+				IMyTerminalControlLabel spacer_lb = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlLabel, IMyUpgradeModule>(MODID_PREFIX + "JumpGateSectionBottomSpacer");
+				spacer_lb.Label = MyStringId.GetOrCompute(" ");
+				spacer_lb.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateRemoteAntenna(block) && MyJumpGateRemoteAntennaTerminal.SectionSwitches[section_switch];
+				spacer_lb.SupportsMultipleBlocks = true;
+				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(spacer_lb);
+			}
 		}
 
 		private static void SetupTerminalEntityFilterControls()
@@ -520,11 +532,13 @@ namespace IOTA.ModularJumpGates.Terminal
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(separator_hr);
 			}
 
+			IMyTerminalControlOnOffSwitch section_switch = MyJumpGateRemoteAntennaTerminal.GenerateSectionSwitch("EntityFilter", false);
+
 			// Label
 			{
 				IMyTerminalControlLabel beacon_label_lb = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlLabel, IMyUpgradeModule>(MODID_PREFIX + "AntennaFilterSettingsLabel");
 				beacon_label_lb.Label = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_EntityFilterSettings"));
-				beacon_label_lb.Visible = MyJumpGateModSession.IsBlockJumpGateRemoteAntenna;
+				beacon_label_lb.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateRemoteAntenna(block) && MyJumpGateRemoteAntennaTerminal.SectionSwitches[section_switch];
 				beacon_label_lb.SupportsMultipleBlocks = true;
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(beacon_label_lb);
 			}
@@ -534,7 +548,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				IMyTerminalControlListbox choose_allowed_entities_lb = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlListbox, IMyUpgradeModule>(MODID_PREFIX + "AllowedEntities");
 				choose_allowed_entities_lb.Title = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_AllowedEntities"));
 				choose_allowed_entities_lb.SupportsMultipleBlocks = false;
-				choose_allowed_entities_lb.Visible = MyJumpGateModSession.IsBlockJumpGateRemoteAntenna;
+				choose_allowed_entities_lb.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateRemoteAntenna(block) && MyJumpGateRemoteAntennaTerminal.SectionSwitches[section_switch];
 				choose_allowed_entities_lb.Enabled = (block) => {
 					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
 					MyJumpGate jump_gate = antenna?.GetInboundControlGate(antenna.CurrentTerminalChannel);
@@ -585,7 +599,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				allowed_entity_mass_min.Title = MyStringId.GetOrCompute($"{MyTexts.GetString("Terminal_JumpGateController_MinimumMass")} (Kg):");
 				allowed_entity_mass_min.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_FilterMinimumMass_Tooltip"));
 				allowed_entity_mass_min.SupportsMultipleBlocks = true;
-				allowed_entity_mass_min.Visible = MyJumpGateModSession.IsBlockJumpGateRemoteAntenna;
+				allowed_entity_mass_min.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateRemoteAntenna(block) && MyJumpGateRemoteAntennaTerminal.SectionSwitches[section_switch];
 				allowed_entity_mass_min.Enabled = (block) => {
 					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
 					return antenna != null && antenna.IsWorking && antenna.JumpGateGrid != null && !antenna.JumpGateGrid.Closed;
@@ -614,7 +628,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				allowed_entity_mass_max.Title = MyStringId.GetOrCompute($"{MyTexts.GetString("Terminal_JumpGateController_MaximumMass")} (Kg):");
 				allowed_entity_mass_max.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_FilterMaximumMass_Tooltip"));
 				allowed_entity_mass_max.SupportsMultipleBlocks = true;
-				allowed_entity_mass_max.Visible = MyJumpGateModSession.IsBlockJumpGateRemoteAntenna;
+				allowed_entity_mass_max.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateRemoteAntenna(block) && MyJumpGateRemoteAntennaTerminal.SectionSwitches[section_switch];
 				allowed_entity_mass_max.Enabled = (block) => {
 					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
 					return antenna != null && antenna.IsWorking && antenna.JumpGateGrid != null && !antenna.JumpGateGrid.Closed;
@@ -646,7 +660,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				allowed_cubegrid_size_min.Title = MyStringId.GetOrCompute($"{MyTexts.GetString("Terminal_JumpGateController_MinimumSize")}:");
 				allowed_cubegrid_size_min.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_MinimumSize_Tooltip"));
 				allowed_cubegrid_size_min.SupportsMultipleBlocks = true;
-				allowed_cubegrid_size_min.Visible = MyJumpGateModSession.IsBlockJumpGateRemoteAntenna;
+				allowed_cubegrid_size_min.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateRemoteAntenna(block) && MyJumpGateRemoteAntennaTerminal.SectionSwitches[section_switch];
 				allowed_cubegrid_size_min.Enabled = (block) => {
 					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
 					return antenna != null && antenna.IsWorking && antenna.JumpGateGrid != null && !antenna.JumpGateGrid.Closed;
@@ -680,7 +694,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				allowed_cubegrid_size_max.Title = MyStringId.GetOrCompute($"{MyTexts.GetString("Terminal_JumpGateController_MaximumSize")}:");
 				allowed_cubegrid_size_max.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_MaximumSize_Tooltip"));
 				allowed_cubegrid_size_max.SupportsMultipleBlocks = true;
-				allowed_cubegrid_size_max.Visible = MyJumpGateModSession.IsBlockJumpGateRemoteAntenna;
+				allowed_cubegrid_size_max.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateRemoteAntenna(block) && MyJumpGateRemoteAntennaTerminal.SectionSwitches[section_switch];
 				allowed_cubegrid_size_max.Enabled = (block) => {
 					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
 					return antenna != null && antenna.IsWorking && antenna.JumpGateGrid != null && !antenna.JumpGateGrid.Closed;
@@ -710,6 +724,15 @@ namespace IOTA.ModularJumpGates.Terminal
 				MyJumpGateRemoteAntennaTerminal.TerminalControls.Add(allowed_cubegrid_size_max);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(allowed_cubegrid_size_max);
 			}
+
+			// Spacer
+			{
+				IMyTerminalControlLabel spacer_lb = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlLabel, IMyUpgradeModule>(MODID_PREFIX + "EntityFilterSectionBottomSpacer");
+				spacer_lb.Label = MyStringId.GetOrCompute(" ");
+				spacer_lb.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateRemoteAntenna(block) && MyJumpGateRemoteAntennaTerminal.SectionSwitches[section_switch];
+				spacer_lb.SupportsMultipleBlocks = true;
+				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(spacer_lb);
+			}
 		}
 
 		private static void SetupTerminalAutoActivateControls()
@@ -722,22 +745,15 @@ namespace IOTA.ModularJumpGates.Terminal
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(separator_hr);
 			}
 
+			IMyTerminalControlOnOffSwitch section_switch = MyJumpGateRemoteAntennaTerminal.GenerateSectionSwitch("AutoJump", false);
+
 			// Label
 			{
 				IMyTerminalControlLabel settings_label_lb = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlLabel, IMyUpgradeModule>(MODID_PREFIX + "AntennaAutoJumpSettingsLabel");
 				settings_label_lb.Label = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_AutoJumpSettings"));
-				settings_label_lb.Visible = MyJumpGateModSession.IsBlockJumpGateRemoteAntenna;
+				settings_label_lb.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateRemoteAntenna(block) && MyJumpGateRemoteAntennaTerminal.SectionSwitches[section_switch];
 				settings_label_lb.SupportsMultipleBlocks = true;
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(settings_label_lb);
-			}
-
-			// Spacer
-			{
-				IMyTerminalControlLabel spacer_lb = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlLabel, IMyUpgradeModule>(MODID_PREFIX + "controller_auto_activate_spacer_lb");
-				spacer_lb.Label = MyStringId.GetOrCompute(" ");
-				spacer_lb.Visible = MyJumpGateModSession.IsBlockJumpGateRemoteAntenna;
-				spacer_lb.SupportsMultipleBlocks = true;
-				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(spacer_lb);
 			}
 
 			// OnOffSwitch [Auto Activate]
@@ -746,7 +762,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				do_auto_activate.Title = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_EnableAutoActivation"));
 				do_auto_activate.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_EnableAutoActivation_Tooltip"));
 				do_auto_activate.SupportsMultipleBlocks = true;
-				do_auto_activate.Visible = MyJumpGateModSession.IsBlockJumpGateRemoteAntenna;
+				do_auto_activate.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateRemoteAntenna(block) && MyJumpGateRemoteAntennaTerminal.SectionSwitches[section_switch];
 				do_auto_activate.Enabled = (block) => {
 					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
 					return antenna != null && antenna.IsWorking && antenna.JumpGateGrid != null && !antenna.JumpGateGrid.Closed;
@@ -774,7 +790,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				autoactivate_mass_min.Title = MyStringId.GetOrCompute($"{MyTexts.GetString("Terminal_JumpGateController_MinimumMass")} (Kg):");
 				autoactivate_mass_min.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_AutoActivateMinimumMass_Tooltip"));
 				autoactivate_mass_min.SupportsMultipleBlocks = true;
-				autoactivate_mass_min.Visible = MyJumpGateModSession.IsBlockJumpGateRemoteAntenna;
+				autoactivate_mass_min.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateRemoteAntenna(block) && MyJumpGateRemoteAntennaTerminal.SectionSwitches[section_switch];
 				autoactivate_mass_min.Enabled = (block) => {
 					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
 					return antenna != null && antenna.IsWorking && antenna.JumpGateGrid != null && !antenna.JumpGateGrid.Closed && antenna.BlockSettings.BaseControllerSettings[antenna.CurrentTerminalChannel].CanAutoActivate();
@@ -804,7 +820,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				autoactivate_mass_max.Title = MyStringId.GetOrCompute($"{MyTexts.GetString("Terminal_JumpGateController_MaximumMass")} (Kg):");
 				autoactivate_mass_max.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_AutoActivateMaximumMass_Tooltip"));
 				autoactivate_mass_max.SupportsMultipleBlocks = true;
-				autoactivate_mass_max.Visible = MyJumpGateModSession.IsBlockJumpGateRemoteAntenna;
+				autoactivate_mass_max.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateRemoteAntenna(block) && MyJumpGateRemoteAntennaTerminal.SectionSwitches[section_switch];
 				autoactivate_mass_max.Enabled = (block) => {
 					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
 					return antenna != null && antenna.IsWorking && antenna.JumpGateGrid != null && !antenna.JumpGateGrid.Closed && antenna.BlockSettings.BaseControllerSettings[antenna.CurrentTerminalChannel].CanAutoActivate();
@@ -837,7 +853,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				autoactivate_power_min.Title = MyStringId.GetOrCompute($"{MyTexts.GetString("Terminal_JumpGateController_MinimumPower")} (MW):");
 				autoactivate_power_min.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_MinimumPower_Tooltip"));
 				autoactivate_power_min.SupportsMultipleBlocks = true;
-				autoactivate_power_min.Visible = MyJumpGateModSession.IsBlockJumpGateRemoteAntenna;
+				autoactivate_power_min.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateRemoteAntenna(block) && MyJumpGateRemoteAntennaTerminal.SectionSwitches[section_switch];
 				autoactivate_power_min.Enabled = (block) => {
 					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
 					return antenna != null && antenna.IsWorking && antenna.JumpGateGrid != null && !antenna.JumpGateGrid.Closed && antenna.BlockSettings.BaseControllerSettings[antenna.CurrentTerminalChannel].CanAutoActivate();
@@ -867,7 +883,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				auto_activate_power_max.Title = MyStringId.GetOrCompute($"{MyTexts.GetString("Terminal_JumpGateController_MaximumPower")} (MW):");
 				auto_activate_power_max.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_MaximumPower_Tooltip"));
 				auto_activate_power_max.SupportsMultipleBlocks = true;
-				auto_activate_power_max.Visible = MyJumpGateModSession.IsBlockJumpGateRemoteAntenna;
+				auto_activate_power_max.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateRemoteAntenna(block) && MyJumpGateRemoteAntennaTerminal.SectionSwitches[section_switch];
 				auto_activate_power_max.Enabled = (block) => {
 					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
 					return antenna != null && antenna.IsWorking && antenna.JumpGateGrid != null && !antenna.JumpGateGrid.Closed && antenna.BlockSettings.BaseControllerSettings[antenna.CurrentTerminalChannel].CanAutoActivate();
@@ -900,7 +916,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				autoactivate_delay.Title = MyStringId.GetOrCompute($"{MyTexts.GetString("Terminal_JumpGateController_ActivationDelay")} (s)");
 				autoactivate_delay.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_ActivationDelay_Tooltip"));
 				autoactivate_delay.SupportsMultipleBlocks = true;
-				autoactivate_delay.Visible = MyJumpGateModSession.IsBlockJumpGateRemoteAntenna;
+				autoactivate_delay.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateRemoteAntenna(block) && MyJumpGateRemoteAntennaTerminal.SectionSwitches[section_switch];
 				autoactivate_delay.Enabled = (block) => {
 					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
 					return antenna != null && antenna.IsWorking && antenna.JumpGateGrid != null && !antenna.JumpGateGrid.Closed && antenna.BlockSettings.BaseControllerSettings[antenna.CurrentTerminalChannel].CanAutoActivate();
@@ -926,6 +942,15 @@ namespace IOTA.ModularJumpGates.Terminal
 				MyJumpGateRemoteAntennaTerminal.TerminalControls.Add(autoactivate_delay);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(autoactivate_delay);
 			}
+
+			// Spacer
+			{
+				IMyTerminalControlLabel spacer_lb = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlLabel, IMyUpgradeModule>(MODID_PREFIX + "AutoJumpSectionBottomSpacer");
+				spacer_lb.Label = MyStringId.GetOrCompute(" ");
+				spacer_lb.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateRemoteAntenna(block) && MyJumpGateRemoteAntennaTerminal.SectionSwitches[section_switch];
+				spacer_lb.SupportsMultipleBlocks = true;
+				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(spacer_lb);
+			}
 		}
 
 		private static void SetupTerminalCommLinkControls()
@@ -938,13 +963,15 @@ namespace IOTA.ModularJumpGates.Terminal
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(separator_hr);
 			}
 
+			IMyTerminalControlOnOffSwitch section_switch = MyJumpGateRemoteAntennaTerminal.GenerateSectionSwitch("CommLink", false);
+
 			// Label
 			{
 				IMyTerminalControlLabel commlink_label_lb = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlLabel, IMyUpgradeModule>(MODID_PREFIX + "AntennaCommLinkLabel");
 				commlink_label_lb.Label = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_CommLinkSettings"));
 				commlink_label_lb.Visible = (block) => {
 					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
-					return antenna != null && antenna.IsWorking && antenna.JumpGateGrid != null && !antenna.JumpGateGrid.Closed && antenna.JumpGateGrid.HasCommLink();
+					return antenna != null && antenna.IsWorking && antenna.JumpGateGrid != null && !antenna.JumpGateGrid.Closed && antenna.JumpGateGrid.HasCommLink() && MyJumpGateRemoteAntennaTerminal.SectionSwitches[section_switch];
 				};
 				commlink_label_lb.SupportsMultipleBlocks = true;
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(commlink_label_lb);
@@ -958,7 +985,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				do_display_owned.SupportsMultipleBlocks = true;
 				do_display_owned.Visible = (block) => {
 					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
-					return antenna != null && antenna.IsWorking && antenna.JumpGateGrid != null && !antenna.JumpGateGrid.Closed && antenna.JumpGateGrid.HasCommLink();
+					return antenna != null && antenna.IsWorking && antenna.JumpGateGrid != null && !antenna.JumpGateGrid.Closed && antenna.JumpGateGrid.HasCommLink() && MyJumpGateRemoteAntennaTerminal.SectionSwitches[section_switch];
 				};
 				do_display_owned.Enabled = (block) => true;
 				do_display_owned.Getter = (block) => {
@@ -983,7 +1010,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				do_display_friendly.SupportsMultipleBlocks = true;
 				do_display_friendly.Visible = (block) => {
 					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
-					return antenna != null && antenna.IsWorking && antenna.JumpGateGrid != null && !antenna.JumpGateGrid.Closed && antenna.JumpGateGrid.HasCommLink();
+					return antenna != null && antenna.IsWorking && antenna.JumpGateGrid != null && !antenna.JumpGateGrid.Closed && antenna.JumpGateGrid.HasCommLink() && MyJumpGateRemoteAntennaTerminal.SectionSwitches[section_switch];
 				};
 				do_display_friendly.Enabled = (block) => true;
 				do_display_friendly.Getter = (block) => {
@@ -1008,7 +1035,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				do_display_neutral.SupportsMultipleBlocks = true;
 				do_display_neutral.Visible = (block) => {
 					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
-					return antenna != null && antenna.IsWorking && antenna.JumpGateGrid != null && !antenna.JumpGateGrid.Closed && antenna.JumpGateGrid.HasCommLink();
+					return antenna != null && antenna.IsWorking && antenna.JumpGateGrid != null && !antenna.JumpGateGrid.Closed && antenna.JumpGateGrid.HasCommLink() && MyJumpGateRemoteAntennaTerminal.SectionSwitches[section_switch];
 				};
 				do_display_neutral.Enabled = (block) => true;
 				do_display_neutral.Getter = (block) => {
@@ -1033,7 +1060,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				do_display_enemy.SupportsMultipleBlocks = true;
 				do_display_enemy.Visible = (block) => {
 					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
-					return antenna != null && antenna.IsWorking && antenna.JumpGateGrid != null && !antenna.JumpGateGrid.Closed && antenna.JumpGateGrid.HasCommLink();
+					return antenna != null && antenna.IsWorking && antenna.JumpGateGrid != null && !antenna.JumpGateGrid.Closed && antenna.JumpGateGrid.HasCommLink() && MyJumpGateRemoteAntennaTerminal.SectionSwitches[section_switch];
 				};
 				do_display_enemy.Enabled = (block) => true;
 				do_display_enemy.Getter = (block) => {
@@ -1058,7 +1085,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				do_display_unowned.SupportsMultipleBlocks = true;
 				do_display_unowned.Visible = (block) => {
 					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
-					return antenna != null && antenna.IsWorking && antenna.JumpGateGrid != null && !antenna.JumpGateGrid.Closed && antenna.JumpGateGrid.HasCommLink();
+					return antenna != null && antenna.IsWorking && antenna.JumpGateGrid != null && !antenna.JumpGateGrid.Closed && antenna.JumpGateGrid.HasCommLink() && MyJumpGateRemoteAntennaTerminal.SectionSwitches[section_switch];
 				};
 				do_display_unowned.Enabled = (block) => true;
 				do_display_unowned.Getter = (block) => {
@@ -1074,6 +1101,15 @@ namespace IOTA.ModularJumpGates.Terminal
 				MyJumpGateRemoteAntennaTerminal.TerminalControls.Add(do_display_unowned);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(do_display_unowned);
 			}
+
+			// Spacer
+			{
+				IMyTerminalControlLabel spacer_lb = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlLabel, IMyUpgradeModule>(MODID_PREFIX + "CommLinkSectionBottomSpacer");
+				spacer_lb.Label = MyStringId.GetOrCompute(" ");
+				spacer_lb.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateRemoteAntenna(block) && MyJumpGateRemoteAntennaTerminal.SectionSwitches[section_switch];
+				spacer_lb.SupportsMultipleBlocks = true;
+				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(spacer_lb);
+			}
 		}
 
 		private static void SetupTerminalDebugControls()
@@ -1086,11 +1122,13 @@ namespace IOTA.ModularJumpGates.Terminal
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(separator_hr);
 			}
 
+			IMyTerminalControlOnOffSwitch section_switch = MyJumpGateRemoteAntennaTerminal.GenerateSectionSwitch("Debug", false);
+
 			// Label
 			{
 				IMyTerminalControlLabel settings_label_lb = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlLabel, IMyUpgradeModule>(MODID_PREFIX + "AntennaDebugSettingsLabel");
 				settings_label_lb.Label = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_DebugSettings"));
-				settings_label_lb.Visible = MyJumpGateModSession.IsBlockJumpGateRemoteAntenna;
+				settings_label_lb.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateRemoteAntenna(block) && MyJumpGateRemoteAntennaTerminal.SectionSwitches[section_switch];
 				settings_label_lb.SupportsMultipleBlocks = true;
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(settings_label_lb);
 			}
@@ -1101,7 +1139,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				do_debug_mode_of.Title = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_DebugMode"));
 				do_debug_mode_of.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_DebugMode_Tooltip"));
 				do_debug_mode_of.SupportsMultipleBlocks = true;
-				do_debug_mode_of.Visible = MyJumpGateModSession.IsBlockJumpGateRemoteAntenna;
+				do_debug_mode_of.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateRemoteAntenna(block) && MyJumpGateRemoteAntennaTerminal.SectionSwitches[section_switch];
 				do_debug_mode_of.Enabled = (block) => true;
 				do_debug_mode_of.OnText = MyStringId.GetOrCompute(MyTexts.GetString("GeneralText_On"));
 				do_debug_mode_of.OffText = MyStringId.GetOrCompute(MyTexts.GetString("GeneralText_Off"));
@@ -1122,7 +1160,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				do_rescan_entities.Title = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_DebugRescanEntities"));
 				do_rescan_entities.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_DebugRescanEntities_Tooltip"));
 				do_rescan_entities.SupportsMultipleBlocks = true;
-				do_rescan_entities.Visible = MyJumpGateModSession.IsBlockJumpGateRemoteAntenna;
+				do_rescan_entities.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateRemoteAntenna(block) && MyJumpGateRemoteAntennaTerminal.SectionSwitches[section_switch];
 				do_rescan_entities.Enabled = (block) => {
 					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
 					MyJumpGate jump_gate = antenna?.GetInboundControlGate(antenna.CurrentTerminalChannel);
@@ -1145,7 +1183,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				do_staticify_construct.Title = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_ConvertToStation"));
 				do_staticify_construct.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_ConvertToStation_Tooltip"));
 				do_staticify_construct.SupportsMultipleBlocks = false;
-				do_staticify_construct.Visible = MyJumpGateModSession.IsBlockJumpGateRemoteAntenna;
+				do_staticify_construct.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateRemoteAntenna(block) && MyJumpGateRemoteAntennaTerminal.SectionSwitches[section_switch];
 				do_staticify_construct.Enabled = (block) => {
 					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
 					return antenna != null && antenna.JumpGateGrid != null && !antenna.JumpGateGrid.Closed && antenna.JumpGateGrid.GetCubeGrids().Any((grid) => !grid.IsStatic && grid.Physics != null && grid.LinearVelocity.Length() < 1e-3 && grid.Physics.AngularVelocity.Length() < 1e-3);
@@ -1177,7 +1215,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				do_unstaticify_construct.Title = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_ConvertToShip"));
 				do_unstaticify_construct.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_ConvertToShip_Tooltip"));
 				do_unstaticify_construct.SupportsMultipleBlocks = false;
-				do_unstaticify_construct.Visible = MyJumpGateModSession.IsBlockJumpGateRemoteAntenna;
+				do_unstaticify_construct.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateRemoteAntenna(block) && MyJumpGateRemoteAntennaTerminal.SectionSwitches[section_switch];
 				do_unstaticify_construct.Enabled = (block) => {
 					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
 					return antenna != null && antenna.JumpGateGrid != null && !antenna.JumpGateGrid.Closed && antenna.JumpGateGrid.GetCubeGrids().Any((grid) => grid.IsStatic);
@@ -1209,7 +1247,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				do_reconstruct_grid_gates.Title = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_ReconstructGates"));
 				do_reconstruct_grid_gates.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_ReconstructGates_Tooltip"));
 				do_reconstruct_grid_gates.SupportsMultipleBlocks = false;
-				do_reconstruct_grid_gates.Visible = (block) => MyNetworkInterface.IsServerLike && MyJumpGateModSession.IsBlockJumpGateRemoteAntenna(block);
+				do_reconstruct_grid_gates.Visible = (block) => MyNetworkInterface.IsServerLike && MyJumpGateModSession.IsBlockJumpGateRemoteAntenna(block) && MyJumpGateRemoteAntennaTerminal.SectionSwitches[section_switch];
 				do_reconstruct_grid_gates.Enabled = (block) => {
 					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
 					return antenna != null && MyJumpGateModSession.DebugMode && antenna.JumpGateGrid != null && !antenna.JumpGateGrid.IsSuspended && !antenna.JumpGateGrid.Closed;
@@ -1229,7 +1267,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				do_reset_client_grids.Title = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_ForceGridsUpdate"));
 				do_reset_client_grids.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_ForceGridsUpdate_Tooltip"));
 				do_reset_client_grids.SupportsMultipleBlocks = false;
-				do_reset_client_grids.Visible = (block) => MyNetworkInterface.IsStandaloneMultiplayerClient && MyJumpGateModSession.IsBlockJumpGateRemoteAntenna(block);
+				do_reset_client_grids.Visible = (block) => MyNetworkInterface.IsStandaloneMultiplayerClient && MyJumpGateModSession.IsBlockJumpGateRemoteAntenna(block) && MyJumpGateRemoteAntennaTerminal.SectionSwitches[section_switch];
 				do_reset_client_grids.Enabled = (block) => {
 					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
 					return antenna != null && MyJumpGateModSession.DebugMode;
@@ -1246,6 +1284,15 @@ namespace IOTA.ModularJumpGates.Terminal
 				MyJumpGateRemoteAntennaTerminal.TerminalControls.Add(do_reset_client_grids);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(do_reset_client_grids);
 			}
+
+			// Spacer
+			{
+				IMyTerminalControlLabel spacer_lb = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlLabel, IMyUpgradeModule>(MODID_PREFIX + "DebugSectionBottomSpacer");
+				spacer_lb.Label = MyStringId.GetOrCompute(" ");
+				spacer_lb.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateRemoteAntenna(block) && MyJumpGateRemoteAntennaTerminal.SectionSwitches[section_switch];
+				spacer_lb.SupportsMultipleBlocks = true;
+				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(spacer_lb);
+			}
 		}
 
 		private static void SetupTerminalGateExtraControls()
@@ -1261,11 +1308,13 @@ namespace IOTA.ModularJumpGates.Terminal
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(separator_hr);
 			}
 
+			IMyTerminalControlOnOffSwitch section_switch = MyJumpGateRemoteAntennaTerminal.GenerateSectionSwitch("Extra", false);
+
 			// Label
 			{
 				IMyTerminalControlLabel settings_label_lb = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlLabel, IMyUpgradeModule>(MODID_PREFIX + "AntennaAdditionalSettingsLabel");
 				settings_label_lb.Label = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_AdditionalSettings"));
-				settings_label_lb.Visible = MyJumpGateModSession.IsBlockJumpGateRemoteAntenna;
+				settings_label_lb.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateRemoteAntenna(block) && MyJumpGateRemoteAntennaTerminal.SectionSwitches[section_switch];
 				settings_label_lb.SupportsMultipleBlocks = true;
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(settings_label_lb);
 			}
@@ -1276,7 +1325,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				jump_sphere_radius_sd.Title = MyStringId.GetOrCompute($"{MyTexts.GetString("Terminal_JumpGateController_JumpSpaceRadius")}:");
 				jump_sphere_radius_sd.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_JumpSpaceRadius_Tooltip"));
 				jump_sphere_radius_sd.SupportsMultipleBlocks = true;
-				jump_sphere_radius_sd.Visible = MyJumpGateModSession.IsBlockJumpGateRemoteAntenna;
+				jump_sphere_radius_sd.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateRemoteAntenna(block) && MyJumpGateRemoteAntennaTerminal.SectionSwitches[section_switch];
 				jump_sphere_radius_sd.Enabled = (block) => {
 					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
 					MyJumpGate jump_gate = antenna?.GetInboundControlGate(antenna.CurrentTerminalChannel);
@@ -1315,7 +1364,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				jump_space_depth.Title = MyStringId.GetOrCompute($"{MyTexts.GetString("Terminal_JumpGateController_JumpSpaceDepthPercent")}:");
 				jump_space_depth.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_JumpSpaceDepthPercent_Tooltip"));
 				jump_space_depth.SupportsMultipleBlocks = true;
-				jump_space_depth.Visible = MyJumpGateModSession.IsBlockJumpGateRemoteAntenna;
+				jump_space_depth.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateRemoteAntenna(block) && MyJumpGateRemoteAntennaTerminal.SectionSwitches[section_switch];
 				jump_space_depth.Enabled = (block) => {
 					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
 					MyJumpGate jump_gate = antenna?.GetInboundControlGate(antenna.CurrentTerminalChannel);
@@ -1349,7 +1398,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				jump_space_fit_type.Title = MyStringId.GetOrCompute($"{MyTexts.GetString("Terminal_JumpGateController_JumpSpaceFitType")}:");
 				jump_space_fit_type.Multiselect = false;
 				jump_space_fit_type.SupportsMultipleBlocks = true;
-				jump_space_fit_type.Visible = MyJumpGateModSession.IsBlockJumpGateRemoteAntenna;
+				jump_space_fit_type.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateRemoteAntenna(block) && MyJumpGateRemoteAntennaTerminal.SectionSwitches[section_switch];
 				jump_space_fit_type.Enabled = (block) => {
 					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
 					MyJumpGate jump_gate = antenna?.GetInboundControlGate(antenna.CurrentTerminalChannel);
@@ -1395,7 +1444,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				effect_color_shift_cl.Title = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_EffectColorShift"));
 				effect_color_shift_cl.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_EffectColorShift_Tooltip"));
 				effect_color_shift_cl.SupportsMultipleBlocks = true;
-				effect_color_shift_cl.Visible = MyJumpGateModSession.IsBlockJumpGateRemoteAntenna;
+				effect_color_shift_cl.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateRemoteAntenna(block) && MyJumpGateRemoteAntennaTerminal.SectionSwitches[section_switch];
 				effect_color_shift_cl.Enabled = (block) => {
 					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
 					MyJumpGate jump_gate = antenna?.GetInboundControlGate(antenna.CurrentTerminalChannel);
@@ -1421,7 +1470,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				spacer_lb.Label = MyStringId.GetOrCompute(" ");
 				spacer_lb.Visible = (block) => {
 					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
-					return antenna != null && antenna.IsWorking && antenna.JumpGateGrid != null && !antenna.JumpGateGrid.Closed;
+					return antenna != null && antenna.IsWorking && antenna.JumpGateGrid != null && !antenna.JumpGateGrid.Closed && MyJumpGateRemoteAntennaTerminal.SectionSwitches[section_switch];
 				};
 				spacer_lb.SupportsMultipleBlocks = true;
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(spacer_lb);
@@ -1433,7 +1482,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				do_normal_vector_override_off.Title = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_VectorNormalOverride"));
 				do_normal_vector_override_off.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_VectorNormalOverride_Tooltip"));
 				do_normal_vector_override_off.SupportsMultipleBlocks = true;
-				do_normal_vector_override_off.Visible = MyJumpGateModSession.IsBlockJumpGateRemoteAntenna;
+				do_normal_vector_override_off.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateRemoteAntenna(block) && MyJumpGateRemoteAntennaTerminal.SectionSwitches[section_switch];
 				do_normal_vector_override_off.Enabled = (block) => {
 					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
 					MyJumpGate jump_gate = antenna?.GetInboundControlGate(antenna.CurrentTerminalChannel);
@@ -1460,7 +1509,7 @@ namespace IOTA.ModularJumpGates.Terminal
 			{
 				IMyTerminalControlLabel settings_label_lb = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlLabel, IMyUpgradeModule>(MODID_PREFIX + "AntennaVectorNormalOverrideLabel");
 				settings_label_lb.Label = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_NormalVector"));
-				settings_label_lb.Visible = MyJumpGateModSession.IsBlockJumpGateRemoteAntenna;
+				settings_label_lb.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateRemoteAntenna(block) && MyJumpGateRemoteAntennaTerminal.SectionSwitches[section_switch];
 				settings_label_lb.SupportsMultipleBlocks = true;
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(settings_label_lb);
 			}
@@ -1471,7 +1520,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				vector_normal_x_sd.Title = MyStringId.GetOrCompute("X:");
 				vector_normal_x_sd.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_NormalVectorComponent_Tooltip").Replace("{%0}", "X"));
 				vector_normal_x_sd.SupportsMultipleBlocks = true;
-				vector_normal_x_sd.Visible = MyJumpGateModSession.IsBlockJumpGateRemoteAntenna;
+				vector_normal_x_sd.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateRemoteAntenna(block) && MyJumpGateRemoteAntennaTerminal.SectionSwitches[section_switch];
 				vector_normal_x_sd.Enabled = (block) => {
 					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
 					MyJumpGate jump_gate = antenna?.GetInboundControlGate(antenna.CurrentTerminalChannel);
@@ -1508,7 +1557,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				vector_normal_y_sd.Title = MyStringId.GetOrCompute("Y:");
 				vector_normal_y_sd.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_NormalVectorComponent_Tooltip").Replace("{%0}", "Y"));
 				vector_normal_y_sd.SupportsMultipleBlocks = true;
-				vector_normal_y_sd.Visible = MyJumpGateModSession.IsBlockJumpGateRemoteAntenna;
+				vector_normal_y_sd.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateRemoteAntenna(block) && MyJumpGateRemoteAntennaTerminal.SectionSwitches[section_switch];
 				vector_normal_y_sd.Enabled = (block) => {
 					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
 					MyJumpGate jump_gate = antenna?.GetInboundControlGate(antenna.CurrentTerminalChannel);
@@ -1545,7 +1594,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				vector_normal_z_sd.Title = MyStringId.GetOrCompute("Z:");
 				vector_normal_z_sd.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_NormalVectorComponent_Tooltip").Replace("{%0}", "Z"));
 				vector_normal_z_sd.SupportsMultipleBlocks = true;
-				vector_normal_z_sd.Visible = MyJumpGateModSession.IsBlockJumpGateRemoteAntenna;
+				vector_normal_z_sd.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateRemoteAntenna(block) && MyJumpGateRemoteAntennaTerminal.SectionSwitches[section_switch];
 				vector_normal_z_sd.Enabled = (block) => {
 					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
 					MyJumpGate jump_gate = antenna?.GetInboundControlGate(antenna.CurrentTerminalChannel);
@@ -1574,6 +1623,15 @@ namespace IOTA.ModularJumpGates.Terminal
 				};
 				MyJumpGateRemoteAntennaTerminal.TerminalControls.Add(vector_normal_z_sd);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(vector_normal_z_sd);
+			}
+
+			// Spacer
+			{
+				IMyTerminalControlLabel spacer_lb = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlLabel, IMyUpgradeModule>(MODID_PREFIX + "ExtraSectionBottomSpacer");
+				spacer_lb.Label = MyStringId.GetOrCompute(" ");
+				spacer_lb.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateRemoteAntenna(block) && MyJumpGateRemoteAntennaTerminal.SectionSwitches[section_switch];
+				spacer_lb.SupportsMultipleBlocks = true;
+				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(spacer_lb);
 			}
 		}
 
@@ -1835,6 +1893,39 @@ namespace IOTA.ModularJumpGates.Terminal
 		private static void SetupJumpGateRemoteAntennaTerminalProperties()
 		{
 
+		}
+
+		private static IMyTerminalControlOnOffSwitch GenerateSectionSwitch(string name, bool default_enabled)
+		{
+			// Section Switch
+			IMyTerminalControlOnOffSwitch section_switch = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlOnOffSwitch, IMyUpgradeModule>(MODID_PREFIX + $"{name}SectionSwitch");
+			section_switch.Title = MyStringId.GetOrCompute(MyTexts.GetString($"Terminal_JumpGateController_{name}SectionSwitch"));
+			section_switch.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString($"Terminal_JumpGateController_{name}SectionSwitch_Tooltip"));
+			section_switch.SupportsMultipleBlocks = true;
+			section_switch.Visible = MyJumpGateModSession.IsBlockJumpGateRemoteAntenna;
+			section_switch.Enabled = (block) => true;
+			section_switch.OnText = MyStringId.GetOrCompute(MyTexts.GetString("GeneralText_On"));
+			section_switch.OffText = MyStringId.GetOrCompute(MyTexts.GetString("GeneralText_Off"));
+			section_switch.Getter = (block) => MyJumpGateRemoteAntennaTerminal.SectionSwitches[section_switch];
+			section_switch.Setter = (block, value) => {
+				if (!MyJumpGateModSession.IsBlockJumpGateRemoteAntenna(block)) return;
+				MyJumpGateRemoteAntennaTerminal.SectionSwitches[section_switch] = value;
+				MyJumpGateModSession.Instance.RedrawAllTerminalControls();
+				IMyEntity interacting = MyAPIGateway.Gui.InteractedEntity;
+				MyAPIGateway.Gui.ChangeInteractedEntity(interacting, false);
+			};
+			//MyJumpGateRemoteAntennaTerminal.TerminalControls.Add(section_switch);
+			MyJumpGateRemoteAntennaTerminal.SectionSwitches[section_switch] = true;
+
+			// Spacer
+			IMyTerminalControlLabel spacer_lb = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlLabel, IMyUpgradeModule>(MODID_PREFIX + $"RemoteAntenna{name}SectionSwitchSpacer");
+			spacer_lb.Label = MyStringId.GetOrCompute(" ");
+			spacer_lb.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateRemoteAntenna(block) && MyJumpGateRemoteAntennaTerminal.SectionSwitches[section_switch];
+			spacer_lb.SupportsMultipleBlocks = true;
+
+			//MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(spacer_lb);
+			//MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(section_switch);
+			return section_switch;
 		}
 
 		public static void Load(IMyModContext context)

@@ -2123,7 +2123,7 @@ namespace IOTA.ModularJumpGates
 		{
 			if (this.Closed) return;
 			MyEntity topmost = (MyEntity) entity.GetTopMostParent();
-			if (entity == this.JumpSpaceCollisionDetector) return;
+			if (entity == this.JumpSpaceCollisionDetector || entity == null) return;
 
 			if (is_entering) this.JumpSpaceColliderEntities[topmost.EntityId] = topmost;
 			else if (!is_entering && !this.ForceUpdateCollider)
@@ -3174,32 +3174,39 @@ namespace IOTA.ModularJumpGates
 					foreach (KeyValuePair<long, MyEntity> pair in this.JumpSpaceColliderEntities)
 					{
 						MyEntity entity = pair.Value.GetTopMostParent();
+						bool is_self = this.JumpGateGrid.HasCubeGrid(entity.EntityId);
 
-						if (entity?.Physics == null || entity.MarkedForClose || this.JumpGateGrid.HasCubeGrid(entity.EntityId))
+						if (entity?.Physics == null || entity.MarkedForClose || is_self)
 						{
 							closed_entities.Add(entity);
+							Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} Entity marked for jump-space removal >> PHYSICS={entity?.Physics}, CLOSED={entity.MarkedForClose}, IS_SELF={is_self}", 5);
 							continue;
 						}
 
 						MyEntity add_entity = null;
 						float? mass = null;
+						bool bounded = false;
 
-						if (entity is MyCubeGrid && (parent = MyJumpGateModSession.Instance.GetUnclosedJumpGateGrid(entity.EntityId)) != null && !parent.IsStatic() && parent.IsConstructWithinBoundingEllipsoid(ref jump_ellipse))
+						if (entity is MyCubeGrid && (parent = MyJumpGateModSession.Instance.GetUnclosedJumpGateGrid(entity.EntityId)) != null && !parent.IsStatic() && (bounded = parent.IsConstructWithinBoundingEllipsoid(ref jump_ellipse)))
 						{
 							add_entity = (MyCubeGrid) parent.CubeGrid;
 							mass = (float) parent.ConstructMass();
 						}
-						else if (entity is IMyCharacter && jump_ellipse.IsPointInEllipse(entity.WorldMatrix.Translation))
+						else if (entity is IMyCharacter && (bounded = jump_ellipse.IsPointInEllipse(entity.WorldMatrix.Translation)))
 						{
 							add_entity = entity;
 							mass = ((IMyCharacter) entity).CurrentMass;
 						}
-						else if (!(entity is MyCubeGrid)) add_entity = (jump_ellipse.IsPointInEllipse(entity.WorldMatrix.Translation)) ? entity : null;
+						else if (!(entity is MyCubeGrid)) add_entity = (bounded = jump_ellipse.IsPointInEllipse(entity.WorldMatrix.Translation)) ? entity : null;
 
 						float old_mass;
 						float new_mass = mass ?? add_entity?.Physics.Mass ?? float.NaN;
 
-						if (this.JumpSpaceEntities.ContainsKey(entity.EntityId) && add_entity == null) closed_entities.Add(entity);
+						if (this.JumpSpaceEntities.ContainsKey(entity.EntityId) && add_entity == null)
+						{
+							closed_entities.Add(entity);
+							Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} Entity marked for jump-space removal >> TYPE={entity.GetType().Name}, STATIC={entity is MyCubeGrid && ((MyCubeGrid) entity).IsStatic}, BOUNDED={bounded}", 5);
+						}
 						else if (add_entity != null && this.JumpSpaceEntities.TryGetValue(add_entity.EntityId, out old_mass) && old_mass != new_mass) this.JumpSpaceEntities[add_entity.EntityId] = new_mass;
 						else if (add_entity != null && this.JumpSpaceEntities.TryAdd(add_entity.EntityId, new_mass)) this.OnEntityJumpSpaceEnter(add_entity);
 					}
@@ -3797,8 +3804,17 @@ namespace IOTA.ModularJumpGates
 		{
 			if (this.Closed || !MyNetworkInterface.IsClientLike) return null;
 			ulong sound_id = this.SoundEmitterID++;
-			if (this.SoundEmitters.TryAdd(sound_id, new KeyValuePair<Vector3D?, MySoundEmitter3D>(pos, new MySoundEmitter3D(sound, pos ?? this.WorldJumpNode, distance, volume)))) return sound_id;
-			else return null;
+
+			try
+			{
+				MySoundEmitter3D emitter = new MySoundEmitter3D(sound, pos ?? this.WorldJumpNode, distance, volume);
+				if (this.SoundEmitters.TryAdd(sound_id, new KeyValuePair<Vector3D?, MySoundEmitter3D>(pos, emitter))) return sound_id;
+				else return null;
+			}
+			catch (Exception)
+			{
+				return null;
+			}
 		}
 
 		/// <summary>

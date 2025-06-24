@@ -3305,7 +3305,7 @@ namespace IOTA.ModularJumpGates
 		/// <summary>
 		/// The gate's assigned sound emitter ID
 		/// </summary>
-		private List<ulong?> SoundIDs = null;
+		private List<ulong> SoundIDs = null;
 
 		/// <summary>
 		/// The calling jump gate
@@ -3348,7 +3348,7 @@ namespace IOTA.ModularJumpGates
 			this.TargetGate = target_gate;
 			this.Duration = (def.Duration == 0) ? animation_duration : def.Duration;
 			this.IsAntiNode = anti_node;
-			this.SoundIDs = new List<ulong?>();
+			this.SoundIDs = new List<ulong>();
 		}
 		#endregion
 
@@ -3380,8 +3380,24 @@ namespace IOTA.ModularJumpGates
 						this.SoundEmitters.Add(emitter);
 					}
 				}
-				else if (is_start && this.IsAntiNode) foreach (string sound_name in this.SoundDefinition.SoundNames) this.SoundIDs.Add(this.JumpGate.PlaySound(sound_name, pos: endpoint));
-				else if (is_start) foreach (string sound_name in this.SoundDefinition.SoundNames) this.SoundIDs.Add(this.JumpGate.PlaySound(sound_name));
+				else if (is_start && this.IsAntiNode)
+				{
+					foreach (string sound_name in this.SoundDefinition.SoundNames)
+					{
+						ulong? id = this.JumpGate.PlaySound(sound_name, pos: endpoint);
+						if (id != null) this.SoundIDs.Add(id.Value);
+						else Logger.Error($"Failed to spawn 3D sound '{sound_name}' for jump gate {JumpGateUUID.FromJumpGate(this.JumpGate)}");
+					}
+				}
+				else if (is_start)
+				{
+					foreach (string sound_name in this.SoundDefinition.SoundNames)
+					{
+						ulong? id = this.JumpGate.PlaySound(sound_name);
+						if (id != null) this.SoundIDs.Add(id.Value);
+						else Logger.Error($"Failed to spawn 3D sound '{sound_name}' for jump gate {JumpGateUUID.FromJumpGate(this.JumpGate)}");
+					}
+				}
 
 				float volume = this.SoundDefinition.Volume;
 				float? distance = this.SoundDefinition.Distance;
@@ -3391,7 +3407,7 @@ namespace IOTA.ModularJumpGates
 
 				if (this.SoundEmitters == null)
 				{
-					foreach (ulong? sound_id in this.SoundIDs)
+					foreach (ulong sound_id in this.SoundIDs)
 					{
 						this.JumpGate.SetSoundVolume(sound_id, volume);
 						this.JumpGate.SetSoundDistance(sound_id, distance);

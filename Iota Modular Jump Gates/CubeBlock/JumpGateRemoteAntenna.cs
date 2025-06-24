@@ -1,12 +1,12 @@
 ﻿using IOTA.ModularJumpGates.Terminal;
 using IOTA.ModularJumpGates.Util;
-using IOTA.ModularJumpGates.Util.ConcurrentCollections;
 using ProtoBuf;
 using Sandbox.Common.ObjectBuilders;
 using Sandbox.Game.Entities;
 using Sandbox.Game.EntityComponents;
 using Sandbox.ModAPI;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -93,6 +93,11 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		private byte ConnectionEmissiveIndex = 0;
 
 		/// <summary>
+		/// The number of nearby antennas as seen from server
+		/// </summary>
+		private int SyncedNearbyAntennas = 0;
+
+		/// <summary>
 		/// The last game tick at which nearby antennas were updated
 		/// </summary>
 		private ulong LastNearbyAntennasUpdateTime = 0;
@@ -144,9 +149,9 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		private List<MyJumpGateWaypoint>[] WaypointsList = new List<MyJumpGateWaypoint>[MyJumpGateRemoteAntenna.ChannelCount] { new List<MyJumpGateWaypoint>(), new List<MyJumpGateWaypoint>(), new List<MyJumpGateWaypoint>() };
 
 		/// <summary>
-		/// A collection of all topmost entities within search range
+		/// A map of all topmost entities within search range
 		/// </summary>
-		private ConcurrentLinkedHashSet<long> NearbyEntities = new ConcurrentLinkedHashSet<long>();
+		private ConcurrentDictionary<long, MyEntity> NearbyEntities = new ConcurrentDictionary<long, MyEntity>();
 		#endregion
 
 		#region Temporary Collections
@@ -266,7 +271,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				sb.Append($" {MyTexts.GetString("DetailedInfo_BlockBase_Input")}: {MyJumpGateModSession.AutoconvertMetricUnits(input_wattage * 1e6, "W/s", 4)}\n");
 				sb.Append($" {MyTexts.GetString("DetailedInfo_BlockBase_RequiredInput")}: {MyJumpGateModSession.AutoconvertMetricUnits(max_input * 1e6, "W/s", 4)}\n");
 				sb.Append($" {MyTexts.GetString("DetailedInfo_BlockBase_InputRatio")}: {((double.IsNaN(input_ratio)) ? "N/A" : $"{Math.Round(MathHelperD.Clamp(input_ratio, 0, 1) * 100, 2):#.00}%")}\n");
-				sb.Append($" {MyTexts.GetString("DetailedInfo_JumpGateRemoteAntenna_NearbyAntennas")}: {this.GetNearbyAntennas().Count()}\n");
+				sb.Append($" {MyTexts.GetString("DetailedInfo_JumpGateRemoteAntenna_NearbyAntennas")}: {((MyNetworkInterface.IsServerLike) ? this.GetNearbyAntennas().Count() : this.SyncedNearbyAntennas)}\n");
 
 				for (byte i = 0; i < MyJumpGateRemoteAntenna.ChannelCount; ++i)
 				{
@@ -783,9 +788,9 @@ namespace IOTA.ModularJumpGates.CubeBlock
 
 		private void OnEntityCollision(IMyEntity entity, bool is_entering)
 		{
-			if (entity == null || entity.Physics == null || !(entity is MyCubeGrid) || this.MarkedForClose) return;
-			else if (is_entering) this.NearbyEntities?.Add(entity.EntityId);
-			else this.NearbyEntities?.Remove(entity.EntityId);
+			if (entity == null || this.MarkedForClose || this.NearbyEntities == null) return;
+			else if (is_entering && entity is MyCubeGrid) this.NearbyEntities[entity.EntityId] = (MyEntity) entity;
+			else this.NearbyEntities.Remove(entity.EntityId);
 			this.SetDirty();
 		}
 
@@ -806,10 +811,12 @@ namespace IOTA.ModularJumpGates.CubeBlock
 
 				if (this.IsWorking)
 				{
-					foreach (long entity in this.NearbyEntities)
+					foreach (KeyValuePair<long, MyEntity> pair in this.NearbyEntities)
 					{
-						if (checked_grids.Contains(entity) || !MyJumpGateModSession.Instance.IsJumpGateGridMultiplayerValid(construct = MyJumpGateModSession.Instance.GetDirectJumpGateGrid(entity))) continue;
-						checked_grids.AddRange(construct.GetCubeGrids().Select((grid) => grid.EntityId));
+						if (!(pair.Value is MyCubeGrid) || pair.Value.Physics == null) continue;
+						MyCubeGrid grid = (MyCubeGrid) pair.Value;
+						if (checked_grids.Contains(pair.Key) || !MyJumpGateModSession.Instance.IsJumpGateGridMultiplayerValid(construct = MyJumpGateModSession.Instance.GetDirectJumpGateGrid(grid))) continue;
+						checked_grids.AddRange(construct.GetCubeGrids().Select((subgrid) => subgrid.EntityId));
 
 						foreach (MyJumpGateRemoteAntenna antenna in construct.GetAttachedJumpGateRemoteAntennas())
 						{
@@ -939,9 +946,6 @@ namespace IOTA.ModularJumpGates.CubeBlock
 					}
 				}
 				
-				this.NearbyEntities.Clear();
-				if (antenna.NearbyEntities != null) this.NearbyEntities.AddRange(antenna.NearbyEntities);
-				
 				if (antenna.ControllerGatePairings != null)
 				{
 					for (byte i = 0; i < MyJumpGateRemoteAntenna.ChannelCount; ++i)
@@ -962,7 +966,8 @@ namespace IOTA.ModularJumpGates.CubeBlock
 					}
 				}
 			}
-			
+
+			this.SyncedNearbyAntennas = antenna.SyncedNearbyAntennas;
 			this.BlockSettings = MyAPIGateway.Utilities.SerializeFromBinary<MyRemoteAntennaBlockSettingsStruct>(antenna.BlockSettings);
 			return true;
 		}
@@ -1171,10 +1176,10 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			}
 
 			MySerializedJumpGateRemoteAntenna serialized = base.ToSerialized<MySerializedJumpGateRemoteAntenna>(false);
+			serialized.SyncedNearbyAntennas = (MyNetworkInterface.IsServerLike) ? this.GetNearbyAntennas().Count() : 0;
 			serialized.InboundControlJumpGates = this.InboundConnectionJumpGates;
 			serialized.OutboundControlControllers = this.OutboundConnectionControllers;
 			serialized.RemoteConnectionThreads = this.ConnectionThreads.Select((antenna) => antenna?.BlockID ?? -1).ToArray();
-			serialized.NearbyEntities = this.NearbyEntities.ToList();
 			serialized.BlockSettings = MyAPIGateway.Utilities.SerializeToBinary(this.BlockSettings);
 			serialized.ControllerGatePairings = pairings;
 			return serialized;
@@ -1189,13 +1194,13 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// The connected jump gates
 		/// </summary>
 		[ProtoMember(20)]
-		public long[] InboundControlJumpGates;
+		public int SyncedNearbyAntennas;
 		[ProtoMember(21)]
-		public long[] OutboundControlControllers;
+		public long[] InboundControlJumpGates;
 		[ProtoMember(22)]
-		public long[] RemoteConnectionThreads;
+		public long[] OutboundControlControllers;
 		[ProtoMember(23)]
-		public List<long> NearbyEntities;
+		public long[] RemoteConnectionThreads;
 		[ProtoMember(24)]
 		public byte[] BlockSettings;
 		[ProtoMember(25)]
