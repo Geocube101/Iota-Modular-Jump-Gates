@@ -22,6 +22,8 @@ A clear and concise description of what you expected to happen.
 
 **Log File**
 If applicable, add your log file describing the crash
+You can add either the SE log file found at *AppData\Roaming\SpaceEngineers*
+or the mod-specific log file located at *AppData\Roaming\SpaceEngineers\Storage*
 
 **Config File**
 If applicable, add your configuration file used by the affected world
