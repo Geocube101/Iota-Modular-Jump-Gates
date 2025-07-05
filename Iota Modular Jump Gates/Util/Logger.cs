@@ -44,7 +44,7 @@ namespace IOTA.ModularJumpGates.Util
 
             try
             {
-				TextWriter writer = MyAPIGateway.Utilities.WriteFileInGlobalStorage(filename);
+				TextWriter writer = MyAPIGateway.Utilities.WriteFileInLocalStorage(filename, MyJumpGateModSession.Instance.GetType());
 				Logger.Log($"Mod-specifid log file created");
 				Logger.ModLogWriter = writer;
 				Logger.ModLogWriter.WriteLine($"-=-=-= [ Iota's Modular Jump Gates (LOG) ] =-=-=-\n");

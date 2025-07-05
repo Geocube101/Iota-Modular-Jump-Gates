@@ -282,6 +282,16 @@ namespace IOTA.ModularJumpGates
 		}
 
 		/// <summary>
+		/// Checks whether the block is a jump gate remote link
+		/// </summary>
+		/// <param name="block">The block to check</param>
+		/// <returns>Whether the "JumpGateRemoteLink" game logic component is attached</returns>
+		public static bool IsBlockJumpGateRemoteLink(IMyTerminalBlock block)
+		{
+			return MyJumpGateModSession.GetBlockAsJumpGateRemoteLink(block) != null;
+		}
+
+		/// <summary>
 		/// Checks if the position is both inside a cube grid's bounding box and whether that position is between at least two walls
 		/// </summary>
 		/// <param name="grid">The grid to check in</param>
@@ -484,7 +494,7 @@ namespace IOTA.ModularJumpGates
 		}
 
 		/// <summary>
-		/// Gets the block as a jump gate capacitor of null if not a jump gate capacitor
+		/// Gets the block as a jump gate capacitor or null if not a jump gate capacitor
 		/// </summary>
 		/// <param name="block">The block to convert</param>
 		/// <returns>The "JumpGateCapacitor" game logic component or null</returns>
@@ -494,7 +504,7 @@ namespace IOTA.ModularJumpGates
 		}
 
 		/// <summary>
-		/// Gets the block as a jump gate remote antenna of null if not a jump gate remote antenna
+		/// Gets the block as a jump gate remote antenna or null if not a jump gate remote antenna
 		/// </summary>
 		/// <param name="block">The block to convert</param>
 		/// <returns>The "JumpGateRemoteAntenna" game logic component or null</returns>
@@ -504,7 +514,7 @@ namespace IOTA.ModularJumpGates
 		}
 
 		/// <summary>
-		/// Gets the block as a jump gate server antenna of null if not a jump gate server antenna
+		/// Gets the block as a jump gate server antenna or null if not a jump gate server antenna
 		/// </summary>
 		/// <param name="block">The block to convert</param>
 		/// <returns>The "JumpGateServerAntenna" game logic component or null</returns>
@@ -512,8 +522,18 @@ namespace IOTA.ModularJumpGates
 		{
 			return block?.GameLogic?.GetAs<MyJumpGateServerAntenna>();
 		}
+
+		/// <summary>
+		/// Gets the block as a jump gate remote link or null if not a jump gate remote link
+		/// </summary>
+		/// <param name="block">The block to convert</param>
+		/// <returns>The "MyJumpGateRemoteLink" game logic component or null</returns>
+		public static MyJumpGateRemoteLink GetBlockAsJumpGateRemoteLink(IMyTerminalBlock block)
+		{
+			return block?.GameLogic?.GetAs<MyJumpGateRemoteLink>();
+		}
 		#endregion
-		
+
 		#region "MySessionComponentBase" Methods
 		/// <summary>
 		/// MySessionComponentBase method<br />
@@ -612,10 +632,10 @@ namespace IOTA.ModularJumpGates
 			// System.Diagnostics.Stopwatch - for measuring code execution time.
 			// ...and many more things, ask in #programming-modding in keen's discord for what you want to do to be pointed at the available things to use.
 
+			MyJumpGateModSession.Instance = this;
 			Logger.Init();
 			Logger.Log("PREINIT - Loading Data...");
 			MyJumpGateModSession.SessionStatus = MySessionStatusEnum.LOADING;
-			MyJumpGateModSession.Instance = this;
 			MyJumpGateModSession.Configuration = Configuration.Load();
 			MyJumpGateModSession.Network = new MyNetworkInterface(0xFFFF, this.ModContext.ModId);
 			if (MyNetworkInterface.IsServerLike && !MyAPIGateway.Utilities.GetVariable($"{MyJumpGateModSession.MODID}.DebugMode", out MyJumpGateModSession.DebugMode)) MyJumpGateModSession.DebugMode = false;
@@ -816,6 +836,9 @@ namespace IOTA.ModularJumpGates
 					}
 					else if (animation.JumpGate.Closed) animation.Stop();
 				}
+
+				// Update Log
+				if (MyJumpGateModSession.GameTick % 300 == 0) Logger.Flush();
 			}
 			finally
 			{

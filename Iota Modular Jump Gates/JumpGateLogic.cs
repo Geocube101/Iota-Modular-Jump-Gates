@@ -1611,7 +1611,7 @@ namespace IOTA.ModularJumpGates
 								foreach (MyEntity sub_entity in obstructing)
 								{
 									subparent = (sub_entity is MyCubeGrid) ? MyJumpGateModSession.Instance.GetUnclosedJumpGateGrid(sub_entity.EntityId) : null;
-									if (sub_entity == entity || subparent == parent || parent.IsPositionInsideAnySubgrid(sub_entity.WorldMatrix.Translation) == null) continue;
+									if (sub_entity == entity || subparent == parent || subparent == this.JumpGateGrid || this.JumpGateGrid.HasCubeGrid(sub_entity.EntityId) || parent.IsPositionInsideAnySubgrid(sub_entity.WorldMatrix.Translation) == null) continue;
 									batch.Add(sub_entity);
 									Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} ... ... BATCH_CHILD={sub_entity.EntityId}", 4);
 								}
@@ -2926,7 +2926,7 @@ namespace IOTA.ModularJumpGates
 			if (this.Closed || this.MarkClosed) return;
 
 			// Update physics collider
-			if (this.JumpSpaceCollisionDetector != null && this.JumpSpaceCollisionDetector.MarkedForClose && this.JumpSpaceCollisionDetector.Closed)
+			if (this.JumpSpaceCollisionDetector != null && this.JumpSpaceCollisionDetector.Closed)
 			{
 				//MyAPIGateway.Entities.RemoveEntity(this.JumpSpaceCollisionDetector);
 				this.JumpSpaceCollisionDetector = null;
@@ -2951,9 +2951,7 @@ namespace IOTA.ModularJumpGates
 				MyGamePruningStructure.GetAllTopMostEntitiesInSphere(ref bounding_sphere, this.ColliderPruningList);
 				this.JumpSpaceColliderEntities.Clear();
 				this.JumpSpaceEntities.Clear();
-				foreach (MyEntity entity in this.ColliderPruningList)
-					if (entity != this.JumpSpaceCollisionDetector)
-						this.JumpSpaceColliderEntities[entity.EntityId] = entity;
+				foreach (MyEntity entity in this.ColliderPruningList) this.OnEntityCollision(entity, true);
 				this.ColliderPruningList.Clear();
 			}
 			
@@ -3178,8 +3176,9 @@ namespace IOTA.ModularJumpGates
 
 						if (entity?.Physics == null || entity.MarkedForClose || is_self)
 						{
+							if (entity == null) continue;
 							closed_entities.Add(entity);
-							if (this.JumpSpaceEntities.ContainsKey(entity.EntityId)) Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} Entity marked for jump-space removal >> PHYSICS={entity?.Physics}, CLOSED={entity.MarkedForClose}, IS_SELF={is_self}", 5);
+							if (this.JumpSpaceEntities.ContainsKey(entity.EntityId)) Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} Entity marked for jump-space removal @ {entity.EntityId} >> PHYSICS={entity.Physics}, CLOSED={entity.MarkedForClose}, IS_SELF={is_self}", 5);
 							continue;
 						}
 
@@ -3205,7 +3204,7 @@ namespace IOTA.ModularJumpGates
 						if (this.JumpSpaceEntities.ContainsKey(entity.EntityId) && add_entity == null)
 						{
 							closed_entities.Add(entity);
-							Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} Entity marked for jump-space removal >> TYPE={entity.GetType().Name}, STATIC={entity is MyCubeGrid && ((MyCubeGrid) entity).IsStatic}, BOUNDED={bounded}", 5);
+							Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} Entity marked for jump-space removal @ {entity.EntityId} >> TYPE={entity.GetType().Name}, STATIC={entity is MyCubeGrid && ((MyCubeGrid) entity).IsStatic}, BOUNDED={bounded}, ISSELF={is_self}", 5);
 						}
 						else if (add_entity != null && this.JumpSpaceEntities.TryGetValue(add_entity.EntityId, out old_mass) && old_mass != new_mass) this.JumpSpaceEntities[add_entity.EntityId] = new_mass;
 						else if (add_entity != null && this.JumpSpaceEntities.TryAdd(add_entity.EntityId, new_mass)) this.OnEntityJumpSpaceEnter(add_entity);

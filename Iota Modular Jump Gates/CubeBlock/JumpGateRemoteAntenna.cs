@@ -713,7 +713,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			base.MarkForClose();
 			if (MyJumpGateModSession.Network.Registered) MyJumpGateModSession.Network.Off(MyPacketTypeEnum.UPDATE_REMOTE_ANTENNA, this.OnNetworkBlockUpdate);
 			if (this.AntennaDetector == null) return;
-			MyAPIGateway.Entities.RemoveEntity(this.AntennaDetector);
+			this.AntennaDetector.Close();
 			this.AntennaDetector = null;
 			this.NearbyEntities.Clear();
 		}

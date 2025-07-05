@@ -175,6 +175,11 @@ namespace IOTA.ModularJumpGates
 		private ConcurrentDictionary<long, MyJumpGateServerAntenna> JumpGateServerAntennas = new ConcurrentDictionary<long, MyJumpGateServerAntenna>();
 
 		/// <summary>
+		/// The master map of jump gate remote links this construct has
+		/// </summary>
+		private ConcurrentDictionary<long, MyJumpGateRemoteLink> JumpGateRemoteLinks = new ConcurrentDictionary<long, MyJumpGateRemoteLink>();
+
+		/// <summary>
 		/// The master map of laser antennas this construct has
 		/// </summary>
 		private ConcurrentDictionary<long, IMyLaserAntenna> LaserAntennas = new ConcurrentDictionary<long, IMyLaserAntenna>();
@@ -585,8 +590,13 @@ namespace IOTA.ModularJumpGates
 					MyJumpGateServerAntenna antenna = block_base as MyJumpGateServerAntenna;
 					if (!this.JumpGateServerAntennas.TryAdd(fat_block.EntityId, antenna)) this.JumpGateServerAntennas[fat_block.EntityId] = antenna;
 				}
+				else if ((block_base = MyJumpGateModSession.GetBlockAsJumpGateRemoteLink(fat_block)) != null)
+				{
+					MyJumpGateRemoteLink link = block_base as MyJumpGateRemoteLink;
+					if (!this.JumpGateRemoteLinks.TryAdd(fat_block.EntityId, link)) this.JumpGateRemoteLinks[fat_block.EntityId] = link;
+				}
 
-                if (MyJumpGateModSession.IsBlockCubeBlockBase(fat_block)) this.SetDirty();
+				if (MyJumpGateModSession.IsBlockCubeBlockBase(fat_block)) this.SetDirty();
 			}
 		}
 
@@ -610,8 +620,9 @@ namespace IOTA.ModularJumpGates
 				this.JumpGateControllers.Remove(block.FatBlock.EntityId);
 				this.JumpGateRemoteAntennas.Remove(block.FatBlock.EntityId);
 				this.JumpGateServerAntennas.Remove(block.FatBlock.EntityId);
+				this.JumpGateRemoteLinks.Remove(block.FatBlock.EntityId);
 
-                if (this.JumpGateDrives.TryRemove(block.FatBlock.EntityId, out drive))
+				if (this.JumpGateDrives.TryRemove(block.FatBlock.EntityId, out drive))
 				{
 					this.MarkUpdateJumpGates = true;
 					lock (this.UpdateLock) this.DriveCombinations?.RemoveAll((pair) => pair.Key == drive || pair.Value == drive);
@@ -697,7 +708,7 @@ namespace IOTA.ModularJumpGates
 				if (this.CubeGrids.TryAdd(grid.EntityId, grid))
                 {
 					this.OnGridAdded(grid);
-                    grids_updated = true;
+					grids_updated = true;
 				}
 			}
 			
@@ -706,7 +717,9 @@ namespace IOTA.ModularJumpGates
 				if (construct.Contains(closed.Value)) continue;
                 this.OnGridRemoved(closed.Value);
                 this.CubeGrids.Remove(closed.Key);
-                grids_updated = true;
+				MyJumpGateConstruct closed_parent = MyJumpGateModSession.Instance.GetUnclosedJumpGateGrid(closed.Key);
+				if (closed_parent == null) MyJumpGateModSession.Instance.AddCubeGridToSession(closed.Value);
+				grids_updated = true;
 			}
 			
 			if (grids_updated)
@@ -721,6 +734,7 @@ namespace IOTA.ModularJumpGates
 				foreach (KeyValuePair<long, MyJumpGateDrive> pair in this.JumpGateDrives) if (pair.Value.IsClosed || !this.CubeGrids.ContainsKey(pair.Value.CubeGridID)) this.JumpGateDrives.Remove(pair.Key);
 				foreach (KeyValuePair<long, MyJumpGateRemoteAntenna> pair in this.JumpGateRemoteAntennas) if (pair.Value.IsClosed || !this.CubeGrids.ContainsKey(pair.Value.CubeGridID)) this.JumpGateRemoteAntennas.Remove(pair.Key);
 				foreach (KeyValuePair<long, MyJumpGateServerAntenna> pair in this.JumpGateServerAntennas) if (pair.Value.IsClosed || !this.CubeGrids.ContainsKey(pair.Value.CubeGridID)) this.JumpGateServerAntennas.Remove(pair.Key);
+				foreach (KeyValuePair<long, MyJumpGateRemoteLink> pair in this.JumpGateRemoteLinks) if (pair.Value.IsClosed || !this.CubeGrids.ContainsKey(pair.Value.CubeGridID)) this.JumpGateRemoteLinks.Remove(pair.Key);
 				foreach (KeyValuePair<long, IMyLaserAntenna> pair in this.LaserAntennas) if (pair.Value.Closed || pair.Value.MarkedForClose || !this.CubeGrids.ContainsKey(pair.Value.CubeGrid.EntityId)) this.LaserAntennas.Remove(pair.Key);
 				foreach (KeyValuePair<long, IMyRadioAntenna> pair in this.RadioAntennas) if (pair.Value.Closed || pair.Value.MarkedForClose || !this.CubeGrids.ContainsKey(pair.Value.CubeGrid.EntityId)) this.RadioAntennas.Remove(pair.Key);
 				foreach (KeyValuePair<long, IMyBeacon> pair in this.BeaconAntennas) if (pair.Value.Closed || pair.Value.MarkedForClose || !this.CubeGrids.ContainsKey(pair.Value.CubeGrid.EntityId)) this.BeaconAntennas.Remove(pair.Key);
@@ -736,6 +750,7 @@ namespace IOTA.ModularJumpGates
 						else if ((block_base = MyJumpGateModSession.GetBlockAsJumpGateDrive(block)) != null) this.JumpGateDrives.AddOrUpdate(block.EntityId, block_base as MyJumpGateDrive, (_1, _2) => block_base as MyJumpGateDrive);
 						else if ((block_base = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block)) != null) this.JumpGateRemoteAntennas.AddOrUpdate(block.EntityId, block_base as MyJumpGateRemoteAntenna, (_1, _2) => block_base as MyJumpGateRemoteAntenna);
 						else if ((block_base = MyJumpGateModSession.GetBlockAsJumpGateServerAntenna(block)) != null) this.JumpGateServerAntennas.AddOrUpdate(block.EntityId, block_base as MyJumpGateServerAntenna, (_1, _2) => block_base as MyJumpGateServerAntenna);
+						else if ((block_base = MyJumpGateModSession.GetBlockAsJumpGateRemoteLink(block)) != null) this.JumpGateRemoteLinks.AddOrUpdate(block.EntityId, block_base as MyJumpGateRemoteLink, (_1, _2) => block_base as MyJumpGateRemoteLink);
 					}
 					
 					foreach (IMyLaserAntenna antenna in pair.Value.GetFatBlocks<IMyLaserAntenna>()) if (!antenna.MarkedForClose && !antenna.Closed) this.LaserAntennas.AddOrUpdate(antenna.EntityId, antenna, (_1, _2) => antenna);
@@ -1109,7 +1124,7 @@ namespace IOTA.ModularJumpGates
 						long primary_id = (primary_ids.Any()) ? primary_ids.First() : ((this.ClosedJumpGateIDs.Count > 0) ? this.ClosedJumpGateIDs.Dequeue() : this.NextJumpGateID++);
 						mapped_gate_ids.Add(primary_id);
 						if ((gate_count > 0 && primary_id >= gate_count) || (large_gate_count > 0 && is_large_grid && primary_id >= large_gate_count) || (small_gate_count > 0 && !is_large_grid && primary_id >= small_gate_count)) continue;
-						MyJumpGate jump_gate;
+						MyJumpGate jump_gate = null;
 
 						if (this.JumpGates.TryGetValue(primary_id, out jump_gate) && !jump_gate.MarkClosed)
 						{
@@ -1119,17 +1134,15 @@ namespace IOTA.ModularJumpGates
 							jump_gate.SetColliderDirty();
 							jump_gate.SetJumpSpaceEllipsoidDirty();
 						}
-						else
-						{
-							jump_gate = new MyJumpGate(this, primary_id, jump_node, node_group);
-							this.JumpGates.TryAdd(primary_id, jump_gate);
-						}
+						else if (jump_gate != null && jump_gate.MarkClosed && !jump_gate.Closed) MyJumpGateModSession.Instance.CloseGate(jump_gate);
+						else this.JumpGates[primary_id] = (jump_gate = new MyJumpGate(this, primary_id, jump_node, node_group));
 
 						foreach (MyJumpGateDrive drive in drive_group) drive.SetAttachedJumpGate(jump_gate);
 						jump_gate.Init();
 					}
 
 					foreach (MyJumpGateDrive unmapped in unmapped_drives) unmapped.SetAttachedJumpGate(null);
+					foreach (KeyValuePair<long, MyJumpGate> pair in this.JumpGates) if (!mapped_gate_ids.Contains(pair.Key)) pair.Value.Dispose();
 					this.SetDirty();
 				}
 				
@@ -1151,7 +1164,7 @@ namespace IOTA.ModularJumpGates
 						continue;
 					}
 
-						jump_gate.Update(full_gate_update, gate_entity_update);
+					jump_gate.Update(full_gate_update, gate_entity_update);
 					if (!jump_gate.MarkClosed && (!jump_gate.IsValid() || jump_gate.JumpGateGrid != this)) jump_gate.Dispose();
 				}
 				
@@ -1503,6 +1516,7 @@ namespace IOTA.ModularJumpGates
 				List<MySerializedJumpGateController> controllers = grid.JumpGateControllers ?? new List<MySerializedJumpGateController>();
 				List<MySerializedJumpGateRemoteAntenna> remote_antennas = grid.JumpGateRemoteAntennas ?? new List<MySerializedJumpGateRemoteAntenna>();
 				List<MySerializedJumpGateServerAntenna> server_antennas = grid.JumpGateServerAntennas ?? new List<MySerializedJumpGateServerAntenna>();
+				List<MySerializedJumpGateRemoteLink> remote_links = grid.JumpGateRemoteLinks ?? new List<MySerializedJumpGateRemoteLink>();
 				List<long> laser_antennas = grid.LaserAntennas ?? new List<long>();
 				List<long> radio_antennas = grid.RadioAntennas ?? new List<long>();
 				List<long> new_gates = new List<long>();
@@ -1558,6 +1572,16 @@ namespace IOTA.ModularJumpGates
 					MyJumpGateServerAntenna component = MyJumpGateModSession.GetBlockAsJumpGateServerAntenna(MyAPIGateway.Entities.GetEntityById(serialized.UUID.GetBlock()) as IMyUpgradeModule) ?? new MyJumpGateServerAntenna(serialized, this);
 
 					this.JumpGateServerAntennas.AddOrUpdate(component.BlockID, component, (_1, block) => {
+						block.FromSerialized(serialized, this);
+						return block;
+					});
+				}
+
+				foreach (MySerializedJumpGateRemoteLink serialized in remote_links)
+				{
+					MyJumpGateRemoteLink component = MyJumpGateModSession.GetBlockAsJumpGateRemoteLink(MyAPIGateway.Entities.GetEntityById(serialized.UUID.GetBlock()) as IMyUpgradeModule) ?? new MyJumpGateRemoteLink(serialized, this);
+
+					this.JumpGateRemoteLinks.AddOrUpdate(component.BlockID, component, (_1, block) => {
 						block.FromSerialized(serialized, this);
 						return block;
 					});
@@ -1974,7 +1998,7 @@ namespace IOTA.ModularJumpGates
 		/// <returns>The block</returns>
 		public MyCubeBlockBase GetCubeBlock(long id)
 		{
-			return (MyCubeBlockBase) this.JumpGateControllers?.GetValueOrDefault(id, null) ?? (MyCubeBlockBase) this.JumpGateCapacitors?.GetValueOrDefault(id, null) ?? (MyCubeBlockBase) this.JumpGateDrives?.GetValueOrDefault(id, null) ?? (MyCubeBlockBase) this.JumpGateRemoteAntennas.GetValueOrDefault(id, null) ?? (MyCubeBlockBase) this.JumpGateServerAntennas.GetValueOrDefault(id, null);
+			return (MyCubeBlockBase) this.JumpGateControllers?.GetValueOrDefault(id, null) ?? (MyCubeBlockBase) this.JumpGateCapacitors?.GetValueOrDefault(id, null) ?? (MyCubeBlockBase) this.JumpGateDrives?.GetValueOrDefault(id, null) ?? (MyCubeBlockBase) this.JumpGateRemoteAntennas.GetValueOrDefault(id, null) ?? (MyCubeBlockBase) this.JumpGateServerAntennas.GetValueOrDefault(id, null) ?? (MyCubeBlockBase) this.JumpGateRemoteLinks.GetValueOrDefault(id, null);
 		}
 
 		/// <summary>
@@ -2015,6 +2039,16 @@ namespace IOTA.ModularJumpGates
 		public MyJumpGateServerAntenna GetServerAntenna(long id)
 		{
 			return this.JumpGateServerAntennas?.GetValueOrDefault(id, null);
+		}
+
+		/// <summary>
+		/// Gets a remote link by it's terminal block entity ID
+		/// </summary>
+		/// <param name="id">The remote link's ID</param>
+		/// <returns>The remote link</returns>
+		public MyJumpGateRemoteLink GetRemoteLink(long id)
+		{
+			return this.JumpGateRemoteLinks?.GetValueOrDefault(id, null);
 		}
 
 		/// <summary>
@@ -2111,6 +2145,15 @@ namespace IOTA.ModularJumpGates
 		public IEnumerable<MyJumpGateServerAntenna> GetAttachedJumpGateServerAntennas()
 		{
 			return this.JumpGateServerAntennas?.Values.AsEnumerable() ?? Enumerable.Empty<MyJumpGateServerAntenna>();
+		}
+
+		/// <summary>
+		/// Gets all jump gate remote links in this construct
+		/// </summary>
+		/// <returns>An IEnumerable referencing all remote links</returns>
+		public IEnumerable<MyJumpGateRemoteLink> GetAttachedJumpGateRemoteLinks()
+		{
+			return this.JumpGateRemoteLinks?.Values.AsEnumerable() ?? Enumerable.Empty<MyJumpGateRemoteLink>();
 		}
 
 		/// <summary>
@@ -2250,6 +2293,7 @@ namespace IOTA.ModularJumpGates
 					JumpGateCapacitors = this.JumpGateCapacitors?.Select((pair) => pair.Value.ToSerialized(false)).ToList(),
 					JumpGateRemoteAntennas = this.JumpGateRemoteAntennas?.Select((pair) => pair.Value.ToSerialized(false)).ToList(),
 					JumpGateServerAntennas = this.JumpGateServerAntennas?.Select((pair) => pair.Value.ToSerialized(false)).ToList(),
+					JumpGateRemoteLinks = this.JumpGateRemoteLinks?.Select((pair) => pair.Value.ToSerialized(false)).ToList(),
 					LaserAntennas = this.LaserAntennas?.Select((pair) => pair.Value.EntityId).ToList(),
 					RadioAntennas = this.RadioAntennas?.Select((pair) => pair.Value.EntityId).ToList(),
 					CubeGrids = this.CubeGrids?.Select((pair) => pair.Value.EntityId).ToList(),
@@ -2310,33 +2354,39 @@ namespace IOTA.ModularJumpGates
         public List<MySerializedJumpGateServerAntenna> JumpGateServerAntennas;
 
 		/// <summary>
-		/// The list of laser antenna IDs belonging to this construct
+		/// The serialized jump gate remote links belonging to this construct
 		/// </summary>
 		[ProtoMember(8)]
+		public List<MySerializedJumpGateRemoteLink> JumpGateRemoteLinks;
+
+		/// <summary>
+		/// The list of laser antenna IDs belonging to this construct
+		/// </summary>
+		[ProtoMember(9)]
         public List<long> LaserAntennas;
 
 		/// <summary>
 		/// The list of radio antenna IDs belonging to this construct
 		/// </summary>
-		[ProtoMember(9)]
+		[ProtoMember(10)]
         public List<long> RadioAntennas;
 
 		/// <summary>
 		/// The list of cube grid IDs belonging to this construct
 		/// </summary>
-		[ProtoMember(10)]
+		[ProtoMember(11)]
         public List<long> CubeGrids;
 
 		/// <summary>
 		/// The name of this construct's primary cube grid
 		/// </summary>
-		[ProtoMember(11)]
+		[ProtoMember(12)]
 		public string ConstructName;
 
 		/// <summary>
 		/// If true, this data should be used by server to identify grid and send updated data
 		/// </summary>
-		[ProtoMember(12)]
+		[ProtoMember(13)]
 		public bool IsClientRequest;
     }
 }
