@@ -529,11 +529,12 @@ namespace IOTA.ModularJumpGates
 		{
 			get
 			{
-				return MyJumpGateModSession.LocalVectorToWorldVectorP(ref this.ConstructMatrix, this.LocalJumpNode);
+				return this.TrueWorldJumpEllipse.WorldMatrix.Translation;
 			}
 			set
 			{
 				this.LocalJumpNode = MyJumpGateModSession.WorldVectorToLocalVectorP(ref this.ConstructMatrix, value);
+				this.TrueLocalJumpEllipse.WorldMatrix.Translation = this.LocalJumpNode;
 			}
 		}
 
@@ -3295,15 +3296,10 @@ namespace IOTA.ModularJumpGates
 
 				// Update Jump Node Velocity
 				this.OldPosition = this.NewPosition;
-				this.NewPosition = this.LocalJumpNode;
+				this.NewPosition = this.WorldJumpNode;
 				DateTime new_time = DateTime.UtcNow;
-
-				if (this.OldPosition != this.NewPosition)
-				{
-					double time_delta = (new_time - this.LastScanTime).TotalSeconds;
-					this.JumpNodeVelocity = (this.NewPosition - this.OldPosition) / time_delta;
-				}
-
+				double time_delta = (new_time - this.LastScanTime).TotalSeconds;
+				this.JumpNodeVelocity = (this.NewPosition - this.OldPosition) / time_delta;
 				this.LastScanTime = new_time;
 
 				// Clean Invalid
