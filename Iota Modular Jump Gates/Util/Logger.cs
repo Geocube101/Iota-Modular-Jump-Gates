@@ -13,9 +13,14 @@ namespace IOTA.ModularJumpGates.Util
     {
         #region Private Static Variables
 		/// <summary>
+		/// The mutex for exlusive file IO
+		/// </summary>
+		private static object LogMutex = new object();
+
+		/// <summary>
 		/// The writer to write to the internal mod log file
 		/// </summary>
-        private static TextWriter ModLogWriter = null;
+		private static TextWriter ModLogWriter = null;
 		#endregion
 
 		#region Private Static Methods
@@ -28,7 +33,7 @@ namespace IOTA.ModularJumpGates.Util
 		{
             if (Logger.ModLogWriter == null) return;
 			string timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
-			Logger.ModLogWriter.WriteLine($"[{timestamp}] -> {category}: {message}");
+			lock (Logger.LogMutex) Logger.ModLogWriter.WriteLine($"[{timestamp}] -> {category}: {message}");
 		}
 		#endregion
 

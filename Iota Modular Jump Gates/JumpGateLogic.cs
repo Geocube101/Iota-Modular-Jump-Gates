@@ -5,6 +5,7 @@ using IOTA.ModularJumpGates.Util.ConcurrentCollections;
 using ProtoBuf;
 using Sandbox.Game.Entities;
 using Sandbox.ModAPI;
+using SpaceEngineers.Game.Entities.Blocks;
 using SpaceEngineers.Game.ModAPI;
 using System;
 using System.Collections.Concurrent;
@@ -471,7 +472,7 @@ namespace IOTA.ModularJumpGates
 		/// <summary>
 		/// The master map of entities within this gate's jump space
 		/// </summary>
-		private ConcurrentDictionary<long, float> JumpSpaceEntities = new ConcurrentDictionary<long, float>();
+		private ConcurrentDictionary<long, KeyValuePair<float, MyEntity>> JumpSpaceEntities = new ConcurrentDictionary<long, KeyValuePair<float, MyEntity>>();
 		#endregion
 
 		#region Public Variables
@@ -2121,17 +2122,11 @@ namespace IOTA.ModularJumpGates
 		/// <param name="is_entering">Whether the entity is entering</param>
 		private void OnEntityCollision(IMyEntity entity, bool is_entering)
 		{
-			if (this.Closed) return;
-			MyEntity topmost = (MyEntity) entity.GetTopMostParent();
-			if (entity == this.JumpSpaceCollisionDetector || entity == null) return;
-
-			if (is_entering) this.JumpSpaceColliderEntities[topmost.EntityId] = topmost;
-			else if (!is_entering && !this.ForceUpdateCollider)
-			{
-				this.JumpSpaceColliderEntities.Remove(topmost.EntityId);
-				float _;
-				if (this.JumpSpaceEntities.TryRemove(topmost.EntityId, out _)) this.OnEntityJumpSpaceLeave(topmost);
-			}
+			if (this.Closed || entity == this.JumpSpaceCollisionDetector || entity == null) return;
+			//IMyEntity parent = entity.GetTopMostParent();
+			//Logger.Warn($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} ENTITY_COLLISION {entity.DisplayName} @ {entity} ({entity.GetType()}) >> ENTERING={is_entering}, PARENT={parent.DisplayName} @ {parent.EntityId} ({parent.GetType()})");
+			if (is_entering) this.JumpSpaceColliderEntities[entity.EntityId] = (MyEntity) entity;
+			else if (!is_entering) this.JumpSpaceColliderEntities.Remove(entity.EntityId);
 		}
 
 		/// <summary>
@@ -2178,9 +2173,9 @@ namespace IOTA.ModularJumpGates
 			lock (this.DriveIntersectNodesMutex) this.InnerDriveIntersectNodes.Clear();
 			this.Closed = true;
 
-			foreach (KeyValuePair<long, float> pair in this.JumpSpaceEntities)
+			foreach (KeyValuePair<long, KeyValuePair<float, MyEntity>> pair in this.JumpSpaceEntities)
 			{
-				MyEntity entity = (MyEntity) MyAPIGateway.Entities.GetEntityById(pair.Key);
+				MyEntity entity = pair.Value.Value ?? (MyEntity) MyAPIGateway.Entities.GetEntityById(pair.Key);
 				if (entity != null) this.OnEntityJumpSpaceLeave(entity);
 			}
 
@@ -2926,11 +2921,7 @@ namespace IOTA.ModularJumpGates
 			if (this.Closed || this.MarkClosed) return;
 
 			// Update physics collider
-			if (this.JumpSpaceCollisionDetector != null && this.JumpSpaceCollisionDetector.Closed)
-			{
-				//MyAPIGateway.Entities.RemoveEntity(this.JumpSpaceCollisionDetector);
-				this.JumpSpaceCollisionDetector = null;
-			}
+			if (this.JumpSpaceCollisionDetector != null && this.JumpSpaceCollisionDetector.Closed) this.JumpSpaceCollisionDetector = null;
 			else if (this.ForceUpdateCollider && this.JumpSpaceCollisionDetector != null && !this.JumpSpaceCollisionDetector.MarkedForClose) this.JumpSpaceCollisionDetector.Close();
 
 			// Update jump space detector
@@ -2941,18 +2932,14 @@ namespace IOTA.ModularJumpGates
 				this.JumpSpaceCollisionDetector.Init(new StringBuilder($"JumpGate_{this.JumpGateGrid.CubeGrid.EntityId}_{this.JumpGateID}"), null, (MyCubeGrid) this.JumpGateGrid.CubeGrid, 1f);
 				this.JumpSpaceCollisionDetector.Save = false;
 				this.JumpSpaceCollisionDetector.Flags = EntityFlags.IsNotGamePrunningStructureObject | EntityFlags.NeedsWorldMatrix;
+				this.JumpSpaceCollisionDetector.OnClosing += (entity) => Logger.Debug($"CLOSED_COLLIDER JUMP_GATE={this.GetPrintableName()}");
+				this.JumpSpaceColliderEntities.Clear();
+				this.JumpSpaceEntities.Clear();
 				PhysicsSettings settings = MyAPIGateway.Physics.CreateSettingsForDetector(this.JumpSpaceCollisionDetector, this.OnEntityCollision, MyJumpGateModSession.WorldMatrix, this.LocalJumpNode, VRage.Game.Components.RigidBodyFlag.RBF_KINEMATIC, 15, true);
 				MyAPIGateway.Physics.CreateSpherePhysics(settings, (float) this.JumpEllipse.Radii.Max());
 				MyAPIGateway.Entities.AddEntity(this.JumpSpaceCollisionDetector);
 				Logger.Debug($"CREATED_COLLIDER JUMP_GATE={this.GetPrintableName()}, COLLIDER={this.JumpSpaceCollisionDetector.DisplayName}", 4);
 
-				BoundingEllipsoidD jump_ellipse = this.JumpEllipse;
-				BoundingSphereD bounding_sphere = new BoundingSphereD(jump_ellipse.WorldMatrix.Translation, jump_ellipse.Radii.Max());
-				MyGamePruningStructure.GetAllTopMostEntitiesInSphere(ref bounding_sphere, this.ColliderPruningList);
-				this.JumpSpaceColliderEntities.Clear();
-				this.JumpSpaceEntities.Clear();
-				foreach (MyEntity entity in this.ColliderPruningList) this.OnEntityCollision(entity, true);
-				this.ColliderPruningList.Clear();
 			}
 			
 			this.ForceUpdateCollider = false;
@@ -3106,7 +3093,7 @@ namespace IOTA.ModularJumpGates
 							}
 						}
 
-						JumpDriveIntersectPlane intersection_plane = intersection_planes.OrderBy((plane) => (plane.PlanePrimaryNormal - this.ConstructMatrix.Forward).Length()).FirstOrDefault();
+						JumpDriveIntersectPlane intersection_plane = intersection_planes.OrderBy((plane) => Vector3D.Angle(plane.PlanePrimaryNormal, this.ConstructMatrix.Forward)).FirstOrDefault();
 
 						if (intersection_plane == null)
 						{
@@ -3136,14 +3123,14 @@ namespace IOTA.ModularJumpGates
 						switch (fit_type)
 						{
 							case MyJumpSpaceFitType.OUTER:
-								distance = Math.Sqrt(intersection_plane.JumpGateDrives.Select((drive) => Vector3D.DistanceSquared(drive.GetDriveRaycastStartpoint(), jump_node)).Max());
+								distance = Math.Sqrt(drives.Select((drive) => Vector3D.DistanceSquared(drive.GetDriveRaycastStartpoint(), jump_node)).Max());
 								break;
 							case MyJumpSpaceFitType.AVERAGE:
-								distance = Math.Sqrt(intersection_plane.JumpGateDrives.Select((drive) => Vector3D.DistanceSquared(drive.GetDriveRaycastStartpoint(), jump_node)).Average());
+								distance = Math.Sqrt(drives.Select((drive) => Vector3D.DistanceSquared(drive.GetDriveRaycastStartpoint(), jump_node)).Average());
 								break;
 							case MyJumpSpaceFitType.INNER:
 							default:
-								distance = Math.Sqrt(intersection_plane.JumpGateDrives.Select((drive) => Vector3D.DistanceSquared(drive.GetDriveRaycastStartpoint(), jump_node)).Min());
+								distance = Math.Sqrt(drives.Select((drive) => Vector3D.DistanceSquared(drive.GetDriveRaycastStartpoint(), jump_node)).Min());
 								break;
 						}
 
@@ -3166,19 +3153,28 @@ namespace IOTA.ModularJumpGates
 				if (MyNetworkInterface.IsServerLike && update_entities && this.IsControlled() && !this.MarkClosed)
 				{
 					BoundingEllipsoidD jump_ellipse = this.GetEffectiveJumpEllipse();
-					List<MyEntity> closed_entities = new List<MyEntity>();
 					MyJumpGateConstruct parent;
+					List<MyEntity> collider_topmost = this.JumpSpaceColliderEntities.Select((pair) => pair.Value.GetTopMostParent()).Distinct().ToList();
 
-					foreach (KeyValuePair<long, MyEntity> pair in this.JumpSpaceColliderEntities)
+					foreach (KeyValuePair<long, KeyValuePair<float, MyEntity>> pair in this.JumpSpaceEntities)
 					{
-						MyEntity entity = pair.Value.GetTopMostParent();
+						MyEntity child = pair.Value.Value ?? (MyEntity) MyAPIGateway.Entities.GetEntityById(pair.Key);
+						if (child == null || collider_topmost.Contains(child)) continue;
+						Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} Entity marked for jump-space removal @ {pair.Key} >> OUTSIDE_PHYSICAL_COLLIDER", 5);
+						this.OnEntityJumpSpaceLeave(child);
+						this.JumpSpaceEntities.Remove(pair.Key);
+					}
+
+					foreach (MyEntity entity in collider_topmost)
+					{
 						bool is_self = this.JumpGateGrid.HasCubeGrid(entity.EntityId);
 
 						if (entity?.Physics == null || entity.MarkedForClose || is_self)
 						{
-							if (entity == null) continue;
-							closed_entities.Add(entity);
-							if (this.JumpSpaceEntities.ContainsKey(entity.EntityId)) Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} Entity marked for jump-space removal @ {entity.EntityId} >> PHYSICS={entity.Physics}, CLOSED={entity.MarkedForClose}, IS_SELF={is_self}", 5);
+							KeyValuePair<float, MyEntity> _;
+							if (entity == null || !this.JumpSpaceEntities.TryRemove(entity.EntityId, out _)) continue;
+							Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} Entity marked for jump-space removal @ {entity.EntityId} >> PHYSICS={entity.Physics}, CLOSED={entity.MarkedForClose}, IS_SELF={is_self}", 5);
+							this.OnEntityJumpSpaceLeave(entity);
 							continue;
 						}
 
@@ -3198,30 +3194,24 @@ namespace IOTA.ModularJumpGates
 						}
 						else if (!(entity is MyCubeGrid)) add_entity = (bounded = jump_ellipse.IsPointInEllipse(entity.WorldMatrix.Translation)) ? entity : null;
 
-						float old_mass;
+						KeyValuePair<float, MyEntity> old_pairing;
 						float new_mass = mass ?? add_entity?.Physics.Mass ?? float.NaN;
-
+						
 						if (this.JumpSpaceEntities.ContainsKey(entity.EntityId) && add_entity == null)
 						{
-							closed_entities.Add(entity);
 							Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} Entity marked for jump-space removal @ {entity.EntityId} >> TYPE={entity.GetType().Name}, STATIC={entity is MyCubeGrid && ((MyCubeGrid) entity).IsStatic}, BOUNDED={bounded}, ISSELF={is_self}", 5);
+							this.JumpSpaceEntities.Remove(entity.EntityId);
+							this.OnEntityJumpSpaceLeave(entity);
 						}
-						else if (add_entity != null && this.JumpSpaceEntities.TryGetValue(add_entity.EntityId, out old_mass) && old_mass != new_mass) this.JumpSpaceEntities[add_entity.EntityId] = new_mass;
-						else if (add_entity != null && this.JumpSpaceEntities.TryAdd(add_entity.EntityId, new_mass)) this.OnEntityJumpSpaceEnter(add_entity);
-					}
-
-					float _;
-
-					foreach (MyEntity entity in closed_entities)
-					{
-						if (this.JumpSpaceEntities.TryRemove(entity.EntityId, out _)) this.OnEntityJumpSpaceLeave(entity);
+						else if (add_entity != null && this.JumpSpaceEntities.TryGetValue(add_entity.EntityId, out old_pairing) && old_pairing.Key != new_mass) this.JumpSpaceEntities[add_entity.EntityId] = new KeyValuePair<float, MyEntity>(new_mass, add_entity);
+						else if (add_entity != null && this.JumpSpaceEntities.TryAdd(add_entity.EntityId, new KeyValuePair<float, MyEntity>(new_mass, add_entity))) this.OnEntityJumpSpaceEnter(add_entity);
 					}
 				}
 
 				// Check auto activation
 				if (MyNetworkInterface.IsServerLike && this.Controller != null && !this.Controller.MarkedForClose && this.Controller.BlockSettings.CanAutoActivate() && this.Phase == MyJumpGatePhase.IDLE && this.Controller.BlockSettings.SelectedWaypoint() != null)
 				{
-					double total_mass = this.JumpSpaceEntities.Sum((pair) => (double) pair.Value);
+					double total_mass = this.JumpSpaceEntities.Sum((pair) => (double) pair.Value.Key);
 					double total_power = this.CalculateTotalRequiredPower(mass: total_mass);
 					KeyValuePair<float, float> required_mass = this.Controller.BlockSettings.AutoActivateMass();
 					KeyValuePair<double, double> required_power = this.Controller.BlockSettings.AutoActivatePower();
@@ -3288,7 +3278,7 @@ namespace IOTA.ModularJumpGates
 					BoundingEllipsoidD jump_ellipse = this.JumpEllipse;
 					BoundingEllipsoidD shear_ellipse = this.ShearEllipse;
 
-					foreach (KeyValuePair<long, float> pair in this.JumpSpaceEntities)
+					foreach (KeyValuePair<long, KeyValuePair<float, MyEntity>> pair in this.JumpSpaceEntities)
 					{
 						MyJumpGateConstruct grid = MyJumpGateModSession.Instance.GetJumpGateGrid(pair.Key);
 						if (grid == null) continue;
@@ -3605,7 +3595,7 @@ namespace IOTA.ModularJumpGates
 				if (MyNetworkInterface.IsStandaloneMultiplayerClient)
 				{
 					this.JumpSpaceEntities.Clear();
-					if (jump_gate.JumpSpaceEntities != null) foreach (KeyValuePair<long, float> pair in jump_gate.JumpSpaceEntities) this.JumpSpaceEntities[pair.Key] = pair.Value;
+					if (jump_gate.JumpSpaceEntities != null) foreach (KeyValuePair<long, float> pair in jump_gate.JumpSpaceEntities) this.JumpSpaceEntities[pair.Key] = new KeyValuePair<float, MyEntity>(pair.Value, (MyEntity) MyAPIGateway.Entities.GetEntityById(pair.Key));
 				}
 
 				this.UpdateDriveIntersectNodes(jump_gate.IntersectNodes);
@@ -3773,7 +3763,7 @@ namespace IOTA.ModularJumpGates
 
 			if (filtered && this.Controller != null)
 			{
-				foreach (KeyValuePair<long, float> pair in this.JumpSpaceEntities)
+				foreach (KeyValuePair<long, KeyValuePair<float, MyEntity>> pair in this.JumpSpaceEntities)
 				{
 					MyEntity entity = (MyEntity) MyAPIGateway.Entities.GetEntityById(pair.Key);
 					if (entity != null && !this.Controller.BlockSettings.IsEntityBlacklisted(entity.EntityId) && this.IsEntityValidForJumpSpace(entity) && (filter == null || filter(entity))) ++count;
@@ -3781,7 +3771,7 @@ namespace IOTA.ModularJumpGates
 			}
 			else
 			{
-				foreach (KeyValuePair<long, float> pair in this.JumpSpaceEntities)
+				foreach (KeyValuePair<long, KeyValuePair<float, MyEntity>> pair in this.JumpSpaceEntities)
 				{
 					MyEntity entity = (MyEntity) MyAPIGateway.Entities.GetEntityById(pair.Key);
 					if (entity != null && (filter == null || filter(entity))) ++count;
@@ -3898,7 +3888,7 @@ namespace IOTA.ModularJumpGates
 			endpoint = endpoint ?? (waypoint?.GetEndpoint());
 			if (endpoint == null) return double.NaN;
 			bool _has_target_gate = has_target_gate ?? (waypoint?.WaypointType == MyWaypointType.JUMP_GATE);
-			double total_mass_kg = mass ?? this.JumpSpaceEntities.Sum((pair) => (double) pair.Value);
+			double total_mass_kg = mass ?? this.JumpSpaceEntities.Sum((pair) => (double) pair.Value.Key);
 			double power_scaler = (_has_target_gate) ? 1 : this.JumpGateConfiguration.UntetheredJumpEnergyCost;
 			Vector3D end = endpoint.Value;
 			return Math.Round(total_mass_kg * this.CalculateUnitPowerRequiredForJump(ref end), 8) * power_scaler / 1000;
@@ -4119,8 +4109,8 @@ namespace IOTA.ModularJumpGates
 		public IEnumerable<KeyValuePair<long, float>> GetUninitializedEntititesInJumpSpace(bool filtered = false)
 		{
 			if (this.Closed) return Enumerable.Empty<KeyValuePair<long, float>>();
-			if (filtered && this.Controller != null) return this.JumpSpaceEntities.Where((pair) => MyAPIGateway.Entities.GetEntityById(pair.Key) == null && !this.Controller.BlockSettings.IsEntityBlacklisted(pair.Key));
-			else return this.JumpSpaceEntities.Where((pair) => MyAPIGateway.Entities.GetEntityById(pair.Key) == null);
+			if (filtered && this.Controller != null) return this.JumpSpaceEntities.Where((pair) => MyAPIGateway.Entities.GetEntityById(pair.Key) == null && !this.Controller.BlockSettings.IsEntityBlacklisted(pair.Key)).Select((pair) => new KeyValuePair<long, float>(pair.Key, pair.Value.Key));
+			else return this.JumpSpaceEntities.Where((pair) => MyAPIGateway.Entities.GetEntityById(pair.Key) == null).Select((pair) => new KeyValuePair<long, float>(pair.Key, pair.Value.Key));
 		}
 
 		/// <summary>
@@ -4132,8 +4122,8 @@ namespace IOTA.ModularJumpGates
 		public IEnumerable<KeyValuePair<MyEntity, float>> GetEntitiesInJumpSpace(bool filtered = false)
 		{
 			if (this.Closed) return Enumerable.Empty<KeyValuePair<MyEntity, float>>();
-			if (filtered && this.Controller != null) return this.JumpSpaceEntities.Select((pair) => new KeyValuePair<MyEntity, float>((MyEntity) MyAPIGateway.Entities.GetEntityById(pair.Key), pair.Value)).Where((pair) => pair.Key != null && !this.Controller.BlockSettings.IsEntityBlacklisted(pair.Key.EntityId) && this.IsEntityValidForJumpSpace(pair.Key));
-			else return this.JumpSpaceEntities.Select((pair) => new KeyValuePair<MyEntity, float>((MyEntity) MyAPIGateway.Entities.GetEntityById(pair.Key), pair.Value)).Where((pair) => pair.Key != null);
+			if (filtered && this.Controller != null) return this.JumpSpaceEntities.Select((pair) => new KeyValuePair<MyEntity, float>((MyEntity) MyAPIGateway.Entities.GetEntityById(pair.Key), pair.Value.Key)).Where((pair) => pair.Key != null && !this.Controller.BlockSettings.IsEntityBlacklisted(pair.Key.EntityId) && this.IsEntityValidForJumpSpace(pair.Key));
+			else return this.JumpSpaceEntities.Select((pair) => new KeyValuePair<MyEntity, float>((MyEntity) MyAPIGateway.Entities.GetEntityById(pair.Key), pair.Value.Key)).Where((pair) => pair.Key != null);
 		}
 
 		/// <summary>
@@ -4168,7 +4158,7 @@ namespace IOTA.ModularJumpGates
 					IntersectNodes = (this.Closed) ? null : this.LocalDriveIntersectNodes,
 					GridSize = (this.Closed) ? MyCubeSize.Large : this.CubeGridSize(),
 					ConstructMatrix = (this.Closed) ? null : Convert.ToBase64String(new BoundingEllipsoidD(ref Vector3D.Zero, this.ConstructMatrix).ToSerialized()),
-					JumpSpaceEntities = (MyNetworkInterface.IsMultiplayerServer && !this.Closed) ? this.JumpSpaceEntities.ToImmutableDictionary() : null,
+					JumpSpaceEntities = (MyNetworkInterface.IsMultiplayerServer && !this.Closed) ? this.JumpSpaceEntities.Select((pair) => new KeyValuePair<long, float>(pair.Key, pair.Value.Key)).ToImmutableDictionary() : null,
 					IsClientRequest = false,
 				};
 			}

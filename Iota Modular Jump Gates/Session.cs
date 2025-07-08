@@ -791,50 +791,52 @@ namespace IOTA.ModularJumpGates
 
 				bool paused = MyNetworkInterface.IsSingleplayer && MyAPIGateway.Session.GameplayFrameCounter == this.LastGameplayFrameCounter;
 				this.LastGameplayFrameCounter = MyAPIGateway.Session.GameplayFrameCounter;
-				if (paused) return;
 
-				// Tick queued entity warps
-				foreach (KeyValuePair<long, EntityWarpInfo> pair in this.EntityWarps)
+				if (!paused)
 				{
-					if (pair.Value.Update())
+					// Tick queued entity warps
+					foreach (KeyValuePair<long, EntityWarpInfo> pair in this.EntityWarps)
 					{
-						pair.Value.Close();
-						this.EntityWarps.Remove(pair.Key);
-					}
-				}
-
-				// Tick queued animations
-				Particle.Render();
-				foreach (KeyValuePair<ulong, AnimationInfo> pair in this.JumpGateAnimations)
-				{
-					AnimationInfo animation_info = pair.Value;
-					string animation_name = animation_info.Animation.FullAnimationName;
-					MyJumpGateAnimation animation = animation_info.Animation;
-					animation.Tick(animation_info.AnimationIndex);
-
-					if (animation.Stopped(animation_info.AnimationIndex))
-					{
-						if (animation_info.CompletionCallback != null) animation_info.CompletionCallback(animation_info.IterCallbackException);
-						this.JumpGateAnimations.Remove(pair.Key);
-					}
-					else if (animation_info.IterCallback != null)
-					{
-						bool stop;
-
-						try
+						if (pair.Value.Update())
 						{
-							stop = !animation_info.IterCallback();
+							pair.Value.Close();
+							this.EntityWarps.Remove(pair.Key);
 						}
-						catch (Exception e)
-						{
-							stop = true;
-							animation_info.IterCallbackException = e;
-							Logger.Error($"Error during animation iteration callback - {animation_name}\n  ...\n[ {e} ]: {e.Message}\n{e.StackTrace}\n{e.InnerException}");
-						}
-
-						if (stop) animation.Stop();
 					}
-					else if (animation.JumpGate.Closed) animation.Stop();
+
+					// Tick queued animations
+					Particle.Render();
+					foreach (KeyValuePair<ulong, AnimationInfo> pair in this.JumpGateAnimations)
+					{
+						AnimationInfo animation_info = pair.Value;
+						string animation_name = animation_info.Animation.FullAnimationName;
+						MyJumpGateAnimation animation = animation_info.Animation;
+						animation.Tick(animation_info.AnimationIndex);
+
+						if (animation.Stopped(animation_info.AnimationIndex))
+						{
+							if (animation_info.CompletionCallback != null) animation_info.CompletionCallback(animation_info.IterCallbackException);
+							this.JumpGateAnimations.Remove(pair.Key);
+						}
+						else if (animation_info.IterCallback != null)
+						{
+							bool stop;
+
+							try
+							{
+								stop = !animation_info.IterCallback();
+							}
+							catch (Exception e)
+							{
+								stop = true;
+								animation_info.IterCallbackException = e;
+								Logger.Error($"Error during animation iteration callback - {animation_name}\n  ...\n[ {e} ]: {e.Message}\n{e.StackTrace}\n{e.InnerException}");
+							}
+
+							if (stop) animation.Stop();
+						}
+						else if (animation.JumpGate.Closed) animation.Stop();
+					}
 				}
 
 				// Update Log

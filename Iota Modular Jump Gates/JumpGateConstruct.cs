@@ -1726,7 +1726,7 @@ namespace IOTA.ModularJumpGates
 		{
 			if (this.Closed) return false;
 			foreach (KeyValuePair<long, IMyCubeGrid> pair in this.CubeGrids) if (ellipsoid.IsPointInEllipse(pair.Value.WorldMatrix.Translation)) return true;
-			foreach (IMySlimBlock block in this.GridBlocks) if (ellipsoid.IsPointInEllipse(MyJumpGateModSession.LocalVectorToWorldVectorP(block.CubeGrid.WorldMatrix, block.Position * block.CubeGrid.GridSize))) return true;
+			foreach (IMySlimBlock block in this.GridBlocks) if (ellipsoid.IsPointInEllipse(block.CubeGrid.GridIntegerToWorld(block.Position))) return true;
 			return false;
 		}
 

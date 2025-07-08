@@ -1355,7 +1355,8 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				return true;
 			}
 
-			bool can_update_gate_settings = this.AttachedJumpGate()?.IsIdle() ?? true;
+			MyJumpGate jump_gate = this.AttachedJumpGate();
+			bool can_update_gate_settings = jump_gate?.IsIdle() ?? true;
 			this.BaseBlockSettings.AcquireLock();
 			this.BaseBlockSettings.CanBeInbound(new_settings.CanBeInbound());
 			this.BaseBlockSettings.CanBeOutbound(new_settings.CanBeOutbound());
@@ -1388,6 +1389,9 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				this.BaseBlockSettings.VectorNormalOverride(new_settings.VectorNormalOverride());
 				this.BaseBlockSettings.JumpEffectAnimationColorShift(new_settings.JumpEffectAnimationColorShift());
 				this.BaseBlockSettings.JumpSpaceDepthPercent(new_settings.JumpSpaceDepthPercent());
+				this.BaseBlockSettings.JumpSpaceFitType(new_settings.JumpSpaceFitType());
+				jump_gate?.SetJumpSpaceEllipsoidDirty();
+				jump_gate?.SetDirty();
 
 				KeyValuePair<MyJumpGateRemoteAntenna, byte> old_antenna = this.RemoteAntennaChannel;
 				this.BaseBlockSettings.RemoteAntennaChannel(new_settings.RemoteAntennaChannel());
