@@ -209,7 +209,7 @@ namespace IOTA.ModularJumpGates
 		/// <summary>
 		/// Whether this session is either singleplayer or a multiplayer standalone client
 		/// </summary>
-		public static readonly bool IsClientLike = MyNetworkInterface.IsStandaloneMultiplayerClient || MyNetworkInterface.IsSingleplayer;
+		public static readonly bool IsClientLike = MyNetworkInterface.IsMultiplayerClient || MyNetworkInterface.IsSingleplayer;
 
 		/// <summary>
 		/// Whether this session is either singleplayer or a server

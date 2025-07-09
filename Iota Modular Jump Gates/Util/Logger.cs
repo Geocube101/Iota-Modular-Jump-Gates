@@ -2,6 +2,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Text;
 using VRage.Utils;
 
 namespace IOTA.ModularJumpGates.Util
@@ -54,6 +55,17 @@ namespace IOTA.ModularJumpGates.Util
 				Logger.ModLogWriter = writer;
 				Logger.ModLogWriter.WriteLine($"-=-=-= [ Iota's Modular Jump Gates (LOG) ] =-=-=-\n");
                 Logger.WriteInternal("MGMT", "Log Started");
+				StringBuilder sb = new StringBuilder();
+				sb.Append($"\n---[ Network Info ]---\n");
+				sb.Append($"- IsMultiplayerServer: {MyNetworkInterface.IsMultiplayerServer}\n");
+				sb.Append($"- IsDedicatedMultiplayerServer: {MyNetworkInterface.IsDedicatedMultiplayerServer}\n");
+				sb.Append($"- IsSingleplayer: {MyNetworkInterface.IsSingleplayer}\n");
+				sb.Append($"- IsMultiplayerClient: {MyNetworkInterface.IsMultiplayerClient}\n");
+				sb.Append($"- IsMultiplayerServerClient: {MyNetworkInterface.IsMultiplayerServerClient}\n");
+				sb.Append($"- IsClientLike: {MyNetworkInterface.IsClientLike}\n");
+				sb.Append($"- IsServerLike: {MyNetworkInterface.IsServerLike}\n");
+				sb.Append($"---[ ofnI krowteN ]---");
+				Logger.WriteInternal("MGMT", sb.ToString());
 			}
             catch (Exception e)
 			{
