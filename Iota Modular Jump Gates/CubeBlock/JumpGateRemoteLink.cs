@@ -308,7 +308,13 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		{
 			bool is_large = ((IMyTerminalBlock) this.Entity).CubeGrid.GridSizeEnum == MyCubeSize.Large;
 			this.MaxConnectionDistance = (is_large) ? 1000 : 500;
-			this.Init(object_builder, 0, (is_large) ? 0.5f : 0.2f, MyJumpGateModSession.BlockComponentDataGUID, false);
+			this.Init(object_builder, 0, () => {
+				if (this.AttachedRemoteLink == null) return (is_large) ? 0.05f : 0.02f;
+				float base_power = (is_large) ? 0.1f : 0.25f;
+				float max_power = (is_large) ? 0.5f : 0.75f;
+				float ratio = (float) MathHelperD.Clamp(Vector3D.Distance(this.WorldMatrix.Translation, this.AttachedRemoteLink.WorldMatrix.Translation) / this.MaxConnectionDistance, 0, 1);
+				return (max_power - base_power) * ratio + base_power;
+			}, MyJumpGateModSession.BlockComponentDataGUID, false);
 			this.TerminalBlock.Synchronized = true;
 			string blockdata;
 			this.ResourceSink.SetMaxRequiredInputByType(MyResourceDistributorComponent.ElectricityId, 5000f);

@@ -12,6 +12,7 @@ namespace IOTA.ModularJumpGates.Commands
 	{
 		private static Dictionary<string, MyChatCommand> Commands = new Dictionary<string, MyChatCommand>() {
 			["reload"] = new MyReloadChatCommand(),
+			["debug"] = new MyDebugChatCommand(),
 		};
 
 		public static bool Initialized { get; private set; } = false;

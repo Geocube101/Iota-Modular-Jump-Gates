@@ -34,4 +34,25 @@ namespace IOTA.ModularJumpGates.ChatCommands
 			}
 		}
 	}
+
+	internal class MyDebugChatCommand : MyChatCommand
+	{
+		public override bool RequiresAdmin => false;
+
+		public override string CommandName => MyTexts.GetString("ChatCommandHandler_DebugCommand_Name");
+
+		public override string CommandDescription => MyTexts.GetString("ChatCommandHandler_DebugCommand_Description");
+
+		public override MyCommandResult Execute(List<string> arguments)
+		{
+			if (arguments.Count > 1) return MyCommandResult.InvalidNumberArguments(this.CommandName, 0, 1, arguments.Count);
+			else
+			{
+				bool value = !MyJumpGateModSession.DebugMode;
+				if (arguments.Count == 1 && !bool.TryParse(arguments[0], out value)) return MyCommandResult.Failure(this.CommandName, $"Invalid boolean value \"{arguments[0]}\", expected either 'true' or 'false'");
+				MyJumpGateModSession.DebugMode = value;
+				return MyCommandResult.Success(this.CommandName, MyTexts.GetString((value) ? "ChatCommandHandler_DebugCommand_OnEnableSuccess" : "ChatCommandHandler_DebugCommand_OnDisableSuccess"));
+			}
+		}
+	}
 }
