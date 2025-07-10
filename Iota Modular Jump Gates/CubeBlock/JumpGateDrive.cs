@@ -234,6 +234,10 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			this.MaxRaycastDistance = this.DriveConfiguration.DriveRaycastDistance;
 			this.ResourceSink.SetMaxRequiredInputByType(MyResourceDistributorComponent.ElectricityId, (float) this.DriveConfiguration.MaxDriveChargeRateMW);
 
+			Dictionary<string, IMyModelDummy> dummies = new Dictionary<string, IMyModelDummy>();
+			this.TerminalBlock.Model.GetDummies(dummies);
+			this.RaycastDummy = dummies.GetValueOrDefault("camera", null);
+
 			if (MyJumpGateModSession.Network.Registered && MyNetworkInterface.IsStandaloneMultiplayerClient)
 			{
 				MyNetworkInterface.Packet request = new MyNetworkInterface.Packet
@@ -242,13 +246,9 @@ namespace IOTA.ModularJumpGates.CubeBlock
 					Broadcast = false,
 					PacketType = MyPacketTypeEnum.UPDATE_DRIVE,
 				};
-				request.Payload<MySerializedJumpGateDrive>(this.ToSerialized(true));
+				request.Payload(this.ToSerialized(true));
 				request.Send();
 			}
-
-			Dictionary<string, IMyModelDummy> dummies = new Dictionary<string, IMyModelDummy>();
-			this.TerminalBlock.Model.GetDummies(dummies);
-			this.RaycastDummy = dummies.GetValueOrDefault("camera", null);
 		}
 
 		/// <summary>
@@ -377,9 +377,9 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			if (MyJumpGateModSession.Network.Registered) MyJumpGateModSession.Network.Off(MyPacketTypeEnum.UPDATE_CAPACITOR, this.OnNetworkBlockUpdate);
 		}
 
-		protected override void OnConstructChanged()
+		protected override void OnConstructChanged(MyJumpGateConstruct new_construct)
 		{
-			base.OnConstructChanged();
+			base.OnConstructChanged(new_construct);
 			this.JumpGateGrid?.MarkGatesForUpdate();
 		}
 
@@ -414,7 +414,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				if (serialized.IsClientRequest)
 				{
 					packet.Payload(this.ToSerialized(false));
-					packet.Send();
+					packet.Forward(packet.SenderID, false).Send();
 				}
 				else if (this.LastUpdateDateTimeUTC < packet.EpochDateTimeUTC && this.FromSerialized(serialized))
 				{
@@ -570,7 +570,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// <returns>The current input power in MW</returns>
 		public double GetCurrentWattageSinkInput()
 		{
-			return (this.IsNullWrapper) ? this.WrapperWattageSinkPower : ((double) this.ResourceSink.CurrentInputByType(MyResourceDistributorComponent.ElectricityId) - this.BasePowerDrawMW);
+			return (this.IsNullWrapper) ? this.WrapperWattageSinkPower : ((this.ResourceSink == null) ? 0 : (double) this.ResourceSink.CurrentInputByType(MyResourceDistributorComponent.ElectricityId) - this.BasePowerDrawMW);
 		}
 
 		/// <summary>

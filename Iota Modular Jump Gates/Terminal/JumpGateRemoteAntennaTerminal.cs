@@ -83,6 +83,7 @@ namespace IOTA.ModularJumpGates.Terminal
 					choose_jump_gate_lb.ItemSelected = (block, selected) => {
 						if (!choose_jump_gate_lb.Enabled(block)) return;
 						MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
+						MyJumpGate old_gate = antenna.GetInboundControlGate(channel);
 						long selected_id = (long) selected[0].UserData;
 
 						if (selected_id == -1)
@@ -93,10 +94,16 @@ namespace IOTA.ModularJumpGates.Terminal
 						{
 							MyJumpGate jump_gate = antenna.JumpGateGrid.GetJumpGate(selected_id);
 							byte gate_channel = antenna.GetJumpGateInboundControlChannel(jump_gate);
-							if (!jump_gate.Closed && jump_gate.IsValid() && (gate_channel == 0xFF || gate_channel == channel) && (jump_gate.Controller == null || jump_gate.Controller.JumpGateGrid != antenna.JumpGateGrid) && (jump_gate.RemoteAntenna == null || jump_gate.RemoteAntenna == antenna)) antenna.SetGateForInboundControl(channel, jump_gate);
+
+							if (jump_gate != null && !jump_gate.Closed && jump_gate.IsValid() && (gate_channel == 0xFF || gate_channel == channel) && (jump_gate.Controller == null || jump_gate.Controller.JumpGateGrid != antenna.JumpGateGrid) && (jump_gate.RemoteAntenna == null || jump_gate.RemoteAntenna == antenna))
+							{
+								antenna.SetGateForInboundControl(channel, jump_gate);
+								jump_gate.SetDirty();
+							}
 						}
 
 						antenna.SetDirty();
+						old_gate?.SetDirty();
 						MyJumpGateModSession.Instance.RedrawAllTerminalControls();
 					};
 					MyJumpGateRemoteAntennaTerminal.TerminalControls.Add(choose_jump_gate_lb);

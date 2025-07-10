@@ -314,11 +314,11 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			base.UpdateBeforeSimulation();
 			if (this.TerminalBlock == null || this.TerminalBlock?.CubeGrid?.Physics == null) return;
 			this.ResourceSink?.Update();
-
-			if (!this.IsClosed && (this.JumpGateGrid == null || !MyJumpGateModSession.Instance.IsJumpGateGridMultiplayerValid(this.JumpGateGrid) || !this.JumpGateGrid.HasCubeGrid(this.TerminalBlock.CubeGrid)))
+			
+			if (!this.IsClosed && (this.JumpGateGrid == null || this.JumpGateGrid.Closed || !MyJumpGateModSession.Instance.IsJumpGateGridMultiplayerValid(this.JumpGateGrid) || !this.JumpGateGrid.HasCubeGrid(this.TerminalBlock.CubeGrid)))
 			{
 				MyJumpGateConstruct new_construct = MyJumpGateModSession.Instance.GetUnclosedJumpGateGrid(this.TerminalBlock.CubeGrid);
-				if (new_construct != this.JumpGateGrid) this.OnConstructChanged();
+				if (new_construct != this.JumpGateGrid) this.OnConstructChanged(new_construct);
 				this.JumpGateGrid = new_construct;
 			}
 		}
@@ -627,7 +627,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// Overridable<br />
 		/// Called when this block's cube grid changes
 		/// </summary>
-		protected virtual void OnConstructChanged() { }
+		protected virtual void OnConstructChanged(MyJumpGateConstruct new_construct) { }
 
 		/// <summary>
 		/// Overridable<br />
@@ -722,7 +722,8 @@ namespace IOTA.ModularJumpGates.CubeBlock
 	[ProtoInclude(200, typeof(MySerializedJumpGateCapacitor))]
 	[ProtoInclude(300, typeof(MySerializedJumpGateDrive))]
 	[ProtoInclude(400, typeof(MySerializedJumpGateRemoteAntenna))]
-	[ProtoInclude(500, typeof(MySerializedJumpGateServerAntenna))]
+	[ProtoInclude(500, typeof(MySerializedJumpGateRemoteLink))]
+	[ProtoInclude(600, typeof(MySerializedJumpGateServerAntenna))]
 	internal class MySerializedCubeBlockBase
 	{
 		/// <summary>

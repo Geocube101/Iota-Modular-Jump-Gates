@@ -522,6 +522,16 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		}
 
 		/// <summary>
+		/// Gets a remote link by it's terminal block entity ID
+		/// </summary>
+		/// <param name="id">The remote link's ID</param>
+		/// <returns>The remote link</returns>
+		public MyModAPIJumpGateRemoteLink GetRemoteLink(long id)
+		{
+			return MyModAPIJumpGateRemoteLink.New(this.GetMethod<Func<long, Dictionary<string, object>>>("GetRemoteLink")(id));
+		}
+
+		/// <summary>
 		/// Gets a server antenna by it's terminal block entity ID
 		/// </summary>
 		/// <param name="id">The server antenna's ID</param>
@@ -593,6 +603,15 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		public IEnumerable<MyModAPIJumpGateRemoteAntenna> GetAttachedJumpGateRemoteAntennas()
 		{
 			return this.GetMethod<Func<IEnumerable<Dictionary<string, object>>>>("GetAttachedJumpGateRemoteAntennas")().Select(MyModAPIJumpGateRemoteAntenna.New);
+		}
+
+		/// <summary>
+		/// Gets all jump gate remote links in this construct
+		/// </summary>
+		/// <returns>An IEnumerable referencing all remote links</returns>
+		public IEnumerable<MyModAPIJumpGateRemoteLink> GetAttachedJumpGateRemoteLinks()
+		{
+			return this.GetMethod<Func<IEnumerable<Dictionary<string, object>>>>("GetAttachedJumpGateRemoteLinks")().Select(MyModAPIJumpGateRemoteLink.New);
 		}
 
 		/// <summary>

@@ -1117,6 +1117,148 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		}
 	}
 
+	public class MyModAPIJumpGateRemoteLink : MyModAPICubeBlockBase
+	{
+		internal static new MyModAPIJumpGateRemoteLink New(Dictionary<string, object> attributes)
+		{
+			return MyModAPIObjectBase.GetObjectOrNew<MyModAPIJumpGateRemoteLink>(attributes, () => new MyModAPIJumpGateRemoteLink(attributes));
+		}
+
+		private MyModAPIJumpGateRemoteLink(Dictionary<string, object> attributes) : base((Dictionary<string, object>) (attributes["BlockBase"]), attributes) { }
+
+		/// <summary>
+		/// True if this remote link is the parent of a link connection
+		/// </summary>
+		public bool IsLinkParent => this.GetAttribute<bool>("IsLinkParent");
+
+		/// <summary>
+		/// Whether to display the connection effect when this link is connected to a remote link
+		/// </summary>
+		public bool DisplayConnectionEffect
+		{
+			get { return this.GetAttribute<bool>("DisplayConnectionEffect"); }
+			set { this.SetAttribute<bool>("DisplayConnectionEffect", value); }
+		}
+
+		/// <summary>
+		/// Whether this remote link is actually connected to another remote link
+		/// </summary>
+		public bool IsPhysicallyConnected => this.GetAttribute<bool>("IsPhysicallyConnected");
+
+		/// <summary>
+		/// A bit flag of faction connection types allowed to connect to this remote link
+		/// </summary>
+		public MyAPIFactionDisplayType AllowedFactionConnections
+		{
+			get { return (MyAPIFactionDisplayType) this.GetAttribute<byte>("AllowedFactionConnections"); }
+			set { this.SetAttribute<byte>("AllowedFactionConnections", (byte) value); }
+		}
+
+		/// <summary>
+		/// The channel this link accepts connections on
+		/// </summary>
+		public ushort ChannelID
+		{
+			get { return this.GetAttribute<ushort>("ChannelID"); }
+			set { this.SetAttribute<ushort>("ChannelID", value); }
+		}
+
+		/// <summary>
+		/// The currently set block ID of the remote link this link is connected to
+		/// </summary>
+		public long AttachedRemoteLinkID
+		{
+			get { return this.GetAttribute<long>("AttachedRemoteLinkID"); }
+			set { this.SetAttribute<long>("AttachedRemoteLinkID", value); }
+		}
+
+		/// <summary>
+		/// Max connection distance allowed between two remote links
+		/// </summary>
+		public double MaxConnectionDistance => this.GetAttribute<double>("MaxConnectionDistance");
+
+		/// <summary>
+		/// The connection effect's display color
+		/// </summary>
+		public Color ConnectionEffectColor
+		{
+			get { return this.GetAttribute<Color>("ConnectionEffectColor"); }
+			set { this.SetAttribute<Color>("ConnectionEffectColor", value); }
+		}
+
+		/// <summary>
+		/// The attached remote link or null
+		/// </summary>
+		public MyModAPIJumpGateRemoteLink AttachedRemoteLink => MyModAPIJumpGateRemoteLink.New(this.GetAttribute<Dictionary<string, object>>("AttachedRemoteLink"));
+
+		/// <summary>
+		/// Breaks the connection between this remote link and its attached remote link
+		/// </summary>
+		public void BreakConnection(bool permanent)
+		{
+			this.GetMethod<Action<bool>>("BreakConnection")(permanent);
+		}
+
+		/// <summary>
+		/// Allows a certain faction relation to connect to this remote link
+		/// </summary>
+		/// <param name="setting">The faction relations to modify</param>
+		/// <param name="flag">Whether to allow specified relation</param>
+		public void AllowFactionConnection(MyAPIFactionDisplayType setting, bool flag)
+		{
+			if (flag) this.AllowedFactionConnections |= setting;
+			else this.AllowedFactionConnections &= ~setting;
+		}
+
+		/// <summary>
+		/// Checks if the specified faction relation is allowed to connect to this remote link
+		/// </summary>
+		/// <param name="setting">The faction relations to check</param>
+		/// <returns>True if allowed</returns>
+		public bool IsFactionConnectionAllowed(MyAPIFactionDisplayType setting)
+		{
+			return (this.AllowedFactionConnections & setting) != 0;
+		}
+
+		/// <summary>
+		/// Connects two remote links together<br />
+		/// Links must be within the max connection distance of both links
+		/// </summary>
+		/// <param name="link">The other remote link</param>
+		/// <returns>True if successfull</returns>
+		public bool Connect(MyModAPIJumpGateRemoteLink link)
+		{
+			return link != null && this.GetMethod<Func<long[], bool>>("Connect")(link.ObjectID.Value.Packed());
+		}
+
+		/// <summary>
+		/// </summary>
+		/// <param name="steam_id">The player's steam ID to check</param>
+		/// <returns>True if the caller's faction can jump to this gate</returns>
+		public bool IsFactionRelationValid(ulong steam_id)
+		{
+			return this.GetMethod<Func<ulong, bool>>("IsSteamFactionRelationValid")(steam_id);
+		}
+
+		/// <summary>
+		/// </summary>
+		/// <param name="player_identity">The player's identiy to check</param>
+		/// <returns>True if the caller's faction can jump to this gate</returns>
+		public bool IsFactionRelationValid(long player_identity)
+		{
+			return this.GetMethod<Func<long, bool>>("IsPlayerFactionRelationValid")(player_identity);
+		}
+
+		/// <summary>
+		/// Gets all working links within range of this one
+		/// </summary>
+		/// <returns>An enumerable containing all nearby working links</returns>
+		public IEnumerable<MyModAPIJumpGateRemoteLink> GetNearbyLinks()
+		{
+			return this.GetMethod<Func<IEnumerable<Dictionary<string, object>>>>("GetNearbyLinks")().Select(MyModAPIJumpGateRemoteLink.New);
+		}
+	}
+
 	public class MyModAPIJumpGateServerAntenna : MyModAPICubeBlockBase
 	{
 		internal static new MyModAPIJumpGateServerAntenna New(Dictionary<string, object> attributes)

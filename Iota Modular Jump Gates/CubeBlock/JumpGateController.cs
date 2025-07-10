@@ -953,7 +953,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 					Broadcast = false,
 					PacketType = MyPacketTypeEnum.UPDATE_CONTROLLER,
 				};
-				request.Payload<MySerializedJumpGateController>(this.ToSerialized(true));
+				request.Payload(this.ToSerialized(true));
 				request.Send();
 			}
 		}
@@ -1250,13 +1250,11 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				if (serialized.IsClientRequest)
 				{
 					packet.Payload(this.ToSerialized(false));
-					packet.Send();
+					packet.Forward(packet.SenderID, false).Send();
 				}
 				else if (this.LastUpdateDateTimeUTC < packet.EpochDateTimeUTC && this.FromSerialized(serialized))
 				{
 					this.LastUpdateTime = packet.EpochTime;
-					this.IsDirty = false;
-					packet.Forward(0, true).Send();
 				}
 			}
 			else if (MyNetworkInterface.IsStandaloneMultiplayerClient && (packet.PhaseFrame == 1 || packet.PhaseFrame == 2) && this.FromSerialized(serialized))
@@ -1384,24 +1382,50 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			{
 				this.BaseBlockSettings.SelectedWaypoint(new_settings.SelectedWaypoint());
 				this.BaseBlockSettings.JumpSpaceRadius(new_settings.JumpSpaceRadius());
-				this.BaseBlockSettings.JumpGateID(new_settings.JumpGateID());
 				this.BaseBlockSettings.JumpEffectAnimationName(new_settings.JumpEffectAnimationName());
 				this.BaseBlockSettings.VectorNormalOverride(new_settings.VectorNormalOverride());
 				this.BaseBlockSettings.JumpEffectAnimationColorShift(new_settings.JumpEffectAnimationColorShift());
 				this.BaseBlockSettings.JumpSpaceDepthPercent(new_settings.JumpSpaceDepthPercent());
 				this.BaseBlockSettings.JumpSpaceFitType(new_settings.JumpSpaceFitType());
-				jump_gate?.SetJumpSpaceEllipsoidDirty();
-				jump_gate?.SetDirty();
 
-				KeyValuePair<MyJumpGateRemoteAntenna, byte> old_antenna = this.RemoteAntennaChannel;
-				this.BaseBlockSettings.RemoteAntennaChannel(new_settings.RemoteAntennaChannel());
-				this.BaseBlockSettings.RemoteAntennaID(new_settings.RemoteAntennaID());
-				KeyValuePair<MyJumpGateRemoteAntenna, byte> new_antenna = this.RemoteAntennaChannel;
-
-				if (old_antenna.Key != new_antenna.Key || old_antenna.Value != new_antenna.Value)
+				if (new_settings.RemoteAntennaID() == -1 || new_settings.RemoteAntennaChannel() == 0xFF)
 				{
-					old_antenna.Key?.SetControllerForOutboundControl(old_antenna.Value, null);
-					new_antenna.Key?.SetControllerForOutboundControl(new_antenna.Value, this);
+					MyJumpGate new_gate = this.JumpGateGrid?.GetJumpGate(new_settings.JumpGateID());
+					this.AttachedJumpGate(new_gate);
+
+					if (MyNetworkInterface.IsServerLike)
+					{
+						jump_gate?.SetJumpSpaceEllipsoidDirty();
+						jump_gate?.SetDirty();
+						new_gate?.SetJumpSpaceEllipsoidDirty();
+						new_gate?.SetDirty();
+						this.SetDirty();
+					}
+				}
+				else
+				{
+					KeyValuePair<MyJumpGateRemoteAntenna, byte> old_antenna = this.RemoteAntennaChannel;
+					this.BaseBlockSettings.RemoteAntennaChannel(new_settings.RemoteAntennaChannel());
+					this.BaseBlockSettings.RemoteAntennaID(new_settings.RemoteAntennaID());
+					KeyValuePair<MyJumpGateRemoteAntenna, byte> new_antenna = this.RemoteAntennaChannel;
+
+					if (old_antenna.Key != new_antenna.Key || old_antenna.Value != new_antenna.Value)
+					{
+						old_antenna.Key?.SetControllerForOutboundControl(old_antenna.Value, null);
+						new_antenna.Key?.SetControllerForOutboundControl(new_antenna.Value, this);
+
+						if (MyNetworkInterface.IsServerLike)
+						{
+							jump_gate?.SetJumpSpaceEllipsoidDirty();
+							jump_gate?.SetDirty();
+							jump_gate = this.AttachedJumpGate();
+							jump_gate?.SetJumpSpaceEllipsoidDirty();
+							jump_gate?.SetDirty();
+							old_antenna.Key?.SetDirty();
+							new_antenna.Key?.SetDirty();
+							this.SetDirty();
+						}
+					}
 				}
 			}
 

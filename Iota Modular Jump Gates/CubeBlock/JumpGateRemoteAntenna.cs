@@ -437,7 +437,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 					Broadcast = false,
 					PacketType = MyPacketTypeEnum.UPDATE_REMOTE_ANTENNA,
 				};
-				request.Payload<MySerializedJumpGateCapacitor>(null);
+				request.Payload(this.ToSerialized(true));
 				request.Send();
 			}
 		}
@@ -487,14 +487,10 @@ namespace IOTA.ModularJumpGates.CubeBlock
 							outbound_controller.SetDirty();
 						}
 						
-						if (inbound_controllee != null)
+						if (inbound_controllee != null && (remote_controller = inbound_controllee.Controller) != null)
 						{
-							if ((remote_controller = inbound_controllee.Controller) != null)
-							{
-								remote_controller.AttachedRemoteJumpGate(null);
-								remote_controller.SetDirty();
-							}
-							
+							remote_controller.AttachedRemoteJumpGate(null);
+							remote_controller.SetDirty();
 							inbound_controllee.Controller = null;
 							inbound_controllee.SetDirty();
 						}
@@ -502,13 +498,13 @@ namespace IOTA.ModularJumpGates.CubeBlock
 						if (antenna != null)
 						{
 							this.ConnectionThreads[i] = null;
+							this.SetDirty();
 							antenna.ConnectionThreads[i] = null;
 							antenna.SetDirty();
 							this.OnAntennaConnection?.Invoke(this, outbound_controller, inbound_controllee, i, false);
 							antenna.OnAntennaConnection?.Invoke(antenna, outbound_controller, inbound_controllee, i, false);
 						}
 						
-						this.SetDirty();
 						continue;
 					}
 					
@@ -748,13 +744,11 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				if (serialized.IsClientRequest)
 				{
 					packet.Payload(this.ToSerialized(false));
-					packet.Send();
+					packet.Forward(packet.SenderID, false).Send();
 				}
 				else if (this.LastUpdateDateTimeUTC < packet.EpochDateTimeUTC && this.FromSerialized(serialized))
 				{
 					this.LastUpdateTime = packet.EpochTime;
-					this.IsDirty = false;
-					packet.Forward(0, true).Send();
 				}
 			}
 			else if (MyNetworkInterface.IsStandaloneMultiplayerClient && (packet.PhaseFrame == 1 || packet.PhaseFrame == 2) && this.FromSerialized(serialized))
@@ -791,7 +785,6 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			if (entity == null || this.MarkedForClose || this.NearbyEntities == null) return;
 			else if (is_entering && entity is MyCubeGrid) this.NearbyEntities[entity.EntityId] = (MyEntity) entity;
 			else this.NearbyEntities.Remove(entity.EntityId);
-			this.SetDirty();
 		}
 
 		/// <summary>
@@ -799,7 +792,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// </summary>
 		private void UpdateNearbyAntennas()
 		{
-			if (this.NearbyEntities == null || this.NearbyAntennas == null || this.JumpGateGrid == null) return;
+			if (!MyNetworkInterface.IsServerLike || this.NearbyEntities == null || this.NearbyAntennas == null || this.JumpGateGrid == null) return;
 			List<long> checked_grids = new List<long>(this.JumpGateGrid.GetCubeGrids().Select((grid) => grid.EntityId));
 			MyJumpGateConstruct construct = null;
 			Vector3D this_pos = this.WorldMatrix.Translation;
@@ -808,6 +801,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			lock (this.NearbyAntennasMutex)
 			{
 				this.NearbyAntennas?.Clear();
+				this.LastNearbyAntennasUpdateTime = this.LocalGameTick;
 
 				if (this.IsWorking)
 				{
@@ -822,7 +816,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 						{
 							double distance = Math.Min(this.BlockSettings.AntennaRange, antenna.BlockSettings.AntennaRange);
 							if (!antenna.IsWorking || Vector3D.DistanceSquared(antenna.WorldMatrix.Translation, this_pos) > distance * distance) continue;
-							lock (this.NearbyAntennasMutex) this.NearbyAntennas?.Add(antenna);
+							this.NearbyAntennas?.Add(antenna);
 						}
 					}
 				}
@@ -910,19 +904,35 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			
 			if (antenna.InboundControlJumpGates != null)
 			{
-				for (byte i = 0; i < this.InboundConnectionJumpGates.Length; ++i)
+				for (byte i = 0; i < MyJumpGateRemoteAntenna.ChannelCount; ++i)
 				{
+					MyJumpGate old_gate = this.GetInboundControlGate(i);
 					MyJumpGate jump_gate = this.JumpGateGrid.GetJumpGate(antenna.InboundControlJumpGates[i]);
 					this.SetGateForInboundControl(i, jump_gate);
+
+					if (MyNetworkInterface.IsServerLike)
+					{
+						old_gate?.SetDirty();
+						jump_gate?.SetDirty();
+						this.SetDirty();
+					}
 				}
 			}
 			
 			if (antenna.OutboundControlControllers != null)
 			{
-				for (byte i = 0; i < this.OutboundConnectionControllers.Length; ++i)
+				for (byte i = 0; i < MyJumpGateRemoteAntenna.ChannelCount; ++i)
 				{
+					MyJumpGateController old_controller = this.GetOutboundControlController(i);
 					MyJumpGateController controller = this.JumpGateGrid.GetController(antenna.OutboundControlControllers[i]);
 					this.SetControllerForOutboundControl(i, controller);
+
+					if (MyNetworkInterface.IsServerLike)
+					{
+						old_controller?.SetDirty();
+						controller?.SetDirty();
+						this.SetDirty();
+					}
 				}
 			}
 			
@@ -930,7 +940,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			{
 				if (antenna.RemoteConnectionThreads != null)
 				{
-					for (byte i = 0; i < this.ConnectionThreads.Length; ++i)
+					for (byte i = 0; i < MyJumpGateRemoteAntenna.ChannelCount; ++i)
 					{
 						long blockid = antenna.RemoteConnectionThreads[i];
 
@@ -1141,12 +1151,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// <returns>An enumerable containing all nearby working antennas</returns>
 		public IEnumerable<MyJumpGateRemoteAntenna> GetNearbyAntennas()
 		{
-			if (this.LastNearbyAntennasUpdateTime == 0 || (this.LocalGameTick - this.LastNearbyAntennasUpdateTime) >= 60)
-			{
-				this.LastNearbyAntennasUpdateTime = this.LocalGameTick;
-				this.UpdateNearbyAntennas();
-			}
-
+			if (this.LastNearbyAntennasUpdateTime == 0 || (this.LocalGameTick - this.LastNearbyAntennasUpdateTime) >= 60) this.UpdateNearbyAntennas();
 			return this.NearbyAntennas?.AsEnumerable() ?? Enumerable.Empty<MyJumpGateRemoteAntenna>();
 		}
 
@@ -1190,9 +1195,6 @@ namespace IOTA.ModularJumpGates.CubeBlock
 	[ProtoContract]
 	internal class MySerializedJumpGateRemoteAntenna : MySerializedCubeBlockBase
 	{
-		/// <summary>
-		/// The connected jump gates
-		/// </summary>
 		[ProtoMember(20)]
 		public int SyncedNearbyAntennas;
 		[ProtoMember(21)]

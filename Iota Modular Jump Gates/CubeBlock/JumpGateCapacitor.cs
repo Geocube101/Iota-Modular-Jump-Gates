@@ -208,7 +208,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 					Broadcast = false,
 					PacketType = MyPacketTypeEnum.UPDATE_CAPACITOR,
 				};
-				request.Payload<MySerializedJumpGateCapacitor>(null);
+				request.Payload(this.ToSerialized(true));
 				request.Send();
 			}
 		}
@@ -314,7 +314,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				if (serialized.IsClientRequest)
 				{
 					packet.Payload(this.ToSerialized(false));
-					packet.Send();
+					packet.Forward(packet.SenderID, false).Send();
 				}
 				else if (this.LastUpdateDateTimeUTC < packet.EpochDateTimeUTC && this.FromSerialized(serialized))
 				{

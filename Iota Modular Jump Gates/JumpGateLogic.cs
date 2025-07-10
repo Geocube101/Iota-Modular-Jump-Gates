@@ -918,7 +918,7 @@ namespace IOTA.ModularJumpGates
 			MySerializedJumpGate serialized = packet.Payload<MySerializedJumpGate>();
 			if (serialized == null || serialized.UUID != JumpGateUUID.FromJumpGate(this)) return;
 
-			if (MyNetworkInterface.IsMultiplayerServer && packet.PhaseFrame == 1 && packet.EpochTime > this.LastUpdateTime)
+			if (MyNetworkInterface.IsMultiplayerServer && packet.PhaseFrame == 1)
 			{
 				if (packet.EpochTime < this.LastUpdateTime || serialized.IsClientRequest)
 				{
@@ -4053,7 +4053,7 @@ namespace IOTA.ModularJumpGates
 		public string GetName()
 		{
 			if (this.Closed) return null;
-			string name = this.Controller?.BlockSettings.JumpGateName() ?? this.RemoteAntenna?.GetJumpGateName(this.RemoteAntennaChannel);
+			string name = this.Controller?.BlockSettings?.JumpGateName() ?? this.RemoteAntenna?.GetJumpGateName(this.RemoteAntennaChannel);
 			this.LastStoredName = name ?? this.LastStoredName;
 			return name;
 		}

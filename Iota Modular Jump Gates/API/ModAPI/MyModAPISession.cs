@@ -11,7 +11,7 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 	public class MyModAPISession : MyModAPIObjectBase
 	{
 		public static readonly long ModAPIID = 3313236685;
-		public static readonly int[] ModAPIVersion = new int[2] { 1, 0 };
+		public static readonly int[] ModAPIVersion = new int[2] { 1, 2 };
 		public static MyModAPISession Instance { get; private set; } = null;
 
 		/// <summary>
@@ -188,6 +188,16 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		}
 
 		/// <summary>
+		/// Checks whether the block is a jump gate remote link
+		/// </summary>
+		/// <param name="block">The block to check</param>
+		/// <returns>Whether the "JumpGateRemoteLink" game logic component is attached</returns>
+		public bool IsBlockJumpGateRemoteLink(IMyTerminalBlock block)
+		{
+			return this.GetMethod<Func<IMyTerminalBlock, bool>>("IsBlockJumpGateRemoteLink")(block);
+		}
+
+		/// <summary>
 		/// Checks whether the block is a jump gate server antenna
 		/// </summary>
 		/// <param name="block">The block to check</param>
@@ -277,6 +287,16 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		public MyModAPIJumpGateRemoteAntenna GetBlockAsJumpGateRemoteAntenna(IMyTerminalBlock block)
 		{
 			return MyModAPIJumpGateRemoteAntenna.New(this.GetMethod<Func<IMyTerminalBlock, Dictionary<string, object>>>("GetBlockAsJumpGateRemoteAntenna")(block));
+		}
+
+		/// <summary>
+		/// Gets the block as a jump gate remote link of null if not a jump gate remote link
+		/// </summary>
+		/// <param name="block">The block to convert</param>
+		/// <returns>The "JumpGateRemoteLink" game logic component or null</returns>
+		public MyModAPIJumpGateRemoteLink GetBlockAsJumpGateRemoteLink(IMyTerminalBlock block)
+		{
+			return MyModAPIJumpGateRemoteLink.New(this.GetMethod<Func<IMyTerminalBlock, Dictionary<string, object>>>("GetBlockAsJumpGateRemoteLink")(block));
 		}
 
 		/// <summary>

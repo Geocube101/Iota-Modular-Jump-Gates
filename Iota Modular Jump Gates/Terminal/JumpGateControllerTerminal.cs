@@ -108,6 +108,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				choose_jump_gate_lb.ItemSelected = (block, selected) => {
 					if (!choose_jump_gate_lb.Enabled(block)) return;
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
+					MyJumpGate old_gate = controller.AttachedJumpGate();
 					object data = selected[0].UserData;
 
 					if (data is long && (long) data == -1)
@@ -126,6 +127,7 @@ namespace IOTA.ModularJumpGates.Terminal
 
 					controller.SetDirty();
 					controller.RemoteAntenna?.SetDirty();
+					old_gate?.SetDirty();
 					MyJumpGateModSession.Instance.RedrawAllTerminalControls();
 				};
 				MyJumpGateControllerTerminal.TerminalControls.Add(choose_jump_gate_lb);

@@ -597,11 +597,14 @@ namespace IOTA.ModularJumpGates
 			MyAPIGateway.Entities.OnEntityRemove -= this.OnEntityRemove;
 			MyAPIGateway.TerminalControls.CustomControlGetter -= this.OnTerminalSelector;
 
+			MyCubeBlockBase.Instances.Clear();
+
 			MyCubeBlockTerminal.Unload();
 			MyJumpGateCapacitorTerminal.Unload();
 			MyJumpGateControllerTerminal.Unload();
 			MyJumpGateDriveTerminal.Unload();
 			MyJumpGateRemoteAntennaTerminal.Unload();
+			MyJumpGateRemoteLinkTerminal.Unload();
 
 			MyJumpGateModSession.Configuration.Save();
 			MyJumpGateModSession.Configuration = null;
@@ -763,6 +766,7 @@ namespace IOTA.ModularJumpGates
 					MyJumpGateControllerTerminal.UpdateRedrawControls();
 					MyJumpGateDriveTerminal.UpdateRedrawControls();
 					MyJumpGateRemoteAntennaTerminal.UpdateRedrawControls();
+					MyJumpGateRemoteLinkTerminal.UpdateRedrawControls();
 					this.__RedrawAllTerminalControls = false;
 				}
 				if (MyAPIGateway.Gui.GetCurrentScreen != MyTerminalPageEnum.ControlPanel)
@@ -1547,10 +1551,19 @@ namespace IOTA.ModularJumpGates
 			MyJumpGateConstruct grid = this.GetJumpGateGrid(cube_grid);
 			if (grid != null) return grid;
 			grid = new MyJumpGateConstruct(cube_grid, cube_grid.EntityId);
+			MyJumpGateConstruct existing = this.GridMap.GetValueOrDefault(cube_grid.EntityId, null);
 
-			if (this.GridMap.TryAdd(cube_grid.EntityId, grid))
+			if (existing == null)
 			{
+				this.GridMap[cube_grid.EntityId] = grid;
 				Logger.Debug($"Grid {cube_grid.EntityId} added to session", 1);
+				return grid;
+			}
+			else if (existing.Closed)
+			{
+				this.GridMap[cube_grid.EntityId] = grid;
+				this.CloseGrid(existing, true);
+				Logger.Debug($"Grid {cube_grid.EntityId} added to session; CLOSED_EXISTING", 1);
 				return grid;
 			}
 			else
@@ -1626,7 +1639,7 @@ namespace IOTA.ModularJumpGates
 			MyJumpGateConstruct jump_gate_grid;
 			if (this.GridMap.TryGetValue(cube_grid.EntityId, out jump_gate_grid) && !jump_gate_grid.MarkClosed) return jump_gate_grid;
 			List<IMyCubeGrid> connected_grids = new List<IMyCubeGrid>();
-			cube_grid.GetGridGroup(GridLinkTypeEnum.Logical | GridLinkTypeEnum.Mechanical).GetGrids(connected_grids);
+			cube_grid.GetGridGroup(GridLinkTypeEnum.Logical).GetGrids(connected_grids);
 			foreach (IMyCubeGrid grid in connected_grids) if (this.GridMap.TryGetValue(grid.EntityId, out jump_gate_grid) && !jump_gate_grid.MarkClosed) return jump_gate_grid;
 			return null;
 		}
