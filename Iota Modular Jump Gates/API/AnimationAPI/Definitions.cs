@@ -293,6 +293,7 @@ namespace IOTA.ModularJumpGates.API.AnimationAPI.Definitions
 	[ProtoInclude(300, typeof(BeamPulseDef))]
 	[ProtoInclude(400, typeof(DriveEmissiveColorDef))]
 	[ProtoInclude(500, typeof(NodePhysicsDef))]
+	[ProtoInclude(600, typeof(DriveEntityLockDef))]
 	public class AnimatableDef
 	{
 		#region Public Variables
@@ -530,6 +531,79 @@ namespace IOTA.ModularJumpGates.API.AnimationAPI.Definitions
 		public Vector3D AttractorTorque = Vector3D.Zero;
 		#endregion
 	}
+
+	/// <summary>
+	/// Definition defining a drive's entity lock particles
+	/// </summary>
+	[ProtoContract(UseProtoMembersOnly = true)]
+	public class DriveEntityLockDef : AnimatableDef
+	{
+		/// <summary>
+		/// The lock delay shift<br />
+		/// Controls how long it takes for drives to lock onto an entity
+		/// </summary>
+		[ProtoMember(1)]
+		public LockDelayShiftEnum LockDelayShift = LockDelayShiftEnum.FIXED;
+
+		/// <summary>
+		/// The entity lock sorting type
+		/// </summary>
+		[ProtoMember(2)]
+		public EntityLockTypeEnum EntityLockType = EntityLockTypeEnum.LOCK_NEAREST;
+
+		/// <summary>
+		/// The easing type for the lock rotation
+		/// </summary>
+		[ProtoMember(3)]
+		public EasingTypeEnum LockDelayEasingType = EasingTypeEnum.EASE_IN_OUT;
+
+		/// <summary>
+		/// The easing durve for the lock rotation
+		/// </summary>
+		[ProtoMember(4)]
+		public EasingCurveEnum LockDelayEasingCurve = EasingCurveEnum.LINEAR;
+
+		/// <summary>
+		/// The minimum lock time in game ticks
+		/// </summary>
+		[ProtoMember(5)]
+		public ushort MinLockTime = 0;
+
+		/// <summary>
+		/// The maximum lock time in game ticks
+		/// </summary>
+		[ProtoMember(6)]
+		public ushort MaxLockTime = 0;
+
+		/// <summary>
+		/// The maximum number of entities that can locked onto at once
+		/// </summary>
+		[ProtoMember(7)]
+		public int MaxEntityLockCount = 0;
+
+		/// <summary>
+		/// Modifies how the ratio is calculated (clamped between -1 and 1)<br />
+		/// 0    - Normal<br />
+		/// 0.5  - Starts halfway<br />
+		/// 1    - Starts fully locked<br />
+		/// -0.5 - Starts halfway but goes backwards<br />
+		/// -1   - Starts fully locked but goes backwards
+		/// </summary>
+		[ProtoMember(8)]
+		public float RatioModifier = 0;
+
+		/// <summary>
+		/// The initial rotation (in degrees) of the entity lock particles relative to each drives' orientation
+		/// </summary>
+		[ProtoMember(9)]
+		public Vector3D InitialRotation = Vector3D.Zero;
+
+		/// <summary>
+		/// The entity lock particles to play
+		/// </summary>
+		[ProtoMember(10)]
+		public ParticleDef[] EntityLockParticles = null;
+	}
 	#endregion
 
 	#region Animation Definitions
@@ -615,6 +689,12 @@ namespace IOTA.ModularJumpGates.API.AnimationAPI.Definitions
 		/// </summary>
 		[ProtoMember(11)]
 		public NodePhysicsDef AntiNodePhysics = null;
+
+		/// <summary>
+		/// The DriveEntityLockDef defining the entity lock particles for this gate's drives
+		/// </summary>
+		[ProtoMember(12)]
+		public DriveEntityLockDef DriveEntityLock = null;
 		#endregion
 	}
 
@@ -725,6 +805,12 @@ namespace IOTA.ModularJumpGates.API.AnimationAPI.Definitions
 		/// </summary>
 		[ProtoMember(15)]
 		public NodePhysicsDef AntiNodePhysics = null;
+
+		/// <summary>
+		/// The DriveEntityLockDef defining the entity lock particles for this gate's drives
+		/// </summary>
+		[ProtoMember(16)]
+		public DriveEntityLockDef DriveEntityLock = null;
 		#endregion
 	}
 
@@ -810,6 +896,12 @@ namespace IOTA.ModularJumpGates.API.AnimationAPI.Definitions
 		/// </summary>
 		[ProtoMember(11)]
 		public NodePhysicsDef AntiNodePhysics = null;
+
+		/// <summary>
+		/// The DriveEntityLockDef defining the entity lock particles for this gate's drives
+		/// </summary>
+		[ProtoMember(12)]
+		public DriveEntityLockDef DriveEntityLock = null;
 		#endregion
 	}
 
@@ -889,7 +981,7 @@ namespace IOTA.ModularJumpGates.API.AnimationAPI.Definitions
 		/// The AnimationConstraintDef definition defining a jump gate constraint for this animation
 		/// </summary>
 		[ProtoMember(11)]
-		public AnimationConstraintDef AnimationContraint = null;
+		public AnimationConstraintDef AnimationConstraint = null;
 		#endregion
 
 		#region Constructors

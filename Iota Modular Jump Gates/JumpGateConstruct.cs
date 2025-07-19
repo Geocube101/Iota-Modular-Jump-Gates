@@ -669,12 +669,342 @@ namespace IOTA.ModularJumpGates
 			this.SetDirty();
 		}
 
-        /// <summary>
-        /// Sets up the new construct<br />
-        /// Checks grids within this group, updates connected blocks, and updates the main controller
-        /// </summary>
-        /// <param name="grids">The cube grids to use instead of the list from this grid group</param>
-        private void SetupConstruct(IEnumerable<IMyCubeGrid> grids = null)
+		/// <summary>
+		/// Updates the drive combinations list if null
+		/// </summary>
+		/// <param name="full_gate_update">Whether to undergo a full gate update</param>
+		private void UpdateDriveCombinations(ref bool full_gate_update)
+		{
+			if (this.DriveCombinations != null) return;
+			List<MyJumpGateDrive> indexable_large_drives = new List<MyJumpGateDrive>(this.JumpGateDrives.Count);
+			List<MyJumpGateDrive> indexable_small_drives = new List<MyJumpGateDrive>(this.JumpGateDrives.Count);
+			this.DriveCombinations = new List<KeyValuePair<MyJumpGateDrive, MyJumpGateDrive>>();
+			full_gate_update = true;
+
+			foreach (KeyValuePair<long, MyJumpGateDrive> pair in this.JumpGateDrives)
+			{
+				if (pair.Value.IsLargeGrid) indexable_large_drives.Add(pair.Value);
+				else if (pair.Value.IsSmallGrid) indexable_small_drives.Add(pair.Value);
+			}
+
+
+			for (int i = 0; i < indexable_large_drives.Count - 1; ++i)
+			{
+				for (int j = i + 1; j < indexable_large_drives.Count; ++j)
+				{
+					this.DriveCombinations.Add(new KeyValuePair<MyJumpGateDrive, MyJumpGateDrive>(indexable_large_drives[i], indexable_large_drives[j]));
+				}
+			}
+
+			for (int i = 0; i < indexable_small_drives.Count - 1; ++i)
+			{
+				for (int j = i + 1; j < indexable_small_drives.Count; ++j)
+				{
+					this.DriveCombinations.Add(new KeyValuePair<MyJumpGateDrive, MyJumpGateDrive>(indexable_small_drives[i], indexable_small_drives[j]));
+				}
+			}
+		}
+
+		/// <summary>
+		/// Updates the max raycast distances for all drives
+		/// </summary>
+		private void UpdateDriveRaycastDistances()
+		{
+			if (!this.UpdateDriveMaxRaycastDistances || this.LocalGameTick % 30 != 0) return;
+			List<Vector3I> raycast_cells = new List<Vector3I>();
+			this.UpdateDriveMaxRaycastDistances = false;
+
+			foreach (KeyValuePair<long, MyJumpGateDrive> drive in this.JumpGateDrives)
+			{
+				double closest_distance = drive.Value.DriveConfiguration.DriveRaycastDistance;
+				Vector3D raycast_start = drive.Value.GetDriveRaycastStartpoint();
+				Vector3D raycast_end = drive.Value.GetDriveRaycastEndpoint(closest_distance);
+
+				foreach (KeyValuePair<long, IMyCubeGrid> grid in this.CubeGrids)
+				{
+					if (grid.Value.MarkedForClose) continue;
+					grid.Value.RayCastCells(raycast_start, raycast_end, raycast_cells);
+
+					foreach (Vector3I cell in raycast_cells)
+					{
+						IMySlimBlock block = grid.Value.GetCubeBlock(cell);
+						if (block == null || block.FatBlock == drive.Value.TerminalBlock) continue;
+						closest_distance = Math.Min(closest_distance, Vector3D.Distance(grid.Value.GridIntegerToWorld(cell), raycast_start));
+					}
+
+					raycast_cells.Clear();
+				}
+
+				this.MarkUpdateJumpGates = this.MarkUpdateJumpGates || drive.Value.MaxRaycastDistance != closest_distance;
+				drive.Value.MaxRaycastDistance = closest_distance;
+			}
+		}
+
+		/// <summary>
+		/// Rebuilds all jump gates in this construct based on drive intersections
+		/// </summary>
+		private void RebuildJumpGates()
+		{
+			Dictionary<MyJumpGateDrive, IntersectionInfo> intersecting_drives = new Dictionary<MyJumpGateDrive, IntersectionInfo>();
+
+			foreach (KeyValuePair<MyJumpGateDrive, MyJumpGateDrive> combination in this.DriveCombinations)
+			{
+				MyJumpGateDrive drive1 = combination.Key;
+				MyJumpGateDrive drive2 = combination.Value;
+
+				Vector3D drive1_pos1 = drive1.GetDriveRaycastStartpoint();
+				Vector3D drive1_pos2 = drive1.GetDriveRaycastEndpoint(drive1.MaxRaycastDistance);
+				Vector3D side_a = drive1_pos2 - drive1_pos1;
+
+				Vector3D drive2_pos1 = drive2.GetDriveRaycastStartpoint();
+				Vector3D drive2_pos2 = drive2.GetDriveRaycastEndpoint(drive2.MaxRaycastDistance);
+				Vector3D side_b = drive2_pos2 - drive2_pos1;
+				Vector3 side_c = drive2_pos1 - drive1_pos1;
+				Vector3D midpoint;
+
+				double angle_a = Vector3D.Angle(side_b, -side_c);
+				double angle_b = Vector3D.Angle(side_a, side_c);
+				double ico_angle = angle_a + angle_b;
+				double angle_c = Math.PI - ico_angle;
+				double c_ratio = (side_c.Length() / Math.Sin(angle_c));
+
+				if (ico_angle == 0)
+				{
+					midpoint = (drive1_pos2 + drive2_pos2) / 2d;
+					if (Vector3D.Distance(drive1_pos1, midpoint) > drive1.DriveConfiguration.DriveRaycastWidth || Vector3D.Distance(drive2_pos1, midpoint) > drive1.DriveConfiguration.DriveRaycastWidth) continue;
+				}
+				else if (ico_angle < Math.PI)
+				{
+					double side_a_len = Math.Sin(angle_a) * c_ratio;
+					double side_b_len = Math.Sin(angle_b) * c_ratio;
+					if (side_a_len > drive2.MaxRaycastDistance || side_b_len > drive1.MaxRaycastDistance) continue;
+					Vector3D _side_a = drive1.GetDriveRaycastEndpoint(side_a_len);
+					Vector3D _side_b = drive2.GetDriveRaycastEndpoint(side_b_len);
+					midpoint = (_side_a + _side_b) / 2d;
+					if (Vector3D.Distance(_side_a, midpoint) > drive1.DriveConfiguration.DriveRaycastWidth || Vector3D.Distance(_side_b, midpoint) > drive1.DriveConfiguration.DriveRaycastWidth) continue;
+				}
+				else continue;
+
+				IntersectionInfo intersection;
+				bool drive1_contained = intersecting_drives.ContainsKey(drive1);
+				bool drive2_contained = intersecting_drives.ContainsKey(drive2);
+
+				if (drive1_contained && drive2_contained)
+				{
+					intersection = intersecting_drives[drive1];
+					IntersectionInfo _intersection = intersecting_drives[drive2];
+
+					if (intersection != _intersection)
+					{
+						intersection.IntersectingDrives.AddList(_intersection.IntersectingDrives);
+						intersection.IntersectNodes.AddList(_intersection.IntersectNodes);
+						foreach (MyJumpGateDrive other_drive in _intersection.IntersectingDrives) intersecting_drives[other_drive] = intersection;
+					}
+				}
+				else if (drive1_contained)
+				{
+					intersection = intersecting_drives[drive1];
+					intersecting_drives.Add(drive2, intersection);
+				}
+				else if (drive2_contained)
+				{
+					intersection = intersecting_drives[drive2];
+					intersecting_drives.Add(drive1, intersection);
+				}
+				else
+				{
+					intersection = new IntersectionInfo();
+					intersecting_drives.Add(drive1, intersection);
+					intersecting_drives.Add(drive2, intersection);
+				}
+
+				if (!intersection.IntersectingDrives.Contains(drive1)) intersection.IntersectingDrives.Add(drive1);
+				if (!intersection.IntersectingDrives.Contains(drive2)) intersection.IntersectingDrives.Add(drive2);
+				if (!intersection.IntersectNodes.Contains(midpoint)) intersection.IntersectNodes.Add(midpoint);
+			}
+
+			uint gate_count = MyJumpGateModSession.Configuration.ConstructConfiguration.MaxTotalGatesPerConstruct;
+			uint large_gate_count = MyJumpGateModSession.Configuration.ConstructConfiguration.MaxLargeGatesPerConstruct;
+			uint small_gate_count = MyJumpGateModSession.Configuration.ConstructConfiguration.MaxSmallGatesPerConstruct;
+			List<MyJumpGateDrive> unmapped_drives = new List<MyJumpGateDrive>(this.JumpGateDrives.Select((pair) => pair.Value));
+			List<long> mapped_gate_ids = new List<long>(this.JumpGates.Count);
+
+			foreach (IntersectionInfo intersection_info in intersecting_drives.Select((pair) => pair.Value).Distinct())
+			{
+				List<MyJumpGateDrive> drive_group = intersection_info.IntersectingDrives.Distinct().ToList();
+				if (drive_group.Count < 2) continue;
+				bool is_large_grid = drive_group.First().IsLargeGrid;
+				List<Vector3D> node_group = intersection_info.IntersectNodes.Distinct().ToList();
+				unmapped_drives.RemoveAll(drive_group.Contains);
+				Vector3D jump_node = Vector3D.Zero;
+				foreach (Vector3D node in node_group) jump_node += node;
+				jump_node /= node_group.Count;
+				IEnumerable<long> primary_ids = drive_group.Select((drive) => drive.JumpGateID).Where((id) => id >= 0 && !mapped_gate_ids.Contains(id)).GroupBy(id => id).OrderByDescending(grp => grp.Count()).Select(grp => grp.Key);
+				long primary_id = (primary_ids.Any()) ? primary_ids.First() : ((this.ClosedJumpGateIDs.Count > 0) ? this.ClosedJumpGateIDs.Dequeue() : this.NextJumpGateID++);
+				mapped_gate_ids.Add(primary_id);
+				if ((gate_count > 0 && primary_id >= gate_count) || (large_gate_count > 0 && is_large_grid && primary_id >= large_gate_count) || (small_gate_count > 0 && !is_large_grid && primary_id >= small_gate_count)) continue;
+				MyJumpGate jump_gate = null;
+
+				if (this.JumpGates.TryGetValue(primary_id, out jump_gate) && !jump_gate.MarkClosed)
+				{
+					jump_gate.ConstructMatrix = this.CubeGrid.WorldMatrix;
+					jump_gate.WorldJumpNode = jump_node;
+					jump_gate.UpdateDriveIntersectNodes(node_group);
+					jump_gate.SetColliderDirty();
+					jump_gate.SetJumpSpaceEllipsoidDirty();
+				}
+				else if (jump_gate != null && jump_gate.MarkClosed && !jump_gate.Closed) MyJumpGateModSession.Instance.CloseGate(jump_gate);
+				else this.JumpGates[primary_id] = (jump_gate = new MyJumpGate(this, primary_id, ref jump_node, node_group));
+
+				foreach (MyJumpGateDrive drive in drive_group) drive.SetAttachedJumpGate(jump_gate);
+				jump_gate.Init();
+			}
+
+			foreach (MyJumpGateDrive unmapped in unmapped_drives) unmapped.SetAttachedJumpGate(null);
+			foreach (KeyValuePair<long, MyJumpGate> pair in this.JumpGates) if (!mapped_gate_ids.Contains(pair.Key)) pair.Value.Dispose();
+			this.SetDirty();
+		}
+
+		/// <summary>
+		/// Ticks all jump gates in this construct
+		/// </summary>
+		/// <param name="full_gate_update">Whether to do a full gate update</param>
+		/// <param name="gate_entity_update">Whether to update all gate jump space entities</param>
+		private void TickUpdateJumpGates(bool full_gate_update, bool gate_entity_update)
+		{
+			foreach (KeyValuePair<long, MyJumpGate> pair in this.JumpGates)
+			{
+				long jump_gate_id = pair.Key;
+				MyJumpGate jump_gate = pair.Value;
+
+				if (jump_gate.Closed)
+				{
+					this.ClosedJumpGateIDs.Enqueue(jump_gate_id);
+					this.JumpGates.Remove(jump_gate_id);
+					continue;
+				}
+				else if (jump_gate.MarkClosed)
+				{
+					MyJumpGateModSession.Instance.CloseGate(jump_gate);
+					continue;
+				}
+
+				jump_gate.Update(full_gate_update, gate_entity_update);
+				if (!jump_gate.MarkClosed && (!jump_gate.IsValid() || jump_gate.JumpGateGrid != this)) jump_gate.Dispose();
+			}
+		}
+
+		/// <summary>
+		/// Does a BFS of antenna connections to find all comm-linked grids
+		/// </summary>
+		private void SearchUpdateCommLinkedGrids()
+		{
+			if (!this.UpdateCommLinkedGrids || !MyNetworkInterface.IsServerLike) return;
+			this.CommLinkedGridsPoll.Enqueue(this);
+			List<MyEntity> broadcast_entities = new List<MyEntity>();
+			List<MyJumpGateConstruct> new_comm_linked = new List<MyJumpGateConstruct>(this.CommLinkedGrids?.Count ?? 0);
+
+			while (this.CommLinkedGridsPoll.Count > 0)
+			{
+				MyJumpGateConstruct grid = this.CommLinkedGridsPoll.Dequeue();
+				if (grid == null || grid.Closed || grid.MarkClosed || (grid.LaserAntennas.Count == 0 && grid.RadioAntennas.Count == 0)) continue;
+
+				foreach (KeyValuePair<long, IMyLaserAntenna> pair in grid.LaserAntennas)
+				{
+					if (pair.Value.MarkedForClose || !pair.Value.IsWorking || pair.Value.Status != Sandbox.ModAPI.Ingame.MyLaserAntennaStatus.Connected) continue;
+					MyJumpGateConstruct other = MyJumpGateModSession.Instance.GetUnclosedJumpGateGrid(pair.Value.Other.CubeGrid);
+					if (other == null || new_comm_linked.Contains(other)) continue;
+					new_comm_linked.Add(other);
+					this.CommLinkedGridsPoll.Enqueue(other);
+				}
+
+				if (grid.RadioAntennas.Count == 0 || grid.RadioAntennas.All((pair) => pair.Value.MarkedForClose || !pair.Value.IsWorking || !pair.Value.IsBroadcasting)) continue;
+				BoundingBoxD world_aabb = grid.GetCombinedAABB();
+				BoundingSphereD broadcast_sphere = new BoundingSphereD(world_aabb.Center, 50000 + world_aabb.Extents.Max());
+				MyGamePruningStructure.GetAllTopMostEntitiesInSphere(ref broadcast_sphere, broadcast_entities);
+
+				foreach (KeyValuePair<long, IMyRadioAntenna> pair in grid.RadioAntennas)
+				{
+					if (pair.Value.MarkedForClose || !pair.Value.IsWorking || !pair.Value.IsBroadcasting) continue;
+
+					foreach (MyEntity entity in broadcast_entities)
+					{
+						IMyCubeGrid target = (entity is IMyCubeGrid) ? (MyCubeGrid) entity : null;
+						MyJumpGateConstruct target_grid = (target == null) ? null : MyJumpGateModSession.Instance.GetJumpGateGrid(target);
+						if (entity.Physics == null || target_grid == null || target_grid == this || new_comm_linked.Contains(target_grid)) continue;
+
+						foreach (KeyValuePair<long, IMyRadioAntenna> target_pair in grid.RadioAntennas)
+						{
+							if (target_pair.Value.IsWorking && target_pair.Value.IsBroadcasting && Vector3D.Distance(pair.Value.WorldMatrix.Translation, target_pair.Value.WorldMatrix.Translation) < Math.Min(pair.Value.Radius, target_pair.Value.Radius))
+							{
+								new_comm_linked.Add(target_grid);
+								this.CommLinkedGridsPoll.Enqueue(target_grid);
+								break;
+							}
+						}
+					}
+				}
+
+				broadcast_entities.Clear();
+			}
+
+			this.LastCommLinkUpdate = DateTime.Now;
+			this.UpdateCommLinkedGrids = false;
+
+			using (this.CommLinkedLock.WithWriter())
+			{
+				if (this.CommLinkedGrids == null) this.CommLinkedGrids = new List<MyJumpGateConstruct>();
+				else this.CommLinkedGrids.Clear();
+				this.CommLinkedGrids.AddList(new_comm_linked);
+			}
+		}
+
+		/// <summary>
+		/// Does a pruning call to find all beacons within this construct's broadcast sphere
+		/// </summary>
+		private void SearchUpdateBeaconLinkedBeacons()
+		{
+			if (!this.UpdateBeaconLinkedBeacons || !MyNetworkInterface.IsServerLike) return;
+			
+			using (this.BeaconLinkedLock.WithWriter())
+			{
+				if (this.RadioAntennas.Count > 0 && this.RadioAntennas.Any((pair) => !pair.Value.MarkedForClose && pair.Value.IsWorking && pair.Value.IsBroadcasting))
+				{
+					if (this.BeaconLinks == null) this.BeaconLinks = new List<MyBeaconLinkWrapper>();
+					else this.BeaconLinks.Clear();
+					List<MyEntity> broadcast_entities = new List<MyEntity>();
+					BoundingBoxD world_aabb = this.GetCombinedAABB();
+					BoundingSphereD broadcast_sphere = new BoundingSphereD(world_aabb.Center, 200000 + world_aabb.Extents.Max());
+					MyGamePruningStructure.GetAllTopMostEntitiesInSphere(ref broadcast_sphere, broadcast_entities);
+
+					foreach (MyEntity entity in broadcast_entities)
+					{
+						MyJumpGateConstruct target_grid;
+						if (!(entity is IMyCubeGrid) || entity.Physics == null || (target_grid = MyJumpGateModSession.Instance.GetJumpGateGrid(entity.EntityId)) == null || target_grid == this) continue;
+
+						foreach (KeyValuePair<long, IMyRadioAntenna> antenna_pair in this.RadioAntennas)
+						{
+							foreach (KeyValuePair<long, IMyBeacon> beacon_pair in target_grid.BeaconAntennas)
+							{
+								MyBeaconLinkWrapper wrapper;
+								if (beacon_pair.Value.MarkedForClose || !beacon_pair.Value.IsWorking || Vector3D.Distance(beacon_pair.Value.WorldMatrix.Translation, antenna_pair.Value.WorldMatrix.Translation) > beacon_pair.Value.Radius || this.BeaconLinks.Contains(wrapper = new MyBeaconLinkWrapper(beacon_pair.Value))) continue;
+								this.BeaconLinks.Add(wrapper);
+							}
+						}
+					}
+
+					this.LastCommLinkUpdate = DateTime.Now;
+					this.UpdateBeaconLinkedBeacons = false;
+				}
+			}
+		}
+
+		/// <summary>
+		/// Sets up the new construct<br />
+		/// Checks grids within this group, updates connected blocks, and updates the main controller
+		/// </summary>
+		/// <param name="grids">The cube grids to use instead of the list from this grid group</param>
+		private void SetupConstruct(IEnumerable<IMyCubeGrid> grids = null)
         {
 			if (this.Closed || this.MarkClosed) return;
 			List<IMyCubeGrid> construct = (grids == null) ? new List<IMyCubeGrid>() : new List<IMyCubeGrid>(grids);
@@ -864,14 +1194,14 @@ namespace IOTA.ModularJumpGates
 				{
 					MyJumpGateModSession.Instance.CloseGrid(this);
 					this.SendNetworkGridUpdate();
-					Logger.Debug($"[{grid_id}]] - Session is not running ({MyJumpGateModSession.SessionStatus}); CLOSED", 2);
+					Logger.Debug($"[{grid_id}] - Session is not running ({MyJumpGateModSession.SessionStatus}); CLOSED", 2);
 					return;
 				}
 				else if ((reason = this.GetInvalidationReason()) != MyGridInvalidationReason.NONE)
 				{
 					MyJumpGateModSession.Instance.CloseGrid(this);
 					this.SendNetworkGridUpdate();
-					Logger.Debug($"[{grid_id}]] - Grid is not valid ({reason}); CLOSED", 2);
+					Logger.Debug($"[{grid_id}] - Grid is not valid ({reason}); CLOSED", 2);
 					return;
 				}
 				
@@ -916,360 +1246,38 @@ namespace IOTA.ModularJumpGates
 				this.PrimaryCubeGridCustomName = this.CubeGrid?.CustomName ?? this.PrimaryCubeGridCustomName;
 				bool first_update = this.LocalGameTick == 0;
 				this.LocalGameTick = (this.LocalGameTick + 1) % 0xFFFFFFFFFFFFFFF0;
-				bool full_gate_update = this.MarkUpdateJumpGates || first_update;
+				bool full_gate_update = this.MarkUpdateJumpGates || first_update || this.LocalGameTick == 180;
 				bool gate_entity_update = this.LocalGameTick % 30 == 0;
 				this.MarkUpdateJumpGates = false;
 				bool is_dirty = this.IsDirty || full_gate_update;
-				
+
 				// Update drive combinations
-				if (this.DriveCombinations == null)
-				{
-					List<MyJumpGateDrive> indexable_large_drives = new List<MyJumpGateDrive>(this.JumpGateDrives.Count);
-					List<MyJumpGateDrive> indexable_small_drives = new List<MyJumpGateDrive>(this.JumpGateDrives.Count);
-					this.DriveCombinations = new List<KeyValuePair<MyJumpGateDrive, MyJumpGateDrive>>();
-
-					foreach (KeyValuePair<long, MyJumpGateDrive> pair in this.JumpGateDrives)
-					{
-						if (pair.Value.IsLargeGrid) indexable_large_drives.Add(pair.Value);
-						else if (pair.Value.IsSmallGrid) indexable_small_drives.Add(pair.Value);
-					}
-
-
-					for (int i = 0; i < indexable_large_drives.Count - 1; ++i)
-					{
-						for (int j = i + 1; j < indexable_large_drives.Count; ++j)
-						{
-							this.DriveCombinations.Add(new KeyValuePair<MyJumpGateDrive, MyJumpGateDrive>(indexable_large_drives[i], indexable_large_drives[j]));
-						}
-					}
-
-					for (int i = 0; i < indexable_small_drives.Count - 1; ++i)
-					{
-						for (int j = i + 1; j < indexable_small_drives.Count; ++j)
-						{
-							this.DriveCombinations.Add(new KeyValuePair<MyJumpGateDrive, MyJumpGateDrive>(indexable_small_drives[i], indexable_small_drives[j]));
-						}
-					}
-				}
+				this.UpdateDriveCombinations(ref full_gate_update);
 				
 				// Update drive max raycast distances
-				if (this.UpdateDriveMaxRaycastDistances && this.LocalGameTick % 30 == 0)
-				{
-					List<Vector3I> raycast_cells = new List<Vector3I>();
-					this.UpdateDriveMaxRaycastDistances = false;
-
-					foreach (KeyValuePair<long, MyJumpGateDrive> drive in this.JumpGateDrives)
-					{
-						double closest_distance = drive.Value.DriveConfiguration.DriveRaycastDistance;
-						Vector3D raycast_start = drive.Value.GetDriveRaycastStartpoint();
-						Vector3D raycast_end = drive.Value.GetDriveRaycastEndpoint(closest_distance);
-
-						foreach (KeyValuePair<long, IMyCubeGrid> grid in this.CubeGrids)
-						{
-							if (grid.Value.MarkedForClose) continue;
-							grid.Value.RayCastCells(raycast_start, raycast_end, raycast_cells);
-
-							foreach (Vector3I cell in raycast_cells)
-							{
-								IMySlimBlock block = grid.Value.GetCubeBlock(cell);
-								if (block == null || block.FatBlock == drive.Value.TerminalBlock) continue;
-								closest_distance = Math.Min(closest_distance, Vector3D.Distance(grid.Value.GridIntegerToWorld(cell), raycast_start));
-							}
-
-							raycast_cells.Clear();
-						}
-
-						this.MarkUpdateJumpGates = this.MarkUpdateJumpGates || drive.Value.MaxRaycastDistance != closest_distance;
-						drive.Value.MaxRaycastDistance = closest_distance;
-					}
-				}
+				this.UpdateDriveRaycastDistances();
 
 				// Rebuild all jump gates
-				if (MyNetworkInterface.IsServerLike && full_gate_update)
-				{
-					Dictionary<MyJumpGateDrive, IntersectionInfo> intersecting_drives = new Dictionary<MyJumpGateDrive, IntersectionInfo>();
+				if (MyNetworkInterface.IsServerLike && full_gate_update) this.RebuildJumpGates();
 
-					foreach (KeyValuePair<MyJumpGateDrive, MyJumpGateDrive> combination in this.DriveCombinations)
-					{
-						MyJumpGateDrive drive1 = combination.Key;
-						MyJumpGateDrive drive2 = combination.Value;
-
-						Vector3D drive1_pos1 = drive1.GetDriveRaycastStartpoint();
-						Vector3D drive1_pos2 = drive1.GetDriveRaycastEndpoint(drive1.MaxRaycastDistance);
-						Vector3D side_a = drive1_pos2 - drive1_pos1;
-
-						Vector3D drive2_pos1 = drive2.GetDriveRaycastStartpoint();
-						Vector3D drive2_pos2 = drive2.GetDriveRaycastEndpoint(drive2.MaxRaycastDistance);
-						Vector3D side_b = drive2_pos2 - drive2_pos1;
-						Vector3 side_c = drive2_pos1 - drive1_pos1;
-
-						double angle_a = Vector3D.Angle(side_b, -side_c);
-						double angle_b = Vector3D.Angle(side_a, side_c);
-						double ico_angle = angle_a + angle_b;
-						double angle_c = Math.PI - ico_angle;
-						double c_ratio = (side_c.Length() / Math.Sin(angle_c));
-
-						if (ico_angle == 0)
-						{
-							Vector3D midpoint = (drive1_pos2 + drive2_pos2) / 2d;
-							if (Vector3D.Distance(drive1_pos1, midpoint) > drive1.DriveConfiguration.DriveRaycastWidth || Vector3D.Distance(drive2_pos1, midpoint) > drive1.DriveConfiguration.DriveRaycastWidth) continue;
-
-							IntersectionInfo intersection;
-							bool drive1_contained = intersecting_drives.ContainsKey(drive1);
-							bool drive2_contained = intersecting_drives.ContainsKey(drive2);
-
-							if (drive1_contained && drive2_contained)
-							{
-								intersection = intersecting_drives[drive1];
-								IntersectionInfo _intersection = intersecting_drives[drive2];
-
-								if (intersection != _intersection)
-								{
-									intersection.IntersectingDrives.AddList(_intersection.IntersectingDrives);
-									intersection.IntersectNodes.AddList(_intersection.IntersectNodes);
-									intersection.IntersectingDrives = intersection.IntersectingDrives.Distinct().ToList();
-									intersection.IntersectNodes = intersection.IntersectNodes.Distinct().ToList();
-									intersecting_drives[drive2] = intersection;
-								}
-							}
-							else if (drive1_contained)
-							{
-								intersection = intersecting_drives[drive1];
-								intersecting_drives.Add(drive2, intersection);
-							}
-							else if (drive2_contained)
-							{
-								intersection = intersecting_drives[drive2];
-								intersecting_drives.Add(drive1, intersection);
-							}
-							else
-							{
-								intersection = new IntersectionInfo();
-								intersecting_drives.Add(drive1, intersection);
-								intersecting_drives.Add(drive2, intersection);
-							}
-
-							if (!intersection.IntersectingDrives.Contains(drive1)) intersection.IntersectingDrives.Add(drive1);
-							if (!intersection.IntersectingDrives.Contains(drive2)) intersection.IntersectingDrives.Add(drive2);
-							if (!intersection.IntersectNodes.Contains(midpoint)) intersection.IntersectNodes.Add(midpoint);
-						}
-						else if (ico_angle < Math.PI)
-						{
-							double side_a_len = Math.Sin(angle_a) * c_ratio;
-							double side_b_len = Math.Sin(angle_b) * c_ratio;
-							if (side_a_len > drive2.MaxRaycastDistance || side_b_len > drive1.MaxRaycastDistance) continue;
-							Vector3D _side_a = drive1.GetDriveRaycastEndpoint(side_a_len);
-							Vector3D _side_b = drive2.GetDriveRaycastEndpoint(side_b_len);
-							Vector3D midpoint = (_side_a + _side_b) / 2d;
-							if (Vector3D.Distance(_side_a, midpoint) > drive1.DriveConfiguration.DriveRaycastWidth || Vector3D.Distance(_side_b, midpoint) > drive1.DriveConfiguration.DriveRaycastWidth) continue;
-
-							IntersectionInfo intersection;
-							bool drive1_contained = intersecting_drives.ContainsKey(drive1);
-							bool drive2_contained = intersecting_drives.ContainsKey(drive2);
-
-							if (drive1_contained && drive2_contained)
-							{
-								intersection = intersecting_drives[drive1];
-								IntersectionInfo _intersection = intersecting_drives[drive2];
-
-								if (intersection != _intersection)
-								{
-									intersection.IntersectingDrives.AddList(_intersection.IntersectingDrives);
-									intersection.IntersectNodes.AddList(_intersection.IntersectNodes);
-									intersection.IntersectingDrives = intersection.IntersectingDrives.Distinct().ToList();
-									intersection.IntersectNodes = intersection.IntersectNodes.Distinct().ToList();
-									intersecting_drives[drive2] = intersection;
-								}
-							}
-							else if (drive1_contained)
-							{
-								intersection = intersecting_drives[drive1];
-								intersecting_drives.Add(drive2, intersection);
-							}
-							else if (drive2_contained)
-							{
-								intersection = intersecting_drives[drive2];
-								intersecting_drives.Add(drive1, intersection);
-							}
-							else
-							{
-								intersection = new IntersectionInfo();
-								intersecting_drives.Add(drive1, intersection);
-								intersecting_drives.Add(drive2, intersection);
-							}
-
-							if (!intersection.IntersectingDrives.Contains(drive1)) intersection.IntersectingDrives.Add(drive1);
-							if (!intersection.IntersectingDrives.Contains(drive2)) intersection.IntersectingDrives.Add(drive2);
-							if (!intersection.IntersectNodes.Contains(midpoint)) intersection.IntersectNodes.Add(midpoint);
-						}
-					}
-
-					uint gate_count = MyJumpGateModSession.Configuration.ConstructConfiguration.MaxTotalGatesPerConstruct;
-					uint large_gate_count = MyJumpGateModSession.Configuration.ConstructConfiguration.MaxLargeGatesPerConstruct;
-					uint small_gate_count = MyJumpGateModSession.Configuration.ConstructConfiguration.MaxSmallGatesPerConstruct;
-					List<MyJumpGateDrive> unmapped_drives = new List<MyJumpGateDrive>(this.JumpGateDrives.Select((pair) => pair.Value));
-					List<long> mapped_gate_ids = new List<long>(this.JumpGates.Count);
-
-					foreach (IntersectionInfo intersection_info in intersecting_drives.Select((pair) => pair.Value).Distinct())
-					{
-						List<MyJumpGateDrive> drive_group = intersection_info.IntersectingDrives.Distinct().ToList();
-						if (drive_group.Count < 2) continue;
-						bool is_large_grid = drive_group.First().IsLargeGrid;
-						List<Vector3D> node_group = intersection_info.IntersectNodes.Distinct().ToList();
-						unmapped_drives.RemoveAll(drive_group.Contains);
-						Vector3D jump_node = Vector3D.Zero;
-						foreach (Vector3D node in node_group) jump_node += node;
-						jump_node /= node_group.Count;
-						IEnumerable<long> primary_ids = drive_group.Select((drive) => drive.JumpGateID).Where((id) => id >= 0 && !mapped_gate_ids.Contains(id)).GroupBy(id => id).OrderByDescending(grp => grp.Count()).Select(grp => grp.Key);
-						long primary_id = (primary_ids.Any()) ? primary_ids.First() : ((this.ClosedJumpGateIDs.Count > 0) ? this.ClosedJumpGateIDs.Dequeue() : this.NextJumpGateID++);
-						mapped_gate_ids.Add(primary_id);
-						if ((gate_count > 0 && primary_id >= gate_count) || (large_gate_count > 0 && is_large_grid && primary_id >= large_gate_count) || (small_gate_count > 0 && !is_large_grid && primary_id >= small_gate_count)) continue;
-						MyJumpGate jump_gate = null;
-
-						if (this.JumpGates.TryGetValue(primary_id, out jump_gate) && !jump_gate.MarkClosed)
-						{
-							jump_gate.ConstructMatrix = this.CubeGrid.WorldMatrix;
-							jump_gate.WorldJumpNode = jump_node;
-							jump_gate.UpdateDriveIntersectNodes(node_group);
-							jump_gate.SetColliderDirty();
-							jump_gate.SetJumpSpaceEllipsoidDirty();
-						}
-						else if (jump_gate != null && jump_gate.MarkClosed && !jump_gate.Closed) MyJumpGateModSession.Instance.CloseGate(jump_gate);
-						else this.JumpGates[primary_id] = (jump_gate = new MyJumpGate(this, primary_id, jump_node, node_group));
-
-						foreach (MyJumpGateDrive drive in drive_group) drive.SetAttachedJumpGate(jump_gate);
-						jump_gate.Init();
-					}
-
-					foreach (MyJumpGateDrive unmapped in unmapped_drives) unmapped.SetAttachedJumpGate(null);
-					foreach (KeyValuePair<long, MyJumpGate> pair in this.JumpGates) if (!mapped_gate_ids.Contains(pair.Key)) pair.Value.Dispose();
-					this.SetDirty();
-				}
-				
 				// Update jump gates
-				foreach (KeyValuePair<long, MyJumpGate> pair in this.JumpGates)
-				{
-					long jump_gate_id = pair.Key;
-					MyJumpGate jump_gate = pair.Value;
+				this.TickUpdateJumpGates(full_gate_update, gate_entity_update);
 
-					if (jump_gate.Closed)
-					{
-						this.ClosedJumpGateIDs.Enqueue(jump_gate_id);
-						this.JumpGates.Remove(jump_gate_id);
-						continue;
-					}
-					else if (jump_gate.MarkClosed)
-					{
-						MyJumpGateModSession.Instance.CloseGate(jump_gate);
-						continue;
-					}
-
-					jump_gate.Update(full_gate_update, gate_entity_update);
-					if (!jump_gate.MarkClosed && (!jump_gate.IsValid() || jump_gate.JumpGateGrid != this)) jump_gate.Dispose();
-				}
-				
 				// Update comm linked grids
-				if (this.UpdateCommLinkedGrids && MyNetworkInterface.IsServerLike)
-				{
-					this.CommLinkedGridsPoll.Enqueue(this);
-					List<MyEntity> broadcast_entities = new List<MyEntity>();
-					List<MyJumpGateConstruct> new_comm_linked = new List<MyJumpGateConstruct>(this.CommLinkedGrids?.Count ?? 0);
-
-					while (this.CommLinkedGridsPoll.Count > 0)
-					{
-						MyJumpGateConstruct grid = this.CommLinkedGridsPoll.Dequeue();
-						if (grid == null || grid.Closed || grid.MarkClosed || (grid.LaserAntennas.Count == 0 && grid.RadioAntennas.Count == 0)) continue;
-
-						foreach (KeyValuePair<long, IMyLaserAntenna> pair in grid.LaserAntennas)
-						{
-							if (pair.Value.MarkedForClose || !pair.Value.IsWorking || pair.Value.Status != Sandbox.ModAPI.Ingame.MyLaserAntennaStatus.Connected) continue;
-							MyJumpGateConstruct other = MyJumpGateModSession.Instance.GetUnclosedJumpGateGrid(pair.Value.Other.CubeGrid);
-							if (other == null || new_comm_linked.Contains(other)) continue;
-							new_comm_linked.Add(other);
-							this.CommLinkedGridsPoll.Enqueue(other);
-						}
-
-						if (grid.RadioAntennas.Count == 0 || grid.RadioAntennas.All((pair) => pair.Value.MarkedForClose || !pair.Value.IsWorking || !pair.Value.IsBroadcasting)) continue;
-						BoundingBoxD world_aabb = grid.GetCombinedAABB();
-						BoundingSphereD broadcast_sphere = new BoundingSphereD(world_aabb.Center, 50000 + world_aabb.Extents.Max());
-						MyGamePruningStructure.GetAllTopMostEntitiesInSphere(ref broadcast_sphere, broadcast_entities);
-
-						foreach (KeyValuePair<long, IMyRadioAntenna> pair in grid.RadioAntennas)
-						{
-							if (pair.Value.MarkedForClose || !pair.Value.IsWorking || !pair.Value.IsBroadcasting) continue;
-
-							foreach (MyEntity entity in broadcast_entities)
-							{
-								IMyCubeGrid target = (entity is IMyCubeGrid) ? (MyCubeGrid) entity : null;
-								MyJumpGateConstruct target_grid = (target == null) ? null : MyJumpGateModSession.Instance.GetJumpGateGrid(target);
-								if (entity.Physics == null || target_grid == null || target_grid == this || new_comm_linked.Contains(target_grid)) continue;
-
-								foreach (KeyValuePair<long, IMyRadioAntenna> target_pair in grid.RadioAntennas)
-								{
-									if (target_pair.Value.IsWorking && target_pair.Value.IsBroadcasting && Vector3D.Distance(pair.Value.WorldMatrix.Translation, target_pair.Value.WorldMatrix.Translation) < Math.Min(pair.Value.Radius, target_pair.Value.Radius))
-									{
-										new_comm_linked.Add(target_grid);
-										this.CommLinkedGridsPoll.Enqueue(target_grid);
-										break;
-									}
-								}
-							}
-						}
-
-						broadcast_entities.Clear();
-					}
-
-					this.LastCommLinkUpdate = DateTime.Now;
-					this.UpdateCommLinkedGrids = false;
-
-					using (this.CommLinkedLock.WithWriter())
-					{
-						if (this.CommLinkedGrids == null) this.CommLinkedGrids = new List<MyJumpGateConstruct>();
-						else this.CommLinkedGrids.Clear();
-						this.CommLinkedGrids.AddList(new_comm_linked);
-					}
-				}
+				this.SearchUpdateCommLinkedGrids();
 
 				// Update beacon linked beacons
-				if (this.UpdateBeaconLinkedBeacons && MyNetworkInterface.IsServerLike)
-				{
-					using (this.BeaconLinkedLock.WithWriter())
-					{
-						if (this.RadioAntennas.Count > 0 && this.RadioAntennas.Any((pair) => !pair.Value.MarkedForClose && pair.Value.IsWorking && pair.Value.IsBroadcasting))
-						{
-							if (this.BeaconLinks == null) this.BeaconLinks = new List<MyBeaconLinkWrapper>();
-							else this.BeaconLinks.Clear();
-							List<MyEntity> broadcast_entities = new List<MyEntity>();
-							BoundingBoxD world_aabb = this.GetCombinedAABB();
-							BoundingSphereD broadcast_sphere = new BoundingSphereD(world_aabb.Center, 200000 + world_aabb.Extents.Max());
-							MyGamePruningStructure.GetAllTopMostEntitiesInSphere(ref broadcast_sphere, broadcast_entities);
-
-							foreach (MyEntity entity in broadcast_entities)
-							{
-								MyJumpGateConstruct target_grid;
-								if (!(entity is IMyCubeGrid) || entity.Physics == null || (target_grid = MyJumpGateModSession.Instance.GetJumpGateGrid(entity.EntityId)) == null || target_grid == this) continue;
-
-								foreach (KeyValuePair<long, IMyRadioAntenna> antenna_pair in this.RadioAntennas)
-								{
-									foreach (KeyValuePair<long, IMyBeacon> beacon_pair in target_grid.BeaconAntennas)
-									{
-										MyBeaconLinkWrapper wrapper;
-										if (beacon_pair.Value.MarkedForClose || !beacon_pair.Value.IsWorking || Vector3D.Distance(beacon_pair.Value.WorldMatrix.Translation, antenna_pair.Value.WorldMatrix.Translation) > beacon_pair.Value.Radius || this.BeaconLinks.Contains(wrapper = new MyBeaconLinkWrapper(beacon_pair.Value))) continue;
-										this.BeaconLinks.Add(wrapper);
-									}
-								}
-							}
-
-							this.LastCommLinkUpdate = DateTime.Now;
-							this.UpdateBeaconLinkedBeacons = false;
-						}
-					}
-				}
+				this.SearchUpdateBeaconLinkedBeacons();
 
 				// Finalize update
 				if (MyJumpGateModSession.Network.Registered && (is_dirty || first_update)) this.SendNetworkGridUpdate();
-				if (first_update) Logger.Debug($"[{grid_id}] (MAIN.{this.GetMainCubeGrid()?.EntityId ?? -1})] - FIRST_UPDATE", 1);
 				this.FullyInitialized = this.FullyInitialized || first_update;
+
+				if (first_update)
+				{
+					IMyCubeGrid main = this.GetMainCubeGrid();
+					Logger.Debug($"[{grid_id}] (MAIN.{main?.EntityId ?? -1}) @ \"{main?.CustomName ?? "N/A"}\" - FIRST_UPDATE", 1);
+				}
 			}
 			finally
 			{
@@ -1365,6 +1373,7 @@ namespace IOTA.ModularJumpGates
 		public void MarkGatesForUpdate()
 		{
 			this.MarkUpdateJumpGates = !this.Closed;
+			Logger.Debug($"[{this.CubeGridID}] Marked all gates for reconstruct", 5);
 		}
 
 		/// <summary>

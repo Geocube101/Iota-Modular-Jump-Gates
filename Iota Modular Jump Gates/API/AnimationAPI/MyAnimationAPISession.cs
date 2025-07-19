@@ -1,5 +1,4 @@
-﻿using IOTA.ModularJumpGates.API.AnimationAPI.Definitions;
-using Sandbox.ModAPI;
+﻿using Sandbox.ModAPI;
 using System;
 using System.Collections.Generic;
 using VRage.Game.ModAPI;
@@ -13,7 +12,7 @@ namespace IOTA.ModularJumpGates.API.AnimationAPI
 		private static Action<IMyModContext, byte[]> AnimationAdder;
 		private static List<Definitions.AnimationDef> AnimationDefinitions = new List<Definitions.AnimationDef>();
 		public static readonly long ModAPIID = 3313236685;
-		public static readonly int[] ModAPIVersion = new int[2] { 1, 0 };
+		public static readonly int[] ModAPIVersion = new int[2] { 1, 1 };
 		public static bool Initialized { get; private set; } = false;
 
 		/// <summary>

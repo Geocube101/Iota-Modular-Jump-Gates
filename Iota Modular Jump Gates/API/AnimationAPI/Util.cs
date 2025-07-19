@@ -10,7 +10,7 @@ namespace IOTA.ModularJumpGates.API.AnimationAPI.Util
 	/// <summary>
 	/// Enum representing the type of easing
 	/// </summary>
-	public enum EasingTypeEnum
+	public enum EasingTypeEnum : byte
 	{
 		EASE_IN,
 		EASE_OUT,
@@ -20,7 +20,7 @@ namespace IOTA.ModularJumpGates.API.AnimationAPI.Util
 	/// <summary>
 	/// Enum representing the easing curve
 	/// </summary>
-	public enum EasingCurveEnum
+	public enum EasingCurveEnum : byte
 	{
 		CONSTANT,
 		LINEAR,
@@ -146,6 +146,13 @@ namespace IOTA.ModularJumpGates.API.AnimationAPI.Util
 		DISTANCE_ENTITY_TO_ENTITY,
 
 		/// <summary>
+		/// Attribute is modified based on the distance from this particle's position to the specified jump space entity (in meters)<br />
+		/// <i>Only effective for per-entity particles, per-drive particles, and entity lock particles</i><br />
+		/// The value will be the distance from this particle's position to the target entity in meters
+		/// </summary>
+		DISTANCE_THIS_TO_ENTITY,
+
+		/// <summary>
 		/// Attribute is modified based on this entity's velocity
 		/// </summary>
 		ENTITY_VELOCITY,
@@ -188,7 +195,7 @@ namespace IOTA.ModularJumpGates.API.AnimationAPI.Util
 	/// <summary>
 	/// Enum representing the operation by which values should be joined
 	/// </summary>
-	internal enum MathOperationEnum
+	internal enum MathOperationEnum : byte
 	{
 		ADD,
 		SUBTRACT,
@@ -209,7 +216,7 @@ namespace IOTA.ModularJumpGates.API.AnimationAPI.Util
 	/// <summary>
 	/// Enum representing the method by which values should be ratioed
 	/// </summary>
-	public enum RatioTypeEnum
+	public enum RatioTypeEnum : byte
 	{
 		/// <summary>
 		/// The standard value
@@ -250,7 +257,7 @@ namespace IOTA.ModularJumpGates.API.AnimationAPI.Util
 	/// <summary>
 	/// Enum representing how to orient particles
 	/// </summary>
-	public enum ParticleOrientationEnum
+	public enum ParticleOrientationEnum : byte
 	{
 		/// <summary>
 		/// Particles are oriented according to the gate's endpoint
@@ -278,6 +285,50 @@ namespace IOTA.ModularJumpGates.API.AnimationAPI.Util
 		/// </summary>
 		FIXED
 	};
+
+	public enum EntityLockTypeEnum : byte
+	{
+		/// <summary>
+		/// Locks the entities closest to the gate's jump node
+		/// </summary>
+		LOCK_NEAREST,
+
+		/// <summary>
+		/// Locks the entities farthest from the gate's jump node
+		/// </summary>
+		LOCK_FARTHEST,
+
+		/// <summary>
+		/// Locks a random set of entities within the jump space
+		/// </summary>
+		LOCK_RANDOM,
+	}
+
+	public enum LockDelayShiftEnum : byte
+	{
+		/// <summary>
+		/// All drives use the same lock times<br />
+		/// Lock time will be the average of min and max
+		/// </summary>
+		FIXED,
+
+		/// <summary>
+		/// Drives will use a lock time based on their distance to the jump node<br />
+		/// The closest drive will use the minimum lock time, the farthest drive will use the maximum lock time
+		/// </summary>
+		NEAREST,
+
+		/// <summary>
+		/// Drives will use a lock time based on their distance to the jump node<br />
+		/// The farthest drive will use the minimum lock time, the closest drive will use the maximum lock time
+		/// </summary>
+		FARTHEST,
+
+		/// <summary>
+		/// Drives will use a random lock time between min and max
+		/// </summary>
+		RANDOM,
+	}
 	#endregion
 
 	#region Animation Util Classes

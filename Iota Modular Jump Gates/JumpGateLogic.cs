@@ -5,7 +5,6 @@ using IOTA.ModularJumpGates.Util.ConcurrentCollections;
 using ProtoBuf;
 using Sandbox.Game.Entities;
 using Sandbox.ModAPI;
-using SpaceEngineers.Game.Entities.Blocks;
 using SpaceEngineers.Game.ModAPI;
 using System;
 using System.Collections.Concurrent;
@@ -323,7 +322,7 @@ namespace IOTA.ModularJumpGates
 		/// <summary>
 		/// Whether the collider should be forcefully updated on next physics tick
 		/// </summary>
-		private bool ForceUpdateCollider = false;
+		private bool ForceUpdateCollider = true;
 
 		/// <summary>
 		/// Whether the jump space ellipse should be forcefully updated on next tick
@@ -335,6 +334,11 @@ namespace IOTA.ModularJumpGates
 		/// Always false on server or singleplayer
 		/// </summary>
 		private bool HasBlocksWithinShearZone = false;
+
+		/// <summary>
+		/// This gate's collider status synced from server or NONE if server
+		/// </summary>
+		private MyGateColliderStatus MPGateColliderStatus;
 
 		/// <summary>
 		/// The last time this grid was updated (in timer ticks ~100ns)
@@ -450,11 +454,6 @@ namespace IOTA.ModularJumpGates
 		private GridPowerSyphon PowerSyphon;
 
 		/// <summary>
-		/// A list of entities found during pruning call
-		/// </summary>
-		private List<MyEntity> ColliderPruningList = new List<MyEntity>();
-
-		/// <summary>
 		/// Map mapping plane normals to a drive intersect plane
 		/// </summary>
 		private Dictionary<Vector3D, JumpDriveIntersectPlane> DriveIntersectionPlanes = new Dictionary<Vector3D, JumpDriveIntersectPlane>();
@@ -535,6 +534,7 @@ namespace IOTA.ModularJumpGates
 			{
 				this.LocalJumpNode = MyJumpGateModSession.WorldVectorToLocalVectorP(ref this.ConstructMatrix, value);
 				this.TrueLocalJumpEllipse.WorldMatrix.Translation = this.LocalJumpNode;
+				this.TrueWorldJumpEllipse.WorldMatrix.Translation = value;
 			}
 		}
 
@@ -809,13 +809,14 @@ namespace IOTA.ModularJumpGates
 		/// <param name="jump_node">The jump node world coordinate</param>
 		/// <param name="nodes">The drive intersect nodes</param>
 		/// <exception cref="ArgumentException"></exception>
-		public MyJumpGate(MyJumpGateConstruct grid, long id, Vector3D jump_node, IEnumerable<Vector3D> nodes)
+		public MyJumpGate(MyJumpGateConstruct grid, long id, ref Vector3D jump_node, IEnumerable<Vector3D> nodes)
 		{
 			if (grid == null) throw new ArgumentException("MyJumpGate CONSTRUCTOR[MyJumpGateConstruct grid] was NULL");
 			this.ConstructMatrix = grid.CubeGrid.WorldMatrix;
 			this.JumpGateGrid = grid;
 			this.JumpGateID = id;
-			this.LocalJumpNode = MyJumpGateModSession.WorldVectorToLocalVectorP(ref this.ConstructMatrix, jump_node);
+			this.WorldJumpNode = jump_node;
+			this.ForceUpdateCollider = true;
 
 			lock (this.DriveIntersectNodesMutex)
 			{
@@ -1031,7 +1032,7 @@ namespace IOTA.ModularJumpGates
 		{
 			if (packet == null || packet.PhaseFrame != 1 || !MyNetworkInterface.IsMultiplayerServer) return;
 			JumpGateDebugPayload payload = packet.Payload<JumpGateDebugPayload>();
-			if (payload == null || payload.JumpGateUUID != JumpGateUUID.FromJumpGate(this)) return;
+			if (payload == null || (payload.JumpGateUUID != JumpGateUUID.Full && payload.JumpGateUUID != JumpGateUUID.FromJumpGate(this))) return;
 
 			switch (payload.DebugType)
 			{
@@ -2124,8 +2125,6 @@ namespace IOTA.ModularJumpGates
 		private void OnEntityCollision(IMyEntity entity, bool is_entering)
 		{
 			if (this.Closed || entity == this.JumpSpaceCollisionDetector || entity == null) return;
-			//IMyEntity parent = entity.GetTopMostParent();
-			//Logger.Warn($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} ENTITY_COLLISION {entity.DisplayName} @ {entity} ({entity.GetType()}) >> ENTERING={is_entering}, PARENT={parent.DisplayName} @ {parent.EntityId} ({parent.GetType()})");
 			if (is_entering) this.JumpSpaceColliderEntities[entity.EntityId] = (MyEntity) entity;
 			else if (!is_entering) this.JumpSpaceColliderEntities.Remove(entity.EntityId);
 		}
@@ -2183,8 +2182,6 @@ namespace IOTA.ModularJumpGates
 			if (this.JumpSpaceCollisionDetector != null)
 			{
 				this.JumpSpaceCollisionDetector.Close();
-				this.JumpSpaceCollisionDetector.Delete();
-				MyAPIGateway.Entities.RemoveEntity(this.JumpSpaceCollisionDetector);
 				this.JumpSpaceCollisionDetector = null;
 			}
 
@@ -2936,11 +2933,11 @@ namespace IOTA.ModularJumpGates
 				this.JumpSpaceCollisionDetector.OnClosing += (entity) => Logger.Debug($"CLOSED_COLLIDER JUMP_GATE={this.GetPrintableName()}");
 				this.JumpSpaceColliderEntities.Clear();
 				this.JumpSpaceEntities.Clear();
+				float radius = (float) this.JumpEllipse.Radii.Max();
 				PhysicsSettings settings = MyAPIGateway.Physics.CreateSettingsForDetector(this.JumpSpaceCollisionDetector, this.OnEntityCollision, MyJumpGateModSession.WorldMatrix, this.LocalJumpNode, VRage.Game.Components.RigidBodyFlag.RBF_KINEMATIC, 15, true);
-				MyAPIGateway.Physics.CreateSpherePhysics(settings, (float) this.JumpEllipse.Radii.Max());
+				MyAPIGateway.Physics.CreateSpherePhysics(settings, radius);
 				MyAPIGateway.Entities.AddEntity(this.JumpSpaceCollisionDetector);
-				Logger.Debug($"CREATED_COLLIDER JUMP_GATE={this.GetPrintableName()}, COLLIDER={this.JumpSpaceCollisionDetector.DisplayName}", 4);
-
+				Logger.Debug($"CREATED_COLLIDER JUMP_GATE={this.GetPrintableName()}, COLLIDER={this.JumpSpaceCollisionDetector.DisplayName}, RADIUS={radius}", 4);
 			}
 			
 			this.ForceUpdateCollider = false;
@@ -3038,7 +3035,7 @@ namespace IOTA.ModularJumpGates
 					List<MyJumpGateDrive> drives = this.GetJumpGateDrives().ToList();
 					this.ForceUpdateJumpEllipsoid = false;
 					Vector3D jump_node = this.WorldJumpNode;
-					Vector3D volume_center = this.JumpGateGrid.ConstructVolumeCenter();
+					Vector3D facing = jump_node - this.ConstructMatrix.Translation;
 
 					for (int start_index = 0; start_index < drives.Count; ++start_index)
 					{
@@ -3053,8 +3050,7 @@ namespace IOTA.ModularJumpGates
 							if (!drive_plane.Normal.IsValid()) continue;
 							Vector3D normal = drive_plane.Normal;
 							Vector3D normal_inv = -normal;
-							Vector3D facing = volume_center - normal;
-							Vector3D primary_normal = (Vector3D.Angle(normal, facing) <= Vector3D.Angle(normal_inv, facing)) ? normal : -normal_inv;
+							Vector3D primary_normal = ((normal - facing).LengthSquared() < (normal_inv - facing).LengthSquared()) ? normal : normal_inv;
 							JumpDriveIntersectPlane plane;
 
 							if (this.DriveIntersectionPlanes.ContainsKey(primary_normal)) plane = this.DriveIntersectionPlanes[primary_normal];
@@ -3084,17 +3080,7 @@ namespace IOTA.ModularJumpGates
 
 					if (this.DriveIntersectionPlanes.Count > 0)
 					{
-						List<JumpDriveIntersectPlane> intersection_planes = new List<JumpDriveIntersectPlane>();
-
-						foreach (KeyValuePair<Vector3D, JumpDriveIntersectPlane> pair in this.DriveIntersectionPlanes)
-						{
-							if (pair.Value.AlignedDrivesCount == most_aligned_plane && pair.Value.JumpGateDrives.Count == largest_plane)
-							{
-								intersection_planes.Add(pair.Value);
-							}
-						}
-
-						JumpDriveIntersectPlane intersection_plane = intersection_planes.OrderBy((plane) => Vector3D.Angle(plane.PlanePrimaryNormal, this.ConstructMatrix.Forward)).FirstOrDefault();
+						JumpDriveIntersectPlane intersection_plane = this.DriveIntersectionPlanes.Select((pair) => pair.Value).FirstOrDefault((plane) => plane.AlignedDrivesCount == most_aligned_plane && plane.JumpGateDrives.Count == largest_plane);
 
 						if (intersection_plane == null)
 						{
@@ -3148,6 +3134,7 @@ namespace IOTA.ModularJumpGates
 					}
 
 					this.DriveIntersectionPlanes.Clear();
+					this.SetColliderDirty();
 				}
 
 				// Update jump space entities
@@ -3224,7 +3211,7 @@ namespace IOTA.ModularJumpGates
 					{
 						this.AutoActivateStartTime = null;
 
-						if (MyJumpGateModSession.Network.Registered && this.AutoActivateStartTime != null)
+						if (MyJumpGateModSession.Network.Registered)
 						{
 							MyNetworkInterface.Packet packet = new MyNetworkInterface.Packet {
 								PacketType = MyPacketTypeEnum.AUTOACTIVATE,
@@ -3301,11 +3288,12 @@ namespace IOTA.ModularJumpGates
 				double time_delta = (new_time - this.LastScanTime).TotalSeconds;
 				this.JumpNodeVelocity = (this.NewPosition - this.OldPosition) / time_delta;
 				this.LastScanTime = new_time;
+				MyGateInvalidationReason invalid_reason = this.GetInvalidationReason();
 
 				// Clean Invalid
-				if (!this.IsValid())
+				if (invalid_reason != MyGateInvalidationReason.NONE)
 				{
-					Logger.Debug($"Invalid Jump Gate {(this.JumpGateGrid?.CubeGrid?.EntityId.ToString() ?? "N/A")}::{this.JumpGateID} - {this.GetInvalidationReason()}", 2);
+					Logger.Debug($"Invalid Jump Gate {(this.JumpGateGrid?.CubeGrid?.EntityId.ToString() ?? "N/A")}::{this.JumpGateID} - {invalid_reason}", 2);
 					this.Status = MyJumpGateStatus.NONE;
 					this.Phase = MyJumpGatePhase.NONE;
 					this.Dispose();
@@ -3339,6 +3327,15 @@ namespace IOTA.ModularJumpGates
 		/// It will be updated on next physics tick
 		/// </summary>
 		public void SetColliderDirty()
+		{
+			this.ForceUpdateCollider = !this.Closed;
+		}
+
+		/// <summary>
+		/// Marks this jump gate's physics collider as dirty<br />
+		/// It will be updated on next physics tick or a packet sent to server if in standalone client
+		/// </summary>
+		public void SetColliderDirtyMP()
 		{
 			if (MyNetworkInterface.IsStandaloneMultiplayerClient)
 			{
@@ -3514,7 +3511,7 @@ namespace IOTA.ModularJumpGates
 		}
 
 		/// <summary>
-		/// Cancels the gate's jump
+		/// Cancels the gate's jump<br />
 		/// For servers and singleplayer: Cancels the jump<br />
 		/// For clients: Sends a cancel jump request to server
 		/// </summary>
@@ -3592,6 +3589,7 @@ namespace IOTA.ModularJumpGates
 				{
 					this.JumpSpaceEntities.Clear();
 					if (jump_gate.JumpSpaceEntities != null) foreach (KeyValuePair<long, float> pair in jump_gate.JumpSpaceEntities) this.JumpSpaceEntities[pair.Key] = new KeyValuePair<float, MyEntity>(pair.Value, (MyEntity) MyAPIGateway.Entities.GetEntityById(pair.Key));
+					this.MPGateColliderStatus = jump_gate.ColliderStatus;
 				}
 
 				this.UpdateDriveIntersectNodes(jump_gate.IntersectNodes);
@@ -3726,7 +3724,9 @@ namespace IOTA.ModularJumpGates
 		/// <returns>The status of this gate's jump space collision detector</returns>
 		public MyGateColliderStatus JumpSpaceColliderStatus()
 		{
-			return (this.Closed || this.JumpSpaceCollisionDetector == null) ? MyGateColliderStatus.NONE : (this.JumpSpaceCollisionDetector.MarkedForClose) ? MyGateColliderStatus.CLOSED : MyGateColliderStatus.ATTACHED;
+			if (MyNetworkInterface.IsStandaloneMultiplayerClient) return this.MPGateColliderStatus;
+			else if (this.Closed || this.JumpSpaceCollisionDetector == null) return MyGateColliderStatus.NONE;
+			else return (this.JumpSpaceCollisionDetector.MarkedForClose) ? MyGateColliderStatus.CLOSED : MyGateColliderStatus.ATTACHED;
 		}
 
 		/// <summary>
@@ -3951,6 +3951,14 @@ namespace IOTA.ModularJumpGates
 		}
 
 		/// <summary>
+		/// </summary>
+		/// <returns>The world position of this gate's physical collider</returns>
+		public Vector3D? GetColliderPosition()
+		{
+			return this.JumpSpaceCollisionDetector?.WorldMatrix.Translation;
+		}
+
+		/// <summary>
 		/// Gets the effective jump space ellipsoid for this gate<br />
 		/// This differes from the standard ellipsoid only when the target is another jump gate<br />
 		/// In this case, the effective ellipsoid is an ellipsoid composed of the smallest radii from the two ellipsoids
@@ -4145,6 +4153,7 @@ namespace IOTA.ModularJumpGates
 					Closed = this.Closed,
 					Status = this.Status,
 					Phase = this.Phase,
+					ColliderStatus = this.JumpSpaceColliderStatus(),
 					LocalJumpNode = this.LocalJumpNode,
 					LocalJumpEllipse = (this.Closed) ? null : Convert.ToBase64String(this.TrueLocalJumpEllipse.ToSerialized()),
 					Controller = (this.Controller == null) ? JumpGateUUID.Empty : JumpGateUUID.FromBlock(this.Controller),
@@ -4193,69 +4202,75 @@ namespace IOTA.ModularJumpGates
 		public MyJumpGatePhase Phase;
 
 		/// <summary>
-		/// This gate's local jump node
+		/// This gate's collider status
 		/// </summary>
 		[ProtoMember(5)]
+		public MyGateColliderStatus ColliderStatus;
+
+		/// <summary>
+		/// This gate's local jump node
+		/// </summary>
+		[ProtoMember(6)]
 		public Vector3D LocalJumpNode;
 
 		/// <summary>
 		/// This gate's local jump ellipse as a base64 string
 		/// </summary>
-		[ProtoMember(6)]
+		[ProtoMember(7)]
 		public string LocalJumpEllipse;
 
 		/// <summary>
 		/// This gate's attached controller or an empty Guid
 		/// </summary>
-		[ProtoMember(7)]
+		[ProtoMember(8)]
 		public JumpGateUUID Controller;
 
 		/// <summary>
 		/// This gate's attached remote antenna or an empty Guid
 		/// </summary>
-		[ProtoMember(8)]
+		[ProtoMember(9)]
 		public JumpGateUUID RemoteAntenna;
 
 		/// <summary>
 		/// This gate's attached server antenna or an empty Guid
 		/// </summary>
-		[ProtoMember(9)]
+		[ProtoMember(10)]
 		public JumpGateUUID ServerAntenna;
 
 		/// <summary>
 		/// This gate's attached grid construct
 		/// </summary>
-		[ProtoMember(10)]
+		[ProtoMember(11)]
 		public JumpGateUUID JumpGateGrid;
 
 		/// <summary>
 		/// A list of this gate's drive intersect nodes
 		/// </summary>
-		[ProtoMember(11)]
+		[ProtoMember(12)]
 		public ImmutableList<Vector3D> IntersectNodes;
 
 		/// <summary>
 		/// This gate's grid size
 		/// </summary>
-		[ProtoMember(12)]
+		[ProtoMember(13)]
 		public MyCubeSize GridSize;
 
 		/// <summary>
 		/// This gate's construct matrix
 		/// </summary>
-		[ProtoMember(13)]
+		[ProtoMember(14)]
 		public string ConstructMatrix;
 
 		/// <summary>
 		/// A map of this gate's jump space entities with their mass
 		/// </summary>
-		[ProtoMember(14)]
+		[ProtoMember(15)]
 		public ImmutableDictionary<long, float> JumpSpaceEntities;
 
 		/// <summary>
 		/// If true, this data should be used by server to identify gate and send updated data
 		/// </summary>
-		[ProtoMember(15)]
+		[ProtoMember(16)]
 		public bool IsClientRequest;
 	}
 
@@ -4267,8 +4282,10 @@ namespace IOTA.ModularJumpGates
 		public readonly MyJumpGateRemoteAntenna RemoteAntenna;
 
 		public bool IsWorking => (this.IsController) ? this.Controller.IsWorking : this.RemoteAntenna.IsWorking;
+		public long BlockID => (this.IsController) ? this.Controller.BlockID : this.RemoteAntenna.BlockID;
 		public MyJumpGateController.MyControllerBlockSettingsStruct BlockSettings => (this.IsController) ? this.Controller.BlockSettings : this.RemoteAntenna.BlockSettings.BaseControllerSettings[this.RemoteAntennaChannel];
 		public MatrixD WorldMatrix => (this.IsController) ? this.Controller.WorldMatrix : this.RemoteAntenna.WorldMatrix;
+		public MyJumpGateConstruct JumpGateGrid => (this.IsController) ? this.Controller.JumpGateGrid : this.RemoteAntenna.JumpGateGrid;
 
 		public MyJumpGateControlObject(MyJumpGateController controller)
 		{

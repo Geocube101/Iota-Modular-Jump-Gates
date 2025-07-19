@@ -1049,7 +1049,7 @@ namespace IOTA.ModularJumpGates.Terminal
 					if (!do_rescan_entities.Enabled(block)) return;
 					else if ((controller = MyJumpGateModSession.GetBlockAsJumpGateController(block)) == null || controller.JumpGateGrid == null || controller.JumpGateGrid.Closed) return;
 					MyJumpGate jump_gate = controller.AttachedJumpGate();
-					jump_gate?.SetColliderDirty();
+					jump_gate?.SetColliderDirtyMP();
 				};
 				MyJumpGateControllerTerminal.TerminalControls.Add(do_rescan_entities);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(do_rescan_entities);
@@ -1127,7 +1127,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				do_reconstruct_grid_gates.Title = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_ReconstructGates"));
 				do_reconstruct_grid_gates.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_ReconstructGates_Tooltip"));
 				do_reconstruct_grid_gates.SupportsMultipleBlocks = false;
-				do_reconstruct_grid_gates.Visible = (block) => MyNetworkInterface.IsServerLike && MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.SectionSwitches[section_switch];
+				do_reconstruct_grid_gates.Visible = (block) => MyAPIGateway.Session.IsUserAdmin(MyAPIGateway.Multiplayer.MyId) && MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.SectionSwitches[section_switch];
 				do_reconstruct_grid_gates.Enabled = (block) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					return controller != null && MyJumpGateModSession.DebugMode && controller.JumpGateGrid != null && !controller.JumpGateGrid.IsSuspended && !controller.JumpGateGrid.Closed;
@@ -1135,7 +1135,18 @@ namespace IOTA.ModularJumpGates.Terminal
 				do_reconstruct_grid_gates.Action = (block) => {
 					if (!do_reconstruct_grid_gates.Enabled(block)) return;
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
-					controller.JumpGateGrid.MarkGatesForUpdate();
+					
+					if (MyNetworkInterface.IsStandaloneMultiplayerClient)
+					{
+						MyNetworkInterface.Packet packet = new MyNetworkInterface.Packet {
+							PacketType = MyPacketTypeEnum.MARK_GATES_DIRTY,
+							TargetID = 0,
+							Broadcast = false,
+						};
+						packet.Payload(controller.JumpGateGrid.CubeGridID);
+						packet.Send();
+					}
+					else controller.JumpGateGrid?.MarkGatesForUpdate();
 				};
 				MyJumpGateControllerTerminal.TerminalControls.Add(do_reconstruct_grid_gates);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(do_reconstruct_grid_gates);

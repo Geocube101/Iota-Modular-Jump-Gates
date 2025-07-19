@@ -432,7 +432,6 @@ namespace IOTA.ModularJumpGates.EventController
 						}
 					}
 				};
-
 				choose_jump_gate_lb.ItemSelected = (block, selected) => {
 					MyJumpGateEventBase<TargetedGateValueType> event_block = block.Components.Get<EventType>();
 					IMyEventControllerBlock event_controller = event_block?.EventController;
@@ -482,7 +481,6 @@ namespace IOTA.ModularJumpGates.EventController
 					event_block.Poll(true);
 					event_block.SetDirty();
 				};
-
 				MyAPIGateway.TerminalControls.AddControl<T>(choose_jump_gate_lb);
 			}
 		}

@@ -9,6 +9,7 @@ namespace IOTA.ModularJumpGates.Animations
 
 		public AnimationDef StandardWarpPrototech = new AnimationDef("Prototech Warp", "The prototech SE warp effect") {
 			Enabled = true,
+			ImmediateCancel = true,
 
 			JumpingAnimationDef = new JumpGateJumpingAnimationDef {
 				Duration = 600,

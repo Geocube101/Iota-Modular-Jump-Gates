@@ -7,7 +7,7 @@ using System.Collections.Generic;
 
 namespace IOTA.ModularJumpGates
 {
-	public enum MyPacketTypeEnum { DOWNLOAD_GRID, UPDATE_GRIDS, UPDATE_GRID, UPDATE_JUMP_GATE, UPDATE_DRIVE, UPDATE_CAPACITOR, UPDATE_CONTROLLER, UPDATE_REMOTE_ANTENNA, UPDATE_REMOTE_LINK, UPDATE_JUMP_ENDPOINT, UPDATE_EVENT_CONTROLLER_EVENT, UPDATE_CONFIG, CLOSE_BLOCK, CLOSE_GRID, JUMP_GATE_JUMP, JUMP_GATE_VOID_IN, JUMP_GATE_VOID_OUT, STATICIFY_CONSTRUCT, COMM_LINKED, BEACON_LINKED, AUTOACTIVATE, SHEARWARNING, GATE_DEBUG, LINK_CONNECTION };
+	public enum MyPacketTypeEnum { DOWNLOAD_GRID, UPDATE_GRIDS, UPDATE_GRID, UPDATE_JUMP_GATE, UPDATE_DRIVE, UPDATE_CAPACITOR, UPDATE_CONTROLLER, UPDATE_REMOTE_ANTENNA, UPDATE_REMOTE_LINK, UPDATE_JUMP_ENDPOINT, UPDATE_EVENT_CONTROLLER_EVENT, UPDATE_CONFIG, CLOSE_BLOCK, CLOSE_GRID, JUMP_GATE_JUMP, JUMP_GATE_VOID_IN, JUMP_GATE_VOID_OUT, STATICIFY_CONSTRUCT, MARK_GATES_DIRTY, COMM_LINKED, BEACON_LINKED, AUTOACTIVATE, SHEARWARNING, GATE_DEBUG, LINK_CONNECTION, GENERAL };
 
 	/// <summary>
 	/// Class holding all network functionality
@@ -78,6 +78,11 @@ namespace IOTA.ModularJumpGates
 			public string Buffer { get; private set; }
 
 			/// <summary>
+			/// The event ID if this is a GENERAL packet, otherwise null
+			/// </summary>
+			public string GenericEventID => (this.PacketType == MyPacketTypeEnum.GENERAL) ? this.Payload<KeyValuePair<string, string>>().Key : null;
+
+			/// <summary>
 			/// The UTC date time representation of Packet.EpochTime
 			/// </summary>
 			public DateTime EpochDateTimeUTC
@@ -129,6 +134,40 @@ namespace IOTA.ModularJumpGates
 					byte[] serialized = MyAPIGateway.Utilities.SerializeToBinary(data);
 					this.Buffer = Convert.ToBase64String(serialized);
 					this.PayloadIsNull = false;
+				}
+			}
+
+			/// <summary>
+			/// Creates a generic payload using an event ID and data
+			/// </summary>
+			/// <typeparam name="T">The typename of this data</typeparam>
+			/// <param name="event_id">The event ID</param>
+			/// <param name="data">The data</param>
+			/// <exception cref="ArgumentNullException">If the event ID is null or empty</exception>
+			public void GeneralPayload<T>(string event_id, T data)
+			{
+				if (event_id == null || event_id.Length == 0) throw new ArgumentNullException("event_id");
+				this.Payload(new KeyValuePair<string, string>(event_id, (data == null) ? "" : Convert.ToBase64String(MyAPIGateway.Utilities.SerializeToBinary(data))));
+			}
+
+			/// <summary>
+			/// Gets the generic payload of this packet
+			/// </summary>
+			/// <typeparam name="T">The typename of this data</typeparam>
+			/// <param name="data">The decoded data</param>
+			/// <returns>The event ID</returns>
+			public string GeneralPayload<T>(out T data)
+			{
+				try
+				{
+					KeyValuePair<string, string> pair = this.Payload<KeyValuePair<string, string>>();
+					data = ((pair.Value?.Length ?? 0) == 0) ? default(T) : MyAPIGateway.Utilities.SerializeFromBinary<T>(Convert.FromBase64String(pair.Value));
+					return pair.Key;
+				}
+				catch (Exception)
+				{
+					data = default(T);
+					return null;
 				}
 			}
 
@@ -398,6 +437,26 @@ namespace IOTA.ModularJumpGates
 			List<Action<Packet>> callbacks;
 			if (!this.EventCallbacks.TryGetValue(type, out callbacks)) return;
 			lock (this.MutexLock) if (callbacks.Contains(callback)) callbacks.Remove(callback);
+		}
+
+		/// <summary>
+		/// Creates a general packet with the specified event ID and data
+		/// </summary>
+		/// <typeparam name="T">The typename of the data</typeparam>
+		/// <param name="event_id">The event ID (cannot be null or empty)</param>
+		/// <param name="data">The data to send</param>
+		/// <param name="target">The target to send to</param>
+		/// <param name="broadcast">Whether to broadcast to all</param>
+		/// <returns>The constructed packet</returns>
+		public Packet CreateGeneralPacket<T>(string event_id, T data, ulong target = 0, bool broadcast = false)
+		{
+			Packet packet = new Packet {
+				PacketType = MyPacketTypeEnum.GENERAL,
+				Broadcast = broadcast,
+				TargetID = target,
+			};
+			packet.GeneralPayload(event_id, data);
+			return packet;
 		}
 		#endregion
 	}

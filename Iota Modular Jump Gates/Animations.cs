@@ -32,7 +32,7 @@ namespace IOTA.ModularJumpGates
 	/// <summary>
 	/// Enum representing the type of easing
 	/// </summary>
-	public enum EasingTypeEnum {
+	public enum EasingTypeEnum : byte {
 		EASE_IN,
 		EASE_OUT,
 		EASE_IN_OUT
@@ -41,7 +41,7 @@ namespace IOTA.ModularJumpGates
 	/// <summary>
 	/// Enum representing the easing curve
 	/// </summary>
-	public enum EasingCurveEnum {
+	public enum EasingCurveEnum : byte {
 		CONSTANT,
 		LINEAR,
 		QUADRATIC,
@@ -165,6 +165,13 @@ namespace IOTA.ModularJumpGates
 		DISTANCE_ENTITY_TO_ENTITY,
 
 		/// <summary>
+		/// Attribute is modified based on the distance from this particle's position to the specified jump space entity (in meters)<br />
+		/// <i>Only effective for per-entity particles, per-drive particles, and entity lock particles</i><br />
+		/// The value will be the distance from this particle's position to the target entity in meters
+		/// </summary>
+		DISTANCE_THIS_TO_ENTITY,
+
+		/// <summary>
 		/// Attribute is modified based on this entity's velocity
 		/// </summary>
 		ENTITY_VELOCITY,
@@ -207,7 +214,7 @@ namespace IOTA.ModularJumpGates
 	/// <summary>
 	/// Enum representing the operation by which values should be joined
 	/// </summary>
-	internal enum MathOperationEnum {
+	internal enum MathOperationEnum : byte {
 		ADD,
 		SUBTRACT,
 		MULTIPLY,
@@ -227,7 +234,7 @@ namespace IOTA.ModularJumpGates
 	/// <summary>
 	/// Enum representing the method by which values should be ratioed
 	/// </summary>
-	public enum RatioTypeEnum
+	public enum RatioTypeEnum : byte
 	{
 		/// <summary>
 		/// The standard value
@@ -268,7 +275,7 @@ namespace IOTA.ModularJumpGates
 	/// <summary>
 	/// Enum representing how to orient particles
 	/// </summary>
-	public enum ParticleOrientationEnum {
+	public enum ParticleOrientationEnum : byte {
 		/// <summary>
 		/// Particles are oriented according to the gate's endpoint
 		/// </summary>
@@ -295,6 +302,50 @@ namespace IOTA.ModularJumpGates
 		/// </summary>
 		FIXED
 	};
+
+	public enum EntityLockTypeEnum : byte
+	{
+		/// <summary>
+		/// Locks the entities closest to the gate's jump node
+		/// </summary>
+		LOCK_NEAREST,
+
+		/// <summary>
+		/// Locks the entities farthest from the gate's jump node
+		/// </summary>
+		LOCK_FARTHEST,
+
+		/// <summary>
+		/// Locks a random set of entities within the jump space
+		/// </summary>
+		LOCK_RANDOM,
+	}
+
+	public enum LockDelayShiftEnum : byte
+	{
+		/// <summary>
+		/// All drives use the same lock times<br />
+		/// Lock time will be the average of min and max
+		/// </summary>
+		FIXED,
+
+		/// <summary>
+		/// Drives will use a lock time based on their distance to the jump node<br />
+		/// The closest drive will use the minimum lock time, the farthest drive will use the maximum lock time
+		/// </summary>
+		NEAREST,
+
+		/// <summary>
+		/// Drives will use a lock time based on their distance to the jump node<br />
+		/// The farthest drive will use the minimum lock time, the closest drive will use the maximum lock time
+		/// </summary>
+		FARTHEST,
+
+		/// <summary>
+		/// Drives will use a random lock time between min and max
+		/// </summary>
+		RANDOM,
+	}
 	#endregion
 
 	#region Animation Util Classes
@@ -1154,7 +1205,6 @@ namespace IOTA.ModularJumpGates
 								result = new EvaluatedResult((arguments.ThisPosition == null || arguments.JumpGate.Closed) ? 0 : Vector3D.Distance(jump_node, arguments.ThisPosition.Value));
 								break;
 							case AnimationSourceEnum.DISTANCE_ENTITY_TO_ENTITY:
-							{
 								if (arguments.ThisPosition == null || arguments.JumpSpaceEntities.Count == 0) result = new EvaluatedResult(0);
 								else
 								{
@@ -1169,7 +1219,9 @@ namespace IOTA.ModularJumpGates
 									return result;
 								}
 								break;
-							}
+							case AnimationSourceEnum.DISTANCE_THIS_TO_ENTITY:
+								result = new EvaluatedResult((arguments.ThisPosition == null || arguments.ThisEntity == null) ? 0 : Vector3D.Distance(arguments.ThisPosition.Value, arguments.ThisEntity.WorldMatrix.Translation));
+								break;
 							case AnimationSourceEnum.ENTITY_VELOCITY:
 								result = new EvaluatedResult((arguments.ThisEntity == null && arguments.JumpGate.Closed) ? Vector3.Zero : (arguments.ThisEntity?.Physics?.LinearVelocity ?? arguments.JumpGate.JumpNodeVelocity));
 								break;
@@ -2262,6 +2314,7 @@ namespace IOTA.ModularJumpGates
 	[ProtoInclude(300, typeof(BeamPulseDef))]
 	[ProtoInclude(400, typeof(DriveEmissiveColorDef))]
 	[ProtoInclude(500, typeof(NodePhysicsDef))]
+	[ProtoInclude(600, typeof(DriveEntityLockDef))]
 	public class AnimatableDef
 	{
 		#region Public Variables
@@ -2499,6 +2552,79 @@ namespace IOTA.ModularJumpGates
 		public Vector3D AttractorTorque = Vector3D.Zero;
 		#endregion
 	}
+
+	/// <summary>
+	/// Definition defining a drive's entity lock particles
+	/// </summary>
+	[ProtoContract(UseProtoMembersOnly = true)]
+	public class DriveEntityLockDef : AnimatableDef
+	{
+		/// <summary>
+		/// The lock delay shift<br />
+		/// Controls how long it takes for drives to lock onto an entity
+		/// </summary>
+		[ProtoMember(1)]
+		public LockDelayShiftEnum LockDelayShift = LockDelayShiftEnum.FIXED;
+
+		/// <summary>
+		/// The entity lock sorting type
+		/// </summary>
+		[ProtoMember(2)]
+		public EntityLockTypeEnum EntityLockType = EntityLockTypeEnum.LOCK_NEAREST;
+
+		/// <summary>
+		/// The easing type for the lock rotation
+		/// </summary>
+		[ProtoMember(3)]
+		public EasingTypeEnum LockDelayEasingType = EasingTypeEnum.EASE_IN_OUT;
+
+		/// <summary>
+		/// The easing durve for the lock rotation
+		/// </summary>
+		[ProtoMember(4)]
+		public EasingCurveEnum LockDelayEasingCurve = EasingCurveEnum.LINEAR;
+
+		/// <summary>
+		/// The minimum lock time in game ticks
+		/// </summary>
+		[ProtoMember(5)]
+		public ushort MinLockTime = 0;
+
+		/// <summary>
+		/// The maximum lock time in game ticks
+		/// </summary>
+		[ProtoMember(6)]
+		public ushort MaxLockTime = 0;
+
+		/// <summary>
+		/// The maximum number of entities that can locked onto at once
+		/// </summary>
+		[ProtoMember(7)]
+		public int MaxEntityLockCount = 0;
+
+		/// <summary>
+		/// Modifies how the ratio is calculated (clamped between -1 and 1)<br />
+		/// 0    - Normal<br />
+		/// 0.5  - Starts halfway<br />
+		/// 1    - Starts fully locked<br />
+		/// -0.5 - Starts halfway but goes backwards<br />
+		/// -1   - Starts fully locked but goes backwards
+		/// </summary>
+		[ProtoMember(8)]
+		public float RatioModifier = 0;
+
+		/// <summary>
+		/// The initial rotation (in degrees) of the entity lock particles relative to each drives' orientation
+		/// </summary>
+		[ProtoMember(9)]
+		public Vector3D InitialRotation = Vector3D.Zero;
+
+		/// <summary>
+		/// The entity lock particles to play
+		/// </summary>
+		[ProtoMember(10)]
+		public ParticleDef[] EntityLockParticles = null;
+	}
 	#endregion
 
 	#region Animation Definitions
@@ -2579,11 +2705,17 @@ namespace IOTA.ModularJumpGates
 		public SoundDef[] AntiNodeSounds = null;
 
 		/// <summary>
-		/// The NodePhysicsDef defining the attractor forces for this gate's anti-ode<br />
+		/// The NodePhysicsDef defining the attractor forces for this gate's anti-node<br />
 		/// <i>The anti-node is the region at the endpoint of this gate</i>
 		/// </summary>
 		[ProtoMember(11)]
 		public NodePhysicsDef AntiNodePhysics = null;
+
+		/// <summary>
+		/// The DriveEntityLockDef defining the entity lock particles for this gate's drives
+		/// </summary>
+		[ProtoMember(12)]
+		public DriveEntityLockDef DriveEntityLock = null;
 		#endregion
 
 		#region Internal Methods
@@ -2705,6 +2837,12 @@ namespace IOTA.ModularJumpGates
 		/// </summary>
 		[ProtoMember(15)]
 		public NodePhysicsDef AntiNodePhysics = null;
+
+		/// <summary>
+		/// The DriveEntityLockDef defining the entity lock particles for this gate's drives
+		/// </summary>
+		[ProtoMember(16)]
+		public DriveEntityLockDef DriveEntityLock = null;
 		#endregion
 
 		#region Internal Methods
@@ -2801,6 +2939,12 @@ namespace IOTA.ModularJumpGates
 		/// </summary>
 		[ProtoMember(11)]
 		public NodePhysicsDef AntiNodePhysics = null;
+
+		/// <summary>
+		/// The DriveEntityLockDef defining the entity lock particles for this gate's drives
+		/// </summary>
+		[ProtoMember(12)]
+		public DriveEntityLockDef DriveEntityLock = null;
 		#endregion
 
 		#region Internal Methods
@@ -2891,7 +3035,7 @@ namespace IOTA.ModularJumpGates
 		/// The AnimationConstraintDef definition defining a jump gate constraint for this animation
 		/// </summary>
 		[ProtoMember(11)]
-		public AnimationConstraintDef AnimationContraint = null;
+		public AnimationConstraintDef AnimationConstraint = null;
 		#endregion
 
 		#region Constructors
@@ -3174,7 +3318,7 @@ namespace IOTA.ModularJumpGates
 		/// <param name="entities">The list of entities within this gate's jump space</param>
 		/// <param name="endpoint">The gate's targeted endpoint</param>
 		/// <param name="this_entity">This entity or null if not bound to an entity</param>
-		public void Tick(ushort current_tick, MatrixD? source, List<MyJumpGateDrive> drives, List<MyEntity> entities, ref Vector3D endpoint, MyEntity this_entity = null)
+		public void Tick(ushort current_tick, MatrixD? source, List<MyJumpGateDrive> drives, List<MyEntity> entities, ref Vector3D endpoint, MyEntity this_entity = null, Vector3D? entity_lock_pos = null)
 		{
 			MatrixD base_matrix = (this.JumpGate == null) ? MyJumpGateModSession.WorldMatrix : (source ?? ParticleOrientationDef.GetJumpGateMatrix(this.JumpGate, this.TargetGate, this.IsAntiNode, ref endpoint, this.ParticleDefinition?.ParticleOrientation));
 			this.EffectPosition = base_matrix.Translation;
@@ -3187,7 +3331,7 @@ namespace IOTA.ModularJumpGates
 				Vector3D rotations_per_second = Vector3D.Zero;
 				Vector3D offset = this.ParticleDefinition.ParticleOffset;
 				Vector4D rps, off;
-				AnimationExpression.ExpressionArguments arguments = new AnimationExpression.ExpressionArguments(current_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, this_entity?.WorldMatrix.Translation, this_entity);
+				AnimationExpression.ExpressionArguments arguments = new AnimationExpression.ExpressionArguments(current_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, entity_lock_pos ?? this_entity?.WorldMatrix.Translation, this_entity);
 				
 				float birth_mp = (float) AttributeAnimationDef.GetAnimatedDoubleValue(this.ParticleDefinition.Animations?.ParticleBirthAnimation, arguments, 1);
 				float color_intensity_mp = (float) AttributeAnimationDef.GetAnimatedDoubleValue(this.ParticleDefinition.Animations?.ParticleColorIntensityAnimation, arguments, 1);
@@ -3199,6 +3343,12 @@ namespace IOTA.ModularJumpGates
 				
 				Vector4D color = AttributeAnimationDef.GetAnimatedVectorValue(this.ParticleDefinition.Animations?.ParticleColorAnimation, arguments, Vector4D.One);
 				color *= this.ControllerSettings?.JumpEffectAnimationColorShift().ToVector4D() ?? Vector4D.One;
+				Vector4 mapped_color = new Vector4(
+					(float) Math.Round(color.X, 4),
+					(float) Math.Round(color.Y, 4),
+					(float) Math.Round(color.Z, 4),
+					(float) Math.Round(color.W, 4)
+				);
 				
 				rps = AttributeAnimationDef.GetAnimatedVectorValue(this.ParticleDefinition.Animations?.ParticleRotationSpeedAnimation, arguments, Vector4D.Zero);
 				rotations_per_second = new Vector3D(rps.X, rps.Y, rps.Z) * 360d / 60d * (Math.PI / 180d);
@@ -3222,7 +3372,7 @@ namespace IOTA.ModularJumpGates
 					effect.UserScale = scale_mp;
 					effect.UserVelocityMultiplier = velocity_mp;
 					effect.WorldMatrix = particle_matrix;
-					effect.UserColorMultiplier = color;
+					effect.UserColorMultiplier = mapped_color;
 					if (this.ParticleDefinition.DirtifyEffect) effect.SetDirty();
 				}
 			}
@@ -3841,6 +3991,270 @@ namespace IOTA.ModularJumpGates
 		}
 		#endregion
 	}
+
+	/// <summary>
+	/// Implementation holding functionality for drive entity lock definitions
+	/// </summary>
+	internal class DriveEntityLock
+	{
+		private class DriveEntityLockInfo
+		{
+			public bool Stopped { get; private set; } = false;
+
+			public EasingCurveEnum EasingCurve;
+
+			public EasingTypeEnum EasingType;
+
+			public ushort EntityLockTime { get; private set; }
+
+			public ushort ParentDuration { get; private set; }
+
+			public float RatioModifier { get; private set; }
+
+			public Vector3D InitialRotation { get; private set; }
+
+			public MyJumpGateDrive JumpGateDrive { get; private set; }
+
+			public MyJumpGate CallerGate { get; private set; }
+
+			public MyJumpGate TargetGate { get; private set; }
+
+			public Dictionary<MyEntity, Particle[]> LockedEntityParticles { get; private set; } = new Dictionary<MyEntity, Particle[]>();
+
+			public DriveEntityLockInfo(ushort lock_time, ushort parent_duration, DriveEntityLockDef def, MyJumpGateDrive drive, MyJumpGate jump_gate, MyJumpGate target_gate)
+			{
+				this.EasingCurve = def.LockDelayEasingCurve;
+				this.EasingType = def.LockDelayEasingType;
+				this.EntityLockTime = lock_time;
+				this.ParentDuration = parent_duration;
+				this.RatioModifier = MathHelper.Clamp(def.RatioModifier, -1f, 1f);
+				this.InitialRotation = def.InitialRotation * (Math.PI / 180d);
+				this.JumpGateDrive = drive;
+				this.CallerGate = jump_gate;
+				this.TargetGate = target_gate;
+			}
+
+			public void Tick(ushort local_tick, ParticleDef[] particle_effects, List<MyEntity> locked_entities, List<MyJumpGateDrive> gate_drives, ref Vector3D endpoint)
+			{
+				if (particle_effects == null) return;
+				this.Stopped = false;
+
+				foreach (MyEntity entity in locked_entities)
+				{
+					if (this.LockedEntityParticles.ContainsKey(entity)) continue;
+					Particle[] effects = new Particle[particle_effects.Length];
+
+					for (int i = 0; i < particle_effects.Length; ++i)
+					{
+						MatrixD matrix = this.JumpGateDrive.WorldMatrix;
+						effects[i] = new Particle(particle_effects[i], this.ParentDuration, this.CallerGate, this.TargetGate, this.CallerGate.Controller.BlockSettings, matrix, matrix.Translation, false);
+					}
+
+					this.LockedEntityParticles[entity] = effects;
+				}
+
+				double entity_lock_ratio = (this.EntityLockTime == 0) ? 1 : MathHelper.Clamp((double) local_tick / this.EntityLockTime, 0, 1);
+				entity_lock_ratio = EasingFunctor.GetEaseResult(entity_lock_ratio, this.EasingType, this.EasingCurve);
+				MatrixD drive_matrix = this.JumpGateDrive.WorldMatrix;
+				drive_matrix.Translation = this.JumpGateDrive.GetDriveRaycastStartpoint();
+				MatrixD rotated_drive_matrix = MatrixD.CreateFromYawPitchRoll(this.InitialRotation.Y, this.InitialRotation.X, this.InitialRotation.Z) * drive_matrix;
+				List<MyEntity> removed_entities = new List<MyEntity>();
+				if (this.RatioModifier > 0) entity_lock_ratio *= this.RatioModifier;
+				else if (this.RatioModifier < 0) entity_lock_ratio = 1 - (entity_lock_ratio * -this.RatioModifier);
+
+				foreach (KeyValuePair<MyEntity, Particle[]> pair in this.LockedEntityParticles)
+				{
+					if (!locked_entities.Contains(pair.Key))
+					{
+						foreach (Particle particle in pair.Value) particle.Clean();
+						removed_entities.Add(pair.Key);
+						continue;
+					}
+
+					Vector3D dir = (pair.Key.WorldMatrix.Translation - drive_matrix.Translation);
+					MatrixD entity_drive_matrix = MatrixD.CreateWorld(drive_matrix.Translation, dir, dir.Cross(dir + Vector3D.One));
+					MatrixD.Lerp(ref rotated_drive_matrix, ref entity_drive_matrix, entity_lock_ratio, out entity_drive_matrix);
+					foreach (Particle particle in pair.Value) particle.Tick(local_tick, MatrixD.Normalize(entity_drive_matrix), gate_drives, locked_entities, ref endpoint, pair.Key, drive_matrix.Translation);
+				}
+
+				foreach (MyEntity entity in removed_entities) this.LockedEntityParticles.Remove(entity);
+			}
+
+			public void Clean()
+			{
+				foreach (KeyValuePair<MyEntity, Particle[]> pair in this.LockedEntityParticles) foreach (Particle particle in pair.Value) particle.Clean();
+				this.LockedEntityParticles?.Clear();
+				this.LockedEntityParticles = null;
+				this.JumpGateDrive = null;
+				this.Stopped = true;
+			}
+
+			public void Stop()
+			{
+				if (this.Stopped) return;
+				foreach (KeyValuePair<MyEntity, Particle[]> pair in this.LockedEntityParticles) foreach (Particle particle in pair.Value) particle.Stop();
+				this.LockedEntityParticles?.Clear();
+				this.Stopped = true;
+			}
+		}
+
+		#region Private Variables
+		/// <summary>
+		/// The duration of this node physics effect in game ticks
+		/// </summary>
+		private readonly ushort Duration;
+
+		/// <summary>
+		/// The calling jump gate
+		/// </summary>
+		private MyJumpGate JumpGate;
+
+		/// <summary>
+		/// The targeted jump gate
+		/// </summary>
+		private MyJumpGate TargetJumpGate;
+
+		private List<MyEntity> LockedEntities = new List<MyEntity>();
+
+		private Dictionary<MyJumpGateDrive, DriveEntityLockInfo> DriveInfo = new Dictionary<MyJumpGateDrive, DriveEntityLockInfo>();
+		#endregion
+
+		#region Public Variables
+		/// <summary>
+		/// The drive entity lock definition
+		/// </summary>
+		public DriveEntityLockDef DriveEntityLockDefinition { get; private set; }
+		#endregion
+
+		#region Constructors
+		/// <summary>
+		/// Creates a new drive entity lock effect
+		/// </summary>
+		/// <param name="def">The drive entity lock definition</param>
+		/// <param name="animation_duration">The parent animation duration in game ticks</param>
+		/// <param name="jump_gate">The calling jump gate</param>
+		/// <param name="target_gate">The targeted jump gate or null</param>
+		/// <exception cref="ArgumentNullException">If the drive entity lock definition is null</exception>
+		public DriveEntityLock(DriveEntityLockDef def, ushort animation_duration, MyJumpGate jump_gate, MyJumpGate target_gate)
+		{
+			if (def == null) throw new ArgumentNullException("DriveEntityLockDef cannot be null");
+			this.DriveEntityLockDefinition = def;
+			this.Duration = (def.Duration == 0) ? animation_duration : def.Duration;
+			this.JumpGate = jump_gate;
+			this.TargetJumpGate = target_gate;
+		}
+		#endregion
+
+		#region Public Methods
+		/// <summary>
+		/// Ticks this node physics effect
+		/// </summary>
+		/// <param name="current_tick">The parent animation's current tick</param>
+		/// <param name="drives">The list of drives belonging to this gate</param>
+		/// <param name="entities">The list of entities within this gate's jump space</param>
+		/// <param name="endpoint">The gate's targeted endpoint</param>
+		public void Tick(ushort current_tick, List<MyJumpGateDrive> drives, List<MyEntity> entities, ref Vector3D endpoint)
+		{
+			if (!this.JumpGate.Closed && current_tick >= this.DriveEntityLockDefinition.StartTime && current_tick <= this.DriveEntityLockDefinition.StartTime + this.Duration && this.Duration > 0 && this.DriveEntityLockDefinition.EntityLockParticles != null)
+			{
+				ushort local_tick = (ushort) (current_tick - this.DriveEntityLockDefinition.StartTime);
+				Vector3D jump_node = this.JumpGate.WorldJumpNode;
+				double farthest = 0;
+				double shortest = double.MaxValue;
+				Random prng = new Random();
+
+				foreach (MyJumpGateDrive drive in drives)
+				{
+					double distance = Vector3D.Distance(drive.WorldMatrix.Translation, jump_node);
+					farthest = Math.Max(farthest, distance);
+					shortest = Math.Min(shortest, distance);
+				}
+
+				foreach (MyJumpGateDrive drive in drives)
+				{
+					if (this.DriveInfo.ContainsKey(drive)) continue;
+					double distance = Vector3D.Distance(drive.WorldMatrix.Translation, jump_node);
+					float ratio = 0.5f;
+
+					switch (this.DriveEntityLockDefinition.LockDelayShift)
+					{
+						case LockDelayShiftEnum.NEAREST:
+							ratio = (float) MathHelper.Clamp((distance - shortest) / (farthest - shortest), 0, 1);
+							break;
+						case LockDelayShiftEnum.FARTHEST:
+							ratio = (float) (1 - MathHelper.Clamp((distance - shortest) / (farthest - shortest), 0, 1));
+							break;
+						case LockDelayShiftEnum.RANDOM:
+							ratio = (float) prng.NextDouble();
+							break;
+					}
+
+					ushort lock_time = (ushort) Math.Round((this.DriveEntityLockDefinition.MaxLockTime - this.DriveEntityLockDefinition.MinLockTime) * ratio + this.DriveEntityLockDefinition.MinLockTime);
+					this.DriveInfo[drive] = new DriveEntityLockInfo(lock_time, this.Duration, this.DriveEntityLockDefinition, drive, this.JumpGate, this.TargetJumpGate);
+				}
+
+				this.LockedEntities.Clear();
+				if (entities.Count == 0) return;
+				int ncount = (this.DriveEntityLockDefinition.MaxEntityLockCount == 0) ? entities.Count : this.DriveEntityLockDefinition.MaxEntityLockCount;
+				List<MyJumpGateDrive> closed_drives = new List<MyJumpGateDrive>();
+
+				switch (this.DriveEntityLockDefinition.EntityLockType)
+				{
+					case EntityLockTypeEnum.LOCK_NEAREST:
+						this.LockedEntities.AddRange(entities.OrderBy((entity) => Vector3D.DistanceSquared(entity.WorldMatrix.Translation, jump_node)).Take(ncount));
+						break;
+					case EntityLockTypeEnum.LOCK_FARTHEST:
+						this.LockedEntities.AddRange(entities.OrderByDescending((entity) => Vector3D.DistanceSquared(entity.WorldMatrix.Translation, jump_node)).Take(ncount));
+						break;
+					case EntityLockTypeEnum.LOCK_RANDOM:
+						if (local_tick != 0) break;
+						for (int i = 0; i < ncount; ++i) this.LockedEntities.Add(entities.GetRandomItemFromList());
+						break;
+				}
+
+				foreach (KeyValuePair<MyJumpGateDrive, DriveEntityLockInfo> pair in this.DriveInfo)
+				{
+					if (!drives.Contains(pair.Key))
+					{
+						pair.Value.Clean();
+						closed_drives.Add(pair.Key);
+						continue;
+					}
+
+					pair.Value.Tick(local_tick, this.DriveEntityLockDefinition.EntityLockParticles, this.LockedEntities, drives, ref endpoint);
+				}
+
+				foreach (MyJumpGateDrive drive in closed_drives) this.DriveInfo.Remove(drive);
+			}
+		}
+
+		/// <summary>
+		/// Stops this effect temporarily
+		/// </summary>
+		public void Stop()
+		{
+			if (this.DriveInfo == null || this.DriveInfo.Count == 0) return;
+			foreach (KeyValuePair<MyJumpGateDrive, DriveEntityLockInfo> pair in this.DriveInfo) pair.Value.Stop();
+			this.DriveInfo.Clear();
+			this.LockedEntities?.Clear();
+		}
+
+		/// <summary>
+		/// Stops this effect fully<br />
+		/// Effect is cleaned and cannot be replayed
+		/// </summary>
+		public void Clean()
+		{
+			foreach (KeyValuePair<MyJumpGateDrive, DriveEntityLockInfo> pair in this.DriveInfo) pair.Value.Clean();
+			this.DriveInfo?.Clear();
+			this.LockedEntities?.Clear();
+			this.DriveInfo = null;
+			this.LockedEntities = null;
+			this.DriveEntityLockDefinition = null;
+			this.JumpGate = null;
+		}
+		#endregion
+	}
 	#endregion
 
 	#region Animation Implementations
@@ -3929,6 +4343,11 @@ namespace IOTA.ModularJumpGates
 		/// The anti-node physics or null
 		/// </summary>
 		protected NodePhysics AntiNodePhysics;
+
+		/// <summary>
+		/// The drive entity lock or null
+		/// </summary>
+		protected DriveEntityLock DriveEntityLock;
 
 		/// <summary>
 		/// The calling jump gate
@@ -4033,6 +4452,7 @@ namespace IOTA.ModularJumpGates
 			this.AntiNodeSounds.ForEach((sound) => sound.Stop());
 			this.ClosedEntities.Clear();
 			this.ClosedDrives.Clear();
+			this.DriveEntityLock?.Stop();
 
 			if (full_close)
 			{
@@ -4045,6 +4465,7 @@ namespace IOTA.ModularJumpGates
 				this.NodeSounds.ForEach((sound) => sound.Clean());
 				this.AntiNodeSounds.ForEach((sound) => sound.Clean());
 				this.DriveColor?.Clean();
+				this.DriveEntityLock?.Clean();
 				this.PerDriveParticles.Clear();
 				this.PerAntiDriveParticles.Clear();
 				this.PerEntityParticles.Clear();
@@ -4058,6 +4479,7 @@ namespace IOTA.ModularJumpGates
 				this.ControllerSettings = null;
 				this.DriveColor = null;
 				this.NodePhysics = null;
+				this.DriveEntityLock = null;
 				this.ClosedEntities = null;
 				this.ClosedDrives = null;
 				this.PerDriveParticles = null;
@@ -4146,6 +4568,7 @@ namespace IOTA.ModularJumpGates
 			this.DriveColor = (def.DriveEmissiveColor == null) ? null : new DriveEmissiveColor(def.DriveEmissiveColor, def.Duration, jump_gate, target_gate, controller_settings);
 			this.NodePhysics = (def.NodePhysics == null) ? null : new NodePhysics(def.NodePhysics, def.Duration, jump_gate, target_gate, false);
 			this.AntiNodePhysics = (def.AntiNodePhysics == null) ? null : new NodePhysics(def.AntiNodePhysics, def.Duration, jump_gate, target_gate, true);
+			this.DriveEntityLock = (def.DriveEntityLock == null) ? null : new DriveEntityLock(def.DriveEntityLock, def.Duration, jump_gate, target_gate);
 
 			if (def.NodeSounds != null) foreach (SoundDef sound_def in def.NodeSounds) this.NodeSounds.Add(new Sound(sound_def, def.Duration, jump_gate, target_gate, false));
 			if (def.AntiNodeSounds != null) foreach (SoundDef sound_def in def.AntiNodeSounds) this.AntiNodeSounds.Add(new Sound(sound_def, def.Duration, jump_gate, target_gate, true));
@@ -4248,6 +4671,7 @@ namespace IOTA.ModularJumpGates
 					foreach (Sound sound in this.NodeSounds) sound.Tick(this.CurrentTick, jump_gate_drives, jump_gate_entities, ref endpoint, null);
 					this.NodePhysics?.Tick(this.CurrentTick, jump_gate_drives, jump_gate_entities, ref endpoint);
 					this.DriveColor?.Tick(this.CurrentTick, jump_gate_drives, jump_gate_entities, ref endpoint);
+					this.DriveEntityLock?.Tick(this.CurrentTick, jump_gate_drives, jump_gate_entities, ref endpoint);
 				}
 
 				if (this.JumpType == MyJumpTypeEnum.STANDARD || this.JumpType == MyJumpTypeEnum.INBOUND_VOID)
@@ -4318,6 +4742,7 @@ namespace IOTA.ModularJumpGates
 			this.DriveColor = (def.DriveEmissiveColor == null) ? null : new DriveEmissiveColor(def.DriveEmissiveColor, def.Duration, jump_gate, target_gate, controller_settings);
 			this.NodePhysics = (def.NodePhysics == null) ? null : new NodePhysics(def.NodePhysics, def.Duration, jump_gate, target_gate, false);
 			this.AntiNodePhysics = (def.AntiNodePhysics == null) ? null : new NodePhysics(def.AntiNodePhysics, def.Duration, jump_gate, target_gate, true);
+			this.DriveEntityLock = (def.DriveEntityLock == null) ? null : new DriveEntityLock(def.DriveEntityLock, def.Duration, jump_gate, target_gate);
 			this.Beam = (def.BeamPulse == null) ? null : new BeamPulse(def.BeamPulse, def.Duration, jump_gate, target_gate, controller_settings);
 
 			if (def.NodeSounds != null) foreach (SoundDef sound_def in def.NodeSounds) this.NodeSounds.Add(new Sound(sound_def, def.Duration, jump_gate, target_gate, false));
@@ -4468,6 +4893,7 @@ namespace IOTA.ModularJumpGates
 					foreach (Sound sound in this.NodeSounds) sound.Tick(this.CurrentTick, jump_gate_drives, jump_gate_entities, ref endpoint, null);
 					this.NodePhysics?.Tick(this.CurrentTick, jump_gate_drives, jump_gate_entities, ref endpoint);
 					this.DriveColor?.Tick(this.CurrentTick, jump_gate_drives, jump_gate_entities, ref endpoint);
+					this.DriveEntityLock?.Tick(this.CurrentTick, jump_gate_drives, jump_gate_entities, ref endpoint);
 				}
 
 				if (this.JumpType == MyJumpTypeEnum.STANDARD || this.JumpType == MyJumpTypeEnum.INBOUND_VOID)
@@ -4552,6 +4978,7 @@ namespace IOTA.ModularJumpGates
 			this.DriveColor = (def.DriveEmissiveColor == null) ? null : new DriveEmissiveColor(def.DriveEmissiveColor, def.Duration, jump_gate, target_gate, controller_settings);
 			this.NodePhysics = (def.NodePhysics == null) ? null : new NodePhysics(def.NodePhysics, def.Duration, jump_gate, target_gate, false);
 			this.AntiNodePhysics = (def.AntiNodePhysics == null) ? null : new NodePhysics(def.AntiNodePhysics, def.Duration, jump_gate, target_gate, true);
+			this.DriveEntityLock = (def.DriveEntityLock == null) ? null : new DriveEntityLock(def.DriveEntityLock, def.Duration, jump_gate, target_gate);
 
 			if (def.NodeSounds != null) foreach (SoundDef sound_def in def.NodeSounds) this.NodeSounds.Add(new Sound(sound_def, def.Duration, jump_gate, target_gate, false));
 			if (def.AntiNodeSounds != null) foreach (SoundDef sound_def in def.AntiNodeSounds) this.AntiNodeSounds.Add(new Sound(sound_def, def.Duration, jump_gate, target_gate, true));
@@ -4654,6 +5081,7 @@ namespace IOTA.ModularJumpGates
 					foreach (Sound sound in this.NodeSounds) sound.Tick(this.CurrentTick, jump_gate_drives, jump_gate_entities, ref endpoint, null);
 					this.NodePhysics?.Tick(this.CurrentTick, jump_gate_drives, jump_gate_entities, ref endpoint);
 					this.DriveColor?.Tick(this.CurrentTick, jump_gate_drives, jump_gate_entities, ref endpoint);
+					this.DriveEntityLock?.Tick(this.CurrentTick, jump_gate_drives, jump_gate_entities, ref endpoint);
 				}
 
 				if (this.JumpType == MyJumpTypeEnum.STANDARD || this.JumpType == MyJumpTypeEnum.INBOUND_VOID)
@@ -4905,7 +5333,7 @@ namespace IOTA.ModularJumpGates
 			List<MyJumpGateDrive> drives = null;
 			this.TEMP_JumpGateDrives.AddRange(this.JumpGate.GetJumpGateDrives());
 			if (this.JumpGate.Phase == MyJumpGatePhase.JUMPING || this.JumpGate.Phase == MyJumpGatePhase.RESETTING) foreach (KeyValuePair<MyEntity, EntityBatch> pair in this.JumpGate.EntityBatches) this.TEMP_JumpGateEntitiesL.AddList(pair.Value.Batch);
-			else this.TEMP_JumpGateEntitiesL.AddRange(this.JumpGate.GetEntitiesInJumpSpace(true).Select((pair) => pair.Key));
+			if (this.JumpGate.Phase != MyJumpGatePhase.JUMPING || this.JumpGate.Phase == MyJumpGatePhase.RESETTING) this.TEMP_JumpGateEntitiesL.AddRange(this.JumpGate.GetEntitiesInJumpSpace(true).Select((pair) => pair.Key));
 			drives = this.TEMP_JumpGateDrives;
 
 			List<MyJumpGateDrive> anti_drives = null;
@@ -5185,7 +5613,7 @@ namespace IOTA.ModularJumpGates
 				if (!animation.Enabled) continue;
 				string name = (animation.AnimationName == null || animation.AnimationName.Trim().Length == 0) ? "<NULL>" : animation.AnimationName.Trim();
 				string full_name = $"{animation.GetType().FullName}.{name}";
-				if (animation.AnimationContraint == null) animation.SubtypeID = null;
+				if (animation.AnimationConstraint == null) animation.SubtypeID = null;
 				else animation.SubtypeID = MyAnimationHandler.NextSubtypeID++;
 				animation.Prepare();
 
@@ -5205,7 +5633,7 @@ namespace IOTA.ModularJumpGates
 					if (!animation.Enabled) continue;
 					string name = (animation.AnimationName == null || animation.AnimationName.Trim().Length == 0) ? "<NULL>" : animation.AnimationName.Trim();
 					string full_name = $"{pair.Key.ModName}.{animation.GetType().FullName}.{name}";
-					if (animation.AnimationContraint == null) animation.SubtypeID = null;
+					if (animation.AnimationConstraint == null) animation.SubtypeID = null;
 					else animation.SubtypeID = MyAnimationHandler.NextSubtypeID++;
 					animation.SourceMod = pair.Key.ModName;
 					animation.Prepare();
@@ -5281,8 +5709,8 @@ namespace IOTA.ModularJumpGates
 			if (animations == null) return null;
 			else if (jump_gate == null) return animations.FirstOrDefault();
 			else if (!MyNetworkInterface.IsStandaloneMultiplayerClient && !jump_gate.IsValid()) return null;
-			AnimationDef _default = animations.Where((animation) => animation.AnimationContraint == null).FirstOrDefault();
-			AnimationDef matched = animations.Where((animation) => animation.AnimationContraint?.Validate(jump_gate) ?? false).FirstOrDefault();
+			AnimationDef _default = animations.Where((animation) => animation.AnimationConstraint == null).FirstOrDefault();
+			AnimationDef matched = animations.Where((animation) => animation.AnimationConstraint?.Validate(jump_gate) ?? false).FirstOrDefault();
 			return matched ?? _default ?? null;
 		}
 

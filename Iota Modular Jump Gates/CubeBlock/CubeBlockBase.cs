@@ -33,7 +33,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// <summary>
 		/// The number of game ticks between network block syncs
 		/// </summary>
-		public static readonly uint ForceUpdateDelay = 300;
+		public static readonly uint ForceUpdateDelay = 600;
 
 		/// <summary>
 		/// The radii of this block's model

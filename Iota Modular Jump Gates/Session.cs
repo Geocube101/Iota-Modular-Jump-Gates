@@ -557,6 +557,7 @@ namespace IOTA.ModularJumpGates
 				MyJumpGateModSession.Network.Off(MyPacketTypeEnum.COMM_LINKED, this.OnNetworkCommLinkedUpdate);
 				MyJumpGateModSession.Network.Off(MyPacketTypeEnum.BEACON_LINKED, this.OnNetworkBeaconLinkedUpdate);
 				MyJumpGateModSession.Network.Off(MyPacketTypeEnum.UPDATE_CONFIG, this.OnConfigurationUpdate);
+				MyJumpGateModSession.Network.Off(MyPacketTypeEnum.MARK_GATES_DIRTY, this.OnNetworkGridGateReconstruct);
 				MyJumpGateModSession.Network.Unregister();
 			}
 
@@ -657,6 +658,7 @@ namespace IOTA.ModularJumpGates
 			{
 				MyJumpGateModSession.Network.On(MyPacketTypeEnum.COMM_LINKED, this.OnNetworkCommLinkedUpdate);
 				MyJumpGateModSession.Network.On(MyPacketTypeEnum.BEACON_LINKED, this.OnNetworkBeaconLinkedUpdate);
+				MyJumpGateModSession.Network.On(MyPacketTypeEnum.MARK_GATES_DIRTY, this.OnNetworkGridGateReconstruct);
 			}
 
 			if (MyNetworkInterface.IsDedicatedMultiplayerServer) MyInterServerCommunication.Register(0, 0, null);
@@ -1162,6 +1164,18 @@ namespace IOTA.ModularJumpGates
 		}
 
 		/// <summary>
+		/// Event handler for grid gate reconstruct packet
+		/// </summary>
+		/// <param name="packet">The received packet</param>
+		private void OnNetworkGridGateReconstruct(MyNetworkInterface.Packet packet)
+		{
+			if (packet == null || MyNetworkInterface.IsStandaloneMultiplayerClient || packet.PhaseFrame != 1) return;
+			long id = packet.Payload<long>();
+			if (id == -1) foreach (KeyValuePair<long, MyJumpGateConstruct> pair in this.GridMap) if (!pair.Value.MarkClosed) pair.Value.MarkGatesForUpdate();
+			else this.GridMap.GetValueOrDefault(id, null)?.MarkGatesForUpdate();
+		}
+
+		/// <summary>
 		/// Event handler for configuration update
 		/// </summary>
 		/// <param name="packet">The received packet</param>
@@ -1207,7 +1221,7 @@ namespace IOTA.ModularJumpGates
 					}
 					catch (Exception e)
 					{
-						Logger.Error($"Error during construct thread tick - {grid.CubeGrid?.EntityId.ToString() ?? "N/A"} ({gridid})\n  ...\n[ {e} ]: {e.Message}\n{e.StackTrace}\n{e.InnerException}");
+						Logger.Error($"Error during construct thread tick - {grid.CubeGridID} ({gridid})\n  ...\n[ {e.GetType().Name} ]: {e.Message}\n{e.StackTrace}\n{e.InnerException}");
 					}
 				}
 

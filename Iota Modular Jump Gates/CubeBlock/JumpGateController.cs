@@ -1365,6 +1365,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			this.BaseBlockSettings.CanAcceptOwned(new_settings.CanAcceptOwned());
 			this.BaseBlockSettings.JumpGateName(new_settings.JumpGateName());
 			this.BaseBlockSettings.AutoActivationDelay(new_settings.AutoActivationDelay());
+			this.BaseBlockSettings.CanAutoActivate(new_settings.CanAutoActivate());
 
 			KeyValuePair<float, float> mass = new_settings.AutoActivateMass();
 			this.BaseBlockSettings.AutoActivateMass(mass.Key, mass.Value);

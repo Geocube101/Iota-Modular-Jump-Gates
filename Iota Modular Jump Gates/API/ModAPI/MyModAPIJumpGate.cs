@@ -248,6 +248,15 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		}
 
 		/// <summary>
+		/// Marks this jump gate's physics collider as dirty<br />
+		/// It will be updated on next physics tick or a packet sent to server if in standalone client
+		/// </summary>
+		public void SetColliderDirtyMP()
+		{
+			this.GetMethod<Action>("SetColliderDirtyMP")();
+		}
+
+		/// <summary>
 		/// Marks this jump gate's jump ellipsoid as dirty<br />
 		/// It will be updated on next tick
 		/// </summary>

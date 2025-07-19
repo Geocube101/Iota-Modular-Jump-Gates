@@ -1178,7 +1178,7 @@ namespace IOTA.ModularJumpGates.Terminal
 					if (!do_rescan_entities.Enabled(block)) return;
 					else if ((antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block)) == null || antenna.JumpGateGrid == null || antenna.JumpGateGrid.Closed) return;
 					MyJumpGate jump_gate = antenna.GetInboundControlGate(antenna.CurrentTerminalChannel);
-					jump_gate?.SetColliderDirty();
+					jump_gate?.SetColliderDirtyMP();
 				};
 				MyJumpGateRemoteAntennaTerminal.TerminalControls.Add(do_rescan_entities);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(do_rescan_entities);

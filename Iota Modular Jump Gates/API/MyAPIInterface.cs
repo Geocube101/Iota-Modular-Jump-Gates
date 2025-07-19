@@ -17,7 +17,7 @@ namespace IOTA.ModularJumpGates.API
 	internal class MyAPIInterface
 	{
 		public static readonly int[] ModAPIVersion = new int[2] { 1, 2 };
-		public static readonly int[] AnimationAPIVersion = new int[2] { 1, 0 };
+		public static readonly int[] AnimationAPIVersion = new int[2] { 1, 1 };
 
 		private bool Registered = false;
 		private readonly ConcurrentDictionary<long, Dictionary<string, object>> ConstructWrappers = new ConcurrentDictionary<long, Dictionary<string, object>>();
@@ -510,6 +510,7 @@ namespace IOTA.ModularJumpGates.API
 					gate.JumpFromVoid(controller_settings, prefabs?.Select((info) => new MyPrefabInfo(info)).ToList(), spawned_grids);
 				}),
 				["SetColliderDirty"] = (Action) gate.SetColliderDirty,
+				["SetColliderDirtyMP"] = (Action) gate.SetColliderDirtyMP,
 				["SetJumpSpaceEllipsoidDirty"] = (Action) gate.SetJumpSpaceEllipsoidDirty,
 				["SetDirty"] = (Action) gate.SetDirty,
 				["StopSoundByName"] = (Action<string>) gate.StopSound,

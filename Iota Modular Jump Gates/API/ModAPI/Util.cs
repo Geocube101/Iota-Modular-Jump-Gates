@@ -1246,6 +1246,11 @@ namespace IOTA.ModularJumpGates.API.ModAPI.Util
 		/// An empty UUID
 		/// </summary>
 		public static readonly JumpGateUUID Empty = new JumpGateUUID(0, 0);
+
+		/// <summary>
+		/// A full UUID
+		/// </summary>
+		public static readonly JumpGateUUID Full = new JumpGateUUID(long.MaxValue, long.MaxValue);
 		#endregion
 
 		#region Private Variables
