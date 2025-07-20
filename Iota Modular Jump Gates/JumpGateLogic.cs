@@ -1769,7 +1769,7 @@ namespace IOTA.ModularJumpGates
 							// Calculate end position and velocity
 							MatrixD entity_matrix = entity.WorldMatrix;
 							Vector3D velocity = entity.Physics.LinearVelocity - this.JumpNodeVelocity;
-							velocity = MyJumpGateModSession.WorldVectorToLocalVectorD(ref this_matrix, entity.Physics.LinearVelocity);
+							velocity = MyJumpGateModSession.WorldVectorToLocalVectorD(ref this_matrix, velocity);
 							velocity = MyJumpGateModSession.LocalVectorToWorldVectorD(ref target_matrix, -velocity);
 							velocity += target_gate?.JumpNodeVelocity ?? Vector3D.Zero;
 							MyJumpGateModSession.Instance.WarpEntityBatchOverTime(this, batch.Batch, ref entity_matrix, ref batch.ParentFinalMatrix, ref batch.ParentTargetPosition, jump_duration, velocity.Length(), (batch_) => { foreach (MyEntity child in batch_) if (child != null && !child.MarkedForClose && child.Physics != null) child.Physics.LinearVelocity = velocity; });
