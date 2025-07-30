@@ -628,7 +628,7 @@ namespace IOTA.ModularJumpGates
 			get
 			{
 				BoundingEllipsoidD world_ellipse = this.TrueWorldJumpEllipse;
-				double? depth_percent = this.ControlObject?.BlockSettings.JumpSpaceDepthPercent();
+				double? depth_percent = this.ControlObject?.BlockSettings?.JumpSpaceDepthPercent();
 				if (depth_percent == null) return world_ellipse;
 				world_ellipse.Radii.Y = world_ellipse.Radii.X * depth_percent.Value;
 				return world_ellipse;

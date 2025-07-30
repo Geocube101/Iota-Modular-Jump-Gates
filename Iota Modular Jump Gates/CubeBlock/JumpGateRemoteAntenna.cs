@@ -800,6 +800,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 
 			lock (this.NearbyAntennasMutex)
 			{
+				int count = this.NearbyAntennas?.Count ?? 0;
 				this.NearbyAntennas?.Clear();
 				this.LastNearbyAntennasUpdateTime = this.LocalGameTick;
 
@@ -819,6 +820,8 @@ namespace IOTA.ModularJumpGates.CubeBlock
 							this.NearbyAntennas?.Add(antenna);
 						}
 					}
+
+					if ((this.NearbyAntennas?.Count ?? 0) != count) this.SetDirty();
 				}
 			}
 		}

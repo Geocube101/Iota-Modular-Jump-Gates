@@ -238,6 +238,7 @@ namespace IOTA.ModularJumpGates.Util
 				Logger.Debug($"Batch parent @ {parent.EntityId} closed");
 				return true;
 			}
+			else if (this.IsComplete && MyNetworkInterface.IsStandaloneMultiplayerClient) return true;
 			else if (this.IsComplete)
 			{
 				for (int i = 0; i < this.BatchedEntities.Count; ++i)
@@ -257,7 +258,11 @@ namespace IOTA.ModularJumpGates.Util
 				parent_matrix.Translation = this.FinalPos.Translation;
 				parent.Teleport(parent_matrix);
 			}
-			else if (complete) parent.PositionComp?.SetWorldMatrix(ref this.FinalPos, parent.Parent, true, true, true, true, true);
+			else if (complete)
+			{
+				parent.Teleport(this.FinalPos, parent.Parent);
+				parent.PositionComp.SetWorldMatrix(ref this.FinalPos, parent.Parent, forceUpdate: false, updateChildren: true, updateLocal: true, skipTeleportCheck: true, forceUpdateAllChildren: false, ignoreAssert: false);
+			}
 			else
 			{
 				double tick_ratio = MathHelper.Clamp((double) this.CurrentTick / this.Duration, 0, 1);

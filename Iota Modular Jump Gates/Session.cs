@@ -926,9 +926,9 @@ namespace IOTA.ModularJumpGates
 					MatrixD orientation = jump_grid.GetConstructCalculatedOrienation();
 					float extent = (float) jump_grid.GetCombinedAABB().HalfExtents.Max();
 					MyStringId square = MyStringId.GetOrCompute("Square");
-					MyTransparentGeometry.AddLineBillboard(square, Color.Red, orientation.Translation, orientation.Right, extent, 0.1f);
+					MyTransparentGeometry.AddLineBillboard(square, Color.Red, orientation.Translation, orientation.Forward, extent, 0.1f);
 					MyTransparentGeometry.AddLineBillboard(square, Color.Lime, orientation.Translation, orientation.Up, extent, 0.1f);
-					MyTransparentGeometry.AddLineBillboard(square, Color.Blue, orientation.Translation, orientation.Backward, extent, 0.1f);
+					MyTransparentGeometry.AddLineBillboard(square, Color.Blue, orientation.Translation, orientation.Right, extent, 0.1f);
 
 					try
 					{
