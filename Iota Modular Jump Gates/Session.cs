@@ -121,7 +121,7 @@ namespace IOTA.ModularJumpGates
 		/// <summary>
 		/// The time in game ticks after which all grids are sent from server to all clients
 		/// </summary>
-		private ushort GridNetworkUpdateDelay = 30 * 60;
+		private ushort GridNetworkUpdateDelay = 18000;
 
 		/// <summary>
 		/// The gameplay frame counter's value 1 tick ago
