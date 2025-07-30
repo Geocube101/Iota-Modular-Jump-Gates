@@ -13,6 +13,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using VRage;
 using VRage.Game;
@@ -683,6 +684,22 @@ namespace IOTA.ModularJumpGates
 			MyAPIGateway.TerminalControls.CustomControlGetter += this.OnTerminalSelector;
 			MyChatCommandHandler.Init();
 			Logger.Log("INIT - Loaded.");
+
+			// Display startup messages
+			TextReader file_reader;
+			string filename;
+			MyObjectBuilder_Checkpoint.ModItem moditem = this.ModContext.ModItem;
+
+			if (MyAPIGateway.Session.IsUserAdmin(MyAPIGateway.Multiplayer.MyId))
+			{
+				filename = "Data/StartupMessage/Admin.txt";
+				file_reader = (MyAPIGateway.Utilities.FileExistsInModLocation(filename, moditem)) ? MyAPIGateway.Utilities.ReadFileInModLocation(filename, moditem) : null;
+				if (file_reader != null) MyAPIGateway.Utilities.ShowMessage(MyJumpGateModSession.DISPLAYNAME, file_reader.ReadToEnd());
+			}
+
+			filename = "Data/StartupMessage/General.txt";
+			file_reader = (MyAPIGateway.Utilities.FileExistsInModLocation(filename, moditem)) ? MyAPIGateway.Utilities.ReadFileInModLocation(filename, moditem) : null;
+			if (file_reader != null) MyAPIGateway.Utilities.ShowMessage(MyJumpGateModSession.DISPLAYNAME, file_reader.ReadToEnd());
 		}
 
 		/// <summary>
@@ -906,6 +923,12 @@ namespace IOTA.ModularJumpGates
 					jump_drives.AddRange(jump_grid.GetAttachedJumpGateDrives());
 					color4 = Color.Violet.ToVector4() * 20;
 					foreach (MyJumpGate gate in jump_gates) if (gate.TrueEndpoint != null) MySimpleObjectDraw.DrawLine(gate.WorldJumpNode, gate.TrueEndpoint.Value, line_material, ref color4, 10);
+					MatrixD orientation = jump_grid.GetConstructCalculatedOrienation();
+					float extent = (float) jump_grid.GetCombinedAABB().HalfExtents.Max();
+					MyStringId square = MyStringId.GetOrCompute("Square");
+					MyTransparentGeometry.AddLineBillboard(square, Color.Red, orientation.Translation, orientation.Right, extent, 0.1f);
+					MyTransparentGeometry.AddLineBillboard(square, Color.Lime, orientation.Translation, orientation.Up, extent, 0.1f);
+					MyTransparentGeometry.AddLineBillboard(square, Color.Blue, orientation.Translation, orientation.Backward, extent, 0.1f);
 
 					try
 					{
@@ -1419,7 +1442,7 @@ namespace IOTA.ModularJumpGates
 		/// <param name="time">The duration in game ticks</param>
 		/// <param name="max_safe_speed">The temporary speed to clamp entities to after warp</param>
 		/// <param name="callback">A callback called when the warp is complete</param>
-		public void WarpEntityBatchOverTime(MyJumpGate jump_gate, List<MyEntity> entity_batch, ref MatrixD source_matrix, ref MatrixD dest_matrix, ref Vector3D end_position, ushort time, double max_safe_speed, Action<List<MyEntity>> callback = null)
+		public void WarpEntityBatchOverTime(MyJumpGate jump_gate, List<MyEntity> entity_batch, ref MatrixD source_matrix, ref MatrixD dest_matrix, ref Vector3D end_position, ushort time, double max_safe_speed, Action<EntityWarpInfo> callback = null)
 		{
 			if (MyNetworkInterface.IsStandaloneMultiplayerClient) return;
 			this.EntityWarps.TryAdd(entity_batch[0].EntityId, new EntityWarpInfo(jump_gate, ref source_matrix, ref end_position, ref dest_matrix, entity_batch, time, max_safe_speed, callback));

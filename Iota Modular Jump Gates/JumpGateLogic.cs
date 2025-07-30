@@ -1478,14 +1478,15 @@ namespace IOTA.ModularJumpGates
 
 							for (ulong i = 0; i < segments; ++i)
 							{
-								float gravity_strength;
-								Vector3D gravity_direction = MyAPIGateway.GravityProviderSystem.CalculateNaturalGravityInPoint(startpos, out gravity_strength);
-								double g_effector = this.JumpGateConfiguration.GateKilometerOffsetPerUnitG * gravity_strength * distance_multiplier;
+								float _;
+								Vector3D gravity_direction = MyAPIGateway.Physics.CalculateNaturalGravityAt(startpos, out _);
+								double g_effector = this.JumpGateConfiguration.GateKilometerOffsetPerUnitG * gravity_direction.Length() * distance_multiplier;
 								direction += gravity_direction * g_effector;
 								startpos += direction;
 							}
 
 							distance_to_endpoint = Vector3D.Distance(startpos, jump_node);
+							Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} GRAVITY_ENDPOINT_OFFSET - OLD={_endpoint.Value}; NEW={startpos}; OFFSET={Vector3D.Distance(startpos, _endpoint.Value)}", 5);
 
 							// Apply random offset to endpoint
 							if (this.JumpGateConfiguration.ConfineUntetheredSpread)
@@ -1519,8 +1520,10 @@ namespace IOTA.ModularJumpGates
 						MatrixD target_matrix = target_gate?.TrueWorldJumpEllipse.WorldMatrix ?? MatrixD.CreateWorld(endpoint, this_matrix.Forward, this_matrix.Up);
 						Vector3D src_gate_velocity = this.JumpNodeVelocity;
 						Vector3D dst_gate_velocity = (target_gate == null) ? Vector3D.Zero : target_gate.JumpNodeVelocity;
+						MyGravityAlignmentType alignment = controller_settings.GravityAlignmentType();
 
 						List<MyEntity> obstructing = new List<MyEntity>();
+						List<MyVoxelBase> terrain = new List<MyVoxelBase>();
 						List<MyEntity> syphon_entities = new List<MyEntity>();
 						List<IMySlimBlock> destroyed = new List<IMySlimBlock>();
 						List<IMyCubeGrid> grids = new List<IMyCubeGrid>();
@@ -1536,17 +1539,19 @@ namespace IOTA.ModularJumpGates
 							BoundingBoxD obstruction_aabb;
 							MyJumpGateConstruct parent = (entity is MyCubeGrid) ? MyJumpGateModSession.Instance.GetUnclosedJumpGateGrid(entity.EntityId) : null;
 							entity = (parent == null) ? entity : (MyCubeGrid) parent.CubeGrid;
+							MatrixD orientation_matrix = (parent != null && parent != this.JumpGateGrid) ? parent.GetConstructCalculatedOrienation() : entity.WorldMatrix;
 							Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} BATCHING - BATCH_PARENT={entity.EntityId}; ISGRID={parent != null}", 5);
 
 							// Calculate end position
-							Vector3D position = MyJumpGateModSession.WorldVectorToLocalVectorP(ref this_matrix, entity.WorldMatrix.Translation);
+							Vector3D position = MyJumpGateModSession.WorldVectorToLocalVectorP(ref this_matrix, orientation_matrix.Translation);
 							position = MyJumpGateModSession.LocalVectorToWorldVectorP(ref target_matrix, position);
-							Vector3D forward_dir = MyJumpGateModSession.WorldVectorToLocalVectorD(ref this_matrix, entity.WorldMatrix.Forward);
+							Vector3D forward_dir = MyJumpGateModSession.WorldVectorToLocalVectorD(ref this_matrix, orientation_matrix.Forward);
 							forward_dir = MyJumpGateModSession.LocalVectorToWorldVectorD(ref target_matrix, forward_dir);
-							Vector3D up_dir = MyJumpGateModSession.WorldVectorToLocalVectorD(ref this_matrix, entity.WorldMatrix.Up);
+							Vector3D up_dir = MyJumpGateModSession.WorldVectorToLocalVectorD(ref this_matrix, orientation_matrix.Up);
 							up_dir = MyJumpGateModSession.LocalVectorToWorldVectorD(ref target_matrix, up_dir);
 							MatrixD.CreateWorld(ref position, ref forward_dir, ref up_dir, out entity_final_matrix);
-							Vector3D entity_target_position = target_matrix.Translation + (entity.WorldMatrix.Translation - this_matrix.Translation);
+							Vector3D entity_target_position = target_matrix.Translation + (orientation_matrix.Translation - this_matrix.Translation);
+							Vector3D gravity_vector = Vector3D.Zero;
 
 							// Apply randomness to end position of applicable
 							if (target_gate == null && !this.JumpGateConfiguration.ConfineUntetheredSpread)
@@ -1557,6 +1562,44 @@ namespace IOTA.ModularJumpGates
 								double rand3 = prng.NextDouble();
 								entity_final_matrix.Translation = position = new BoundingSphereD(endpoint, max_offset).RandomToUniformPointInSphere(rand1, rand2, rand3);
 								Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} ... RANDOM_ENDPOINT_OFFSET_LOCAL @ {entity.EntityId} - OLD={endpoint}; NEW={position}; OFFSET={Vector3D.Distance(position, endpoint)}", 5);
+							}
+
+							// Align entity to gravity
+							if (alignment != MyGravityAlignmentType.NONE)
+							{
+								//Vector3D gravity_vector = Vector3D.Zero;
+								float gravity_strength;
+
+								switch (alignment)
+								{
+									case MyGravityAlignmentType.NATURAL:
+										gravity_vector = MyAPIGateway.Physics.CalculateNaturalGravityAt(target_matrix.Translation, out gravity_strength);
+										break;
+									case MyGravityAlignmentType.ARTIFICIAL:
+										MyAPIGateway.Physics.CalculateNaturalGravityAt(target_matrix.Translation, out gravity_strength);
+										gravity_vector = MyAPIGateway.Physics.CalculateArtificialGravityAt(target_matrix.Translation, gravity_strength);
+										break;
+									case MyGravityAlignmentType.BOTH:
+										gravity_vector = MyAPIGateway.Physics.CalculateNaturalGravityAt(target_matrix.Translation, out gravity_strength);
+										gravity_vector += MyAPIGateway.Physics.CalculateArtificialGravityAt(target_matrix.Translation, gravity_strength);
+										break;
+								}
+
+								if (gravity_vector != Vector3D.Zero)
+								{
+									double angle = Vector3D.Angle(gravity_vector, entity_final_matrix.Down);
+									Logger.Log($"RESULT-{entity.DisplayName} = O1 {angle * (180d / Math.PI)}");
+
+									if (angle > 0.0017453292519943296)
+									{
+										Vector3D axis = ((angle == Math.PI) ? Vector3D.CalculatePerpendicularVector(gravity_vector) : Vector3D.Cross(gravity_vector, entity_final_matrix.Down)).Normalized();
+										QuaternionD transform = QuaternionD.CreateFromAxisAngle(axis, -angle);
+										entity_final_matrix = Extensions.Extensions.Transform(ref entity_final_matrix, ref transform).Round(8);
+										entity_final_matrix.Translation = position;
+									}
+
+									Logger.Log($"RESULT-{entity.DisplayName} = O2 {Vector3D.Angle(entity_final_matrix.Down, gravity_vector) * (180d / Math.PI)}, {Vector3D.Angle(entity_final_matrix.Down, entity_final_matrix.Up) * (180d / Math.PI)}");
+								}
 							}
 
 							// Construct specific checks
@@ -1606,6 +1649,30 @@ namespace IOTA.ModularJumpGates
 								}
 
 								obstructing.Clear();
+
+								// Terrain Check
+								MyGamePruningStructure.GetAllVoxelMapsInBox(ref obstruction_aabb, terrain);
+								bool terrain_obstruct = false;
+
+								foreach (IMyCubeGrid subgrid in parent.GetCubeGrids())
+								{
+									Vector3 extents = subgrid.LocalAABB.Extents * 0.75f;
+									BoundingBoxD local_aabb = new BoundingBoxD(subgrid.LocalAABB.Center - extents, subgrid.LocalAABB.Center + extents);
+									MatrixD world_matrix = entity_final_matrix;
+									Vector3D relation = subgrid.WorldMatrix.Translation - parent.CubeGrid.WorldMatrix.Translation;
+									relation = MyJumpGateModSession.WorldVectorToLocalVectorD(parent.CubeGrid.WorldMatrix, relation);
+									world_matrix.Translation = entity_final_matrix.Translation + MyJumpGateModSession.LocalVectorToWorldVectorD(ref entity_final_matrix, relation);
+									if (terrain_obstruct = terrain.Any((voxel) => voxel.GetVoxelContentInBoundingBox_Fast(local_aabb, world_matrix, true).Item2 > 0)) break;
+								}
+
+								terrain.Clear();
+
+								if (terrain_obstruct)
+								{
+									++skipped_entities_count;
+									Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} ... BATCH_SKIP_FAIL_OBSTRUCTED_TERRAIN", 4);
+									continue;
+								}
 
 								// Gather contained child entities
 								MyGamePruningStructure.GetTopmostEntitiesInBox(ref construct_aabb, obstructing);
@@ -1668,7 +1735,7 @@ namespace IOTA.ModularJumpGates
 							else
 							{
 								foreach (MyEntity merger in mergers) batch.RemoveAll(this.EntityBatches[merger].Batch.Contains);
-								this.EntityBatches[entity] = new EntityBatch(batch, ref entity_target_position, ref obstruction_aabb, ref entity_final_matrix);
+								this.EntityBatches[entity] = new EntityBatch(batch, ref entity_target_position, ref obstruction_aabb, ref entity_final_matrix, ref gravity_vector);
 								Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} ... BATCH_ADDED_{entity.EntityId}", 4);
 							}
 						}
@@ -1772,7 +1839,9 @@ namespace IOTA.ModularJumpGates
 							velocity = MyJumpGateModSession.WorldVectorToLocalVectorD(ref this_matrix, velocity);
 							velocity = MyJumpGateModSession.LocalVectorToWorldVectorD(ref target_matrix, -velocity);
 							velocity += target_gate?.JumpNodeVelocity ?? Vector3D.Zero;
-							MyJumpGateModSession.Instance.WarpEntityBatchOverTime(this, batch.Batch, ref entity_matrix, ref batch.ParentFinalMatrix, ref batch.ParentTargetPosition, jump_duration, velocity.Length(), (batch_) => { foreach (MyEntity child in batch_) if (child != null && !child.MarkedForClose && child.Physics != null) child.Physics.LinearVelocity = velocity; });
+							MyJumpGateModSession.Instance.WarpEntityBatchOverTime(this, batch.Batch, ref entity_matrix, ref batch.ParentFinalMatrix, ref batch.ParentTargetPosition, jump_duration, velocity.Length(), (batch_) => {
+								foreach (MyEntity child in batch_.EntityBatch) if (child != null && !child.MarkedForClose && child.Physics != null) child.Physics.LinearVelocity = velocity;
+							});
 							Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} ... TP_SUCCESS_BATCH_{entity.EntityId} - ENDPOINT={batch.ParentFinalMatrix.Translation}", 4);
 						}
 
@@ -1883,7 +1952,9 @@ namespace IOTA.ModularJumpGates
 									MatrixD entity_matrix = entity.WorldMatrix;
 									Vector3D velocity = MyJumpGateModSession.WorldVectorToLocalVectorD(ref this_matrix, entity.Physics.LinearVelocity);
 									velocity = MyJumpGateModSession.LocalVectorToWorldVectorD(ref target_matrix, velocity);
-									MyJumpGateModSession.Instance.WarpEntityBatchOverTime(this, batch.Batch, ref entity_matrix, ref batch.ParentFinalMatrix, ref batch.ParentTargetPosition, jump_duration, velocity.Length(), (batch_) => { foreach (MyEntity child in batch_) if (child != null && !child.MarkedForClose) child.Physics.LinearVelocity = velocity; });
+									MyJumpGateModSession.Instance.WarpEntityBatchOverTime(this, batch.Batch, ref entity_matrix, ref batch.ParentFinalMatrix, ref batch.ParentTargetPosition, jump_duration, velocity.Length(), (batch_) => {
+										foreach (MyEntity child in batch_.EntityBatch) if (child != null && !child.MarkedForClose) child.Physics.LinearVelocity = velocity;
+									});
 									Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} ... TP_SUCCESS_BATCH_{entity.EntityId} - ENDPOINT={batch.ParentFinalMatrix.Translation}", 4);
 								}
 							}
@@ -1894,7 +1965,6 @@ namespace IOTA.ModularJumpGates
 							}
 							else if (dst.WaypointType != MyWaypointType.SERVER)
 							{
-
 								int final_count = entities_to_jump.Count - skipped_entities_count;
 								string message = MyTexts.GetString("Notification_JumpGate_Jumped").Replace("{%0}", final_count.ToString()).Replace("{%1}", entities_to_jump.Count.ToString());
 								SendJumpResponse((final_count > 0) ? MyJumpFailReason.SUCCESS : MyJumpFailReason.NO_ENTITIES_JUMPED, final_count > 0, message);

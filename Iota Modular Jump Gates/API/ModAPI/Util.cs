@@ -32,6 +32,7 @@ namespace IOTA.ModularJumpGates.API.ModAPI.Util
 		NAME = 1, DESTINATIONS = 2, ANIMATIONS = 4, INBOUND_OUTBOUND = 8, ENTITY_FILTER = 16, AUTO_ACTIVATE = 32, COMM_LINKAGE = 64, JUMPSPACE = 128, COLOR_OVERRIDE = 256, VECTOR_OVERRIDE = 512, JUMP = 1024, NOJUMP = 2048,
 		ALL = 4095, NONE = 0,
 	}
+	public enum MyAPIGravityAlignmentType : byte { NONE = 0, NATURAL = 1, ARTIFICIAL = 2, BOTH = 3 }
 
 	/// <summary>
 	/// Class representing a 3D ellipsoid

@@ -219,6 +219,8 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 			private float AutoActivationDelay_V = 0;
 			[ProtoMember(26)]
 			private MyAPIJumpSpaceFitType JumpSpaceFitType_V = MyAPIJumpSpaceFitType.INNER;
+			[ProtoMember(27)]
+			private MyAPIGravityAlignmentType GravityAlignmentType_V = MyAPIGravityAlignmentType.NONE;
 
 			private readonly object WriterLock = new object();
 
@@ -249,6 +251,7 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 					this.HasVectorNormalOverride_V = (bool) mapping.GetValueOrDefault("HasVectorNormalOverride", this.HasVectorNormalOverride_V);
 					this.FactionDisplayType_V = (MyAPIFactionDisplayType) (byte) mapping.GetValueOrDefault("FactionDisplayType", (byte) this.FactionDisplayType_V);
 					this.JumpSpaceFitType_V = (MyAPIJumpSpaceFitType) (byte) mapping.GetValueOrDefault("JumpSpaceFitType", (byte) this.JumpSpaceFitType_V);
+					this.GravityAlignmentType_V = (MyAPIGravityAlignmentType) (byte) mapping.GetValueOrDefault("GravityAlignmentType", (byte) this.GravityAlignmentType_V);
 					this.JumpSpaceRadius_V = (double) mapping.GetValueOrDefault("JumpSpaceRadius", this.JumpSpaceRadius_V);
 					this.JumpSpaceDepthPercent_V = (double) mapping.GetValueOrDefault("JumpSpaceDepthPercent", this.JumpSpaceDepthPercent_V);
 					this.JumpEffectName_V = (string) mapping.GetValueOrDefault("JumpEffectName", this.JumpEffectName_V);
@@ -337,6 +340,7 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 						["HasVectorNormalOverride"] = this.HasVectorNormalOverride_V,
 						["FactionDisplayType"] = (byte) this.FactionDisplayType_V,
 						["JumpSpaceFitType"] = (byte) this.JumpSpaceFitType_V,
+						["GravityAlignmentType"] = (byte) this.GravityAlignmentType_V,
 						["JumpSpaceRadius"] = this.JumpSpaceRadius_V,
 						["JumpSpaceDepthPercent"] = this.JumpSpaceDepthPercent_V,
 						["JumpEffectName"] = this.JumpEffectName_V,
@@ -412,6 +416,10 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 			public void JumpSpaceFitType(MyAPIJumpSpaceFitType value)
 			{
 				lock (this.WriterLock) this.JumpSpaceFitType_V = value;
+			}
+			public void GravityAlignmentType(MyAPIGravityAlignmentType value)
+			{
+				lock (this.WriterLock) this.GravityAlignmentType_V = value;
 			}
 			public void HasVectorNormalOverride(bool flag)
 			{
@@ -562,6 +570,10 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 			public MyAPIJumpSpaceFitType JumpSpaceFitType()
 			{
 				return this.JumpSpaceFitType_V;
+			}
+			public MyAPIGravityAlignmentType GravityAlignmentType()
+			{
+				return this.GravityAlignmentType_V;
 			}
 			public bool HasVectorNormalOverride()
 			{

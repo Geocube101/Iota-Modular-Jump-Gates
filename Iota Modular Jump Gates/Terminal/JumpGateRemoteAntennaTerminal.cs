@@ -1445,6 +1445,48 @@ namespace IOTA.ModularJumpGates.Terminal
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(jump_space_fit_type);
 			}
 
+			// Listbox [Gravity Alignment Type]
+			{
+				IMyTerminalControlListbox gravity_alignment_type = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlListbox, IMyUpgradeModule>(MODID_PREFIX + "ControllerGravityAlignmentType");
+				gravity_alignment_type.Title = MyStringId.GetOrCompute($"{MyTexts.GetString("Terminal_JumpGateController_GravityAlignmentType")}:");
+				gravity_alignment_type.Multiselect = false;
+				gravity_alignment_type.SupportsMultipleBlocks = true;
+				gravity_alignment_type.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateRemoteAntenna(block) && MyJumpGateRemoteAntennaTerminal.SectionSwitches[section_switch];
+				gravity_alignment_type.Enabled = (block) => {
+					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
+					MyJumpGate jump_gate = antenna?.GetInboundControlGate(antenna.CurrentTerminalChannel);
+					if (antenna == null || !antenna.IsWorking || antenna.JumpGateGrid == null || antenna.JumpGateGrid.Closed) return false;
+					else return jump_gate == null || jump_gate.IsIdle();
+				};
+				gravity_alignment_type.VisibleRowsCount = 4;
+				gravity_alignment_type.ListContent = (block, content_list, preselect_list) => {
+					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
+					if (antenna == null || antenna.JumpGateGrid == null || antenna.JumpGateGrid.Closed) return;
+					MyGravityAlignmentType selected_alignment = antenna.BlockSettings.BaseControllerSettings[antenna.CurrentTerminalChannel].GravityAlignmentType();
+
+					foreach (MyGravityAlignmentType alignment in Enum.GetValues(typeof(MyGravityAlignmentType)))
+					{
+						string enum_name = Enum.GetName(typeof(MyGravityAlignmentType), alignment);
+						string name = MyTexts.GetString($"GravityAlignmentType_{enum_name}");
+						string tooltip = MyTexts.GetString($"Terminal_JumpGateController_GravityAlignmentType_{enum_name}_Tooltip");
+						MyTerminalControlListBoxItem item = new MyTerminalControlListBoxItem(MyStringId.GetOrCompute(name), MyStringId.GetOrCompute(tooltip), alignment);
+						content_list.Add(item);
+						if (selected_alignment == alignment) preselect_list.Add(item);
+					}
+				};
+				gravity_alignment_type.ItemSelected = (block, selected) => {
+					if (!gravity_alignment_type.Enabled(block)) return;
+					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
+					MyGravityAlignmentType data = (MyGravityAlignmentType) selected[0].UserData;
+					MyGravityAlignmentType old_data = antenna.BlockSettings.BaseControllerSettings[antenna.CurrentTerminalChannel].GravityAlignmentType();
+					if (data == old_data) return;
+					antenna.BlockSettings.BaseControllerSettings[antenna.CurrentTerminalChannel].GravityAlignmentType(data);
+					antenna.SetDirty();
+				};
+				MyJumpGateRemoteAntennaTerminal.TerminalControls.Add(gravity_alignment_type);
+				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(gravity_alignment_type);
+			}
+
 			// Color [Effect Color Shift]
 			{
 				IMyTerminalControlColor effect_color_shift_cl = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlColor, IMyUpgradeModule>(MODID_PREFIX + "AntennaEffectColorShift");

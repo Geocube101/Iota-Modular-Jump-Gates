@@ -16,7 +16,7 @@ namespace IOTA.ModularJumpGates.API
 {
 	internal class MyAPIInterface
 	{
-		public static readonly int[] ModAPIVersion = new int[2] { 1, 2 };
+		public static readonly int[] ModAPIVersion = new int[2] { 1, 3 };
 		public static readonly int[] AnimationAPIVersion = new int[2] { 1, 1 };
 
 		private bool Registered = false;

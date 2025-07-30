@@ -11,7 +11,7 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 	public class MyModAPISession : MyModAPIObjectBase
 	{
 		public static readonly long ModAPIID = 3313236685;
-		public static readonly int[] ModAPIVersion = new int[2] { 1, 2 };
+		public static readonly int[] ModAPIVersion = new int[2] { 1, 3 };
 		public static MyModAPISession Instance { get; private set; } = null;
 
 		/// <summary>

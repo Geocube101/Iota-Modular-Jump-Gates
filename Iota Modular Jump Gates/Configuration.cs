@@ -417,7 +417,7 @@ namespace IOTA.ModularJumpGates
 			/// Defaults to 5 Km
 			/// </summary>
 			[ProtoMember(17, IsRequired = true)]
-			public double LargeGateKilometerOffsetPerUnitG = 5d;
+			public double LargeGateKilometerOffsetPerUnitG = 0.5d;
 
 			/// <summary>
 			/// The maximum distance (in KiloMeters) per unit of gravity 'g' an endpoint will be offset by if untethered for small grid gates<br />
@@ -425,7 +425,7 @@ namespace IOTA.ModularJumpGates
 			/// Defaults to 10 Km
 			/// </summary>
 			[ProtoMember(18, IsRequired = true)]
-			public double SmallGateKilometerOffsetPerUnitG = 10d;
+			public double SmallGateKilometerOffsetPerUnitG = 0.825d;
 
 			/// <summary>
 			/// If false, grids docked to the jump gate inside it's jump space will have constraints (landing gear, connectors, etc...) destroyed during jump<br />
@@ -490,6 +490,9 @@ namespace IOTA.ModularJumpGates
 				this.SmallGateRandomOffsetPerKilometer = ValidateDoubleValue(this.SmallGateRandomOffsetPerKilometer, defaults.SmallGateRandomOffsetPerKilometer, 0);
 				this.LargeGateKilometerOffsetPerUnitG = ValidateDoubleValue(this.LargeGateKilometerOffsetPerUnitG, defaults.LargeGateKilometerOffsetPerUnitG);
 				this.SmallGateKilometerOffsetPerUnitG = ValidateDoubleValue(this.SmallGateKilometerOffsetPerUnitG, defaults.SmallGateKilometerOffsetPerUnitG);
+
+				if (this.LargeGateKilometerOffsetPerUnitG == 5) this.LargeGateKilometerOffsetPerUnitG = 0.5;
+				if (this.SmallGateKilometerOffsetPerUnitG == 10) this.LargeGateKilometerOffsetPerUnitG = 0.825;
 
 				this.LargeGateDistanceScaleExponent = Math.Log((this.MaxLargeJumpGate50Distance - this.MinimumLargeJumpDistance) / 1000d, 50d);
 				this.SmallGateDistanceScaleExponent = Math.Log((this.MaxSmallJumpGate50Distance - this.MinimumSmallJumpDistance) / 1000d, 50d);

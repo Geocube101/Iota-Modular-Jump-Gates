@@ -25,6 +25,8 @@ using VRageMath;
 namespace IOTA.ModularJumpGates.CubeBlock
 {
 	public enum MyFactionDisplayType : byte { UNOWNED = 1, ENEMY = 2, NEUTRAL = 4, FRIENDLY = 8, OWNED = 16 }
+
+	public enum MyGravityAlignmentType : byte { NONE = 0, NATURAL = 1, ARTIFICIAL = 2, BOTH = 3 }
 	
 	/// <summary>
 	/// Game logic for jump gate controllers
@@ -90,6 +92,8 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			private float AutoActivationDelay_V = 0;
 			[ProtoMember(26)]
 			private MyJumpSpaceFitType JumpSpaceFitType_V = MyJumpSpaceFitType.INNER;
+			[ProtoMember(27)]
+			private MyGravityAlignmentType GravityAlignmentType_V = MyGravityAlignmentType.NONE;
 
 			private readonly object WriterLock = new object();
 
@@ -122,6 +126,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 					this.JumpSpaceRadius_V = (double) mapping.GetValueOrDefault("JumpSpaceRadius", this.JumpSpaceRadius_V);
 					this.JumpSpaceDepthPercent_V = (double) mapping.GetValueOrDefault("JumpSpaceDepthPercent", this.JumpSpaceDepthPercent_V);
 					this.JumpSpaceFitType_V = (MyJumpSpaceFitType) (byte) mapping.GetValueOrDefault("JumpSpaceFitType", (byte) this.JumpSpaceFitType_V);
+					this.GravityAlignmentType_V = (MyGravityAlignmentType) (byte) mapping.GetValueOrDefault("GravityAlignmentType", (byte) this.GravityAlignmentType_V);
 					this.JumpEffectName_V = (string) mapping.GetValueOrDefault("JumpEffectName", this.JumpEffectName_V);
 					string name = (string) mapping.GetValueOrDefault("JumpGateName", this.JumpGateName_V);
 					this.VectorNormal_V = (Vector3D) mapping.GetValueOrDefault("VectorNormal", this.VectorNormal_V);
@@ -213,6 +218,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 						["JumpSpaceRadius"] = this.JumpSpaceRadius_V,
 						["JumpSpaceDepthPercent"] = this.JumpSpaceDepthPercent_V,
 						["JumpSpaceFitType"] = (byte) this.JumpSpaceFitType_V,
+						["GravityAlignmentType"] = (byte) this.GravityAlignmentType_V,
 						["JumpEffectName"] = this.JumpEffectName_V,
 						["JumpGateName"] = this.JumpGateName_V,
 						["VectorNormal"] = this.VectorNormal_V,
@@ -286,6 +292,10 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			public void JumpSpaceFitType(MyJumpSpaceFitType value)
 			{
 				lock (this.WriterLock) this.JumpSpaceFitType_V = value;
+			}
+			public void GravityAlignmentType(MyGravityAlignmentType value)
+			{
+				lock (this.WriterLock) this.GravityAlignmentType_V = value;
 			}
 			public void HasVectorNormalOverride(bool flag)
 			{
@@ -479,6 +489,10 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			{
 				return this.JumpSpaceFitType_V;
 			}
+			public MyGravityAlignmentType GravityAlignmentType()
+			{
+				return this.GravityAlignmentType_V;
+			}
 			public bool HasVectorNormalOverride()
 			{
 				return this.HasVectorNormalOverride_V;
@@ -653,6 +667,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				this.OverlayedBlockSettings.JumpSpaceFitType(((allowed & MyAllowedRemoteSettings.JUMPSPACE) != 0) ? this.BaseBlockSettings.JumpSpaceFitType() : remote.JumpSpaceFitType());
 				this.OverlayedBlockSettings.JumpSpaceDepthPercent(((allowed & MyAllowedRemoteSettings.JUMPSPACE) != 0) ? this.BaseBlockSettings.JumpSpaceDepthPercent() : remote.JumpSpaceDepthPercent());
 				this.OverlayedBlockSettings.JumpSpaceRadius(((allowed & MyAllowedRemoteSettings.JUMPSPACE) != 0) ? this.BaseBlockSettings.JumpSpaceRadius() : remote.JumpSpaceRadius());
+				this.OverlayedBlockSettings.GravityAlignmentType(((allowed & MyAllowedRemoteSettings.JUMPSPACE) != 0) ? this.BaseBlockSettings.GravityAlignmentType() : remote.GravityAlignmentType());
 				this.OverlayedBlockSettings.JumpEffectAnimationColorShift(((allowed & MyAllowedRemoteSettings.COLOR_OVERRIDE) != 0) ? this.BaseBlockSettings.JumpEffectAnimationColorShift() : remote.JumpEffectAnimationColorShift());
 				this.OverlayedBlockSettings.VectorNormalOverride(((allowed & MyAllowedRemoteSettings.VECTOR_OVERRIDE) != 0) ? this.BaseBlockSettings.VectorNormalOverride() : remote.VectorNormalOverride());
 				this.OverlayedBlockSettings.HasVectorNormalOverride(((allowed & MyAllowedRemoteSettings.VECTOR_OVERRIDE) != 0) ? this.BaseBlockSettings.HasVectorNormalOverride() : remote.HasVectorNormalOverride());
@@ -1366,6 +1381,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			this.BaseBlockSettings.JumpGateName(new_settings.JumpGateName());
 			this.BaseBlockSettings.AutoActivationDelay(new_settings.AutoActivationDelay());
 			this.BaseBlockSettings.CanAutoActivate(new_settings.CanAutoActivate());
+			this.BaseBlockSettings.GravityAlignmentType(new_settings.GravityAlignmentType());
 
 			KeyValuePair<float, float> mass = new_settings.AutoActivateMass();
 			this.BaseBlockSettings.AutoActivateMass(mass.Key, mass.Value);
