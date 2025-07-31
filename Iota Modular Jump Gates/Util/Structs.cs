@@ -261,7 +261,7 @@ namespace IOTA.ModularJumpGates.Util
 			else if (complete)
 			{
 				parent.Teleport(this.FinalPos, parent.Parent);
-				parent.PositionComp.SetWorldMatrix(ref this.FinalPos, parent.Parent, forceUpdate: false, updateChildren: true, updateLocal: true, skipTeleportCheck: true, forceUpdateAllChildren: false, ignoreAssert: false);
+				parent.PositionComp.SetWorldMatrix(ref this.FinalPos, parent.Parent, true, true, true, true, true);
 			}
 			else
 			{
