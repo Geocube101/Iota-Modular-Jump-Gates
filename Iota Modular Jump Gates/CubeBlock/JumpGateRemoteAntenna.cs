@@ -151,7 +151,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// <summary>
 		/// A map of all topmost entities within search range
 		/// </summary>
-		private ConcurrentDictionary<long, MyEntity> NearbyEntities = new ConcurrentDictionary<long, MyEntity>();
+		private ConcurrentDictionary<long, MyCubeGrid> NearbyEntities = new ConcurrentDictionary<long, MyCubeGrid>();
 		#endregion
 
 		#region Temporary Collections
@@ -221,15 +221,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		{
 			base.UpdateOnceAfterInit();
 			if (MyNetworkInterface.IsStandaloneMultiplayerClient || this.TerminalBlock?.CubeGrid?.Physics == null) return;
-			this.AntennaDetector = new MyEntity();
-			this.AntennaDetector.EntityId = 0;
-			this.AntennaDetector.Init(new StringBuilder($"JumpGateRemoteAntenna_{this.BlockID}"), null, (MyEntity) this.Entity, 1f);
-			this.AntennaDetector.Save = false;
-			this.AntennaDetector.Flags = EntityFlags.IsNotGamePrunningStructureObject | EntityFlags.NeedsWorldMatrix;
-			PhysicsSettings settings = MyAPIGateway.Physics.CreateSettingsForDetector(this.AntennaDetector, this.OnEntityCollision, MyJumpGateModSession.WorldMatrix, Vector3D.Zero, RigidBodyFlag.RBF_KINEMATIC, 15, true);
-			MyAPIGateway.Physics.CreateSpherePhysics(settings, (float) MyJumpGateRemoteAntenna.MaxCollisionDistance);
-			MyAPIGateway.Entities.AddEntity(this.AntennaDetector);
-			Logger.Debug($"CREATED_COLLIDER REMOTE_ANTENNA={this.BlockID}, COLLIDER={this.AntennaDetector.DisplayName}", 4);
+			this.UpdateResetCollider();
 
 			BoundingSphereD bounding_sphere = new BoundingSphereD(this.WorldMatrix.Translation, MyJumpGateRemoteAntenna.MaxCollisionDistance);
 			List<MyEntity> entities = new List<MyEntity>();
@@ -783,7 +775,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		private void OnEntityCollision(IMyEntity entity, bool is_entering)
 		{
 			if (entity == null || this.MarkedForClose || this.NearbyEntities == null) return;
-			else if (is_entering && entity is MyCubeGrid) this.NearbyEntities[entity.EntityId] = (MyEntity) entity;
+			else if (is_entering && entity is MyCubeGrid) this.NearbyEntities[entity.EntityId] = (MyCubeGrid) entity;
 			else this.NearbyEntities.Remove(entity.EntityId);
 		}
 
@@ -806,11 +798,10 @@ namespace IOTA.ModularJumpGates.CubeBlock
 
 				if (this.IsWorking)
 				{
-					foreach (KeyValuePair<long, MyEntity> pair in this.NearbyEntities)
+					foreach (KeyValuePair<long, MyCubeGrid> pair in this.NearbyEntities)
 					{
-						if (!(pair.Value is MyCubeGrid) || pair.Value.Physics == null) continue;
-						MyCubeGrid grid = (MyCubeGrid) pair.Value;
-						if (checked_grids.Contains(pair.Key) || !MyJumpGateModSession.Instance.IsJumpGateGridMultiplayerValid(construct = MyJumpGateModSession.Instance.GetDirectJumpGateGrid(grid))) continue;
+						if (pair.Value.Physics == null) continue;
+						if (checked_grids.Contains(pair.Key) || !MyJumpGateModSession.Instance.IsJumpGateGridMultiplayerValid(construct = MyJumpGateModSession.Instance.GetUnclosedJumpGateGrid(pair.Value))) continue;
 						checked_grids.AddRange(construct.GetCubeGrids().Select((subgrid) => subgrid.EntityId));
 
 						foreach (MyJumpGateRemoteAntenna antenna in construct.GetAttachedJumpGateRemoteAntennas())
@@ -824,6 +815,22 @@ namespace IOTA.ModularJumpGates.CubeBlock
 					if ((this.NearbyAntennas?.Count ?? 0) != count) this.SetDirty();
 				}
 			}
+		}
+
+		private void UpdateResetCollider()
+		{
+			if (MyNetworkInterface.IsStandaloneMultiplayerClient || this.TerminalBlock?.CubeGrid?.Physics == null || this.MarkedForClose || this.NearbyEntities == null) return;
+			this.AntennaDetector?.Close();
+			this.AntennaDetector = new MyEntity();
+			this.AntennaDetector.EntityId = 0;
+			this.AntennaDetector.Init(new StringBuilder($"JumpGateRemoteAntenna_{this.BlockID}"), null, (MyEntity) this.Entity, 1f);
+			this.AntennaDetector.Save = false;
+			this.AntennaDetector.Flags = EntityFlags.IsNotGamePrunningStructureObject | EntityFlags.NeedsWorldMatrix;
+			this.NearbyEntities.Clear();
+			PhysicsSettings settings = MyAPIGateway.Physics.CreateSettingsForDetector(this.AntennaDetector, this.OnEntityCollision, MyJumpGateModSession.WorldMatrix, Vector3D.Zero, RigidBodyFlag.RBF_KINEMATIC, 15, true);
+			MyAPIGateway.Physics.CreateSpherePhysics(settings, (float) MyJumpGateRemoteAntenna.MaxCollisionDistance);
+			MyAPIGateway.Entities.AddEntity(this.AntennaDetector);
+			Logger.Debug($"CREATED_COLLIDER REMOTE_ANTENNA={this.BlockID}, COLLIDER={this.AntennaDetector.DisplayName}", 4);
 		}
 		#endregion
 
