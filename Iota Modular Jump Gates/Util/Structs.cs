@@ -261,7 +261,21 @@ namespace IOTA.ModularJumpGates.Util
 			else if (complete)
 			{
 				parent.Teleport(this.FinalPos, parent.Parent);
+				MatrixD parent_matrix = MatrixD.Invert(parent.WorldMatrix);
 				parent.PositionComp.SetWorldMatrix(ref this.FinalPos, parent.Parent, true, true, true, true, true);
+
+				if (parent is MyCubeGrid)
+				{
+					List<IMyCubeGrid> children = new List<IMyCubeGrid>();
+					((MyCubeGrid) parent).GetGridGroup(GridLinkTypeEnum.Logical).GetGrids(children);
+
+					foreach (IMyCubeGrid child in children)
+					{
+						if (child == parent) continue;
+						MatrixD child_matrix = (child.WorldMatrix * parent_matrix) * parent.WorldMatrix;
+						child.PositionComp?.SetWorldMatrix(ref child_matrix, child.Parent, true, true, true, true, true);
+					}
+				}
 			}
 			else
 			{
