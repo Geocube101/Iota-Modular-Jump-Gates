@@ -164,6 +164,11 @@ namespace IOTA.ModularJumpGates
 		private ConcurrentQueue<MyJumpGate> GateCloseRequests = new ConcurrentQueue<MyJumpGate>();
 
 		/// <summary>
+		/// Used to store all constructs awaiting session add
+		/// </summary>
+		private ConcurrentDictionary<IMyCubeGrid, Action<MyJumpGateConstruct>> GridAddRequests = new ConcurrentDictionary<IMyCubeGrid, Action<MyJumpGateConstruct>>();
+
+		/// <summary>
 		/// Used to store all constructs that are partially loaded
 		/// </summary>
 		private ConcurrentDictionary<long, byte> PartialSuspendedGridsQueue = new ConcurrentDictionary<long, byte>();
@@ -575,6 +580,7 @@ namespace IOTA.ModularJumpGates
 
 			this.FlushClosureQueues();
 			Logger.Log($"Closed {closed_grids_count} Grids");
+			MyJumpGateConstruct _;
 			foreach (KeyValuePair<ulong, AnimationInfo> pair in this.JumpGateAnimations) pair.Value.Animation.Clean();
 			foreach (KeyValuePair<long, EntityWarpInfo> pair in this.EntityWarps) pair.Value.Close();
 
@@ -584,6 +590,7 @@ namespace IOTA.ModularJumpGates
 			this.JumpGateAnimations.Clear();
 			this.EntityWarps.Clear();
 			this.PartialSuspendedGridsQueue.Clear();
+			this.GridAddRequests.Clear();
 
 			this.ModAPIInterface = null;
 			this.GridUpdateTimeTicks = null;
@@ -594,6 +601,7 @@ namespace IOTA.ModularJumpGates
 			this.JumpGateAnimations = null;
 			this.EntityWarps = null;
 			this.PartialSuspendedGridsQueue = null;
+			this.GridAddRequests = null;
 
 			MyAPIGateway.Entities.OnEntityAdd -= this.OnEntityAdd;
 			MyAPIGateway.Entities.OnEntityRemove -= this.OnEntityRemove;
@@ -715,6 +723,7 @@ namespace IOTA.ModularJumpGates
 			{
 				base.UpdateBeforeSimulation();
 				this.FlushClosureQueues();
+				this.FlushAdditionQueues();
 				if (MyNetworkInterface.IsServerLike) return;
 
 				foreach (KeyValuePair<long, byte> partial_grid in this.PartialSuspendedGridsQueue)
@@ -1043,8 +1052,7 @@ namespace IOTA.ModularJumpGates
 		{
 			IMyCubeGrid cube_grid = entity as IMyCubeGrid;
 			if (cube_grid?.Physics == null) return;
-			Logger.Debug("ENTITY-ADD", 5);
-
+			Logger.Debug($"Entity \"{entity.DisplayName}\" added to session @ {entity.EntityId} >> SESSION_ADD", 5);
 			if (MyNetworkInterface.IsStandaloneMultiplayerClient && MyJumpGateModSession.GameTick > this.FirstUpdateTimeTicks) this.RequestGridDownload(cube_grid.EntityId);
 			else if (MyNetworkInterface.IsServerLike) this.AddCubeGridToSession(cube_grid);
 		}
@@ -1057,7 +1065,7 @@ namespace IOTA.ModularJumpGates
 		{
 			IMyCubeGrid cube_grid = entity as IMyCubeGrid;
 			if (cube_grid?.Physics == null) return;
-			Logger.Debug("ENTITY-REMOVE", 5);
+			Logger.Debug($"Entity \"{entity.DisplayName}\" removed from session @ {entity.EntityId} >> {(entity.Closed ? "CLOSED" : "SESSION_REMOVE")}", 5);
 			MyJumpGateConstruct parent_grid = this.GridMap.GetValueOrDefault(cube_grid.EntityId, null);
 			if (parent_grid?.Closed ?? true) return;
 			if (MyNetworkInterface.IsStandaloneMultiplayerClient) parent_grid.Suspend(cube_grid.EntityId);
@@ -1244,6 +1252,26 @@ namespace IOTA.ModularJumpGates
 					}
 					catch (Exception e)
 					{
+						if (MyNetworkInterface.IsServerLike && ++grid.FailedTickCount > 3)
+						{
+							IMyCubeGrid main_grid = grid.CubeGrid;
+							this.CloseGrid(grid);
+
+							if (main_grid == null)
+							{
+								Logger.Warn($"A grid failed its construct tick but was null - Cannot reinitialize null grid");
+							}
+							else if (++grid.FailedReinitializationCount > 3)
+							{
+								Logger.Critical($"Grid \"{main_grid.DisplayName}\" @ {main_grid.EntityId} failed its construct tick and exhauseted all reinitialization attempts - {grid.FailedReinitializationCount}/3");
+							}
+							else
+							{
+								this.AddCubeGridToSession(main_grid, true, (construct) => Logger.Log($"Grid \"{ main_grid.DisplayName}\" @ {main_grid.EntityId} was reinitialized with construct ID {construct.CubeGridID}"));
+								Logger.Warn($"Grid \"{main_grid.DisplayName}\" @ {main_grid.EntityId} failed its construct tick and will be reinitialized - {grid.FailedReinitializationCount}/3");
+							}
+						}
+
 						Logger.Error($"Error during construct thread tick - {grid.CubeGridID} ({gridid})\n  ...\n[ {e.GetType().Name} ]: {e.Message}\n{e.StackTrace}\n{e.InnerException}");
 					}
 				}
@@ -1280,6 +1308,21 @@ namespace IOTA.ModularJumpGates
 			while (this.GridCloseRequests.TryDequeue(out pair)) if (!pair.Key.Closed) pair.Key.Close(pair.Value);
 			MyJumpGate gate;
 			while (this.GateCloseRequests.TryDequeue(out gate)) if (!gate.Closed) gate.Close();
+		}
+
+		/// <summary>
+		/// Attempts to add all pending grids
+		/// </summary>
+		private void FlushAdditionQueues()
+		{
+			foreach (KeyValuePair<IMyCubeGrid, Action<MyJumpGateConstruct>> pair in this.GridAddRequests)
+			{
+				MyJumpGateConstruct construct = this.AddCubeGridToSession(pair.Key);
+				if (construct == null) continue;
+				this.GridAddRequests.Remove(pair.Key);
+				try { pair.Value(construct); }
+				catch (Exception e) { Logger.Error($"Error during add construct request callback\n  ...\n[ {e.GetType().Name} ]: {e.Message}\n{e.StackTrace}\n{e.InnerException}"); }
+			}
 		}
 
 		/// <summary>
@@ -1583,7 +1626,9 @@ namespace IOTA.ModularJumpGates
 		/// Adds a new cube grid to this session's internal map
 		/// </summary>
 		/// <param name="cube_grid">The grid to add</param>
-		public MyJumpGateConstruct AddCubeGridToSession(IMyCubeGrid cube_grid)
+		/// <param name="queue">Whether to queue if grid cannot be added</param>
+		/// <param name="addition_callback">Callback to call once queued grid is added</param>
+		public MyJumpGateConstruct AddCubeGridToSession(IMyCubeGrid cube_grid, bool queue = false, Action<MyJumpGateConstruct> addition_callback = null)
 		{
 			MyJumpGateConstruct grid = this.GetJumpGateGrid(cube_grid);
 			if (grid != null) return grid;
@@ -1602,6 +1647,13 @@ namespace IOTA.ModularJumpGates
 				this.CloseGrid(existing, true);
 				Logger.Debug($"Grid {cube_grid.EntityId} added to session; CLOSED_EXISTING", 1);
 				return grid;
+			}
+			else if (queue)
+			{
+				grid.Release();
+				this.GridAddRequests[cube_grid] = addition_callback;
+				Logger.Debug($"Grid {cube_grid.EntityId} skipped session add; QUEUED", 1);
+				return null;
 			}
 			else
 			{

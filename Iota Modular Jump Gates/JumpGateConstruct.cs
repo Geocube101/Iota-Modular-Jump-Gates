@@ -60,6 +60,11 @@ namespace IOTA.ModularJumpGates
 		private bool UpdateBeaconLinkedBeacons = true;
 
 		/// <summary>
+		/// The number of times this construct reinitialized
+		/// </summary>
+		private byte ConstructReinitializationAttempts;
+
+		/// <summary>
 		/// The next jump gate ID
 		/// </summary>
 		private long NextJumpGateID = 0;
@@ -195,6 +200,24 @@ namespace IOTA.ModularJumpGates
 		/// True when all gates are constructed and resources initialized
 		/// </summary>
 		public bool FullyInitialized { get; private set; } = false;
+
+		/// <summary>
+		/// Number of times this construct failed consecutive ticks
+		/// </summary>
+		public byte FailedTickCount
+		{
+			get { return (byte) (this.ConstructReinitializationAttempts & 3); }
+			set { this.ConstructReinitializationAttempts |= (byte) (value & 3); }
+		}
+
+		/// <summary>
+		/// Number of times this construct failed consecutive initializations
+		/// </summary>
+		public byte FailedReinitializationCount
+		{
+			get { return (byte) ((this.ConstructReinitializationAttempts >> 2) & 3); }
+			set { this.ConstructReinitializationAttempts |= (byte) ((value & 3) << 2); }
+		}
 
 		/// <summary>
 		/// The current ID of this construct's cube grid
@@ -1201,6 +1224,7 @@ namespace IOTA.ModularJumpGates
 				// Finalize update
 				if (MyJumpGateModSession.Network.Registered && (is_dirty || first_update)) this.SendNetworkGridUpdate();
 				this.FullyInitialized = this.FullyInitialized || first_update;
+				this.FailedTickCount = 0;
 
 				if (first_update)
 				{

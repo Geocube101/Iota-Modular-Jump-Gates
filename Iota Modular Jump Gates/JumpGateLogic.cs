@@ -1714,6 +1714,7 @@ namespace IOTA.ModularJumpGates
 								{
 									batch.AddRange(child_batch.Batch.Where((child_) => !batch.Contains(child_)));
 									this.EntityBatches.Remove(child);
+									mergers.Remove(child);
 									Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} ... BATCH_MERGED - {child.EntityId} --> {entity.EntityId}", 4);
 								}
 
@@ -1734,7 +1735,7 @@ namespace IOTA.ModularJumpGates
 							}
 							else
 							{
-								foreach (MyEntity merger in mergers) batch.RemoveAll(this.EntityBatches[merger].Batch.Contains);
+								foreach (MyEntity merger in mergers.Distinct()) batch.RemoveAll(this.EntityBatches[merger].Batch.Contains);
 								this.EntityBatches[entity] = new EntityBatch(batch, ref entity_target_position, ref obstruction_aabb, ref entity_final_matrix, ref gravity_vector);
 								Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} ... BATCH_ADDED_{entity.EntityId}", 4);
 							}
@@ -3642,12 +3643,12 @@ namespace IOTA.ModularJumpGates
 				this.MarkClosed = false;
 				this.Status = jump_gate.Status;
 				this.Phase = jump_gate.Phase;
+				this.ConstructMatrix = BoundingEllipsoidD.FromSerialized(Convert.FromBase64String(jump_gate.ConstructMatrix), 0).WorldMatrix;
 				this.LocalJumpNode = jump_gate.LocalJumpNode;
 				this.TrueLocalJumpEllipse = BoundingEllipsoidD.FromSerialized(Convert.FromBase64String(jump_gate.LocalJumpEllipse), 0);
 				this.TrueWorldJumpEllipse = this.TrueLocalJumpEllipse.ToWorldSpace(ref this.ConstructMatrix);
 				this.JumpGateGrid = parent ?? MyJumpGateModSession.Instance.GetUnclosedJumpGateGrid(jump_gate.JumpGateGrid.GetJumpGateGrid());
 				this.DriveGridSize = jump_gate.GridSize;
-				this.ConstructMatrix = BoundingEllipsoidD.FromSerialized(Convert.FromBase64String(jump_gate.ConstructMatrix), 0).WorldMatrix;
 
 				if (this.JumpGateGrid == null)
 				{
