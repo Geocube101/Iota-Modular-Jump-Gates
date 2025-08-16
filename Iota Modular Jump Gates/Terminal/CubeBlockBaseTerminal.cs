@@ -5,7 +5,7 @@ namespace IOTA.ModularJumpGates.Terminal
 	internal static class MyCubeBlockTerminal
 	{
 		public static bool IsLoaded { get; private set; } = false;
-		public static readonly string MODID_PREFIX = MyJumpGateModSession.MODID + ".BlockBase.";
+		public static string MODID_PREFIX { get; private set; } = MyJumpGateModSession.MODID + ".BlockBase.";
 
 		private static void SetupJumpGateBlockTerminalControls()
 		{
@@ -40,6 +40,7 @@ namespace IOTA.ModularJumpGates.Terminal
 		{
 			if (!MyCubeBlockTerminal.IsLoaded) return;
 			MyCubeBlockTerminal.IsLoaded = false;
+			MyCubeBlockTerminal.MODID_PREFIX = null;
 		}
 
 		public static void UpdateRedrawControls()

@@ -66,9 +66,9 @@ namespace IOTA.ModularJumpGates.EventController
 		private bool NetworkRegistered = false;
 		private ulong LastUpdateTimeEpoch = 0;
 		private MySerializedJumpGateEventInfo DeserializedInfo = null;
-		private readonly Dictionary<MyJumpGate, TargetedGateValueType> TargetedJumpGates = new Dictionary<MyJumpGate, TargetedGateValueType>();
-		private readonly Dictionary<MyJumpGate, TargetedGateValueType> TargetedRemoteJumpGates = new Dictionary<MyJumpGate, TargetedGateValueType>();
-		private readonly List<KeyValuePair<MyJumpGateRemoteAntenna, byte>> TargetedRemoteAntennas = new List<KeyValuePair<MyJumpGateRemoteAntenna, byte>>();
+		private Dictionary<MyJumpGate, TargetedGateValueType> TargetedJumpGates = new Dictionary<MyJumpGate, TargetedGateValueType>();
+		private Dictionary<MyJumpGate, TargetedGateValueType> TargetedRemoteJumpGates = new Dictionary<MyJumpGate, TargetedGateValueType>();
+		private List<KeyValuePair<MyJumpGateRemoteAntenna, byte>> TargetedRemoteAntennas = new List<KeyValuePair<MyJumpGateRemoteAntenna, byte>>();
 
 		protected bool IsDirty = false;
 		protected int LastActionTriggered { get; private set; } = 0;
@@ -153,6 +153,9 @@ namespace IOTA.ModularJumpGates.EventController
 			this.TargetedJumpGates.Clear();
 			this.TargetedRemoteAntennas.Clear();
 			this.TargetedRemoteJumpGates.Clear();
+			this.TargetedJumpGates = null;
+			this.TargetedRemoteAntennas = null;
+			this.TargetedRemoteJumpGates = null;
 			this.NetworkRegistered = false;
 		}
 

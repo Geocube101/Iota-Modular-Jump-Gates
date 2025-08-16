@@ -19,13 +19,13 @@ namespace IOTA.ModularJumpGates.Terminal
 {
 	internal static class MyJumpGateRemoteAntennaTerminal
 	{
-		private static readonly List<IMyTerminalControl> TerminalControls = new List<IMyTerminalControl>();
-		private static readonly Dictionary<IMyTerminalControlOnOffSwitch, bool> SectionSwitches = new Dictionary<IMyTerminalControlOnOffSwitch, bool>();
+		private static List<IMyTerminalControl> TerminalControls = new List<IMyTerminalControl>();
+		private static Dictionary<IMyTerminalControlOnOffSwitch, bool> SectionSwitches = new Dictionary<IMyTerminalControlOnOffSwitch, bool>();
 
 		public static bool IsLoaded { get; private set; } = false;
-		public static readonly string MODID_PREFIX = MyJumpGateModSession.MODID + ".JumpGateRemoteAntenna.";
+		public static string MODID_PREFIX { get; private set; } = MyJumpGateModSession.MODID + ".JumpGateRemoteAntenna.";
 
-		private static readonly ConcurrentDictionary<long, string> AntennaSearchInputs = new ConcurrentDictionary<long, string>();
+		private static ConcurrentDictionary<long, string> AntennaSearchInputs = new ConcurrentDictionary<long, string>();
 
 		private static void SetupJumpGateRemoteAntennaTerminalControls()
 		{
@@ -1150,11 +1150,11 @@ namespace IOTA.ModularJumpGates.Terminal
 				do_debug_mode_of.Enabled = (block) => true;
 				do_debug_mode_of.OnText = MyStringId.GetOrCompute(MyTexts.GetString("GeneralText_On"));
 				do_debug_mode_of.OffText = MyStringId.GetOrCompute(MyTexts.GetString("GeneralText_Off"));
-				do_debug_mode_of.Getter = (block) => MyJumpGateModSession.DebugMode;
+				do_debug_mode_of.Getter = (block) => MyJumpGateModSession.Instance.DebugMode;
 				do_debug_mode_of.Setter = (block, value) => {
 					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
 					if (antenna == null) return;
-					MyJumpGateModSession.DebugMode = value;
+					MyJumpGateModSession.Instance.DebugMode = value;
 					MyJumpGateModSession.Instance.RedrawAllTerminalControls();
 				};
 				MyJumpGateRemoteAntennaTerminal.TerminalControls.Add(do_debug_mode_of);
@@ -1257,7 +1257,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				do_reconstruct_grid_gates.Visible = (block) => MyNetworkInterface.IsServerLike && MyJumpGateModSession.IsBlockJumpGateRemoteAntenna(block) && MyJumpGateRemoteAntennaTerminal.SectionSwitches[section_switch];
 				do_reconstruct_grid_gates.Enabled = (block) => {
 					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
-					return antenna != null && MyJumpGateModSession.DebugMode && antenna.JumpGateGrid != null && !antenna.JumpGateGrid.IsSuspended && !antenna.JumpGateGrid.Closed;
+					return antenna != null && MyJumpGateModSession.Instance.DebugMode && antenna.JumpGateGrid != null && !antenna.JumpGateGrid.IsSuspended && !antenna.JumpGateGrid.Closed;
 				};
 				do_reconstruct_grid_gates.Action = (block) => {
 					if (!do_reconstruct_grid_gates.Enabled(block)) return;
@@ -1277,7 +1277,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				do_reset_client_grids.Visible = (block) => MyNetworkInterface.IsStandaloneMultiplayerClient && MyJumpGateModSession.IsBlockJumpGateRemoteAntenna(block) && MyJumpGateRemoteAntennaTerminal.SectionSwitches[section_switch];
 				do_reset_client_grids.Enabled = (block) => {
 					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
-					return antenna != null && MyJumpGateModSession.DebugMode;
+					return antenna != null && MyJumpGateModSession.Instance.DebugMode;
 				};
 				do_reset_client_grids.Action = (block) => {
 					if (!do_reset_client_grids.Enabled(block)) return;
@@ -1998,6 +1998,12 @@ namespace IOTA.ModularJumpGates.Terminal
 			if (!MyJumpGateRemoteAntennaTerminal.IsLoaded) return;
 			MyJumpGateRemoteAntennaTerminal.IsLoaded = false;
 			MyJumpGateRemoteAntennaTerminal.TerminalControls.Clear();
+			MyJumpGateRemoteAntennaTerminal.SectionSwitches.Clear();
+			MyJumpGateRemoteAntennaTerminal.AntennaSearchInputs.Clear();
+			MyJumpGateRemoteAntennaTerminal.TerminalControls = null;
+			MyJumpGateRemoteAntennaTerminal.SectionSwitches = null;
+			MyJumpGateRemoteAntennaTerminal.AntennaSearchInputs = null;
+			MyJumpGateRemoteAntennaTerminal.MODID_PREFIX = null;
 		}
 
 		public static void ResetSearchInputs()

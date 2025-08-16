@@ -26,6 +26,7 @@ namespace IOTA.ModularJumpGates.ChatCommands
 		{
 			this.AddSubCommand(new MyConstructInfoChatCommand());
 			this.AddSubCommand(new MyConstructReconstructChatCommand());
+			this.AddSubCommand(new MyConstructTickFailChatCommand());
 			base.Init();
 			return true;
 		}
@@ -48,7 +49,7 @@ namespace IOTA.ModularJumpGates.ChatCommands
 
 		public override string CommandDescription => MyTexts.GetString("ChatCommandHandler_GridInfoCommand_Description");
 
-		public override string CommandHelp => $"{this.CommandName}";
+		public override string CommandHelp => this.CommandName;
 
 		private void OnGridInfoPacket(MyNetworkInterface.Packet packet)
 		{
@@ -70,7 +71,7 @@ namespace IOTA.ModularJumpGates.ChatCommands
 			else if (eid == "gridinfo_response" && packet.PhaseFrame == 2)
 			{
 				string response;
-				packet.GeneralPayload<string>(out response);
+				packet.GeneralPayload(out response);
 				MyAPIGateway.Utilities.ShowMessage(MyJumpGateModSession.DISPLAYNAME, response);
 			}
 		}
@@ -109,7 +110,7 @@ namespace IOTA.ModularJumpGates.ChatCommands
 				.Replace("{%1}", construct.PrimaryCubeGridCustomName ?? "N/A")
 				.Replace("{%2}", construct.FullyInitialized.ToString())
 				.Replace("{%3}", construct.FailedTickCount.ToString())
-				.Replace("{%4}", construct.FailedReinitializationCount.ToString())
+				.Replace("{%4}", MyJumpGateModSession.Instance.GridReinitializationCount(construct).ToString())
 				.Replace("{%5}", construct.HasCommLink().ToString())
 				.Replace("{%6}", construct.GetCommLinkedJumpGateGrids().Count().ToString())
 				.Replace("{%7}", construct.GetBeaconsWithinReverseBroadcastSphere().Count().ToString())
@@ -226,6 +227,86 @@ namespace IOTA.ModularJumpGates.ChatCommands
 			else
 			{
 				return MyCommandResult.Failure(this, MyTexts.GetString("ChatCommandHandler_GateRescanCommand_InvalidTarget").Replace("{%0}", target_type));
+			}
+		}
+	}
+
+	internal class MyConstructTickFailChatCommand : MyChatCommand
+	{
+		public override bool RequiresAdmin => true;
+
+		public override bool RequiresNonNullCaller => true;
+
+		public override string CommandName => MyTexts.GetString("ChatCommandHandler_GridTickFailCommand_Name");
+
+		public override string CommandDescription => MyTexts.GetString("ChatCommandHandler_GridTickFailCommand_Description");
+
+		public override string CommandHelp => $"{this.CommandName} [count]";
+
+		private void OnTickFailPacket(MyNetworkInterface.Packet packet)
+		{
+			if (packet == null || packet.PacketType != MyPacketTypeEnum.GENERAL) return;
+			string eid = packet.GenericEventID;
+
+			if (eid == "tickfail_request" && packet.PhaseFrame == 1)
+			{
+				KeyValuePair<long, byte> pair;
+				packet.GeneralPayload(out pair);
+				MyJumpGateConstruct construct = MyJumpGateModSession.Instance.GetDirectJumpGateGrid(pair.Key);
+
+				if (construct == null || construct.Closed)
+				{
+					string response = MyTexts.GetString("ChatCommandHandler_GridInfoCommand_GridNotFound");
+					packet = packet.Forward(packet.SenderID, false);
+					packet.GeneralPayload("gridinfo_response", response);
+					packet.Send();
+				}
+				else construct.RaiseTickFailure(pair.Value);
+			}
+			else if (eid == "tickfail_response" && packet.PhaseFrame == 2)
+			{
+				string response;
+				packet.GeneralPayload(out response);
+				MyAPIGateway.Utilities.ShowMessage(MyJumpGateModSession.DISPLAYNAME, response);
+			}
+		}
+
+		public override void Deinit()
+		{
+			base.Deinit();
+			if (!(MyJumpGateModSession.Network?.Registered ?? false)) return;
+			MyJumpGateModSession.Network.Off(MyPacketTypeEnum.GENERAL, this.OnTickFailPacket);
+		}
+
+		public override bool Init()
+		{
+			base.Init();
+			if (!(MyJumpGateModSession.Network?.Registered ?? false)) return true;
+			MyJumpGateModSession.Network.On(MyPacketTypeEnum.GENERAL, this.OnTickFailPacket);
+			return true;
+		}
+
+		public override MyCommandResult Execute(IMyPlayer caller, List<string> arguments)
+		{
+			if (caller == null) return MyCommandResult.NullCaller(this);
+			else if (arguments.Count > 1) return MyCommandResult.InvalidNumberArguments(this, 0, 1, arguments.Count);
+			double scan_distance = 1500 * 1500;
+			Vector3D position = caller.GetPosition();
+			MyJumpGateConstruct closest = MyJumpGateModSession.Instance.GetAllJumpGateGrids().Where((grid) => grid != null && !grid.Closed && Vector3D.DistanceSquared(position, grid.ConstructMassCenter()) <= scan_distance).OrderBy((grid) => Vector3D.DistanceSquared(position, grid.ConstructMassCenter())).FirstOrDefault();
+			if (closest == null || closest.MarkClosed) return MyCommandResult.Failure(this, MyTexts.GetString("ChatCommandHandler_GridInfoCommand_GridNotFound"));
+			byte count = 1;
+			if (arguments.Count == 1 && !byte.TryParse(arguments[0], out count)) return MyCommandResult.Failure(this, MyTexts.GetString("ChatCommandHandler_GridTickFailCommand_ArgumentNumberError").Replace("{%0}", arguments[0]));
+
+			if (MyNetworkInterface.IsStandaloneMultiplayerClient)
+			{
+				MyNetworkInterface.Packet packet = MyJumpGateModSession.Network.CreateGeneralPacket("tickfail_request", new KeyValuePair<long, byte>(closest.CubeGridID, count));
+				packet.Send();
+				return MyCommandResult.Success(this, MyTexts.GetString("ChatCommandHandler_GridTickFailCommand_OnMPSuccess"));
+			}
+			else
+			{
+				closest.RaiseTickFailure(count);
+				return MyCommandResult.Success(this, MyTexts.GetString("ChatCommandHandler_GridTickFailCommand_OnSuccess"));
 			}
 		}
 	}

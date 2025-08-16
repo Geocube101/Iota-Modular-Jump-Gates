@@ -10,9 +10,21 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 {
 	public class MyModAPISession : MyModAPIObjectBase
 	{
-		public static readonly long ModAPIID = 3313236685;
-		public static readonly int[] ModAPIVersion = new int[2] { 1, 3 };
+		public static long ModAPIID => 3313236685;
+		public static int[] ModAPIVersion { get; private set; } = new int[2] { 1, 3 };
 		public static MyModAPISession Instance { get; private set; } = null;
+
+		/// <summary>
+		/// Deinitializes the Mod API Session<br />
+		/// Called automatically by Jump Gate Mod
+		/// </summary>
+		public static void Deinit()
+		{
+			if (MyModAPISession.Instance == null) return;
+			MyModAPISession.Instance = null;
+			MyModAPISession.ModAPIVersion = null;
+			MyModAPIObjectBase.DisposeAll();
+		}
 
 		/// <summary>
 		/// Initializes the Mod API Session
@@ -27,6 +39,7 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 				["Callback"] = (Action<Dictionary<string, object>>) ((attributes) => {
 					if (result = attributes != null) MyModAPISession.Instance = new MyModAPISession(attributes);
 				}),
+				["Unloader"] = (Action) MyModAPISession.Deinit,
 				["Version"] = MyModAPISession.ModAPIVersion,
 				["ModContext"] = context,
 			});

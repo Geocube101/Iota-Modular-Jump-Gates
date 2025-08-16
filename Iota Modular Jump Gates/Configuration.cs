@@ -605,6 +605,7 @@ namespace IOTA.ModularJumpGates
 				GeneralConfigurationSchema defaults = new GeneralConfigurationSchema();
 				this.DebugLogVerbosity =  MathHelper.Clamp(this.DebugLogVerbosity, (byte) 0, (byte) 5);
 				this.DrawSyncDistance = ValidateDoubleValue(this.DrawSyncDistance, defaults.DrawSyncDistance, 500, allow_inf: true);
+				this.ConcurrentGridUpdateThreads = (byte) MathHelper.Max(1, (int) this.ConcurrentGridUpdateThreads);
 			}
 		}
 		#endregion
@@ -881,12 +882,12 @@ namespace IOTA.ModularJumpGates
 		/// <summary>
 		/// The name of the local configuration file
 		/// </summary>
-		private static readonly string ConfigFileName = "Config.xml";
+		private static string ConfigFileName => "Config.xml";
 
 		/// <summary>
 		/// The variable name used for MyAPIGateway.Utilities.GetVariable and MyAPIGateway.Utilities.SetVariable
 		/// </summary>
-		private static readonly string ConfigVariableName = $"{MyJumpGateModSession.MODID}.ServerConfig";
+		private static string ConfigVariableName => $"{MyJumpGateModSession.MODID}.ServerConfig";
 		#endregion
 
 		#region Public Variables

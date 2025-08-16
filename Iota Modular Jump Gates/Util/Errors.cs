@@ -14,4 +14,10 @@ namespace IOTA.ModularJumpGates.Util
 		public InvalidBlockTypeException() { }
 		public InvalidBlockTypeException(string message) : base(message) { }
 	}
+
+	public class ExplicitTickFailureException : InvalidOperationException
+	{
+		public ExplicitTickFailureException() { }
+		public ExplicitTickFailureException(string message) : base(message) { }
+	}
 }

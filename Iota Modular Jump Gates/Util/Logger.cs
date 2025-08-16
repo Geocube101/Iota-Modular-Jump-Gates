@@ -51,7 +51,7 @@ namespace IOTA.ModularJumpGates.Util
             try
             {
 				TextWriter writer = MyAPIGateway.Utilities.WriteFileInLocalStorage(filename, MyJumpGateModSession.Instance.GetType());
-				Logger.Log($"Mod-specifid log file created");
+				Logger.Log($"Mod-specific log file created");
 				Logger.ModLogWriter = writer;
 				Logger.ModLogWriter.WriteLine($"-=-=-= [ Iota's Modular Jump Gates (LOG) ] =-=-=-\n");
                 Logger.WriteInternal("MGMT", "Log Started");
@@ -84,6 +84,7 @@ namespace IOTA.ModularJumpGates.Util
             Logger.ModLogWriter.Flush();
             Logger.ModLogWriter.Close();
 			Logger.ModLogWriter = null;
+			Logger.LogMutex = null;
 		}
 
 		/// <summary>
@@ -93,7 +94,7 @@ namespace IOTA.ModularJumpGates.Util
 		/// <param name="verbosity">The message verbosity</param>
 		public static void Debug(string message, byte verbosity = 0)
         {
-            if (!MyJumpGateModSession.DebugMode && (MyJumpGateModSession.Configuration != null && verbosity > MyJumpGateModSession.Configuration.GeneralConfiguration.DebugLogVerbosity)) return;
+            if (!MyJumpGateModSession.Instance.DebugMode && (MyJumpGateModSession.Configuration != null && verbosity > MyJumpGateModSession.Configuration.GeneralConfiguration.DebugLogVerbosity)) return;
             message = string.Join("\n  ...  ", message.Split('\n').Where((s) => s.Trim().Length > 0));
             message = $"[ {MyJumpGateModSession.MODID} ] [ DEBUG -> {verbosity} ]: {message}";
 			MyLog.Default.WriteLine(message);

@@ -14,7 +14,7 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 {
 	public class MyModAPIJumpGate : MyModAPIObjectBase
 	{
-		private readonly ConcurrentDictionary<Action<MyModAPIJumpGate, MyEntity, bool>, Action<Dictionary<string, object>, MyEntity, bool>> EntityEnteredCallbacks = new ConcurrentDictionary<Action<MyModAPIJumpGate, MyEntity, bool>, Action<Dictionary<string, object>, MyEntity, bool>>();
+		private ConcurrentDictionary<Action<MyModAPIJumpGate, MyEntity, bool>, Action<Dictionary<string, object>, MyEntity, bool>> EntityEnteredCallbacks = new ConcurrentDictionary<Action<MyModAPIJumpGate, MyEntity, bool>, Action<Dictionary<string, object>, MyEntity, bool>>();
 
 		internal static MyModAPIJumpGate New(Dictionary<string, object> attributes)
 		{
@@ -166,6 +166,13 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		/// Gets the list of world space drive ray-cast intersections for this jump gate
 		/// </summary>
 		public ImmutableList<Vector3D> WorldDriveIntersectNodes => this.GetAttribute<ImmutableList<Vector3D>>("WorldDriveIntersectNodes");
+
+		protected override void Close()
+		{
+			base.Close();
+			this.EntityEnteredCallbacks.Clear();
+			this.EntityEnteredCallbacks = null;
+		}
 
 		/// <summary>
 		/// Gets the associated desription for the specified failure reason
@@ -493,11 +500,6 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		public MyAPIGateInvalidationReason GetInvalidationReason()
 		{
 			return (MyAPIGateInvalidationReason) this.GetMethod<Func<byte>>("GetInvalidationReason")();
-		}
-
-		public override int GetHashCode()
-		{
-			return base.GetHashCode();
 		}
 
 		/// <summary>

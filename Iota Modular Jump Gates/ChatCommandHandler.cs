@@ -111,6 +111,9 @@ namespace IOTA.ModularJumpGates.Commands
 				string name = command.CommandName;
 				if (name != null && name.Length > 0 && !MyChatCommandHandler.Commands.ContainsKey(name)) MyChatCommandHandler.Commands[name] = command;
 			}
+
+			MyChatCommandHandler.PreLoadCommands.Clear();
+			MyChatCommandHandler.PreLoadCommands = null;
 		}
 
 		public static void Close()
@@ -119,6 +122,8 @@ namespace IOTA.ModularJumpGates.Commands
 			MyChatCommandHandler.Initialized = false;
 			MyAPIGateway.Utilities.MessageEnteredSender -= MyChatCommandHandler.OnChatCommand;
 			foreach (KeyValuePair<string, MyChatCommand> pair in MyChatCommandHandler.Commands) pair.Value.Deinit();
+			MyChatCommandHandler.Commands.Clear();
+			MyChatCommandHandler.Commands = null;
 		}
 
 		/// <summary>

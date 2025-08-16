@@ -16,7 +16,7 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 	internal class JumpGatePhaseChangedEvent : MyJumpGateEventBase<byte>
 	{
 		private static List<MyTerminalControlComboBoxItem> ComboBoxItems = null;
-		private static readonly object ComboBoxLock = new object();
+		private static object ComboBoxLock = new object();
 
 		public override bool IsThresholdUsed => false;
 		public override bool IsConditionSelectionUsed => false;
@@ -27,6 +27,13 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 		public override string ComponentTypeDebugString => nameof(JumpGatePhaseChangedEvent);
 		public override string YesNoToolbarYesDescription => MyTexts.GetString("DisplayName_JumpGatePhaseChangedEvent_YesDescription").Replace("{%1}", MyTexts.GetString($"PhaseText_{(MyJumpGatePhase) this.TargetValue}"));
 		public override string YesNoToolbarNoDescription => MyTexts.GetString("DisplayName_JumpGatePhaseChangedEvent_NoDescription").Replace("{%1}", MyTexts.GetString($"PhaseText_{(MyJumpGatePhase) this.TargetValue}"));
+
+		public static void Dispose()
+		{
+			JumpGatePhaseChangedEvent.ComboBoxItems?.Clear();
+			JumpGatePhaseChangedEvent.ComboBoxItems = null;
+			JumpGatePhaseChangedEvent.ComboBoxLock = null;
+		}
 
 		public JumpGatePhaseChangedEvent() : base()
 		{

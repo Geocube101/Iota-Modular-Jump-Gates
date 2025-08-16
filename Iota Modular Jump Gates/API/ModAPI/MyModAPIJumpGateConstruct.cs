@@ -94,6 +94,16 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		public MyModAPIJumpGate BatchingGate => MyModAPIJumpGate.New(this.GetAttribute<Dictionary<string, object>>("BatchingGate"));
 
 		/// <summary>
+		/// Gets all big owners for all grids in this construct
+		/// </summary>
+		public List<ulong> BigOwners => this.GetAttribute<List<ulong>>("BigOwners");
+
+		/// <summary>
+		/// Gets all small owners for all grids in this construct
+		/// </summary>
+		public List<ulong> SmallOwners => this.GetAttribute<List<ulong>>("SmallOwners");
+
+		/// <summary>
 		/// Remaps all jump gate IDs on this construct<br />
 		/// Ids will be compressed such that the highest ID is the number of jump gates - 1
 		/// </summary>

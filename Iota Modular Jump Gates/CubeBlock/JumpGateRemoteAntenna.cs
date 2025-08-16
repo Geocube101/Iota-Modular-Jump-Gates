@@ -83,7 +83,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// <summary>
 		/// The maximum distance (in meters) to scan for nearby antennas
 		/// </summary>
-		public const double MaxCollisionDistance = 1500;
+		public static double MaxCollisionDistance => 1500;
 		#endregion
 
 		#region Private Variables
@@ -610,7 +610,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			}
 
 			// Update waypoints
-			if (is_working && !MyNetworkInterface.IsDedicatedMultiplayerServer && MyAPIGateway.Gui.GetCurrentScreen == MyTerminalPageEnum.ControlPanel && MyJumpGateModSession.GameTick % 60 == 0)
+			if (is_working && this.JumpGateGrid != null && !MyNetworkInterface.IsDedicatedMultiplayerServer && MyAPIGateway.Gui.GetCurrentScreen == MyTerminalPageEnum.ControlPanel && MyJumpGateModSession.Instance.GameTick % 60 == 0)
 			{
 				long player_identity = MyAPIGateway.Players.TryGetIdentityId(MyAPIGateway.Multiplayer.MyId);
 				IEnumerable<MyJumpGateConstruct> reachable_grids = (MyJumpGateModSession.Configuration.ConstructConfiguration.RequireGridCommLink) ? this.JumpGateGrid.GetCommLinkedJumpGateGrids() : MyJumpGateModSession.Instance.GetAllJumpGateGrids();
@@ -757,7 +757,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// </summary>
 		private void CheckSendGlobalUpdate()
 		{
-			if (MyJumpGateModSession.Network.Registered && ((MyNetworkInterface.IsMultiplayerServer && MyJumpGateModSession.GameTick % MyCubeBlockBase.ForceUpdateDelay == 0) || this.IsDirty))
+			if (MyJumpGateModSession.Network.Registered && ((MyNetworkInterface.IsMultiplayerServer && MyJumpGateModSession.Instance.GameTick % MyCubeBlockBase.ForceUpdateDelay == 0) || this.IsDirty))
 			{
 				MyNetworkInterface.Packet update_packet = new MyNetworkInterface.Packet {
 					PacketType = MyPacketTypeEnum.UPDATE_REMOTE_ANTENNA,

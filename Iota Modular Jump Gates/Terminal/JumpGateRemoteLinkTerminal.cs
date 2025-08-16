@@ -14,10 +14,10 @@ namespace IOTA.ModularJumpGates.Terminal
 {
 	internal static class MyJumpGateRemoteLinkTerminal
 	{
-		private static readonly List<IMyTerminalControl> TerminalControls = new List<IMyTerminalControl>();
+		private static List<IMyTerminalControl> TerminalControls = new List<IMyTerminalControl>();
 
 		public static bool IsLoaded { get; private set; } = false;
-		public static readonly string MODID_PREFIX = MyJumpGateModSession.MODID + ".JumpGateRemoteLink.";
+		public static string MODID_PREFIX { get; private set; } = MyJumpGateModSession.MODID + ".JumpGateRemoteLink.";
 
 		private static void SetupJumpGateLinkTerminalControls()
 		{
@@ -241,6 +241,8 @@ namespace IOTA.ModularJumpGates.Terminal
 			if (!MyJumpGateRemoteLinkTerminal.IsLoaded) return;
 			MyJumpGateRemoteLinkTerminal.IsLoaded = false;
 			MyJumpGateRemoteLinkTerminal.TerminalControls.Clear();
+			MyJumpGateRemoteLinkTerminal.TerminalControls = null;
+			MyJumpGateRemoteLinkTerminal.MODID_PREFIX = null;
 		}
 
 		public static void UpdateRedrawControls()

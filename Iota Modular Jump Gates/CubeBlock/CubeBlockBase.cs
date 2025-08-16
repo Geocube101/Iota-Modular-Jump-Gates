@@ -33,7 +33,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// <summary>
 		/// The number of game ticks between network block syncs
 		/// </summary>
-		public static readonly uint ForceUpdateDelay = 1800;
+		public static uint ForceUpdateDelay => 1800;
 
 		/// <summary>
 		/// The radii of this block's model
@@ -43,7 +43,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// <summary>
 		/// Master map of all Iota cube block instances
 		/// </summary>
-		public static readonly ConcurrentDictionary<long, MyCubeBlockBase> Instances = new ConcurrentDictionary<long, MyCubeBlockBase>();
+		public static ConcurrentDictionary<long, MyCubeBlockBase> Instances { get; private set; } = new ConcurrentDictionary<long, MyCubeBlockBase>();
 		#endregion
 
 		#region Private Variables
@@ -168,7 +168,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// <summary>
 		/// Whether this block is working: (not closed, enabled, powered)
 		/// </summary>
-		public virtual bool IsWorking => (this.IsNullWrapper) ? (this.SerializedWrapperInfo?.IsWorking ?? false) : (!this.IsClosed && this.IsEnabled && this.IsPowered && this.TerminalBlock.IsFunctional);
+		public virtual bool IsWorking => (this.IsNullWrapper) ? (this.SerializedWrapperInfo?.IsWorking ?? false) : (this.JumpGateGrid != null && !this.IsClosed && this.IsEnabled && this.IsPowered && this.TerminalBlock.IsFunctional);
 
 		/// <summary>
 		/// Whether this block is marked for close
@@ -266,6 +266,20 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		public static bool operator !=(MyCubeBlockBase a, MyCubeBlockBase b)
 		{
 			return !(a == b);
+		}
+		#endregion
+
+		#region Public Static Methods
+		/// <summary>
+		/// Closes all cube block base instances<br />
+		/// Should be called once at end of session
+		/// </summary>
+		public static void DisposeAll()
+		{
+			if (MyCubeBlockBase.Instances == null) return;
+			foreach (KeyValuePair<long, MyCubeBlockBase> pair in MyCubeBlockBase.Instances) if (!pair.Value.IsClosed) pair.Value.MarkForClose();
+			MyCubeBlockBase.Instances.Clear();
+			MyCubeBlockBase.Instances = null;
 		}
 		#endregion
 

@@ -30,7 +30,7 @@ namespace IOTA.ModularJumpGates
 		/// <summary>
 		/// The delay in milliseconds after which the next call to comm linked grids should update the internal list
 		/// </summary>
-		private static readonly ushort CommLinkedUpdateDelay = (ushort) ((MyNetworkInterface.IsStandaloneMultiplayerClient) ? 3000u : 500u);
+		private static ushort CommLinkedUpdateDelay => (ushort) ((MyNetworkInterface.IsStandaloneMultiplayerClient) ? 3000u : 500u);
 		#endregion
 
 		#region Private Variables
@@ -60,9 +60,9 @@ namespace IOTA.ModularJumpGates
 		private bool UpdateBeaconLinkedBeacons = true;
 
 		/// <summary>
-		/// The number of times this construct reinitialized
+		/// Whether to cause a tick failure
 		/// </summary>
-		private byte ConstructReinitializationAttempts;
+		private byte CauseTickFailure = 0;
 
 		/// <summary>
 		/// The next jump gate ID
@@ -202,22 +202,14 @@ namespace IOTA.ModularJumpGates
 		public bool FullyInitialized { get; private set; } = false;
 
 		/// <summary>
-		/// Number of times this construct failed consecutive ticks
+		/// Whether this grid is queued for update
 		/// </summary>
-		public byte FailedTickCount
-		{
-			get { return (byte) (this.ConstructReinitializationAttempts & 3); }
-			set { this.ConstructReinitializationAttempts |= (byte) (value & 3); }
-		}
+		public bool QueuedForUpdate = false;
 
 		/// <summary>
-		/// Number of times this construct failed consecutive initializations
+		/// Number of times this construct failed consecutive ticks
 		/// </summary>
-		public byte FailedReinitializationCount
-		{
-			get { return (byte) ((this.ConstructReinitializationAttempts >> 2) & 3); }
-			set { this.ConstructReinitializationAttempts |= (byte) ((value & 3) << 2); }
-		}
+		public byte FailedTickCount;
 
 		/// <summary>
 		/// The current ID of this construct's cube grid
@@ -267,6 +259,16 @@ namespace IOTA.ModularJumpGates
 		/// The gate this construct is currently being jumped by or null
 		/// </summary>
 		public MyJumpGate BatchingGate = null;
+
+		/// <summary>
+		/// Gets all big owners for all grids in this construct
+		/// </summary>
+		public List<ulong> BigOwners => this.CubeGrids?.Where((pair) => pair.Value != null && !pair.Value.Closed).SelectMany((pair) => pair.Value.BigOwners).Select(MyAPIGateway.Players.TryGetSteamId).Where((id) => id != 0).Distinct().ToList();
+
+		/// <summary>
+		/// Gets all small owners for all grids in this construct
+		/// </summary>
+		public List<ulong> SmallOwners => this.CubeGrids?.Where((pair) => pair.Value != null && !pair.Value.Closed).SelectMany((pair) => pair.Value.SmallOwners).Select(MyAPIGateway.Players.TryGetSteamId).Where((id) => id != 0).Distinct().ToList();
 		#endregion
 
 		#region Constructors
@@ -625,7 +627,7 @@ namespace IOTA.ModularJumpGates
 			}
 
             MyJumpGateConstruct parent = MyJumpGateModSession.Instance.GetJumpGateGrid(grid);
-            if (parent == null && (MyJumpGateModSession.SessionStatus == MySessionStatusEnum.LOADING || MyJumpGateModSession.SessionStatus == MySessionStatusEnum.RUNNING)) parent = MyJumpGateModSession.Instance.AddCubeGridToSession(grid);
+            if (parent == null && (MyJumpGateModSession.Instance.SessionStatus == MySessionStatusEnum.LOADING || MyJumpGateModSession.Instance.SessionStatus == MySessionStatusEnum.RUNNING)) parent = MyJumpGateModSession.Instance.AddCubeGridToSession(grid);
 			this.SetDirty();
 		}
 
@@ -670,7 +672,7 @@ namespace IOTA.ModularJumpGates
 		/// </summary>
 		private void UpdateDriveRaycastDistances()
 		{
-			if (!this.UpdateDriveMaxRaycastDistances || this.LocalGameTick % 30 != 0) return;
+			if (!this.UpdateDriveMaxRaycastDistances || this.LocalGameTick % 60 != 0) return;
 			List<Vector3I> raycast_cells = new List<Vector3I>();
 			this.UpdateDriveMaxRaycastDistances = false;
 
@@ -816,7 +818,11 @@ namespace IOTA.ModularJumpGates
 				else if (jump_gate != null && jump_gate.MarkClosed && !jump_gate.Closed) MyJumpGateModSession.Instance.CloseGate(jump_gate);
 				else this.JumpGates[primary_id] = (jump_gate = new MyJumpGate(this, primary_id, ref jump_node, node_group));
 
-				foreach (MyJumpGateDrive drive in drive_group) drive.SetAttachedJumpGate(jump_gate);
+				foreach (MyJumpGateDrive drive in drive_group)
+				{
+					Logger.Warn($"[{this.CubeGridID}]: DRIVE={drive.BlockID}, CONSTRUCT={drive.JumpGateGrid?.CubeGridID.ToString() ?? "N/A"}, MATCH={this == drive.JumpGateGrid}");
+					drive.SetAttachedJumpGate(jump_gate);
+				}
 				jump_gate.Init();
 			}
 
@@ -1109,7 +1115,7 @@ namespace IOTA.ModularJumpGates
 			this.MarkClosed = true;
 			this.Closed = true;
 
-			Logger.Debug($"Jump Gate Grid \"{name}\" ({this.CubeGridID}) Closed - {reason}; SESSION_STATUS={MyJumpGateModSession.SessionStatus}", 1);
+			Logger.Debug($"Jump Gate Grid \"{name}\" ({this.CubeGridID}) Closed - {reason}; SESSION_STATUS={MyJumpGateModSession.Instance.SessionStatus}", 1);
 		}
 
 		/// <summary>
@@ -1120,8 +1126,9 @@ namespace IOTA.ModularJumpGates
 		///  ... This construct is not valid<br />
 		///  ... This construct's main grid is not the true main grid
 		/// </summary>
-		public void Update()
+		public void Update(out bool true_update)
 		{
+			true_update = false;
 			if (this.Closed) return;
 			MyGridInvalidationReason reason;
 
@@ -1142,11 +1149,11 @@ namespace IOTA.ModularJumpGates
 			try
 			{
 				//Logger.Debug($"[{grid_id}] - IN_SCENE={this.CubeGrid?.InScene ?? false}", 1);
-				if (MyJumpGateModSession.SessionStatus != MySessionStatusEnum.RUNNING)
+				if (MyJumpGateModSession.Instance.SessionStatus != MySessionStatusEnum.RUNNING)
 				{
 					MyJumpGateModSession.Instance.CloseGrid(this);
 					this.SendNetworkGridUpdate();
-					Logger.Debug($"[{grid_id}] - Session is not running ({MyJumpGateModSession.SessionStatus}); CLOSED", 2);
+					Logger.Debug($"[{grid_id}] - Session is not running ({MyJumpGateModSession.Instance.SessionStatus}); CLOSED", 2);
 					return;
 				}
 				else if ((reason = this.GetInvalidationReason()) != MyGridInvalidationReason.NONE)
@@ -1195,36 +1202,47 @@ namespace IOTA.ModularJumpGates
 				}
 
 				// Initialize update
+				true_update = true;
 				this.PrimaryCubeGridCustomName = this.CubeGrid?.CustomName ?? this.PrimaryCubeGridCustomName;
 				bool first_update = this.LocalGameTick == 0;
+				if (!first_update && this.JumpGateBlocks.Count == 0) return;
 				this.LocalGameTick = (this.LocalGameTick + 1) % 0xFFFFFFFFFFFFFFF0;
 				bool full_gate_update = this.MarkUpdateJumpGates || first_update || this.LocalGameTick == 180;
 				bool gate_entity_update = this.LocalGameTick % 30 == 0;
 				this.MarkUpdateJumpGates = false;
 				bool is_dirty = this.IsDirty || full_gate_update;
 
-				// Update drive combinations
-				this.UpdateDriveCombinations(ref full_gate_update);
-				
-				// Update drive max raycast distances
-				this.UpdateDriveRaycastDistances();
+				if (MyNetworkInterface.IsServerLike)
+				{
+					//Check tick failure
+					if (this.CauseTickFailure > 0)
+					{
+						--this.CauseTickFailure;
+						throw new ExplicitTickFailureException("An explicit tick failure event was raised");
+					}
 
-				// Rebuild all jump gates
-				if (MyNetworkInterface.IsServerLike && full_gate_update) this.RebuildJumpGates();
+					// Update drive combinations
+					this.UpdateDriveCombinations(ref full_gate_update);
+
+					// Update drive max raycast distances
+					this.UpdateDriveRaycastDistances();
+
+					// Rebuild all jump gates
+					if (full_gate_update) this.RebuildJumpGates();
+
+					// Update comm linked grids
+					this.SearchUpdateCommLinkedGrids();
+
+					// Update beacon linked beacons
+					this.SearchUpdateBeaconLinkedBeacons();
+				}
 
 				// Update jump gates
 				this.TickUpdateJumpGates(full_gate_update, gate_entity_update);
 
-				// Update comm linked grids
-				this.SearchUpdateCommLinkedGrids();
-
-				// Update beacon linked beacons
-				this.SearchUpdateBeaconLinkedBeacons();
-
 				// Finalize update
-				if (MyJumpGateModSession.Network.Registered && (is_dirty || first_update)) this.SendNetworkGridUpdate();
 				this.FullyInitialized = this.FullyInitialized || first_update;
-				this.FailedTickCount = 0;
+				if (MyJumpGateModSession.Network.Registered && (is_dirty || first_update)) this.SendNetworkGridUpdate();
 
 				if (first_update)
 				{
@@ -1297,7 +1315,7 @@ namespace IOTA.ModularJumpGates
 			if (this.Closed || this.MarkClosed || MyNetworkInterface.IsStandaloneMultiplayerClient) return;
 			this.MarkClosed = true;
 			foreach (KeyValuePair<long, MyJumpGate> pair in this.JumpGates) pair.Value.Dispose();
-			if (MyJumpGateModSession.SessionStatus == MySessionStatusEnum.UNLOADING) MyJumpGateModSession.Instance.CloseGrid(this);
+			if (MyJumpGateModSession.Instance.SessionStatus == MySessionStatusEnum.UNLOADING) MyJumpGateModSession.Instance.CloseGrid(this);
 		}
 
 		/// <summary>
@@ -1427,6 +1445,15 @@ namespace IOTA.ModularJumpGates
 				if (contained_blocks != null && ellipsoid.IsPointInEllipse(position)) contained_blocks.Add(block);
 				else if (uncontained_blocks != null) uncontained_blocks.Add(block);
 			}
+		}
+
+		/// <summary>
+		/// Forces this construct to throw an "ExplicitTickFailureException" on next tick
+		/// </summary>
+		/// <param name="count">The number of consecutive ticks to raise over</param>
+		public void RaiseTickFailure(byte count)
+		{
+			this.CauseTickFailure = count;
 		}
 
 		/// <summary>
@@ -1649,7 +1676,7 @@ namespace IOTA.ModularJumpGates
 		/// <returns>True if the grid is part of this construct</returns>
 		public bool HasCubeGrid(IMyCubeGrid grid)
         {
-            return !this.Closed && this.CubeGrids.ContainsKey(grid.EntityId);
+            return !this.Closed && grid != null && (this.CubeGrids?.ContainsKey(grid.EntityId) ?? false);
         }
 
 		/// <summary>

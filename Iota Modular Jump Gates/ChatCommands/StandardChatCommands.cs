@@ -59,9 +59,9 @@ namespace IOTA.ModularJumpGates.ChatCommands
 			if (arguments.Count > 1) return MyCommandResult.InvalidNumberArguments(this, 0, 1, arguments.Count);
 			else
 			{
-				bool value = !MyJumpGateModSession.DebugMode;
+				bool value = !MyJumpGateModSession.Instance.DebugMode;
 				if (arguments.Count == 1 && !bool.TryParse(arguments[0], out value)) return MyCommandResult.Failure(this, $"Invalid boolean value \"{arguments[0]}\", expected either 'true' or 'false'");
-				MyJumpGateModSession.DebugMode = value;
+				MyJumpGateModSession.Instance.DebugMode = value;
 				return MyCommandResult.Success(this, MyTexts.GetString((value) ? "ChatCommandHandler_DebugCommand_OnEnableSuccess" : "ChatCommandHandler_DebugCommand_OnDisableSuccess"));
 			}
 		}

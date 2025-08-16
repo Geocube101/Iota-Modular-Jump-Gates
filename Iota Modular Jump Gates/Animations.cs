@@ -2559,6 +2559,7 @@ namespace IOTA.ModularJumpGates
 	[ProtoContract(UseProtoMembersOnly = true)]
 	public class DriveEntityLockDef : AnimatableDef
 	{
+		#region Public Variables
 		/// <summary>
 		/// The lock delay shift<br />
 		/// Controls how long it takes for drives to lock onto an entity
@@ -2624,6 +2625,7 @@ namespace IOTA.ModularJumpGates
 		/// </summary>
 		[ProtoMember(10)]
 		public ParticleDef[] EntityLockParticles = null;
+		#endregion
 	}
 	#endregion
 
@@ -3096,7 +3098,7 @@ namespace IOTA.ModularJumpGates
 		/// <summary>
 		/// The number of active effects to play at a given time
 		/// </summary>
-		private static readonly uint RenderQueueLength = 50;
+		private static ushort RenderQueueLength => 128;
 
 		/// <summary>
 		/// The next particle ID
@@ -3106,7 +3108,7 @@ namespace IOTA.ModularJumpGates
 		/// <summary>
 		/// Master list of active particle effects on this client
 		/// </summary>
-		private static readonly List<Particle> ActiveParticlesQueue = new List<Particle>();
+		private static List<Particle> ActiveParticlesQueue = new List<Particle>();
 
 		/// <summary>
 		/// Master map storing transient particles
@@ -3159,6 +3161,14 @@ namespace IOTA.ModularJumpGates
 				foreach (Particle particle in Particle.ActiveParticlesQueue.OrderBy((particle) => Vector3D.DistanceSquared(camera_pos, particle.EffectPosition)))
 					particle.IsPlayableInQueue = index++ < Particle.RenderQueueLength;
 			}
+		}
+
+		public static void Dispose()
+		{
+			Particle.ActiveParticlesQueue?.Clear();
+			Particle.TransientParticles?.Clear();
+			Particle.ActiveParticlesQueue = null;
+			Particle.TransientParticles = null;
 		}
 		#endregion
 
@@ -3521,7 +3531,8 @@ namespace IOTA.ModularJumpGates
 
 				if (is_start && source != null)
 				{
-					this.SoundEmitters = new List<MyEntity3DSoundEmitter>();
+					if (this.SoundEmitters == null) this.SoundEmitters = new List<MyEntity3DSoundEmitter>();
+					else this.SoundEmitters.Clear();
 
 					foreach (string sound_name in this.SoundDefinition.SoundNames)
 					{
@@ -3599,6 +3610,7 @@ namespace IOTA.ModularJumpGates
 			if (this.SoundEmitters != null) foreach (MyEntity3DSoundEmitter emitter in this.SoundEmitters) emitter.StopSound(true);
 			this.SoundIDs.Clear();
 			this.SoundEmitters?.Clear();
+			this.SoundEmitters = null;
 		}
 		#endregion
 	}
@@ -5522,12 +5534,12 @@ namespace IOTA.ModularJumpGates
 		/// Holds the list of pre-load animation definitions<br />
 		/// All animations definined in code will be here
 		/// </summary>
-		private readonly static List<AnimationDef> PreloadedAnimationDefinitions = new List<AnimationDef>();
+		private static List<AnimationDef> PreloadedAnimationDefinitions = new List<AnimationDef>();
 
 		/// <summary>
 		/// Master map mapping a full animation name with it's animation definition
 		/// </summary>
-		private readonly static Dictionary<string, List<AnimationDef>> Animations = new Dictionary<string, List<AnimationDef>>();
+		private static Dictionary<string, List<AnimationDef>> Animations = new Dictionary<string, List<AnimationDef>>();
 		#endregion
 
 		#region Public Static Methods
@@ -5686,6 +5698,9 @@ namespace IOTA.ModularJumpGates
 			}
 
 			MyAnimationHandler.Animations.Clear();
+			MyAnimationHandler.PreloadedAnimationDefinitions?.Clear();
+			MyAnimationHandler.Animations = null;
+			MyAnimationHandler.PreloadedAnimationDefinitions = null;
 			Logger.Log($"Animations Unloaded");
 		}
 

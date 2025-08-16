@@ -20,7 +20,7 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		}
 
 		private MyModAPICubeBlockBase(Dictionary<string, object> attributes) : base(attributes) { }
-		protected MyModAPICubeBlockBase(Dictionary<string, object> block_base_attributes, Dictionary<string, object> attributes) : base(block_base_attributes.Concat(attributes).ToDictionary(pair => pair.Key, pair => pair.Value)) { }
+		protected MyModAPICubeBlockBase(Dictionary<string, object> block_base_attributes, Dictionary<string, object> attributes) : base(attributes.Concat(block_base_attributes.Where((pair) => !attributes.ContainsKey(pair.Key))).ToDictionary(pair => pair.Key, pair => pair.Value)) { }
 
 		/// <summary>
 		/// Whether this block should be synced<br/>
@@ -257,6 +257,8 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 					this.JumpEffectName_V = (string) mapping.GetValueOrDefault("JumpEffectName", this.JumpEffectName_V);
 					this.VectorNormal_V = (Vector3D) mapping.GetValueOrDefault("VectorNormal", this.VectorNormal_V);
 					this.EffectColorShift_V = (Color) mapping.GetValueOrDefault("EffectColorShift", this.EffectColorShift_V);
+					this.RemoteAntennaChannel_V = (byte) mapping.GetValueOrDefault("RemoteAntennaChannel", this.RemoteAntennaChannel_V);
+					this.RemoteAntennaID_V = (long) mapping.GetValueOrDefault("RemoteAntennaID", this.RemoteAntennaID_V);
 
 					{
 						object selected_waypoint = mapping.GetValueOrDefault("SelectedWaypoint", null);
@@ -287,8 +289,9 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 						}
 					}
 
+					object blacklisted;
 					this.BlacklistedEntities.Clear();
-					this.BlacklistedEntities.AddRange((IEnumerable<long>) mapping.GetValueOrDefault("BlacklistedEntities", this.BlacklistedEntities));
+					if (mapping.TryGetValue("BlacklistedEntities", out blacklisted)) this.BlacklistedEntities.AddRange((IEnumerable<long>) blacklisted);
 
 					{
 						float? minimum_mass_kg = (float?) mapping.GetValueOrDefault("MinimumEntityMass", null);
@@ -317,19 +320,22 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 				lock (this.WriterLock)
 				{
 					MyAPIJumpGateWaypoint waypoint = this.SelectedWaypoint_V;
-					object selected_waypoint;
+					object selected_waypoint = null;
 
-					switch (waypoint.WaypointType)
+					if (waypoint != null)
 					{
-						case MyAPIWaypointType.JUMP_GATE:
-							selected_waypoint = waypoint.JumpGate;
-							break;
-						case MyAPIWaypointType.GPS:
-							selected_waypoint = waypoint.GPS;
-							break;
-						default:
-							selected_waypoint = null;
-							break;
+						switch (waypoint.WaypointType)
+						{
+							case MyAPIWaypointType.JUMP_GATE:
+								selected_waypoint = waypoint.JumpGate;
+								break;
+							case MyAPIWaypointType.GPS:
+								selected_waypoint = waypoint.GPS;
+								break;
+							default:
+								selected_waypoint = null;
+								break;
+						}
 					}
 
 					return new Dictionary<string, object>()
@@ -338,6 +344,8 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 						["CanBeInbound"] = this.CanBeInbound_V,
 						["CanBeOutbound"] = this.CanBeOutbound_V,
 						["HasVectorNormalOverride"] = this.HasVectorNormalOverride_V,
+						["RemoteAntennaChannel"] = this.RemoteAntennaChannel_V,
+						["RemoteAntennaID"] = this.RemoteAntennaID_V,
 						["FactionDisplayType"] = (byte) this.FactionDisplayType_V,
 						["JumpSpaceFitType"] = (byte) this.JumpSpaceFitType_V,
 						["GravityAlignmentType"] = (byte) this.GravityAlignmentType_V,
@@ -348,7 +356,7 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 						["VectorNormal"] = this.VectorNormal_V,
 						["EffectColorShift"] = this.EffectColorShift_V,
 						["SelectedWaypoint"] = selected_waypoint,
-						["BlacklistedEntities"] = new List<long>(this.BlacklistedEntities),
+						["BlacklistedEntities"] = this.BlacklistedEntities?.ToList() ?? new List<long>(),
 						["MinimumEntityMass"] = this.MinimumEntityMass_V,
 						["MaximumEntityMass"] = this.MaximumEntityMass_V,
 						["MinimumCubeGridSize"] = this.MinimumCubeGridSize_V,
@@ -687,7 +695,7 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		}
 
 		/// <summary>
-		/// Sets or gets this controller's attached jump gate
+		/// Sets or gets this controller's selected waypoint
 		/// </summary>
 		public MyAPIJumpGateWaypoint SelectedWaypoint
 		{
@@ -929,8 +937,8 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		/// </summary>
 		public MyAPIAllowedRemoteSettings AllowedRemoteSettings
 		{
-			get { return (MyAPIAllowedRemoteSettings) this.GetAttribute<byte>("AllowedRemoteSettings"); }
-			set { this.SetAttribute<byte>("AllowedRemoteSettings", (byte) value); }
+			get { return (MyAPIAllowedRemoteSettings) this.GetAttribute<ushort>("AllowedRemoteSettings"); }
+			set { this.SetAttribute<ushort>("AllowedRemoteSettings", (ushort) value); }
 		}
 
 		/// <summary>

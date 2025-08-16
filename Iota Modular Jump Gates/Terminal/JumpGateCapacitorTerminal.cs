@@ -13,10 +13,10 @@ namespace IOTA.ModularJumpGates.Terminal
 {
 	internal static class MyJumpGateCapacitorTerminal
 	{
-		private static readonly List<IMyTerminalControl> TerminalControls = new List<IMyTerminalControl>();
+		private static List<IMyTerminalControl> TerminalControls = new List<IMyTerminalControl>();
 
 		public static bool IsLoaded { get; private set; } = false;
-		public static readonly string MODID_PREFIX = MyJumpGateModSession.MODID + ".JumpGateCapacitor.";
+		public static string MODID_PREFIX { get; private set; } = MyJumpGateModSession.MODID + ".JumpGateCapacitor.";
 
 		private static void SetupJumpGateCapacitorTerminalControls()
 		{
@@ -186,6 +186,8 @@ namespace IOTA.ModularJumpGates.Terminal
 			if (!MyJumpGateCapacitorTerminal.IsLoaded) return;
 			MyJumpGateCapacitorTerminal.IsLoaded = false;
 			MyJumpGateCapacitorTerminal.TerminalControls.Clear();
+			MyJumpGateCapacitorTerminal.MODID_PREFIX = null;
+			MyJumpGateCapacitorTerminal.TerminalControls = null;
 		}
 
 		public static void UpdateRedrawControls()

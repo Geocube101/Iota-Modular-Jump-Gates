@@ -337,7 +337,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
         /// </summary>
         private void CheckSendGlobalUpdate()
 		{
-			if (MyJumpGateModSession.Network.Registered && ((MyNetworkInterface.IsMultiplayerServer && MyJumpGateModSession.GameTick % MyCubeBlockBase.ForceUpdateDelay == 0) || this.IsDirty))
+			if (MyJumpGateModSession.Network.Registered && ((MyNetworkInterface.IsMultiplayerServer && MyJumpGateModSession.Instance.GameTick % MyCubeBlockBase.ForceUpdateDelay == 0) || this.IsDirty))
             {
                 MyNetworkInterface.Packet update_packet = new MyNetworkInterface.Packet {
                     PacketType = MyPacketTypeEnum.UPDATE_CAPACITOR,

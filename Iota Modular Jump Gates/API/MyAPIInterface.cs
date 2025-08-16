@@ -16,21 +16,23 @@ namespace IOTA.ModularJumpGates.API
 {
 	internal class MyAPIInterface
 	{
-		public static readonly int[] ModAPIVersion = new int[2] { 1, 3 };
-		public static readonly int[] AnimationAPIVersion = new int[2] { 1, 1 };
+		public static int[] ModAPIVersion { get; private set; } = new int[2] { 1, 4 };
+		public static int[] AnimationAPIVersion { get; private set; } = new int[2] { 1, 2 };
 
 		private bool Registered = false;
-		private readonly ConcurrentDictionary<long, Dictionary<string, object>> ConstructWrappers = new ConcurrentDictionary<long, Dictionary<string, object>>();
-		private readonly ConcurrentDictionary<JumpGateUUID, Dictionary<string, object>> JumpGateWrappers = new ConcurrentDictionary<JumpGateUUID, Dictionary<string, object>>();
-		private readonly ConcurrentDictionary<long, Dictionary<string, object>> BlockBaseWrappers = new ConcurrentDictionary<long, Dictionary<string, object>>();
-		private readonly ConcurrentDictionary<long, Dictionary<string, object>> ControllerWrappers = new ConcurrentDictionary<long, Dictionary<string, object>>();
-		private readonly ConcurrentDictionary<long, Dictionary<string, object>> DriveWrappers = new ConcurrentDictionary<long, Dictionary<string, object>>();
-		private readonly ConcurrentDictionary<long, Dictionary<string, object>> CapacitorWrppers = new ConcurrentDictionary<long, Dictionary<string, object>>();
-		private readonly ConcurrentDictionary<long, Dictionary<string, object>> RemoteAntennaWrappers = new ConcurrentDictionary<long, Dictionary<string, object>>();
-		private readonly ConcurrentDictionary<long, Dictionary<string, object>> RemoteLinkWrappers = new ConcurrentDictionary<long, Dictionary<string, object>>();
-		private readonly ConcurrentDictionary<long, Dictionary<string, object>> ServerAntennaWrappers = new ConcurrentDictionary<long, Dictionary<string, object>>();
+		private Dictionary<IMyModContext, Action> ModAPIUnloaderCallbacks = new Dictionary<IMyModContext, Action>();
+		private Dictionary<IMyModContext, Action> AnimationAPIUnloaderCallbacks = new Dictionary<IMyModContext, Action>();
+		private ConcurrentDictionary<long, Dictionary<string, object>> ConstructWrappers = new ConcurrentDictionary<long, Dictionary<string, object>>();
+		private ConcurrentDictionary<JumpGateUUID, Dictionary<string, object>> JumpGateWrappers = new ConcurrentDictionary<JumpGateUUID, Dictionary<string, object>>();
+		private ConcurrentDictionary<long, Dictionary<string, object>> BlockBaseWrappers = new ConcurrentDictionary<long, Dictionary<string, object>>();
+		private ConcurrentDictionary<long, Dictionary<string, object>> ControllerWrappers = new ConcurrentDictionary<long, Dictionary<string, object>>();
+		private ConcurrentDictionary<long, Dictionary<string, object>> DriveWrappers = new ConcurrentDictionary<long, Dictionary<string, object>>();
+		private ConcurrentDictionary<long, Dictionary<string, object>> CapacitorWrappers = new ConcurrentDictionary<long, Dictionary<string, object>>();
+		private ConcurrentDictionary<long, Dictionary<string, object>> RemoteAntennaWrappers = new ConcurrentDictionary<long, Dictionary<string, object>>();
+		private ConcurrentDictionary<long, Dictionary<string, object>> RemoteLinkWrappers = new ConcurrentDictionary<long, Dictionary<string, object>>();
+		private ConcurrentDictionary<long, Dictionary<string, object>> ServerAntennaWrappers = new ConcurrentDictionary<long, Dictionary<string, object>>();
 
-		public readonly Dictionary<IMyModContext, List<AnimationDef>> ModAnimationDefinitions = new Dictionary<IMyModContext, List<AnimationDef>>();
+		public Dictionary<IMyModContext, List<AnimationDef>> ModAnimationDefinitions { get; private set; } = new Dictionary<IMyModContext, List<AnimationDef>>();
 
 		public MyAPIInterface() { }
 
@@ -45,17 +47,33 @@ namespace IOTA.ModularJumpGates.API
 		public void Close()
 		{
 			if (!this.Registered) return;
+			this.Registered = false;
+			foreach (KeyValuePair<IMyModContext, Action> pair in this.ModAPIUnloaderCallbacks) this.UnloadModAPISessionWrapper(pair.Key);
+			foreach (KeyValuePair<IMyModContext, Action> pair in this.AnimationAPIUnloaderCallbacks) this.UnloadAnimationAPISessionWrapper(pair.Key);
 			MyAPIGateway.Utilities.UnregisterMessageHandler(3313236685, this.OnModMessage);
 			this.ConstructWrappers.Clear();
 			this.JumpGateWrappers.Clear();
 			this.BlockBaseWrappers.Clear();
 			this.ControllerWrappers.Clear();
 			this.DriveWrappers.Clear();
-			this.CapacitorWrppers.Clear();
+			this.CapacitorWrappers.Clear();
 			this.RemoteAntennaWrappers.Clear();
 			this.ServerAntennaWrappers.Clear();
 			this.ModAnimationDefinitions.Clear();
-			this.Registered = false;
+			this.ModAPIUnloaderCallbacks.Clear();
+			this.AnimationAPIUnloaderCallbacks.Clear();
+			this.ConstructWrappers = null;
+			this.JumpGateWrappers = null;
+			this.BlockBaseWrappers = null;
+			this.ControllerWrappers = null;
+			this.DriveWrappers = null;
+			this.CapacitorWrappers = null;
+			this.RemoteAntennaWrappers = null;
+			this.RemoteLinkWrappers = null;
+			this.ServerAntennaWrappers = null;
+			this.ModAnimationDefinitions = null;
+			this.ModAPIUnloaderCallbacks = null;
+			this.AnimationAPIUnloaderCallbacks = null;
 			Logger.Log("ModAPI Closed");
 		}
 
@@ -67,6 +85,22 @@ namespace IOTA.ModularJumpGates.API
 			else if (api_type == "modapi") Logger.Log($"Mod API connected - \"{context.ModItem.FriendlyName}\"");
 			else if (api_type == "animationapi") Logger.Log($"Animation API connected - \"{context.ModItem.FriendlyName}\"");
 			else Logger.Warn($"Unknown API connected - \"{context.ModItem.FriendlyName}\"");
+		}
+
+		private void UnloadModAPISessionWrapper(IMyModContext context)
+		{
+			Action unloader = this.ModAPIUnloaderCallbacks.GetValueOrDefault(context, null);
+			if (unloader == null) return;
+			try { unloader(); }
+			catch (Exception e) { Logger.Error($"Error during Mod-API deinit callback --> \"{context.ModName}\"\n  ...\n[ {e.GetType().Name} ]: {e.Message}\n{e.StackTrace}\n{e.InnerException}"); }
+		}
+
+		private void UnloadAnimationAPISessionWrapper(IMyModContext context)
+		{
+			Action unloader = this.AnimationAPIUnloaderCallbacks.GetValueOrDefault(context, null);
+			if (unloader == null) return;
+			try { unloader(); }
+			catch (Exception e) { Logger.Error($"Error during Animation-API deinit callback --> \"{context.ModName}\"\n  ...\n[ {e.GetType().Name} ]: {e.Message}\n{e.StackTrace}\n{e.InnerException}"); }
 		}
 
 		private IMyModContext HandleApiInit(object obj, out string api_type)
@@ -87,8 +121,20 @@ namespace IOTA.ModularJumpGates.API
 				else if (version[1] < MyAPIInterface.ModAPIVersion[1]) Logger.Warn("ModAPI version is not latest - Current");
 				if (!payload.ContainsKey("ModContext") || !(payload["ModContext"] is MyModContext)) return null;
 				IMyModContext context = (IMyModContext) payload["ModContext"];
-				callback(this.ReturnSessionWrapper());
-				return context;
+				this.ModAPIUnloaderCallbacks[context] = (Action) payload.GetValueOrDefault("Unloader", null);
+
+				try
+				{
+					callback(this.ReturnSessionWrapper());
+					return context;
+				}
+				catch (Exception e)
+				{
+					Logger.Error($"Error during Mod-API init callback --> \"{context.ModName}\"\n  ...\n[ {e.GetType().Name} ]: {e.Message}\n{e.StackTrace}\n{e.InnerException}");
+					this.UnloadModAPISessionWrapper(context);
+					this.ModAPIUnloaderCallbacks.Remove(context);
+					return null;
+				}
 			}
 			else if (api_type == "animationapi")
 			{
@@ -100,8 +146,20 @@ namespace IOTA.ModularJumpGates.API
 				else if (version[1] < MyAPIInterface.ModAPIVersion[1]) Logger.Warn("AnimationAPI version is not latest - Current");
 				if (!payload.ContainsKey("ModContext") || !(payload["ModContext"] is MyModContext)) return null;
 				IMyModContext context = (IMyModContext) payload["ModContext"];
-				callback(this.OnModAnimationAdd);
-				return context;
+				this.AnimationAPIUnloaderCallbacks[context] = (Action) payload.GetValueOrDefault("Unloader", null);
+
+				try
+				{
+					callback(this.OnModAnimationAdd);
+					return context;
+				}
+				catch (Exception e)
+				{
+					Logger.Error($"Error during Animation-API init callback --> \"{context.ModName}\"\n  ...\n[ {e.GetType().Name} ]: {e.Message}\n{e.StackTrace}\n{e.InnerException}");
+					this.UnloadAnimationAPISessionWrapper(context);
+					this.AnimationAPIUnloaderCallbacks.Remove(context);
+					return null;
+				}
 			}
 			else throw new InvalidOperationException($"Invalid API type: \"{api_type}\"");
 		}
@@ -118,9 +176,9 @@ namespace IOTA.ModularJumpGates.API
 		{
 			return new Dictionary<string, object> {
 				["GUID"] = JumpGateUUID.Empty.Packed(),
-				["GameTick"] = new object[2] { (Func<ulong>) (() => MyJumpGateModSession.GameTick), null },
-				["DebugMode"] = new object[2] { (Func<bool>) (() => MyJumpGateModSession.DebugMode), (Action<bool>) ((value) => MyJumpGateModSession.DebugMode = value) },
-				["SessionStatus"] = new object[2] { (Func<byte>) (() => (byte) MyJumpGateModSession.SessionStatus), null },
+				["GameTick"] = new object[2] { (Func<ulong>) (() => MyJumpGateModSession.Instance.GameTick), null },
+				["DebugMode"] = new object[2] { (Func<bool>) (() => MyJumpGateModSession.Instance.DebugMode), (Action<bool>) ((value) => MyJumpGateModSession.Instance.DebugMode = value) },
+				["SessionStatus"] = new object[2] { (Func<byte>) (() => (byte) MyJumpGateModSession.Instance.SessionStatus), null },
 				["WorldMatrix"] = new object[2] { (Func<MatrixD>) (() => MyJumpGateModSession.WorldMatrix), null },
 				["AllSessionEntitiesLoaded"] = new object[2] { (Func<bool>) (() => MyJumpGateModSession.Instance.AllSessionEntitiesLoaded), null },
 				["InitializationComplete"] = new object[2] { (Func<bool>) (() => MyJumpGateModSession.Instance.InitializationComplete), null },
@@ -260,7 +318,7 @@ namespace IOTA.ModularJumpGates.API
 		{
 			Dictionary<string, object> attributes;
 			if (block == null) return null;
-			else if (this.CapacitorWrppers.TryGetValue(block.BlockID, out attributes)) return attributes;
+			else if (this.CapacitorWrappers.TryGetValue(block.BlockID, out attributes)) return attributes;
 			attributes = new Dictionary<string, object> {
 				["GUID"] = JumpGateUUID.FromBlock(block).Packed(),
 				["BlockBase"] = this.ReturnCubeBlockBaseWrapper(block),
@@ -269,7 +327,7 @@ namespace IOTA.ModularJumpGates.API
 				["Configuration"] = new object[2] { (Func<Dictionary<string, object>>) (() => block.CapacitorConfiguration.ToDictionary()), null },
 				["DrainStoredCharge"] = (Func<double, double>) block.DrainStoredCharge,
 			};
-			this.CapacitorWrppers[block.BlockID] = attributes;
+			this.CapacitorWrappers[block.BlockID] = attributes;
 			return attributes;
 		}
 
@@ -297,7 +355,7 @@ namespace IOTA.ModularJumpGates.API
 				["GetControllerOutboundControlChannel"] = (Func<long[], byte>) ((id) => block.GetControllerOutboundControlChannel(MyJumpGateModSession.Instance.GetJumpGateBlock<MyJumpGateController>(new JumpGateUUID(id)))),
 				["GetInboundControlGate"] = (Func<byte, Dictionary<string, object>>) ((channel) => this.ReturnJumpGateWrapper(block.GetInboundControlGate(channel))),
 				["GetConnectedControlledJumpGate"] = (Func<byte, Dictionary<string, object>>) ((channel) => this.ReturnJumpGateWrapper(block.GetConnectedControlledJumpGate(channel))),
-				["ReturnCubeBlockControllerWrapper"] = (Func<byte, Dictionary<string, object>>) ((channel) => this.ReturnCubeBlockControllerWrapper(block.GetOutboundControlController(channel))),
+				["GetOutboundControlController"] = (Func<byte, Dictionary<string, object>>) ((channel) => this.ReturnCubeBlockControllerWrapper(block.GetOutboundControlController(channel))),
 				["GetConnectedRemoteAntenna"] = (Func<byte, Dictionary<string, object>>) ((channel) => this.ReturnCubeBlockRemoteAntennaWrapper(block.GetConnectedRemoteAntenna(channel))),
 				["RegisteredInboundControlGateIDs"] = (Func<IEnumerable<long>>) block.RegisteredInboundControlGateIDs,
 				["RegisteredOutboundControlControllerIDs"] = (Func<IEnumerable<long>>) block.RegisteredOutboundControlControllerIDs,
@@ -372,6 +430,8 @@ namespace IOTA.ModularJumpGates.API
 				["LastUpdateDateTimeUTC"] = new object[2] { (Func<DateTime>) (() => construct.LastUpdateDateTimeUTC), (Action<DateTime>) ((datetime) => construct.LastUpdateDateTimeUTC = datetime) },
 				["CubeGrid"] = new object[2] { (Func<IMyCubeGrid>) (() => construct.CubeGrid), null },
 				["BatchingGate"] = new object[2] { (Func<Dictionary<string, object>>) (() => this.ReturnJumpGateWrapper(construct.BatchingGate)), null },
+				["BigOwners"] = new object[2] { (Func<List<ulong>>) (() => construct.BigOwners), null },
+				["SmallOwners"] = new object[2] { (Func<List<ulong>>) (() => construct.SmallOwners), null },
 				["#HASH"] = (Func<int>) construct.GetHashCode,
 				["#EQUALS"] = (Func<object, bool>) ((id) => id is long && construct.Equals(MyJumpGateModSession.Instance.GetJumpGateGrid((long) id))),
 				["RemapJumpGateIDs"] = (Action) construct.RemapJumpGateIDs,

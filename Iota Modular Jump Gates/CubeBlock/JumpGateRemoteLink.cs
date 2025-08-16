@@ -77,17 +77,17 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// <summary>
 		/// The spline size in meters
 		/// </summary>
-		public static readonly double TargetConnectionEffectSize = 25;
+		public static double TargetConnectionEffectSize => 25;
 
 		/// <summary>
 		/// Max connection distance allowed between two remote links
 		/// </summary>
-		public static readonly double MaxLargeConnectionDistance = 1000;
+		public static double MaxLargeConnectionDistance => 1000;
 
 		/// <summary>
 		/// Max connection distance allowed between two remote links
 		/// </summary>
-		public static readonly double MaxSmallConnectionDistance = 500;
+		public static double MaxSmallConnectionDistance => 500;
 		#endregion
 
 		#region Private Variables
@@ -458,10 +458,10 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			this.EmissiveAnimation[1] = (byte) ((this.AttachedRemoteLink == null) ? 0 : 180);
 
 			// Debug draw
-			if (MyJumpGateModSession.DebugMode && this.AttachedRemoteLink != null && this.IsLinkParent)
+			if (MyJumpGateModSession.Instance.DebugMode && this.AttachedRemoteLink != null && this.IsLinkParent)
 			{
 				Vector4 color = Color.Magenta;
-				MySimpleObjectDraw.DrawLine(this.ParticleEmitterPos, this.AttachedRemoteLink.ParticleEmitterPos, MyJumpGateModSession.MyMaterialsHolder.WeaponLaser, ref color, 0.25f);
+				MySimpleObjectDraw.DrawLine(this.ParticleEmitterPos, this.AttachedRemoteLink.ParticleEmitterPos, MyJumpGateModSession.MATERIALS.WeaponLaser, ref color, 0.25f);
 			}
 
 			//Network sync
@@ -578,7 +578,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// </summary>
 		private void CheckSendGlobalUpdate()
 		{
-			if (MyJumpGateModSession.Network.Registered && ((MyNetworkInterface.IsMultiplayerServer && MyJumpGateModSession.GameTick % MyCubeBlockBase.ForceUpdateDelay == 0) || this.IsDirty))
+			if (MyJumpGateModSession.Network.Registered && ((MyNetworkInterface.IsMultiplayerServer && MyJumpGateModSession.Instance.GameTick % MyCubeBlockBase.ForceUpdateDelay == 0) || this.IsDirty))
 			{
 				MyNetworkInterface.Packet update_packet = new MyNetworkInterface.Packet {
 					PacketType = MyPacketTypeEnum.UPDATE_REMOTE_LINK,

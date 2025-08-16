@@ -17,7 +17,7 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 	{
 		private static List<MyTerminalControlComboBoxItem> ComboBoxItems = null;
 
-		private static readonly object ComboBoxLock = new object();
+		private static object ComboBoxLock = new object();
 
 		public override bool IsThresholdUsed => false;
 		public override bool IsConditionSelectionUsed => false;
@@ -28,6 +28,13 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 		public override string ComponentTypeDebugString => nameof(JumpGateStatusChangedEvent);
 		public override string YesNoToolbarYesDescription => MyTexts.GetString("DisplayName_JumpGateStatusChangedEvent_YesDescription").Replace("{%1}", MyTexts.GetString($"StatusText_{(MyJumpGateStatus) this.TargetValue}"));
 		public override string YesNoToolbarNoDescription => MyTexts.GetString("DisplayName_JumpGateStatusChangedEvent_NoDescription").Replace("{%1}", MyTexts.GetString($"StatusText_{(MyJumpGateStatus) this.TargetValue}"));
+
+		public static void Dispose()
+		{
+			JumpGateStatusChangedEvent.ComboBoxItems?.Clear();
+			JumpGateStatusChangedEvent.ComboBoxItems = null;
+			JumpGateStatusChangedEvent.ComboBoxLock = null;
+		}
 
 		public JumpGateStatusChangedEvent() : base()
 		{

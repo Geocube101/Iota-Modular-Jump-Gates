@@ -15,7 +15,7 @@ namespace IOTA.ModularJumpGates.Util
 	/// <summary>
 	/// Class holding an animation request
 	/// </summary>
-	internal class AnimationInfo
+	internal sealed class AnimationInfo
     {
 		#region Public Variables
 		/// <summary>
@@ -92,28 +92,92 @@ namespace IOTA.ModularJumpGates.Util
 			public double MaxSafeSpeed;
 		}
 
-		private static readonly ushort GlobalMaxSpeedCooldownTime = 30;
-		private static readonly ushort GlobalTickSkip = 2;
+		#region Private Variables
+		/// <summary>
+		/// The time (in game ticks) to apply cooldown velocity limits
+		/// </summary>
+		private static ushort GlobalMaxSpeedCooldownTime => 30;
 
+		/// <summary>
+		/// The number of game ticks to skip after applying warp tick
+		/// </summary>
+		private static ushort GlobalTickSkip => 2;
+
+		/// <summary>
+		/// Whether this batch warp is complete (entered cooldown phase)
+		/// </summary>
 		private bool IsComplete = false;
-		private ushort MaxSpeedCooldownTime = 0;
-		private Vector3D StartPos;
-		private Vector3D EndPos;
-		private MatrixD FinalPos;
-		private readonly List<MyEntity> BatchedEntities;
-		private readonly List<MatrixD> RelativeEntityOffsets;
-		private readonly List<Vector3> EntityStartingAngularVelocities;
-		private readonly Action<EntityWarpInfo> Callback;
 
+		/// <summary>
+		/// The current time (in game ticks) for the cooldown
+		/// </summary>
+		private ushort MaxSpeedCooldownTime = 0;
+
+		/// <summary>
+		/// The batch warp's start position
+		/// </summary>
+		private Vector3D StartPos;
+
+		/// <summary>
+		/// The batch warp's end position
+		/// </summary>
+		private Vector3D EndPos;
+
+		/// <summary>
+		/// The batch warp's end position and orientation
+		/// </summary>
+		private MatrixD FinalPos;
+
+		/// <summary>
+		/// The list of entities in this batch
+		/// </summary>
+		private readonly List<MyEntity> BatchedEntities;
+
+		/// <summary>
+		/// The relative matrices of all entities in this batch relative to the batch parent
+		/// </summary>
+		private readonly List<MatrixD> RelativeEntityOffsets;
+
+		/// <summary>
+		/// The initial angular velocities of all entities in this batch
+		/// </summary>
+		private readonly List<Vector3> EntityStartingAngularVelocities;
+
+		/// <summary>
+		/// The callback to call once this batch warp enteres cooldown
+		/// </summary>
+		private readonly Action<EntityWarpInfo> Callback;
+		#endregion
+
+		#region Public Variables
+		/// <summary>
+		/// The calling jump gate
+		/// </summary>
 		public readonly MyJumpGate JumpGate;
+
+		/// <summary>
+		/// The duration of this batch warp in game ticks
+		/// </summary>
 		public readonly ushort Duration;
+
+		/// <summary>
+		/// The cooldown speed limit (in meters per second) to apply to entitities once warp is complete
+		/// </summary>
 		public readonly double MaxSafeSpeed;
+
+		/// <summary>
+		/// The current local tick of this batch warp
+		/// </summary>
 		public ushort CurrentTick { get; private set; }
-		public Vector3D StartPosition => this.StartPos;
-		public Vector3D EndPosition => this.EndPos;
-		public MatrixD FinalWorldMatrix => this.FinalPos;
+
+		/// <summary>
+		/// This batch warp's entity batch
+		/// </summary>
 		public ImmutableList<MyEntity> EntityBatch => this.BatchedEntities.ToImmutableList();
 
+		/// <summary>
+		/// This batch warp's batch parent
+		/// </summary>
 		public MyEntity Parent
 		{
 			get
@@ -121,7 +185,15 @@ namespace IOTA.ModularJumpGates.Util
 				return this.BatchedEntities[0];
 			}
 		}
+		#endregion
 
+		#region Public Static Methods
+		/// <summary>
+		/// Creates a new batch warp from serialized information
+		/// </summary>
+		/// <param name="serialized_warp_info">The serialized batch warp</param>
+		/// <param name="callback">The callback to call once batch warp enteres cooldown phase</param>
+		/// <returns>The new batch warp or null if failed to create</returns>
 		public static EntityWarpInfo FromSerialized(string serialized_warp_info, Action<EntityWarpInfo> callback)
 		{
 			SerializedEntityWarpInfo serialized = MyAPIGateway.Utilities.SerializeFromBinary<SerializedEntityWarpInfo>(Convert.FromBase64String(serialized_warp_info));
@@ -141,7 +213,23 @@ namespace IOTA.ModularJumpGates.Util
 			if (jump_gate == null || batch_entities.Count == 0) return null;
 			return new EntityWarpInfo(ref serialized.StartPos, ref serialized.EndPos, ref final_pos, batch_entities, relative_entity_offsets, serialized.EntityStartingAngularVelocities, jump_gate, serialized.Duration, serialized.CurrentTick, serialized.MaxSafeSpeed, callback);
 		}
+		#endregion
 
+		#region Constructors
+		/// <summary>
+		/// Constructor used for creating batch warp from serialized info
+		/// </summary>
+		/// <param name="startpos">Batch start position</param>
+		/// <param name="endpos">Batch end position</param>
+		/// <param name="final_pos">Batch end position and orienation</param>
+		/// <param name="batch_entities">List of entities to jump</param>
+		/// <param name="relative_offsets">Relative offsets between batch children and batch parent</param>
+		/// <param name="starting_angular_velocities">Initial angular velocities of batch entities</param>
+		/// <param name="jump_gate">The calling jump gate</param>
+		/// <param name="duration">The warp duration in game ticks</param>
+		/// <param name="current_tick">The current tick this batch warp should be on</param>
+		/// <param name="max_safe_speed">The cooldown speed limit to apply in meters per second</param>
+		/// <param name="callback">The callback to call once batch warp enteres cooldown phase</param>
 		private EntityWarpInfo(ref Vector3D startpos, ref Vector3D endpos, ref MatrixD final_pos, List<MyEntity> batch_entities, List<MatrixD> relative_offsets, List<Vector3> starting_angular_velocities, MyJumpGate jump_gate, ushort duration, ushort current_tick, double max_safe_speed, Action<EntityWarpInfo> callback)
 		{
 			MyEntity parent = batch_entities[0];
@@ -166,6 +254,17 @@ namespace IOTA.ModularJumpGates.Util
 			}
 		}
 
+		/// <summary>
+		/// Constructor
+		/// </summary>
+		/// <param name="jump_gate">The calling jump gate</param>
+		/// <param name="current_position">Batch start position</param>
+		/// <param name="target_position">Batch end position</param>
+		/// <param name="final_position">Batch end position and orienation</param>
+		/// <param name="entity_batch">List of entities to jump</param>
+		/// <param name="time">The warp duration in game ticks</param>
+		/// <param name="max_safe_speed">The cooldown speed limit to apply in meters per second</param>
+		/// <param name="callback">The callback to call once batch warp enteres cooldown phase</param>
 		public EntityWarpInfo(MyJumpGate jump_gate, ref MatrixD current_position, ref Vector3D target_position, ref MatrixD final_position, List<MyEntity> entity_batch, ushort time, double max_safe_speed, Action<EntityWarpInfo> callback)
 		{
 			MyEntity parent = entity_batch[0];
@@ -193,7 +292,13 @@ namespace IOTA.ModularJumpGates.Util
 				if (construct != null) construct.BatchingGate = jump_gate;
 			}
 		}
+		#endregion
 
+		#region Public Methods
+		/// <summary>
+		/// Closes this batch warp<br />
+		/// If applicable, immediately moves all entities to final positions and orientations
+		/// </summary>
 		public void Close()
 		{
 			if (!this.IsComplete)
@@ -208,7 +313,25 @@ namespace IOTA.ModularJumpGates.Util
 					parent_matrix.Translation = this.FinalPos.Translation;
 					parent.Teleport(parent_matrix);
 				}
-				else if (!parent.MarkedForClose) parent.Teleport(this.FinalPos);
+				else if (!parent.MarkedForClose)
+				{
+					parent.Teleport(this.FinalPos, parent.Parent);
+					MatrixD parent_matrix = MatrixD.Invert(parent.WorldMatrix);
+					parent.PositionComp.SetWorldMatrix(ref this.FinalPos, parent.Parent, true, true, true, true, true);
+
+					if (parent is MyCubeGrid)
+					{
+						List<IMyCubeGrid> children = new List<IMyCubeGrid>();
+						((MyCubeGrid) parent).GetGridGroup(GridLinkTypeEnum.Logical).GetGrids(children);
+
+						foreach (IMyCubeGrid child in children)
+						{
+							if (child == parent) continue;
+							MatrixD child_matrix = (child.WorldMatrix * parent_matrix) * parent.WorldMatrix;
+							child.PositionComp?.SetWorldMatrix(ref child_matrix, child.Parent, true, true, true, true, true);
+						}
+					}
+				}
 
 				MyJumpGateConstruct construct;
 				if (parent is MyCubeGrid && (construct = MyJumpGateModSession.Instance.GetUnclosedJumpGateGrid(parent.EntityId)) != null) construct.BatchingGate = null;
@@ -227,6 +350,10 @@ namespace IOTA.ModularJumpGates.Util
 			this.EntityStartingAngularVelocities.Clear();
 		}
 
+		/// <summary>
+		/// Ticks this batch warp once
+		/// </summary>
+		/// <returns>Whether this batch warp is fully complete (including cooldown)</returns>
 		public bool Update()
 		{
 			if (this.CurrentTick++ % EntityWarpInfo.GlobalTickSkip != 0 && !this.IsComplete) return false;
@@ -325,6 +452,10 @@ namespace IOTA.ModularJumpGates.Util
 			return false;
 		}
 
+		/// <summary>
+		/// Serializes this batch warp
+		/// </summary>
+		/// <returns>The base64 string</returns>
 		public string ToSerialized()
 		{
 			return Convert.ToBase64String(MyAPIGateway.Utilities.SerializeToBinary(new SerializedEntityWarpInfo {
@@ -345,12 +476,13 @@ namespace IOTA.ModularJumpGates.Util
 				MaxSafeSpeed = this.MaxSafeSpeed,
 			}));
 		}
+		#endregion
 	}
 
 	/// <summary>
 	/// Class holding information on an entity batch
 	/// </summary>
-	internal class EntityBatch
+	internal sealed class EntityBatch
 	{
 		[ProtoContract]
 		private sealed class SerializedEntityBatch
@@ -365,14 +497,43 @@ namespace IOTA.ModularJumpGates.Util
 			public Vector3D[] ParentFinalMatrix;
 		}
 
+		#region Public Variables
+		/// <summary>
+		/// The list of entities in this batch
+		/// </summary>
 		public readonly List<MyEntity> Batch;
+
+		/// <summary>
+		/// The target position this batch's parent should be moved to<br />
+		/// For use in the warping system
+		/// </summary>
 		public Vector3D ParentTargetPosition;
+
+		/// <summary>
+		/// The gravity vector at the parent's targeted position
+		/// </summary>
 		public Vector3D GravityDir;
+
+		/// <summary>
+		/// The combined axis-aligned bounding box at the parent's targeted position<br />
+		/// Used for obstruction scanning
+		/// </summary>
 		public BoundingBoxD ObstructAABB;
+
+		/// <summary>
+		/// The final position and orientation of the parent<br />
+		/// For use in the warping system
+		/// </summary>
 		public MatrixD ParentFinalMatrix;
 
+		/// <summary>
+		/// Gets this batch's parent entity
+		/// </summary>
 		public MyEntity Parent => this.Batch?.FirstOrDefault();
 
+		/// <summary>
+		/// Gets the total mass of all entities in the batch in kilograms
+		/// </summary>
 		public double BatchMass
 		{
 			get
@@ -389,7 +550,13 @@ namespace IOTA.ModularJumpGates.Util
 				return mass;
 			}
 		}
+		#endregion
 
+		#region Constructors
+		/// <summary>
+		/// Constructs a new entity batch from serialized information
+		/// </summary>
+		/// <param name="serialized_batch">The base64 serialized batch</param>
 		public EntityBatch(string serialized_batch)
 		{
 			SerializedEntityBatch serialized = MyAPIGateway.Utilities.SerializeFromBinary<SerializedEntityBatch>(Convert.FromBase64String(serialized_batch));
@@ -399,6 +566,14 @@ namespace IOTA.ModularJumpGates.Util
 			this.ParentFinalMatrix = MatrixD.CreateWorld(serialized.ParentFinalMatrix[0], serialized.ParentFinalMatrix[1], serialized.ParentFinalMatrix[2]);
 		}
 
+		/// <summary>
+		/// Constructor
+		/// </summary>
+		/// <param name="batch">The list of entities in this batch<br />First entity is parent</param>
+		/// <param name="target_position">The batch's target position</param>
+		/// <param name="obstruct_aabb">The batch's obstruction axis-aligned bounding box</param>
+		/// <param name="final_matrix">The batch's targeted position and orientation</param>
+		/// <param name="gravity_dir">The gravity vector at the batch's target position</param>
 		public EntityBatch(List<MyEntity> batch, ref Vector3D target_position, ref BoundingBoxD obstruct_aabb, ref MatrixD final_matrix, ref Vector3D gravity_dir)
 		{
 			this.Batch = batch;
@@ -407,13 +582,23 @@ namespace IOTA.ModularJumpGates.Util
 			this.ParentFinalMatrix = final_matrix;
 			this.GravityDir = gravity_dir;
 		}
+		#endregion
 
+		#region Public Methods
+		/// <summary>
+		/// </summary>
+		/// <param name="entity">The entity to check for</param>
+		/// <returns>Whether the specified entity is a part of this batch</returns>
 		public bool IsEntityInBatch(MyEntity entity)
 		{
 			MyEntity topmost = entity.GetTopMostParent();
 			return this.Batch != null && (this.Batch.Contains(topmost) || this.Batch.Any((parent) => topmost == parent));
 		}
 
+		/// <summary>
+		/// Serializes this entity batch
+		/// </summary>
+		/// <returns>The base64 string</returns>
 		public string ToSerialized()
 		{
 			return Convert.ToBase64String(MyAPIGateway.Utilities.SerializeToBinary(new SerializedEntityBatch {
@@ -423,12 +608,13 @@ namespace IOTA.ModularJumpGates.Util
 				ParentFinalMatrix = new Vector3D[3] { this.ParentFinalMatrix.Translation, this.ParentFinalMatrix.Forward, this.ParentFinalMatrix.Up },
 			}));
 		}
+		#endregion
 	}
 
 	/// <summary>
 	/// Class wrapping a MyEntity3DSoundEmitter object
 	/// </summary>
-	public class MySoundEmitter3D
+	public sealed class MySoundEmitter3D
 	{
 		#region Private Variables
 		/// <summary>
@@ -651,7 +837,7 @@ namespace IOTA.ModularJumpGates.Util
 		#endregion
 	}
 
-	internal class IntersectionInfo
+	internal sealed class IntersectionInfo
 	{
 		public List<MyJumpGateDrive> IntersectingDrives = new List<MyJumpGateDrive>();
 		public List<Vector3D> IntersectNodes = new List<Vector3D>();
@@ -661,7 +847,7 @@ namespace IOTA.ModularJumpGates.Util
 	/// Class wrapping a beacon for use on server and clients
 	/// </summary>
 	[ProtoContract(UseProtoMembersOnly = true)]
-	public class MyBeaconLinkWrapper : IEquatable<MyBeaconLinkWrapper>
+	public sealed class MyBeaconLinkWrapper : IEquatable<MyBeaconLinkWrapper>
 	{
 		#region Private Variables
 		[ProtoMember(1, IsRequired = true)]
@@ -788,17 +974,63 @@ namespace IOTA.ModularJumpGates.Util
 	/// </summary>
 	public struct MyPrefabInfo
 	{
+		#region Public Variables
+		/// <summary>
+		/// The prefab name
+		/// </summary>
 		public readonly string PrefabName;
-		public readonly Vector3D Position;
-		public readonly Vector3D Forward;
-		public readonly Vector3D Up;
-		public readonly Vector3D InitialLinearVelocity;
-		public readonly Vector3D InitialAngularVelocity;
-		public readonly string BeaconName;
-		public readonly SpawningOptions SpawningOptions;
-		public readonly bool UpdateSync;
-		public readonly Action Callback;
 
+		/// <summary>
+		/// The world coordinate this prefab should be spawn at
+		/// </summary>
+		public readonly Vector3D Position;
+
+		/// <summary>
+		/// The world forward direction this prefab should face
+		/// </summary>
+		public readonly Vector3D Forward;
+
+		/// <summary>
+		/// The world up direction this prefab should face
+		/// </summary>
+		public readonly Vector3D Up;
+
+		/// <summary>
+		/// The linear velocity to apply on spawn
+		/// </summary>
+		public readonly Vector3D InitialLinearVelocity;
+
+		/// <summary>
+		/// The angular velocity to apply on spawn
+		/// </summary>
+		public readonly Vector3D InitialAngularVelocity;
+
+		/// <summary>
+		/// The name to apply to all prefab beacons
+		/// </summary>
+		public readonly string BeaconName;
+
+		/// <summary>
+		/// The spawning options to spawn with
+		/// </summary>
+		public readonly SpawningOptions SpawningOptions;
+
+		/// <summary>
+		/// <i>Random seed depends on this</i>
+		/// </summary>
+		public readonly bool UpdateSync;
+
+		/// <summary>
+		/// Callback to call when prefab is spawned
+		/// </summary>
+		public readonly Action Callback;
+		#endregion
+
+		#region Constructors
+		/// <summary>
+		/// Constructs a prefab info object from dictonary
+		/// </summary>
+		/// <param name="info"></param>
 		public MyPrefabInfo(Dictionary<string, object> info)
 		{
 			this.PrefabName = (string) info["PrefabName"];
@@ -812,6 +1044,20 @@ namespace IOTA.ModularJumpGates.Util
 			this.UpdateSync = (bool) info["UpdateSync"];
 			this.Callback = (Action) info["Callback"];
 		}
+
+		/// <summary>
+		/// Constructor
+		/// </summary>
+		/// <param name="prefab_name">The prefab name</param>
+		/// <param name="position">The world coordinate this prefab should be spawn at</param>
+		/// <param name="forward">The world forward direction this prefab should face</param>
+		/// <param name="up">The world up direction this prefab should face</param>
+		/// <param name="initial_linear_velocity">The linear velocity to apply on spawn</param>
+		/// <param name="initial_angular_velocity">The angular velocity to apply on spawn</param>
+		/// <param name="beacon_name">The name to apply to all prefab beacons</param>
+		/// <param name="spawning_options">The spawning options to spawn with</param>
+		/// <param name="update_sync"><i>Random seed depends on this</i></param>
+		/// <param name="callback">Callback to call when prefab is spawned</param>
 		public MyPrefabInfo(string prefab_name, Vector3D position, Vector3D forward, Vector3D up, Vector3D initial_linear_velocity = default(Vector3D), Vector3D initial_angular_velocity = default(Vector3D), string beacon_name = null, SpawningOptions spawning_options = SpawningOptions.None, bool update_sync = false, Action callback = null)
 		{
 			this.PrefabName = prefab_name;
@@ -825,12 +1071,22 @@ namespace IOTA.ModularJumpGates.Util
 			this.UpdateSync = update_sync;
 			this.Callback = callback;
 		}
+		#endregion
 
+		#region Public Methods
+		/// <summary>
+		/// Spawns the prefab
+		/// </summary>
+		/// <param name="spawned_grids">A list to be populated with the newly spawned grids</param>
 		public void Spawn(List<IMyCubeGrid> spawned_grids)
 		{
 			MyAPIGateway.PrefabManager.SpawnPrefab(spawned_grids, this.PrefabName, this.Position, this.Forward, this.Up, this.InitialLinearVelocity, this.InitialAngularVelocity, this.BeaconName, this.SpawningOptions, this.UpdateSync, this.Callback);
 		}
 
+		/// <summary>
+		/// Converts this prefab object to a dictionary
+		/// </summary>
+		/// <returns>The dictionary</returns>
 		public Dictionary<string, object> ToDictionary()
 		{
 			return new Dictionary<string, object>
@@ -847,5 +1103,36 @@ namespace IOTA.ModularJumpGates.Util
 				["Callback"] = this.Callback,
 			};
 		}
+		#endregion
+	}
+
+	[ProtoContract]
+	public sealed class MyConstructUpdateNotice
+	{
+		#region Public Variables
+		/// <summary>
+		/// Whether the failure is full (unrecoverable)
+		/// </summary>
+		[ProtoMember(1)]
+		public bool IsFullFailure;
+
+		/// <summary>
+		/// The affected construct's main grid ID
+		/// </summary>
+		[ProtoMember(2)]
+		public long ConstructMainID;
+
+		/// <summary>
+		/// The affected construct's name
+		/// </summary>
+		[ProtoMember(3)]
+		public string ConstructName;
+
+		/// <summary>
+		/// The affected construct's big owners
+		/// </summary>
+		[ProtoMember(4)]
+		public List<ulong> ConstructOwnerIDs;
+		#endregion
 	}
 }

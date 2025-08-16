@@ -132,7 +132,6 @@ namespace IOTA.ModularJumpGates.CubeBlock
 					this.VectorNormal_V = (Vector3D) mapping.GetValueOrDefault("VectorNormal", this.VectorNormal_V);
 					this.EffectColorShift_V = (Color) mapping.GetValueOrDefault("EffectColorShift", this.EffectColorShift_V);
 					this.JumpGateName_V = (name != null && (name.StartsWith("#") || name.Contains(';'))) ? this.JumpGateName_V : name;
-					this.RemoteAntennaChannel_V = (byte) mapping.GetValueOrDefault("RemoteAntennaChannel", this.RemoteAntennaChannel_V);
 
 					{
 						object selected_waypoint = mapping.GetValueOrDefault("SelectedWaypoint", null);
@@ -163,8 +162,9 @@ namespace IOTA.ModularJumpGates.CubeBlock
 						}
 					}
 
+					object blacklisted;
 					this.BlacklistedEntities.Clear();
-					this.BlacklistedEntities.AddRange((IEnumerable<long>) mapping.GetValueOrDefault("BlacklistedEntities", this.BlacklistedEntities));
+					if (mapping.TryGetValue("BlacklistedEntities", out blacklisted)) this.BlacklistedEntities.AddRange((IEnumerable<long>) blacklisted);
 
 					{
 						float? minimum_mass_kg = (float?) mapping.GetValueOrDefault("MinimumEntityMass", null);
@@ -193,27 +193,31 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				lock (this.WriterLock)
 				{
 					MyJumpGateWaypoint waypoint = this.SelectedWaypoint_V;
-					object selected_waypoint;
+					object selected_waypoint = null;
 
-					switch (waypoint.WaypointType)
+					if (waypoint != null)
 					{
-						case MyWaypointType.JUMP_GATE:
-							selected_waypoint = waypoint.JumpGate;
-							break;
-						case MyWaypointType.GPS:
-							selected_waypoint = waypoint.GPS;
-							break;
-						default:
-							selected_waypoint = null;
-							break;
+						switch (waypoint.WaypointType)
+						{
+							case MyWaypointType.JUMP_GATE:
+								selected_waypoint = waypoint.JumpGate;
+								break;
+							case MyWaypointType.GPS:
+								selected_waypoint = waypoint.GPS;
+								break;
+							default:
+								selected_waypoint = null;
+								break;
+						}
 					}
-
+					
 					return new Dictionary<string, object>() {
 						["CanAutoActivate"] = this.CanAutoActivate_V,
 						["CanBeInbound"] = this.CanBeInbound_V,
 						["CanBeOutbound"] = this.CanBeOutbound_V,
 						["HasVectorNormalOverride"] = this.HasVectorNormalOverride_V,
 						["RemoteAntennaChannel"] = this.RemoteAntennaChannel_V,
+						["RemoteAntennaID"] = this.RemoteAntennaID_V,
 						["FactionDisplayType"] = (byte) this.FactionDisplayType_V,
 						["JumpSpaceRadius"] = this.JumpSpaceRadius_V,
 						["JumpSpaceDepthPercent"] = this.JumpSpaceDepthPercent_V,
@@ -224,7 +228,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 						["VectorNormal"] = this.VectorNormal_V,
 						["EffectColorShift"] = this.EffectColorShift_V,
 						["SelectedWaypoint"] = selected_waypoint,
-						["BlacklistedEntities"] = new List<long>(this.BlacklistedEntities),
+						["BlacklistedEntities"] = this.BlacklistedEntities?.ToList() ?? new List<long>(),
 						["MinimumEntityMass"] = this.MinimumEntityMass_V,
 						["MaximumEntityMass"] = this.MaximumEntityMass_V,
 						["MinimumCubeGridSize"] = this.MinimumCubeGridSize_V,
@@ -572,7 +576,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// <summary>
 		/// The maximum viewing angle in radians
 		/// </summary>
-		private static readonly double MaxHoloViewAngle = 60d * (Math.PI / 180d);
+		private static double MaxHoloViewAngle => 60d * (Math.PI / 180d);
 		#endregion
 
 		#region Private Variables
@@ -857,7 +861,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				sb.Append($" - {MyTexts.GetString("DetailedInfo_JumpGateController_TotalGridDrives")}: {(this_grid?.GetAttachedJumpGateDrives().Count().ToString() ?? "N/A")}\n");
 				sb.Append($" - {MyTexts.GetString("DetailedInfo_JumpGateController_TotalGridGates")}: {(this_grid?.GetJumpGates().Count().ToString() ?? "N/A")}[/color]\n");
 
-				if (MyJumpGateModSession.DebugMode)
+				if (MyJumpGateModSession.Instance.DebugMode)
 				{
 					sb.Append($"\n--- {MyTexts.GetString("DetailedInfo_JumpGateController_HeaderDebugInfo")} ---[color=#FFCCCCCC]\n");
 
@@ -1029,7 +1033,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				jump_gate = null;
 				jump_gate_valid = false;
 			}
-
+			
 			// Update antenna
 			{
 				MyJumpGateRemoteAntenna antenna = this.RemoteAntenna;
@@ -1040,9 +1044,9 @@ namespace IOTA.ModularJumpGates.CubeBlock
 					this.BaseBlockSettings.RemoteAntennaID(-1);
 				}
 			}
-
+			
 			// Update waypoints
-			if (jump_gate_valid && !MyNetworkInterface.IsDedicatedMultiplayerServer && MyAPIGateway.Gui.GetCurrentScreen == MyTerminalPageEnum.ControlPanel && MyJumpGateModSession.GameTick % 60 == 0)
+			if (jump_gate_valid && !MyNetworkInterface.IsDedicatedMultiplayerServer && MyAPIGateway.Gui.GetCurrentScreen == MyTerminalPageEnum.ControlPanel && MyJumpGateModSession.Instance.GameTick % 60 == 0)
 			{
 				long player_identity = MyAPIGateway.Players.TryGetIdentityId(MyAPIGateway.Multiplayer.MyId);
 				double distance;
@@ -1101,7 +1105,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 					Vector3D endpoint = waypoint_endpoint.Value;
 					double distance = Vector3D.Distance(endpoint, jump_gate.WorldJumpNode);
 
-					if (distance < jump_gate.JumpGateConfiguration.MinimumJumpDistance || distance > jump_gate.JumpGateConfiguration.MaximumJumpDistance)
+					if (jump_gate.JumpGateConfiguration != null && (distance < jump_gate.JumpGateConfiguration.MinimumJumpDistance || distance > jump_gate.JumpGateConfiguration.MaximumJumpDistance))
 					{
 						this.BaseBlockSettings.SelectedWaypoint(null);
 						this.SetDirty();
@@ -1153,7 +1157,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 						BoundingEllipsoidD draw_ellipse = new BoundingEllipsoidD(new Vector3D(jump_ellipse.Radii.X, jump_ellipse.Radii.Z, jump_ellipse.Radii.Y) * this.HoloDisplayScale, holo_matrix);
 						draw_ellipse.WorldMatrix.Forward = holo_matrix.Up;
 						draw_ellipse.WorldMatrix.Up = holo_matrix.Forward;
-						draw_ellipse.Draw2(aqua, 20, 16, 0.00125f, MyJumpGateModSession.MyMaterialsHolder.WeaponLaser, 10);
+						draw_ellipse.Draw2(aqua, 20, 16, 0.00125f, MyJumpGateModSession.MATERIALS.WeaponLaser, 10);
 
 						foreach (MyJumpGateDrive drive in this.AttachedJumpGateDrives)
 						{
@@ -1162,7 +1166,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 							Vector3D pos = MyJumpGateModSession.WorldVectorToLocalVectorP(ref jump_ellipse.WorldMatrix, drive.WorldMatrix.Translation);
 							drive_matrix.Translation = MyJumpGateModSession.LocalVectorToWorldVectorP(ref scaled_matrix, pos);
 							BoundingBoxD drive_box = BoundingBoxD.CreateFromSphere(new BoundingSphereD(Vector3D.Zero, (jump_gate.IsLargeGrid()) ? 10 : 2));
-							MySimpleObjectDraw.DrawTransparentBox(ref drive_matrix, ref drive_box, ref color, MySimpleObjectRasterizer.Wireframe, 1, 0.00025f, null, MyJumpGateModSession.MyMaterialsHolder.WeaponLaser, intensity: 10);
+							MySimpleObjectDraw.DrawTransparentBox(ref drive_matrix, ref drive_box, ref color, MySimpleObjectRasterizer.Wireframe, 1, 0.00025f, null, MyJumpGateModSession.MATERIALS.WeaponLaser, intensity: 10);
 						}
 
 						foreach (KeyValuePair<MyEntity, float> pair in jump_gate.GetEntitiesInJumpSpace())
@@ -1174,7 +1178,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 							{
 								Vector3D pos = MyJumpGateModSession.WorldVectorToLocalVectorP(ref jump_ellipse.WorldMatrix, entity.WorldMatrix.Translation);
 								pos = MyJumpGateModSession.LocalVectorToWorldVectorP(ref scaled_matrix, pos);
-								MyStringId marker = (jump_gate.IsEntityValidForJumpSpace(entity)) ? MyJumpGateModSession.MyMaterialsHolder.EnabledEntityMarker : MyJumpGateModSession.MyMaterialsHolder.DisabledEntityMarker;
+								MyStringId marker = (jump_gate.IsEntityValidForJumpSpace(entity)) ? MyJumpGateModSession.MATERIALS.EnabledEntityMarker : MyJumpGateModSession.MATERIALS.DisabledEntityMarker;
 								MyTransparentGeometry.AddBillboardOriented(marker, intense_red, pos, player_holo_matrix.Right, player_holo_matrix.Down, 0.05f);
 							}
 							else
@@ -1185,7 +1189,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 									Vector3D pos = MyJumpGateModSession.WorldVectorToLocalVectorP(ref jump_ellipse.WorldMatrix, subgrid.WorldMatrix.Translation);
 									subgrid_matrix.Translation = MyJumpGateModSession.LocalVectorToWorldVectorP(ref scaled_matrix, pos);
 									BoundingBoxD grid_box = subgrid.LocalAABB;
-									MySimpleObjectDraw.DrawTransparentBox(ref subgrid_matrix, ref grid_box, ref red, MySimpleObjectRasterizer.Wireframe, 1, 0.00025f, null, MyJumpGateModSession.MyMaterialsHolder.WeaponLaser, intensity: 10);
+									MySimpleObjectDraw.DrawTransparentBox(ref subgrid_matrix, ref grid_box, ref red, MySimpleObjectRasterizer.Wireframe, 1, 0.00025f, null, MyJumpGateModSession.MATERIALS.WeaponLaser, intensity: 10);
 								}
 							}
 						}
@@ -1197,7 +1201,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 						player_facing = Vector3D.ProjectOnPlane(ref player_facing, ref normal);
 						MatrixD billboard_matrix;
 						MatrixD.CreateWorld(ref table_holo_center, ref player_facing, ref normal, out billboard_matrix);
-						MyTransparentGeometry.AddBillboardOriented(MyJumpGateModSession.MyMaterialsHolder.GateOfflineControllerIcon, intense_aqua, billboard_matrix.Translation, billboard_matrix.Left, billboard_matrix.Up, 0.75f, 0.75f);
+						MyTransparentGeometry.AddBillboardOriented(MyJumpGateModSession.MATERIALS.GateOfflineControllerIcon, intense_aqua, billboard_matrix.Translation, billboard_matrix.Left, billboard_matrix.Up, 0.75f, 0.75f);
 					}
 					else if (this.RemoteAntenna != null)
 					{
@@ -1206,7 +1210,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 						player_facing = Vector3D.ProjectOnPlane(ref player_facing, ref normal);
 						MatrixD billboard_matrix;
 						MatrixD.CreateWorld(ref table_holo_center, ref player_facing, ref normal, out billboard_matrix);
-						MyTransparentGeometry.AddBillboardOriented(MyJumpGateModSession.MyMaterialsHolder.GateAntennaDisconnectedControllerIcon, intense_red, billboard_matrix.Translation, billboard_matrix.Left, billboard_matrix.Up, 0.75f, 0.75f);
+						MyTransparentGeometry.AddBillboardOriented(MyJumpGateModSession.MATERIALS.GateAntennaDisconnectedControllerIcon, intense_red, billboard_matrix.Translation, billboard_matrix.Left, billboard_matrix.Up, 0.75f, 0.75f);
 					}
 					else
 					{
@@ -1215,7 +1219,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 						player_facing = Vector3D.ProjectOnPlane(ref player_facing, ref normal);
 						MatrixD billboard_matrix;
 						MatrixD.CreateWorld(ref table_holo_center, ref player_facing, ref normal, out billboard_matrix);
-						MyTransparentGeometry.AddBillboardOriented(MyJumpGateModSession.MyMaterialsHolder.GateDisconnectedControllerIcon, intense_red, billboard_matrix.Translation, billboard_matrix.Left, billboard_matrix.Up, 0.75f, 0.75f);
+						MyTransparentGeometry.AddBillboardOriented(MyJumpGateModSession.MATERIALS.GateDisconnectedControllerIcon, intense_red, billboard_matrix.Translation, billboard_matrix.Left, billboard_matrix.Up, 0.75f, 0.75f);
 					}
 				}
 			}
@@ -1286,7 +1290,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// </summary>
 		private void CheckSendGlobalUpdate()
 		{
-			if (MyJumpGateModSession.Network.Registered && ((MyNetworkInterface.IsMultiplayerServer && MyJumpGateModSession.GameTick % MyCubeBlockBase.ForceUpdateDelay == 0) || this.IsDirty))
+			if (MyJumpGateModSession.Network.Registered && ((MyNetworkInterface.IsMultiplayerServer && MyJumpGateModSession.Instance.GameTick % MyCubeBlockBase.ForceUpdateDelay == 0) || this.IsDirty))
 			{
 				MyNetworkInterface.Packet packet = new MyNetworkInterface.Packet {
 					PacketType = MyPacketTypeEnum.UPDATE_CONTROLLER,

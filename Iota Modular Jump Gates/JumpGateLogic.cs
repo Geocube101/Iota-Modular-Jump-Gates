@@ -1352,7 +1352,7 @@ namespace IOTA.ModularJumpGates
 						this.TrueEndpoint = endpoint;
 					}
 
-					if (MyJumpGateModSession.GameTick % 30 == 0)
+					if (MyJumpGateModSession.Instance.GameTick % 30 == 0)
 					{
 						other_gates.AddRange(MyJumpGateModSession.Instance.GetAllJumpGates());
 
@@ -2223,6 +2223,179 @@ namespace IOTA.ModularJumpGates
 			this.IsDirty = this.IsDirty || MyNetworkInterface.IsMultiplayerServer;
 			this.EntityEnterered?.Invoke(this, entity, false);
 		}
+
+		/// <summary>
+		/// Updates this jump gate's local jump space ellipsoid
+		/// </summary>
+		private void UpdateJumpSpaceEllipsoid()
+		{
+			int most_aligned_plane = 0;
+			int largest_plane = 0;
+			List<MyJumpGateDrive> drives = this.GetJumpGateDrives().ToList();
+			this.ForceUpdateJumpEllipsoid = false;
+			Vector3D jump_node = this.WorldJumpNode;
+			Vector3D facing = jump_node - this.ConstructMatrix.Translation;
+
+			for (int start_index = 0; start_index < drives.Count; ++start_index)
+			{
+				MyJumpGateDrive drive1 = drives[start_index];
+				Vector3D pos1 = drive1.GetDriveRaycastStartpoint();
+
+				for (int i = start_index + 1; i < drives.Count; ++i)
+				{
+					MyJumpGateDrive drive2 = drives[i];
+					Vector3D pos2 = drive2.GetDriveRaycastStartpoint();
+					PlaneD drive_plane = new PlaneD(pos1, pos2, jump_node);
+					if (!drive_plane.Normal.IsValid()) continue;
+					Vector3D normal = drive_plane.Normal;
+					Vector3D normal_inv = -normal;
+					Vector3D primary_normal = ((normal - facing).LengthSquared() < (normal_inv - facing).LengthSquared()) ? normal : normal_inv;
+					JumpDriveIntersectPlane plane;
+
+					if (this.DriveIntersectionPlanes.ContainsKey(primary_normal)) plane = this.DriveIntersectionPlanes[primary_normal];
+					else
+					{
+						plane = new JumpDriveIntersectPlane();
+						plane.Plane = drive_plane;
+						plane.PlanePrimaryNormal = primary_normal;
+						this.DriveIntersectionPlanes.Add(primary_normal, plane);
+					}
+
+					plane.JumpGateDrives.Add(drive1);
+					plane.JumpGateDrives.Add(drive2);
+
+					Vector3D direction = drive1.TerminalBlock.WorldMatrix.Up;
+					double deviation = Math.Abs(Vector3D.Angle(direction, primary_normal)) % Math.PI;
+					if (deviation >= 3.132866 || deviation <= 0.00872665) ++plane.AlignedDrivesCount;
+
+					direction = drive2.TerminalBlock.WorldMatrix.Up;
+					deviation = Math.Abs(Vector3D.Angle(direction, primary_normal)) % Math.PI;
+					if (deviation >= 3.132866 || deviation <= 0.00872665) ++plane.AlignedDrivesCount;
+
+					most_aligned_plane = Math.Max(most_aligned_plane, plane.AlignedDrivesCount);
+					largest_plane = Math.Max(largest_plane, plane.JumpGateDrives.Count);
+				}
+			}
+
+			if (this.DriveIntersectionPlanes.Count > 0)
+			{
+				JumpDriveIntersectPlane intersection_plane = this.DriveIntersectionPlanes.Select((pair) => pair.Value).FirstOrDefault((plane) => plane.AlignedDrivesCount == most_aligned_plane && plane.JumpGateDrives.Count == largest_plane);
+
+				if (intersection_plane == null)
+				{
+					this.TrueLocalJumpEllipse = BoundingEllipsoidD.Zero;
+					this.TrueWorldJumpEllipse = BoundingEllipsoidD.Zero;
+					this.DriveIntersectionPlanes.Clear();
+					this.PrimaryDrivePlane = null;
+					return;
+				}
+
+				double plane_height = MyJumpGateDrive.ModelBoundingBoxSize.Y;
+				double distance = 0;
+				MyJumpGateControlObject control_object = this.ControlObject;
+				MyJumpSpaceFitType fit_type = MyJumpSpaceFitType.INNER;
+				if (control_object != null && control_object.IsController) fit_type = control_object.Controller.BlockSettings.JumpSpaceFitType();
+				else if (control_object != null) fit_type = control_object.RemoteAntenna.BlockSettings.BaseControllerSettings[this.RemoteAntennaChannel].JumpSpaceFitType();
+				Vector3D forward = Vector3D.Cross(intersection_plane.PlanePrimaryNormal, this.ConstructMatrix.Forward);
+				MatrixD plane_matrix = MatrixD.CreateWorld(jump_node, forward, intersection_plane.PlanePrimaryNormal);
+
+				foreach (MyJumpGateDrive drive in drives)
+				{
+					if (intersection_plane.JumpGateDrives.Contains(drive)) continue;
+					Vector3D local_pos = MyJumpGateModSession.WorldVectorToLocalVectorP(ref plane_matrix, drive.GetDriveRaycastStartpoint());
+					if (!double.IsNaN(local_pos.Y)) plane_height = Math.Max(plane_height, Math.Abs(local_pos.Y));
+				}
+
+				switch (fit_type)
+				{
+					case MyJumpSpaceFitType.OUTER:
+						distance = Math.Sqrt(drives.Select((drive) => Vector3D.DistanceSquared(drive.GetDriveRaycastStartpoint(), jump_node)).Max());
+						break;
+					case MyJumpSpaceFitType.AVERAGE:
+						distance = Math.Sqrt(drives.Select((drive) => Vector3D.DistanceSquared(drive.GetDriveRaycastStartpoint(), jump_node)).Average());
+						break;
+					case MyJumpSpaceFitType.INNER:
+					default:
+						distance = Math.Sqrt(drives.Select((drive) => Vector3D.DistanceSquared(drive.GetDriveRaycastStartpoint(), jump_node)).Min());
+						break;
+				}
+
+				this.PrimaryDrivePlane = intersection_plane.Plane;
+				Vector3D radii = new Vector3D(distance, plane_height, distance);
+				this.TrueWorldJumpEllipse = new BoundingEllipsoidD(ref radii, ref plane_matrix);
+				this.TrueLocalJumpEllipse = this.TrueWorldJumpEllipse.ToLocalSpace(ref this.ConstructMatrix);
+			}
+			else
+			{
+				this.PrimaryDrivePlane = null;
+				this.TrueLocalJumpEllipse = BoundingEllipsoidD.Zero;
+				this.TrueWorldJumpEllipse = BoundingEllipsoidD.Zero;
+			}
+
+			this.DriveIntersectionPlanes.Clear();
+			this.SetColliderDirty();
+		}
+
+		/// <summary>
+		/// Updates this jump gate's internal jump space entity list
+		/// </summary>
+		private void UpdateJumpSpaceEntities()
+		{
+			BoundingEllipsoidD jump_ellipse = this.GetEffectiveJumpEllipse();
+			MyJumpGateConstruct parent;
+			List<MyEntity> collider_topmost = this.JumpSpaceColliderEntities.Select((pair) => pair.Value.GetTopMostParent()).Distinct().ToList();
+
+			foreach (KeyValuePair<long, KeyValuePair<float, MyEntity>> pair in this.JumpSpaceEntities)
+			{
+				MyEntity child = pair.Value.Value ?? (MyEntity) MyAPIGateway.Entities.GetEntityById(pair.Key);
+				if (child == null || collider_topmost.Contains(child)) continue;
+				Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} Entity marked for jump-space removal @ {pair.Key} >> OUTSIDE_PHYSICAL_COLLIDER", 5);
+				this.OnEntityJumpSpaceLeave(child);
+				this.JumpSpaceEntities.Remove(pair.Key);
+			}
+
+			foreach (MyEntity entity in collider_topmost)
+			{
+				bool is_self = this.JumpGateGrid.HasCubeGrid(entity.EntityId);
+
+				if (entity?.Physics == null || entity.MarkedForClose || is_self)
+				{
+					KeyValuePair<float, MyEntity> _;
+					if (entity == null || !this.JumpSpaceEntities.TryRemove(entity.EntityId, out _)) continue;
+					Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} Entity marked for jump-space removal @ {entity.EntityId} >> PHYSICS={entity.Physics}, CLOSED={entity.MarkedForClose}, IS_SELF={is_self}", 5);
+					this.OnEntityJumpSpaceLeave(entity);
+					continue;
+				}
+
+				MyEntity add_entity = null;
+				float? mass = null;
+				bool bounded = false;
+
+				if (entity is MyCubeGrid && (parent = MyJumpGateModSession.Instance.GetUnclosedJumpGateGrid(entity.EntityId)) != null && !parent.IsStatic() && (bounded = parent.IsConstructWithinBoundingEllipsoid(ref jump_ellipse)))
+				{
+					add_entity = (MyCubeGrid) parent.CubeGrid;
+					mass = (float) parent.ConstructMass();
+				}
+				else if (entity is IMyCharacter && (bounded = jump_ellipse.IsPointInEllipse(entity.WorldMatrix.Translation)))
+				{
+					add_entity = entity;
+					mass = ((IMyCharacter) entity).CurrentMass;
+				}
+				else if (!(entity is MyCubeGrid)) add_entity = (bounded = jump_ellipse.IsPointInEllipse(entity.WorldMatrix.Translation)) ? entity : null;
+
+				KeyValuePair<float, MyEntity> old_pairing;
+				float new_mass = mass ?? add_entity?.Physics.Mass ?? float.NaN;
+
+				if (this.JumpSpaceEntities.ContainsKey(entity.EntityId) && add_entity == null)
+				{
+					Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} Entity marked for jump-space removal @ {entity.EntityId} >> TYPE={entity.GetType().Name}, STATIC={entity is MyCubeGrid && ((MyCubeGrid) entity).IsStatic}, BOUNDED={bounded}, ISSELF={is_self}", 5);
+					this.JumpSpaceEntities.Remove(entity.EntityId);
+					this.OnEntityJumpSpaceLeave(entity);
+				}
+				else if (add_entity != null && this.JumpSpaceEntities.TryGetValue(add_entity.EntityId, out old_pairing) && old_pairing.Key != new_mass) this.JumpSpaceEntities[add_entity.EntityId] = new KeyValuePair<float, MyEntity>(new_mass, add_entity);
+				else if (add_entity != null && this.JumpSpaceEntities.TryAdd(add_entity.EntityId, new KeyValuePair<float, MyEntity>(new_mass, add_entity))) this.OnEntityJumpSpaceEnter(add_entity);
+			}
+		}
 		#endregion
 
 		#region Public Methods
@@ -2532,7 +2705,7 @@ namespace IOTA.ModularJumpGates
 					else if (!controller_settings.CanBeInbound() && !controller_settings.CanBeOutbound()) result = MyJumpFailReason.SRC_ROUTING_CHANGED;
 					else if (!controller_settings.CanBeOutbound()) result = MyJumpFailReason.SRC_ROUTING_CHANGED;
 					
-					if (MyJumpGateModSession.GameTick % 30 == 0)
+					if (MyJumpGateModSession.Instance.GameTick % 30 == 0)
 					{
 						other_gates.AddRange(MyJumpGateModSession.Instance.GetAllJumpGates());
 
@@ -3001,7 +3174,7 @@ namespace IOTA.ModularJumpGates
 				this.JumpSpaceCollisionDetector.Init(new StringBuilder($"JumpGate_{this.JumpGateGrid.CubeGrid.EntityId}_{this.JumpGateID}"), null, (MyCubeGrid) this.JumpGateGrid.CubeGrid, 1f);
 				this.JumpSpaceCollisionDetector.Save = false;
 				this.JumpSpaceCollisionDetector.Flags = EntityFlags.IsNotGamePrunningStructureObject | EntityFlags.NeedsWorldMatrix;
-				this.JumpSpaceCollisionDetector.OnClosing += (entity) => Logger.Debug($"CLOSED_COLLIDER JUMP_GATE={this.GetPrintableName()}");
+				this.JumpSpaceCollisionDetector.OnClosing += (entity) => Logger.Debug($"CLOSED_COLLIDER JUMP_GATE={this.GetPrintableName()}", 4);
 				this.JumpSpaceColliderEntities.Clear();
 				this.JumpSpaceEntities.Clear();
 				float radius = (float) this.JumpEllipse.Radii.Max();
@@ -3081,9 +3254,9 @@ namespace IOTA.ModularJumpGates
 
 			try
 			{
-				bool grid_invalid = (!this.JumpGateGrid?.IsValid() ?? true) || this.MarkClosed || this.JumpGateGrid.IsSuspended;
+				bool grid_invalid = this.JumpGateGrid == null || this.MarkClosed || this.JumpGateGrid.IsSuspended || !this.JumpGateGrid.IsValid();
 
-				if ((grid_invalid && this.Status != MyJumpGateStatus.OUTBOUND && this.Status != MyJumpGateStatus.SWITCHING && this.Status != MyJumpGateStatus.CANCELLED) || MyJumpGateModSession.SessionStatus != MySessionStatusEnum.RUNNING)
+				if (MyJumpGateModSession.Instance.SessionStatus != MySessionStatusEnum.RUNNING || (grid_invalid && this.Status != MyJumpGateStatus.OUTBOUND && this.Status != MyJumpGateStatus.SWITCHING && this.Status != MyJumpGateStatus.CANCELLED))
 				{
 					List<MyJumpGateAnimation> this_animations = new List<MyJumpGateAnimation>();
 					MyJumpGateModSession.Instance.GetGateAnimationsPlaying(this_animations, this);
@@ -3099,173 +3272,10 @@ namespace IOTA.ModularJumpGates
 				this.TrueWorldJumpEllipse = this.TrueLocalJumpEllipse.ToWorldSpace(ref this.ConstructMatrix);
 
 				// Update jump space ellipsoid
-				if (update_ellipses || this.ForceUpdateJumpEllipsoid || this.TrueLocalJumpEllipse == BoundingEllipsoidD.Zero)
-				{
-					int most_aligned_plane = 0;
-					int largest_plane = 0;
-					List<MyJumpGateDrive> drives = this.GetJumpGateDrives().ToList();
-					this.ForceUpdateJumpEllipsoid = false;
-					Vector3D jump_node = this.WorldJumpNode;
-					Vector3D facing = jump_node - this.ConstructMatrix.Translation;
-
-					for (int start_index = 0; start_index < drives.Count; ++start_index)
-					{
-						MyJumpGateDrive drive1 = drives[start_index];
-						Vector3D pos1 = drive1.GetDriveRaycastStartpoint();
-
-						for (int i = start_index + 1; i < drives.Count; ++i)
-						{
-							MyJumpGateDrive drive2 = drives[i];
-							Vector3D pos2 = drive2.GetDriveRaycastStartpoint();
-							PlaneD drive_plane = new PlaneD(pos1, pos2, jump_node);
-							if (!drive_plane.Normal.IsValid()) continue;
-							Vector3D normal = drive_plane.Normal;
-							Vector3D normal_inv = -normal;
-							Vector3D primary_normal = ((normal - facing).LengthSquared() < (normal_inv - facing).LengthSquared()) ? normal : normal_inv;
-							JumpDriveIntersectPlane plane;
-
-							if (this.DriveIntersectionPlanes.ContainsKey(primary_normal)) plane = this.DriveIntersectionPlanes[primary_normal];
-							else
-							{
-								plane = new JumpDriveIntersectPlane();
-								plane.Plane = drive_plane;
-								plane.PlanePrimaryNormal = primary_normal;
-								this.DriveIntersectionPlanes.Add(primary_normal, plane);
-							}
-
-							plane.JumpGateDrives.Add(drive1);
-							plane.JumpGateDrives.Add(drive2);
-
-							Vector3D direction = drive1.TerminalBlock.WorldMatrix.Up;
-							double deviation = Math.Abs(Vector3D.Angle(direction, primary_normal)) % Math.PI;
-							if (deviation >= 3.132866 || deviation <= 0.00872665) ++plane.AlignedDrivesCount;
-
-							direction = drive2.TerminalBlock.WorldMatrix.Up;
-							deviation = Math.Abs(Vector3D.Angle(direction, primary_normal)) % Math.PI;
-							if (deviation >= 3.132866 || deviation <= 0.00872665) ++plane.AlignedDrivesCount;
-
-							most_aligned_plane = Math.Max(most_aligned_plane, plane.AlignedDrivesCount);
-							largest_plane = Math.Max(largest_plane, plane.JumpGateDrives.Count);
-						}
-					}
-
-					if (this.DriveIntersectionPlanes.Count > 0)
-					{
-						JumpDriveIntersectPlane intersection_plane = this.DriveIntersectionPlanes.Select((pair) => pair.Value).FirstOrDefault((plane) => plane.AlignedDrivesCount == most_aligned_plane && plane.JumpGateDrives.Count == largest_plane);
-
-						if (intersection_plane == null)
-						{
-							this.TrueLocalJumpEllipse = BoundingEllipsoidD.Zero;
-							this.TrueWorldJumpEllipse = BoundingEllipsoidD.Zero;
-							this.DriveIntersectionPlanes.Clear();
-							this.PrimaryDrivePlane = null;
-							return;
-						}
-
-						double plane_height = MyJumpGateDrive.ModelBoundingBoxSize.Y;
-						double distance = 0;
-						MyJumpGateControlObject control_object = this.ControlObject;
-						MyJumpSpaceFitType fit_type = MyJumpSpaceFitType.INNER;
-						if (control_object != null && control_object.IsController) fit_type = control_object.Controller.BlockSettings.JumpSpaceFitType();
-						else if (control_object != null) fit_type = control_object.RemoteAntenna.BlockSettings.BaseControllerSettings[this.RemoteAntennaChannel].JumpSpaceFitType();
-						Vector3D forward = Vector3D.Cross(intersection_plane.PlanePrimaryNormal, this.ConstructMatrix.Forward);
-						MatrixD plane_matrix = MatrixD.CreateWorld(jump_node, forward, intersection_plane.PlanePrimaryNormal);
-
-						foreach (MyJumpGateDrive drive in drives)
-						{
-							if (intersection_plane.JumpGateDrives.Contains(drive)) continue;
-							Vector3D local_pos = MyJumpGateModSession.WorldVectorToLocalVectorP(ref plane_matrix, drive.GetDriveRaycastStartpoint());
-							if (!double.IsNaN(local_pos.Y)) plane_height = Math.Max(plane_height, Math.Abs(local_pos.Y));
-						}
-
-						switch (fit_type)
-						{
-							case MyJumpSpaceFitType.OUTER:
-								distance = Math.Sqrt(drives.Select((drive) => Vector3D.DistanceSquared(drive.GetDriveRaycastStartpoint(), jump_node)).Max());
-								break;
-							case MyJumpSpaceFitType.AVERAGE:
-								distance = Math.Sqrt(drives.Select((drive) => Vector3D.DistanceSquared(drive.GetDriveRaycastStartpoint(), jump_node)).Average());
-								break;
-							case MyJumpSpaceFitType.INNER:
-							default:
-								distance = Math.Sqrt(drives.Select((drive) => Vector3D.DistanceSquared(drive.GetDriveRaycastStartpoint(), jump_node)).Min());
-								break;
-						}
-
-						this.PrimaryDrivePlane = intersection_plane.Plane;
-						Vector3D radii = new Vector3D(distance, plane_height, distance);
-						this.TrueWorldJumpEllipse = new BoundingEllipsoidD(ref radii, ref plane_matrix);
-						this.TrueLocalJumpEllipse = this.TrueWorldJumpEllipse.ToLocalSpace(ref this.ConstructMatrix);
-					}
-					else
-					{
-						this.PrimaryDrivePlane = null;
-						this.TrueLocalJumpEllipse = BoundingEllipsoidD.Zero;
-						this.TrueWorldJumpEllipse = BoundingEllipsoidD.Zero;
-					}
-
-					this.DriveIntersectionPlanes.Clear();
-					this.SetColliderDirty();
-				}
+				if (update_ellipses || this.ForceUpdateJumpEllipsoid || this.TrueLocalJumpEllipse == BoundingEllipsoidD.Zero) this.UpdateJumpSpaceEllipsoid();
 
 				// Update jump space entities
-				if (MyNetworkInterface.IsServerLike && update_entities && this.IsControlled() && !this.MarkClosed)
-				{
-					BoundingEllipsoidD jump_ellipse = this.GetEffectiveJumpEllipse();
-					MyJumpGateConstruct parent;
-					List<MyEntity> collider_topmost = this.JumpSpaceColliderEntities.Select((pair) => pair.Value.GetTopMostParent()).Distinct().ToList();
-
-					foreach (KeyValuePair<long, KeyValuePair<float, MyEntity>> pair in this.JumpSpaceEntities)
-					{
-						MyEntity child = pair.Value.Value ?? (MyEntity) MyAPIGateway.Entities.GetEntityById(pair.Key);
-						if (child == null || collider_topmost.Contains(child)) continue;
-						Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} Entity marked for jump-space removal @ {pair.Key} >> OUTSIDE_PHYSICAL_COLLIDER", 5);
-						this.OnEntityJumpSpaceLeave(child);
-						this.JumpSpaceEntities.Remove(pair.Key);
-					}
-
-					foreach (MyEntity entity in collider_topmost)
-					{
-						bool is_self = this.JumpGateGrid.HasCubeGrid(entity.EntityId);
-
-						if (entity?.Physics == null || entity.MarkedForClose || is_self)
-						{
-							KeyValuePair<float, MyEntity> _;
-							if (entity == null || !this.JumpSpaceEntities.TryRemove(entity.EntityId, out _)) continue;
-							Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} Entity marked for jump-space removal @ {entity.EntityId} >> PHYSICS={entity.Physics}, CLOSED={entity.MarkedForClose}, IS_SELF={is_self}", 5);
-							this.OnEntityJumpSpaceLeave(entity);
-							continue;
-						}
-
-						MyEntity add_entity = null;
-						float? mass = null;
-						bool bounded = false;
-
-						if (entity is MyCubeGrid && (parent = MyJumpGateModSession.Instance.GetUnclosedJumpGateGrid(entity.EntityId)) != null && !parent.IsStatic() && (bounded = parent.IsConstructWithinBoundingEllipsoid(ref jump_ellipse)))
-						{
-							add_entity = (MyCubeGrid) parent.CubeGrid;
-							mass = (float) parent.ConstructMass();
-						}
-						else if (entity is IMyCharacter && (bounded = jump_ellipse.IsPointInEllipse(entity.WorldMatrix.Translation)))
-						{
-							add_entity = entity;
-							mass = ((IMyCharacter) entity).CurrentMass;
-						}
-						else if (!(entity is MyCubeGrid)) add_entity = (bounded = jump_ellipse.IsPointInEllipse(entity.WorldMatrix.Translation)) ? entity : null;
-
-						KeyValuePair<float, MyEntity> old_pairing;
-						float new_mass = mass ?? add_entity?.Physics.Mass ?? float.NaN;
-						
-						if (this.JumpSpaceEntities.ContainsKey(entity.EntityId) && add_entity == null)
-						{
-							Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} Entity marked for jump-space removal @ {entity.EntityId} >> TYPE={entity.GetType().Name}, STATIC={entity is MyCubeGrid && ((MyCubeGrid) entity).IsStatic}, BOUNDED={bounded}, ISSELF={is_self}", 5);
-							this.JumpSpaceEntities.Remove(entity.EntityId);
-							this.OnEntityJumpSpaceLeave(entity);
-						}
-						else if (add_entity != null && this.JumpSpaceEntities.TryGetValue(add_entity.EntityId, out old_pairing) && old_pairing.Key != new_mass) this.JumpSpaceEntities[add_entity.EntityId] = new KeyValuePair<float, MyEntity>(new_mass, add_entity);
-						else if (add_entity != null && this.JumpSpaceEntities.TryAdd(add_entity.EntityId, new KeyValuePair<float, MyEntity>(new_mass, add_entity))) this.OnEntityJumpSpaceEnter(add_entity);
-					}
-				}
+				if (MyNetworkInterface.IsServerLike && update_entities && this.IsControlled() && !this.MarkClosed) this.UpdateJumpSpaceEntities();
 
 				// Check auto activation
 				if (MyNetworkInterface.IsServerLike && this.Controller != null && !this.Controller.MarkedForClose && this.Controller.BlockSettings.CanAutoActivate() && this.Phase == MyJumpGatePhase.IDLE && this.Controller.BlockSettings.SelectedWaypoint() != null)
@@ -3331,7 +3341,7 @@ namespace IOTA.ModularJumpGates
 				}
 
 				// Check lenient jump blocks
-				if (this.Controller != null && !MyJumpGateModSession.Configuration.GeneralConfiguration.LenientJumps && MyJumpGateModSession.GameTick % 60 == 0)
+				if (this.Controller != null && !MyJumpGateModSession.Configuration.GeneralConfiguration.LenientJumps && MyJumpGateModSession.Instance.GameTick % 60 == 0)
 				{
 					this.ShearBlocks.Clear();
 					BoundingEllipsoidD jump_ellipse = this.JumpEllipse;
@@ -3390,7 +3400,7 @@ namespace IOTA.ModularJumpGates
 		{
 			if (this.Closed || this.MarkClosed) return;
 			this.MarkClosed = true;
-			if (MyJumpGateModSession.SessionStatus == MySessionStatusEnum.UNLOADING) MyJumpGateModSession.Instance.CloseGate(this);
+			if (MyJumpGateModSession.Instance.SessionStatus == MySessionStatusEnum.UNLOADING) MyJumpGateModSession.Instance.CloseGate(this);
 		}
 
 		/// <summary>
@@ -4354,7 +4364,7 @@ namespace IOTA.ModularJumpGates
 
 		public bool IsWorking => (this.IsController) ? this.Controller.IsWorking : this.RemoteAntenna.IsWorking;
 		public long BlockID => (this.IsController) ? this.Controller.BlockID : this.RemoteAntenna.BlockID;
-		public MyJumpGateController.MyControllerBlockSettingsStruct BlockSettings => (this.IsController) ? this.Controller.BlockSettings : this.RemoteAntenna.BlockSettings.BaseControllerSettings[this.RemoteAntennaChannel];
+		public MyJumpGateController.MyControllerBlockSettingsStruct BlockSettings => (this.IsController) ? this.Controller.BlockSettings : ((this.RemoteAntennaChannel == 0xFF) ? null : this.RemoteAntenna.BlockSettings.BaseControllerSettings[this.RemoteAntennaChannel]);
 		public MatrixD WorldMatrix => (this.IsController) ? this.Controller.WorldMatrix : this.RemoteAntenna.WorldMatrix;
 		public MyJumpGateConstruct JumpGateGrid => (this.IsController) ? this.Controller.JumpGateGrid : this.RemoteAntenna.JumpGateGrid;
 

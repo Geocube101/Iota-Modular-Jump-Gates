@@ -25,7 +25,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// <summary>
 		/// The default drive emissive color
 		/// </summary>
-		public static readonly Color DefaultDriveEmitterColor = new Color(62, 133, 247);
+		public static Color DefaultDriveEmitterColor => new Color(62, 133, 247);
 		#endregion
 
 		#region Private Variables
@@ -320,7 +320,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				else if (jump_gate != null)
 				{
 					if (this.DriveEmitterColor != Color.Black && !this.DriveEmitterCycling()) this.CycleDriveEmitter(this.DriveEmitterColor, Color.Black, 0);
-					this.TerminalBlock.SetEmissiveParts("Emissive1", (MyJumpGateModSession.GameTick % 120 >= 60) ? Color.Lime : Color.Black, 1);
+					this.TerminalBlock.SetEmissiveParts("Emissive1", (MyJumpGateModSession.Instance.GameTick % 120 >= 60) ? Color.Lime : Color.Black, 1);
 				}
 				else
 				{
@@ -342,7 +342,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			{
 				double cycle_tick_0d = cycle_tick_0;
 				double cycle_tick_1d = cycle_tick_1;
-				double ratio = MathHelperD.Clamp((MyJumpGateModSession.GameTick - cycle_tick_0d) / (cycle_tick_1d - cycle_tick_0d), 0, 1);
+				double ratio = MathHelperD.Clamp((MyJumpGateModSession.Instance.GameTick - cycle_tick_0d) / (cycle_tick_1d - cycle_tick_0d), 0, 1);
 				Vector4D color_start = this.DriveEmitterColorStart.ToVector4();
 				Vector4D color_end = this.DriveEmitterColorEnd.ToVector4();
 				Vector4D result = (color_end - color_start) * ratio + color_start;
@@ -437,7 +437,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// </summary>
 		private void CheckSendGlobalUpdate()
 		{
-			if (MyJumpGateModSession.Network.Registered && ((MyNetworkInterface.IsMultiplayerServer && MyJumpGateModSession.GameTick % MyCubeBlockBase.ForceUpdateDelay == 0) || this.IsDirty))
+			if (MyJumpGateModSession.Network.Registered && ((MyNetworkInterface.IsMultiplayerServer && MyJumpGateModSession.Instance.GameTick % MyCubeBlockBase.ForceUpdateDelay == 0) || this.IsDirty))
 			{
 				MyNetworkInterface.Packet update_packet = new MyNetworkInterface.Packet
 				{
@@ -467,6 +467,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			this.SinkOverrideMW = drive.SinkOverrideMW;
 			this.StoredChargeMW = drive.StoredChargeMW;
 			this.WrapperWattageSinkPower = drive.WattageSinkPowerUsage;
+			if (MyNetworkInterface.IsStandaloneMultiplayerClient) this.MaxRaycastDistance = drive.MaxRaycastDistance;
 			this.JumpGateID = drive.JumpGateID;
 			return true;
 		}
@@ -518,8 +519,8 @@ namespace IOTA.ModularJumpGates.CubeBlock
 
 			this.DriveEmitterColorStart = from;
 			this.DriveEmitterColorEnd = to;
-			this.EmitterEmissiveTick[0] = MyJumpGateModSession.GameTick + 1;
-			this.EmitterEmissiveTick[1] = MyJumpGateModSession.GameTick + duration + 1;
+			this.EmitterEmissiveTick[0] = MyJumpGateModSession.Instance.GameTick + 1;
+			this.EmitterEmissiveTick[1] = MyJumpGateModSession.Instance.GameTick + duration + 1;
 		}
 
 		/// <summary>
@@ -643,6 +644,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			serialized.SinkOverrideMW = this.SinkOverrideMW;
 			serialized.StoredChargeMW = this.StoredChargeMW;
 			serialized.WattageSinkPowerUsage = this.GetCurrentWattageSinkInput();
+			serialized.MaxRaycastDistance = this.MaxRaycastDistance;
 			serialized.JumpGateID = this.JumpGateID;
 			return serialized;
 		}
@@ -674,9 +676,15 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		public double WattageSinkPowerUsage;
 
 		/// <summary>
-		/// The currently attached jump gate or -1
+		/// The maximum distance this drive can raycast in meters
 		/// </summary>
 		[ProtoMember(23)]
+		public double MaxRaycastDistance;
+
+		/// <summary>
+		/// The currently attached jump gate or -1
+		/// </summary>
+		[ProtoMember(24)]
 		public long JumpGateID;
 	}
 }

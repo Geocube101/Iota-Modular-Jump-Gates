@@ -14,7 +14,7 @@ namespace IOTA.ModularJumpGates.Util
 		/// A zero ellipse<br />
 		/// An ellipse at world center with no radii
 		/// </summary>
-		public static readonly BoundingEllipsoidD Zero = new BoundingEllipsoidD(ref Vector3D.Zero, ref MatrixD.Zero);
+		public static BoundingEllipsoidD Zero => new BoundingEllipsoidD(ref Vector3D.Zero, ref MatrixD.Zero);
 		#endregion
 
 		#region Public Variables
@@ -288,10 +288,10 @@ namespace IOTA.ModularJumpGates.Util
 					int next_j = (j + 1) % theta_count;
 
 					// Draw horizontal line (same latitude)
-					MyJumpGateModSession.DrawTransparentLine(current, vertices[i, next_j], MyJumpGateModSession.MyMaterialsHolder.WeaponLaser, ref color_v, thickness);
+					MyJumpGateModSession.DrawTransparentLine(current, vertices[i, next_j], material, ref color_v, thickness);
 
 					// Draw vertical line (next latitude)
-					if (i + 1 < phi_count) MyJumpGateModSession.DrawTransparentLine(current, vertices[i + 1, j], MyJumpGateModSession.MyMaterialsHolder.WeaponLaser, ref color_v, thickness);
+					if (i + 1 < phi_count) MyJumpGateModSession.DrawTransparentLine(current, vertices[i + 1, j], material, ref color_v, thickness);
 				}
 			}
 		}

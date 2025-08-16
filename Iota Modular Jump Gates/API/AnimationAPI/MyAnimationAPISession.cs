@@ -11,14 +11,29 @@ namespace IOTA.ModularJumpGates.API.AnimationAPI
 		private static IMyModContext ModContext;
 		private static Action<IMyModContext, byte[]> AnimationAdder;
 		private static List<Definitions.AnimationDef> AnimationDefinitions = new List<Definitions.AnimationDef>();
-		public static readonly long ModAPIID = 3313236685;
-		public static readonly int[] ModAPIVersion = new int[2] { 1, 1 };
+		public static long ModAPIID => 3313236685;
+		public static int[] ModAPIVersion { get; private set; } = new int[2] { 1, 1 };
 		public static bool Initialized { get; private set; } = false;
 
 		/// <summary>
 		/// The world's world matrix
 		/// </summary>
-		public static readonly MatrixD WorldMatrix = MatrixD.CreateWorld(Vector3D.Zero, new Vector3D(0, 0, -1), new Vector3D(0, 1, 0));
+		public static MatrixD WorldMatrix => MatrixD.CreateWorld(Vector3D.Zero, new Vector3D(0, 0, -1), new Vector3D(0, 1, 0));
+
+		/// <summary>
+		/// Deinitializes the Mod API Session<br />
+		/// Called automatically by Jump Gate Mod
+		/// </summary>
+		public static void Deinit()
+		{
+			if (!MyAnimationAPISession.Initialized) return;
+			MyAnimationAPISession.Initialized = false;
+			MyAnimationAPISession.AnimationDefinitions.Clear();
+			MyAnimationAPISession.ModContext = null;
+			MyAnimationAPISession.AnimationAdder = null;
+			MyAnimationAPISession.AnimationDefinitions = null;
+			MyAnimationAPISession.ModAPIVersion = null;
+		}
 
 		/// <summary>
 		/// Initializes the Mod API Session
@@ -27,14 +42,14 @@ namespace IOTA.ModularJumpGates.API.AnimationAPI
 		/// <returns>Whether the API was initialized</returns>
 		public static bool Init(IMyModContext context)
 		{
-			MyAPIGateway.Utilities.SendModMessage(MyAnimationAPISession.ModAPIID, new Dictionary<string, object>()
-			{
+			MyAPIGateway.Utilities.SendModMessage(MyAnimationAPISession.ModAPIID, new Dictionary<string, object>() {
 				["Type"] = "animationapi",
 				["Callback"] = (Action<Action<IMyModContext, byte[]>>) ((adder) => {
 					if (MyAnimationAPISession.Initialized = adder != null) new MyAnimationAPISession(context, adder);
 				}),
 				["Version"] = MyAnimationAPISession.ModAPIVersion,
 				["ModContext"] = context,
+				["Unloader"] = (Action) MyAnimationAPISession.Deinit,
 			});
 			return MyAnimationAPISession.Initialized;
 		}
