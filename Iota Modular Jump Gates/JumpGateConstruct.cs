@@ -818,11 +818,7 @@ namespace IOTA.ModularJumpGates
 				else if (jump_gate != null && jump_gate.MarkClosed && !jump_gate.Closed) MyJumpGateModSession.Instance.CloseGate(jump_gate);
 				else this.JumpGates[primary_id] = (jump_gate = new MyJumpGate(this, primary_id, ref jump_node, node_group));
 
-				foreach (MyJumpGateDrive drive in drive_group)
-				{
-					Logger.Warn($"[{this.CubeGridID}]: DRIVE={drive.BlockID}, CONSTRUCT={drive.JumpGateGrid?.CubeGridID.ToString() ?? "N/A"}, MATCH={this == drive.JumpGateGrid}");
-					drive.SetAttachedJumpGate(jump_gate);
-				}
+				foreach (MyJumpGateDrive drive in drive_group) drive.SetAttachedJumpGate(jump_gate);
 				jump_gate.Init();
 			}
 
@@ -1051,7 +1047,7 @@ namespace IOTA.ModularJumpGates
 					this.GridBlocks.AddRange(((MyCubeGrid) pair.Value).CubeBlocks);	
 				}
 
-				if (this.GetAttachedJumpGateDrives().Where((drive) => drive.JumpGateGrid == this).Count() != drive_count)
+				if (this.GetAttachedJumpGateDrives().Count() != drive_count)
 				{
 					this.MarkUpdateJumpGates = true;
 					this.DriveCombinations = null;
