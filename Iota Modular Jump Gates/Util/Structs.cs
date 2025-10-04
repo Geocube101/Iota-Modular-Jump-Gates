@@ -1550,9 +1550,11 @@ namespace IOTA.ModularJumpGates.Util
 		/// <returns>New particle position</returns>
 		private Vector3D CalculateParticleClientPosition(Vector3D camera_pos, out float scale)
 		{
+			scale = (float) (this.GateSizeM * 4);
+			return this.Position;
 			double scalar = this.GateSizeM * 4;
 			Vector3D dir = this.Position - camera_pos;
-			int sync = MyAPIGateway.Session.SessionSettings.SyncDistance;
+			int sync = 50000;
 			double distance = dir.Length();
 
 			if (distance <= sync)
