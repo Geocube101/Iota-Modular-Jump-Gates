@@ -16,7 +16,7 @@ namespace IOTA.ModularJumpGates.API
 {
 	internal class MyAPIInterface
 	{
-		public static int[] ModAPIVersion { get; private set; } = new int[2] { 1, 4 };
+		public static int[] ModAPIVersion { get; private set; } = new int[2] { 1, 5 };
 		public static int[] AnimationAPIVersion { get; private set; } = new int[2] { 1, 2 };
 
 		private bool Registered = false;
@@ -452,8 +452,8 @@ namespace IOTA.ModularJumpGates.API
 				["HasCubeGridByID"] = (Func<long, bool>) construct.HasCubeGrid,
 				["HasCubeGrid"] = (Func<IMyCubeGrid, bool>) construct.HasCubeGrid,
 				["IsConstructCommLinked"] = (Func<long, bool>) ((id) => construct.IsConstructCommLinked(MyJumpGateModSession.Instance.GetJumpGateGrid(id))),
-				["IsBeaconWithinReverseBroadcastSphere"] = (Func<IMyBeacon, bool>) ((beacon) => (beacon == null) ? false : construct.IsBeaconWithinReverseBroadcastSphere(new MyBeaconLinkWrapper(beacon))),
-				["IsBeaconWrapperWithinReverseBroadcastSphere"] = (Func<byte[], bool>) ((beacon) => (beacon == null) ? false : construct.IsBeaconWithinReverseBroadcastSphere(MyAPIGateway.Utilities.SerializeFromBinary<MyBeaconLinkWrapper>(beacon))),
+				["IsBeaconWithinReverseBroadcastSphere"] = (Func<IMyBeacon, bool>) ((beacon) => beacon != null && construct.IsBeaconWithinReverseBroadcastSphere(new MyBeaconLinkWrapper(beacon))),
+				["IsBeaconWrapperWithinReverseBroadcastSphere"] = (Func<byte[], bool>) ((beacon) => beacon != null && construct.IsBeaconWithinReverseBroadcastSphere(MyAPIGateway.Utilities.SerializeFromBinary<MyBeaconLinkWrapper>(beacon))),
 				["IsConstructWithinBoundingEllipsoid"] = (Func<byte[], bool>) ((serialized) => {
 					BoundingEllipsoidD ellipsoid = BoundingEllipsoidD.FromSerialized(serialized, 0);
 					return construct.IsConstructWithinBoundingEllipsoid(ref ellipsoid);
@@ -527,8 +527,10 @@ namespace IOTA.ModularJumpGates.API
 				["MarkClosed"] = new object[2] { (Func<bool>) (() => gate.MarkClosed), null },
 				["Closed"] = new object[2] { (Func<bool>) (() => gate.Closed), null },
 				["IsDirty"] = new object[2] { (Func<bool>) (() => gate.IsDirty), null },
+				["IsDetonating"] = new object[2] { (Func<bool>) (() => gate.IsDetonating), null },
 				["Status"] = new object[2] { (Func<byte>) (() => (byte) gate.Status), null },
 				["Phase"] = new object[2] { (Func<byte>) (() => (byte) gate.Phase), null },
+				["ManualDetonationTimeout"] = new object[2] { (Func<int>) (() => gate.ManualDetonationTimeout), null },
 				["JumpGateID"] = new object[2] { (Func<long>) (() => gate.JumpGateID), null },
 				["JumpFailureReason"] = new object[2] { (Func<KeyValuePair<byte, bool>>) (() => new KeyValuePair<byte, bool>((byte) gate.JumpFailureReason.Key, gate.JumpFailureReason.Value)), null },
 				["LocalJumpNode"] = new object[2] { (Func<Vector3D>) (() => gate.LocalJumpNode), null },
@@ -580,7 +582,10 @@ namespace IOTA.ModularJumpGates.API
 				["StopSounds"] = (Action) gate.StopSounds,
 				["CanDoSyphonGridPower"] = (Action<double, ulong, Action<bool>, bool>) gate.CanDoSyphonGridPower,
 				["CancelJump"] = (Action) gate.CancelJump,
-				["OnEntityCollision"] = (Action<Action<Dictionary<string, object>, MyEntity, bool>>) ((callback) => entity_entered_callbacks.TryAdd(callback.GetHashCode(), callback)),
+				["Detonate"] = (Action<long>) ((block_id) => gate.Detonate(gate.JumpGateGrid?.GetDrive(block_id))),
+				["QueueDetonation"] = (Action<float>) gate.QueueDetonation,
+				["ClearDetonation"] = (Action) gate.ClearDetonation,
+				["OnDetonationStart"] = (Action<Action<Dictionary<string, object>, MyEntity, bool>>) ((callback) => entity_entered_callbacks.TryAdd(callback.GetHashCode(), callback)),
 				["OffEntityCollision"] = (Action<Action<Dictionary<string, object>, MyEntity, bool>>) ((callback) => entity_entered_callbacks.Remove(callback.GetHashCode())),
 				["IsPointInHudBroadcastRange"] = (Func<Vector3D, bool>) ((pos) => gate.IsPointInHudBroadcastRange(ref pos)),
 				["IsEntityValidForJumpSpace"] = (Func<MyEntity, bool>) gate.IsEntityValidForJumpSpace,

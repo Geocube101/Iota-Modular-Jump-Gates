@@ -86,9 +86,10 @@ namespace IOTA.ModularJumpGates.Util.ConcurrentCollections
 
 		public SpinQueue<Type> Clone()
 		{
-			SpinQueue<Type> clone = new SpinQueue<Type>(this.Buffer.Length);
-			clone.Count = this.Count;
-			clone.Index = this.Index;
+			SpinQueue<Type> clone = new SpinQueue<Type>(this.Buffer.Length) {
+				Count = this.Count,
+				Index = this.Index,
+			};
 			for (int i = 0; i < this.Buffer.Length; ++i) clone.Buffer[i] = this.Buffer[i];
 			return clone;
 		}

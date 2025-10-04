@@ -97,17 +97,17 @@ namespace IOTA.ModularJumpGates
 		/// <summary>
 		/// The mutex lock for exclusive construct updates
 		/// </summary>
-		private object UpdateLock = new object();
+		private readonly object UpdateLock = new object();
 
 		/// <summary>
 		/// The mutex lock for exclusive comm-linked updates
 		/// </summary>
-		private IOTA.ModularJumpGates.Util.ReaderWriterLock CommLinkedLock = new IOTA.ModularJumpGates.Util.ReaderWriterLock();
+		private readonly Util.ReaderWriterLock CommLinkedLock = new Util.ReaderWriterLock();
 
 		/// <summary>
 		/// The mutex lock for exclusive beacon-linked updates
 		/// </summary>
-		private IOTA.ModularJumpGates.Util.ReaderWriterLock BeaconLinkedLock = new IOTA.ModularJumpGates.Util.ReaderWriterLock();
+		private readonly Util.ReaderWriterLock BeaconLinkedLock = new Util.ReaderWriterLock();
 
 		/// <summary>
 		/// A queue of all IDs from closed gates
@@ -176,6 +176,11 @@ namespace IOTA.ModularJumpGates
         /// Whether this construct is marked for close
         /// </summary>
 		public bool MarkClosed { get; private set; } = false;
+
+		/// <summary>
+		/// Whether this construct is closing
+		/// </summary>
+		public bool IsClosing = false;
 
 		/// <summary>
 		/// Whether this construct is suspended from updates<br />
@@ -862,6 +867,7 @@ namespace IOTA.ModularJumpGates
 		private void SearchUpdateCommLinkedGrids()
 		{
 			if (!this.UpdateCommLinkedGrids || !MyNetworkInterface.IsServerLike) return;
+			this.CommLinkedGridsPoll.Clear();
 			this.CommLinkedGridsPoll.Enqueue(this);
 			List<MyEntity> broadcast_entities = new List<MyEntity>();
 			List<MyJumpGateConstruct> new_comm_linked = new List<MyJumpGateConstruct>(this.CommLinkedGrids?.Count ?? 0);
@@ -1109,6 +1115,7 @@ namespace IOTA.ModularJumpGates
 			this.BatchingGate = null;
 			this.CubeGrid = null;
 			this.MarkClosed = true;
+			this.IsClosing = false;
 			this.Closed = true;
 
 			Logger.Debug($"Jump Gate Grid \"{name}\" ({this.CubeGridID}) Closed - {reason}; SESSION_STATUS={MyJumpGateModSession.Instance.SessionStatus}", 1);
@@ -1125,7 +1132,7 @@ namespace IOTA.ModularJumpGates
 		public void Update(out bool true_update)
 		{
 			true_update = false;
-			if (this.Closed) return;
+			if (this.Closed || this.IsClosing) return;
 			MyGridInvalidationReason reason;
 
 			// Check update validity
@@ -1263,7 +1270,7 @@ namespace IOTA.ModularJumpGates
 		/// </summary>
 		public void UpdateNonThreadable()
 		{
-			if (this.Closed) return;
+			if (this.Closed || this.IsClosing) return;
 
 			foreach (KeyValuePair<long, MyJumpGate> pair in this.JumpGates)
 			{
@@ -1439,7 +1446,7 @@ namespace IOTA.ModularJumpGates
 				if (block == null || (block.FatBlock?.MarkedForClose ?? false)) continue;
 				position = block.CubeGrid.GridIntegerToWorld(block.Position);
 				if (contained_blocks != null && ellipsoid.IsPointInEllipse(position)) contained_blocks.Add(block);
-				else if (uncontained_blocks != null) uncontained_blocks.Add(block);
+				else uncontained_blocks?.Add(block);
 			}
 		}
 
@@ -1637,6 +1644,14 @@ namespace IOTA.ModularJumpGates
 			if (this.Closed) return false;
 			foreach (KeyValuePair<long, IMyCubeGrid> pair in this.CubeGrids) if (pair.Value.IsStatic) return true;
 			return false;
+		}
+
+		/// <summary>
+		/// </summary>
+		/// <returns>Whether this construct can be safely closed</returns>
+		public bool CanFinalizeClosure()
+		{
+			return this.Closed || this.JumpGates.All((pair) => pair.Value.CanFinalizeClosure());
 		}
 
         /// <summary>

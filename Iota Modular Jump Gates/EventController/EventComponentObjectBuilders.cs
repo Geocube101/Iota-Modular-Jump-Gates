@@ -62,5 +62,17 @@ namespace IOTA.ModularJumpGates.EventController.ObjectBuilders
 
 	[ProtoContract]
 	[MyObjectBuilderDefinition]
+	public class MyObjectBuilder_EventJumpGateDetonationStarted : MyObjectBuilder_ComponentBase { }
+
+	[ProtoContract]
+	[MyObjectBuilderDefinition]
+	public class MyObjectBuilder_EventJumpGateDetonatorArmed : MyObjectBuilder_ComponentBase { }
+
+	[ProtoContract]
+	[MyObjectBuilderDefinition]
+	public class MyObjectBuilder_EventJumpGateDetonatorCountdownChanged : MyObjectBuilder_ComponentBase { }
+
+	[ProtoContract]
+	[MyObjectBuilderDefinition]
 	public class MyObjectBuilder_EventRemoteAntennaConnected : MyObjectBuilder_ComponentBase { }
 }

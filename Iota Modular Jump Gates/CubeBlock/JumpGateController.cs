@@ -71,7 +71,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			[ProtoMember(15)]
 			private MyJumpGateWaypoint SelectedWaypoint_V = null;
 			[ProtoMember(16)]
-			private List<long> BlacklistedEntities = new List<long>();
+			private readonly List<long> BlacklistedEntities = new List<long>();
 			[ProtoMember(17)]
 			private float MinimumEntityMass_V = 0;
 			[ProtoMember(18)]
@@ -94,6 +94,10 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			private MyJumpSpaceFitType JumpSpaceFitType_V = MyJumpSpaceFitType.INNER;
 			[ProtoMember(27)]
 			private MyGravityAlignmentType GravityAlignmentType_V = MyGravityAlignmentType.NONE;
+			[ProtoMember(28)]
+			private bool GateDetonatorArmed_V = false;
+			[ProtoMember(29)]
+			private float GateDetonationTime_V = 10;
 
 			private readonly object WriterLock = new object();
 
@@ -132,6 +136,8 @@ namespace IOTA.ModularJumpGates.CubeBlock
 					this.VectorNormal_V = (Vector3D) mapping.GetValueOrDefault("VectorNormal", this.VectorNormal_V);
 					this.EffectColorShift_V = (Color) mapping.GetValueOrDefault("EffectColorShift", this.EffectColorShift_V);
 					this.JumpGateName_V = (name != null && (name.StartsWith("#") || name.Contains(';'))) ? this.JumpGateName_V : name;
+					this.GateDetonatorArmed_V = (bool) mapping.GetValueOrDefault("GateDetonatorArmed", this.GateDetonatorArmed_V);
+					this.GateDetonationTime_V = (float) mapping.GetValueOrDefault("GateDetonationTime", this.GateDetonationTime_V);
 
 					{
 						object selected_waypoint = mapping.GetValueOrDefault("SelectedWaypoint", null);
@@ -228,11 +234,13 @@ namespace IOTA.ModularJumpGates.CubeBlock
 						["VectorNormal"] = this.VectorNormal_V,
 						["EffectColorShift"] = this.EffectColorShift_V,
 						["SelectedWaypoint"] = selected_waypoint,
-						["BlacklistedEntities"] = this.BlacklistedEntities?.ToList() ?? new List<long>(),
+						["BlacklistedEntities"] = this.BlacklistedEntities,
 						["MinimumEntityMass"] = this.MinimumEntityMass_V,
 						["MaximumEntityMass"] = this.MaximumEntityMass_V,
 						["MinimumCubeGridSize"] = this.MinimumCubeGridSize_V,
 						["MaximumCubeGridSize"] = this.MaximumCubeGridSize_V,
+						["GateDetonatorArmed"] = this.GateDetonatorArmed_V,
+						["GateDetonationTime"] = this.GateDetonationTime_V,
 					};
 				}
 			}
@@ -452,6 +460,14 @@ namespace IOTA.ModularJumpGates.CubeBlock
 					if (this.MaximumAutoPower_V == double.MaxValue) this.MaximumAutoPower_V = double.PositiveInfinity;
 				}
 			}
+			public void GateDetonatorArmed(bool armed)
+			{
+				lock (this.WriterLock) this.GateDetonatorArmed_V = armed;
+			}
+			public void GateDetonationTime(float seconds)
+			{
+				lock (this.WriterLock) this.GateDetonationTime_V = MathHelper.Clamp(seconds, 0, 3600);
+			}
 
 			public bool CanAutoActivate()
 			{
@@ -570,6 +586,14 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			{
 				return new KeyValuePair<double, double>(this.MinimumAutoPower_V, this.MaximumAutoPower_V);
 			}
+			public bool GateDetonatorArmed()
+			{
+				return this.GateDetonatorArmed_V;
+			}
+			public float GateDetonationTime()
+			{
+				return this.GateDetonationTime_V;
+			}
 		}
 
 		#region Private Static Variables
@@ -675,6 +699,8 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				this.OverlayedBlockSettings.JumpEffectAnimationColorShift(((allowed & MyAllowedRemoteSettings.COLOR_OVERRIDE) != 0) ? this.BaseBlockSettings.JumpEffectAnimationColorShift() : remote.JumpEffectAnimationColorShift());
 				this.OverlayedBlockSettings.VectorNormalOverride(((allowed & MyAllowedRemoteSettings.VECTOR_OVERRIDE) != 0) ? this.BaseBlockSettings.VectorNormalOverride() : remote.VectorNormalOverride());
 				this.OverlayedBlockSettings.HasVectorNormalOverride(((allowed & MyAllowedRemoteSettings.VECTOR_OVERRIDE) != 0) ? this.BaseBlockSettings.HasVectorNormalOverride() : remote.HasVectorNormalOverride());
+				this.OverlayedBlockSettings.GateDetonatorArmed(((allowed & MyAllowedRemoteSettings.DETONATION_CONTROL) != 0) ? this.BaseBlockSettings.GateDetonatorArmed() : remote.GateDetonatorArmed());
+				this.OverlayedBlockSettings.GateDetonationTime(((allowed & MyAllowedRemoteSettings.DETONATION_CONTROL) != 0) ? this.BaseBlockSettings.GateDetonationTime() : remote.GateDetonationTime());
 
 				return this.OverlayedBlockSettings;
 			}
@@ -826,7 +852,15 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				sb.Append($"\n[color=#FF78FFFB]--- {MyTexts.GetString("DetailedInfo_JumpGateController_HeaderJumpGateInfo")} ---[/color][color=#FF5ABFBC]\n");
 				sb.Append($" - {MyTexts.GetString("StatusText_Status")}: {((jump_gate == null) ? "N/A" : MyTexts.GetString($"StatusText_{jump_gate.Status}"))}\n");
 				sb.Append($" - {MyTexts.GetString("PhaseText_Phase")}: {((jump_gate == null) ? "N/A" : MyTexts.GetString($"PhaseText_{jump_gate.Phase}"))}\n");
-				sb.Append($" - {MyTexts.GetString("DetailedInfo_JumpGateController_DriveCount")}: {jump_gate?.GetWorkingJumpGateDrives().Count().ToString() ?? "N/A"}\n");
+				sb.Append($" - {MyTexts.GetString("DetailedInfo_JumpGateController_DriveCount")}: {jump_gate?.GetJumpGateDrives().Count().ToString() ?? "N/A"}\n");
+				sb.Append($" - {MyTexts.GetString("DetailedInfo_JumpGateController_WorkingDriveCount")}: {jump_gate?.GetWorkingJumpGateDrives().Count().ToString() ?? "N/A"}\n");
+
+				if (MyJumpGateModSession.Configuration.JumpGateConfiguration.EnableGateExplosions)
+				{
+					string crit_count = (jump_gate == null) ? "N/A" : Math.Ceiling(jump_gate.GetJumpGateDrives().Count() * jump_gate.JumpGateConfiguration.ExplosionDamagePercent).ToString();
+					sb.Append($" - {MyTexts.GetString("DetailedInfo_JumpGateController_CriticalDriveCount")}: {crit_count}\n");
+				}
+
 				sb.Append($" - {MyTexts.GetString("DetailedInfo_JumpGateController_GridSize")}: {jump_gate?.CubeGridSize().ToString() ?? "N/A"}\n");
 				sb.Append($" - {MyTexts.GetString("DetailedInfo_JumpGateController_Radius")}: {((jump_gate == null) ? "N/A" : MyJumpGateModSession.AutoconvertMetricUnits(jump_ellipse.Value.Radii.X, "m", 4))}\n");
 				sb.Append($" - {MyTexts.GetString("DetailedInfo_JumpGateController_EffectiveRadius")}: {((jump_gate == null) ? "N/A" : MyJumpGateModSession.AutoconvertMetricUnits(jump_ellipse.Value.Radii.X, "m", 4))}\n");
@@ -1006,7 +1040,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		public override void UpdateOnceBeforeFrame()
 		{
 			base.UpdateOnceBeforeFrame();
-			if (!MyJumpGateControllerTerminal.IsLoaded) MyJumpGateControllerTerminal.Load(this.ModContext);
+			if (!MyJumpGateControllerTerminal.IsLoaded) MyJumpGateControllerTerminal.Load();
 		}
 
 		/// <summary>
@@ -1386,6 +1420,12 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			this.BaseBlockSettings.AutoActivationDelay(new_settings.AutoActivationDelay());
 			this.BaseBlockSettings.CanAutoActivate(new_settings.CanAutoActivate());
 			this.BaseBlockSettings.GravityAlignmentType(new_settings.GravityAlignmentType());
+
+			if (jump_gate == null || jump_gate.ManualDetonationTimeout == -1)
+			{
+				this.BaseBlockSettings.GateDetonatorArmed(new_settings.GateDetonatorArmed());
+				this.BaseBlockSettings.GateDetonationTime(new_settings.GateDetonationTime());
+			}
 
 			KeyValuePair<float, float> mass = new_settings.AutoActivateMass();
 			this.BaseBlockSettings.AutoActivateMass(mass.Key, mass.Value);

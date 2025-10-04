@@ -99,7 +99,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// <summary>
 		/// The emissive animation for this block
 		/// </summary>
-		private byte[] EmissiveAnimation = new byte[2] { 0, 0 };
+		private readonly byte[] EmissiveAnimation = new byte[2] { 0, 0 };
 
 		/// <summary>
 		/// The last game tick at which nearby links were updated
@@ -139,7 +139,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// <summary>
 		/// Mutex object for exclusive read-write operations on the NearbyLinks list
 		/// </summary>
-		private object NearbyLinksMutex = new object();
+		private readonly object NearbyLinksMutex = new object();
 		#endregion
 
 		#region Public Variables
@@ -229,11 +229,12 @@ namespace IOTA.ModularJumpGates.CubeBlock
 
 			// Create collider
 			if (MyNetworkInterface.IsStandaloneMultiplayerClient || this.TerminalBlock?.CubeGrid?.Physics == null) return;
-			this.LinkDetector = new MyEntity();
-			this.LinkDetector.EntityId = 0;
+			this.LinkDetector = new MyEntity() {
+				EntityId = 0,
+				Flags = EntityFlags.IsNotGamePrunningStructureObject | EntityFlags.NeedsWorldMatrix,
+				Save = false,
+			};
 			this.LinkDetector.Init(new StringBuilder($"JumpGateRemoteLink_{this.BlockID}"), null, (MyEntity) this.Entity, 1f);
-			this.LinkDetector.Save = false;
-			this.LinkDetector.Flags = EntityFlags.IsNotGamePrunningStructureObject | EntityFlags.NeedsWorldMatrix;
 			PhysicsSettings settings = MyAPIGateway.Physics.CreateSettingsForDetector(this.LinkDetector, this.OnEntityCollision, MyJumpGateModSession.WorldMatrix, Vector3D.Zero, RigidBodyFlag.RBF_KINEMATIC, 15, true);
 			MyAPIGateway.Physics.CreateSpherePhysics(settings, (float) this.MaxConnectionDistance);
 			MyAPIGateway.Entities.AddEntity(this.LinkDetector);
@@ -607,7 +608,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		private void UpdateNearbyLinks()
 		{
 			if (!MyNetworkInterface.IsServerLike || this.NearbyEntities == null || this.NearbyLinks == null || this.JumpGateGrid == null) return;
-			MyJumpGateConstruct construct = null;
+			MyJumpGateConstruct construct;
 			Vector3D this_pos = this.WorldMatrix.Translation;
 			string name = this.JumpGateGrid.PrimaryCubeGridCustomName;
 

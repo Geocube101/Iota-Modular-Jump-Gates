@@ -36,11 +36,6 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		public static uint ForceUpdateDelay => 1800;
 
 		/// <summary>
-		/// The radii of this block's model
-		/// </summary>
-		public static Vector3D ModelBoundingBoxSize { get; private set; } = Vector3D.Zero;
-
-		/// <summary>
 		/// Master map of all Iota cube block instances
 		/// </summary>
 		public static ConcurrentDictionary<long, MyCubeBlockBase> Instances { get; private set; } = new ConcurrentDictionary<long, MyCubeBlockBase>();
@@ -67,7 +62,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// <summary>
 		/// The block ID of this block if this block is a wrapper
 		/// </summary>
-		private long SuspendedTerminalBlockID;
+		private readonly long SuspendedTerminalBlockID;
 
 		/// <summary>
 		/// The world matrix of this block
@@ -206,6 +201,11 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		public ulong LocalGameTick { get; private set; } = 0;
 
 		/// <summary>
+		/// The radii of this block's model
+		/// </summary>
+		public Vector3D ModelBoundingBoxSize { get; private set; } = Vector3D.Zero;
+
+		/// <summary>
 		/// The grid size of this block
 		/// </summary>
 		public MyCubeSize CubeGridSize { get; private set; }
@@ -312,8 +312,8 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		public override void UpdateOnceBeforeFrame()
 		{
 			base.UpdateOnceBeforeFrame();
-			MyCubeBlockBase.ModelBoundingBoxSize = (MyCubeBlockBase.ModelBoundingBoxSize == Vector3D.Zero && !this.IsNullWrapper) ? new Vector3D(this.TerminalBlock.Model.BoundingBoxSize) : MyCubeBlockBase.ModelBoundingBoxSize;
-			MyCubeBlockTerminal.Load(this.ModContext);
+			this.ModelBoundingBoxSize = (this.ModelBoundingBoxSize == Vector3D.Zero && !this.IsNullWrapper) ? new Vector3D(this.TerminalBlock.Model.BoundingBoxSize) : this.ModelBoundingBoxSize;
+			MyCubeBlockTerminal.Load();
 			this.InitFrameAvailable = true;
 		}
 
@@ -352,7 +352,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			{
 				this.UpdateOnceAfterInit();
 				this.IsInitFrameCalled = true;
-				Logger.Debug($"[{this.BlockID}] ({this.ToString()}) UPDATE_ONCE_AFTER_INIT", 5);
+				Logger.Debug($"[{this.BlockID}] ({this}) UPDATE_ONCE_AFTER_INIT", 5);
 			}
 
 			if (this.ResourceSink != null)
@@ -570,10 +570,11 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			if (this.TerminalBlock.ResourceSink == null)
 			{
 				this.ResourceSink = new MyResourceSinkComponent();
-				MyResourceSinkInfo sink_info = new MyResourceSinkInfo();
-				sink_info.ResourceTypeId = MyResourceDistributorComponent.ElectricityId;
-				sink_info.RequiredInputFunc = () => power_drain_mw;
-				sink_info.MaxRequiredInput = 0;
+				MyResourceSinkInfo sink_info = new MyResourceSinkInfo() {
+					ResourceTypeId = MyResourceDistributorComponent.ElectricityId,
+					RequiredInputFunc = () => power_drain_mw,
+					MaxRequiredInput = 0,
+				};
 				
 				this.ResourceSink.Init(VRage.Utils.MyStringHash.GetOrCompute("Utility"), sink_info, this.Entity as MyCubeBlock);
 				this.TerminalBlock.Components.Add(this.ResourceSink);
@@ -616,11 +617,11 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			if (this.TerminalBlock.ResourceSink == null)
 			{
 				this.ResourceSink = new MyResourceSinkComponent();
-				MyResourceSinkInfo sink_info = new MyResourceSinkInfo();
-				sink_info.ResourceTypeId = MyResourceDistributorComponent.ElectricityId;
-				sink_info.RequiredInputFunc = power_draw_mw == null ? () => 0 : power_draw_mw;
-				sink_info.MaxRequiredInput = 0;
-
+				MyResourceSinkInfo sink_info = new MyResourceSinkInfo() {
+					ResourceTypeId = MyResourceDistributorComponent.ElectricityId,
+					RequiredInputFunc = power_draw_mw ?? (() => 0),
+					MaxRequiredInput = 0,
+				};
 				this.ResourceSink.Init(VRage.Utils.MyStringHash.GetOrCompute("Utility"), sink_info, this.Entity as MyCubeBlock);
 				this.ResourceSink.AddType(ref sink_info);
 				this.TerminalBlock.Components.Add(this.ResourceSink);
@@ -628,7 +629,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			else
 			{
 				this.ResourceSink = this.TerminalBlock.Components.Get<MyResourceSinkComponent>();
-				this.ResourceSink.SetRequiredInputFuncByType(MyResourceDistributorComponent.ElectricityId, power_draw_mw == null ? () => 0 : power_draw_mw);
+				this.ResourceSink.SetRequiredInputFuncByType(MyResourceDistributorComponent.ElectricityId, power_draw_mw ?? (() => 0));
 				this.ResourceSink.SetMaxRequiredInputByType(MyResourceDistributorComponent.ElectricityId, 0);
 				this.ResourceSink.Update();
 			}

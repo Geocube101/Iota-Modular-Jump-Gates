@@ -11,7 +11,7 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 	public class MyModAPISession : MyModAPIObjectBase
 	{
 		public static long ModAPIID => 3313236685;
-		public static int[] ModAPIVersion { get; private set; } = new int[2] { 1, 3 };
+		public static int[] ModAPIVersion { get; private set; } = new int[2] { 1, 5 };
 		public static MyModAPISession Instance { get; private set; } = null;
 
 		/// <summary>
@@ -126,7 +126,7 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		/// <returns>True if this grid should be considered valid</returns>
 		public bool IsJumpGateGridMultiplayerValid(MyModAPIJumpGateConstruct grid)
 		{
-			return (grid == null) ? false : this.GetMethod<Func<long, bool>>("IsJumpGateGridMultiplayerValid")(grid.CubeGridID);
+			return grid != null && this.GetMethod<Func<long, bool>>("IsJumpGateGridMultiplayerValid")(grid.CubeGridID);
 		}
 
 		/// <summary>
@@ -135,7 +135,7 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		/// <returns>True if this grid has a duplicate construct</returns>
 		public bool HasDuplicateGrid(MyModAPIJumpGateConstruct grid)
 		{
-			return (grid == null) ? false : this.GetMethod<Func<long, bool>>("HasDuplicateGrid")(grid.CubeGridID);
+			return grid != null && this.GetMethod<Func<long, bool>>("HasDuplicateGrid")(grid.CubeGridID);
 		}
 
 		/// <summary>
@@ -147,7 +147,7 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		/// <returns>Whether the grid was moved</returns>
 		public bool MoveGrid(MyModAPIJumpGateConstruct grid, long new_id)
 		{
-			return (grid == null) ? false : this.GetMethod<Func<long, long, bool>>("MoveGrid")(grid.CubeGridID, new_id);
+			return grid != null && this.GetMethod<Func<long, long, bool>>("MoveGrid")(grid.CubeGridID, new_id);
 		}
 
 		/// <summary>

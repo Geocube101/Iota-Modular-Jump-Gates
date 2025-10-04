@@ -172,7 +172,7 @@ namespace IOTA.ModularJumpGates.Terminal
 			
 		}
 
-		public static void Load(IMyModContext context)
+		public static void Load()
 		{
 			if (MyJumpGateCapacitorTerminal.IsLoaded) return;
 			MyJumpGateCapacitorTerminal.IsLoaded = true;

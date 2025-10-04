@@ -22,8 +22,8 @@ using VRageMath;
 namespace IOTA.ModularJumpGates.CubeBlock
 {
 	public enum MyAllowedRemoteSettings : ushort {
-		NAME = 1, DESTINATIONS = 2, ANIMATIONS = 4, ROUTING = 8, ENTITY_FILTER = 16, AUTO_ACTIVATE = 32, COMM_LINKAGE = 64, JUMPSPACE = 128, COLOR_OVERRIDE = 256, VECTOR_OVERRIDE = 512, JUMP = 1024, NOJUMP = 2048,
-		ALL = 4095, NONE = 0,
+		NAME = 1, DESTINATIONS = 2, ANIMATIONS = 4, ROUTING = 8, ENTITY_FILTER = 16, AUTO_ACTIVATE = 32, COMM_LINKAGE = 64, JUMPSPACE = 128, COLOR_OVERRIDE = 256, VECTOR_OVERRIDE = 512, JUMP = 1024, NOJUMP = 2048, DETONATION_CONTROL = 4096,
+		ALL = 8191, NONE = 0,
 	}
 
 	/// <summary>
@@ -105,12 +105,12 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// <summary>
 		/// Mutex object for exclusive read-write operations on the NearbyAntennas list
 		/// </summary>
-		private object NearbyAntennasMutex = new object();
+		private readonly object NearbyAntennasMutex = new object();
 
 		/// <summary>
 		/// Mutex object for exclusive read-write operations on the WaypointsList
 		/// </summary>
-		private object[] WaypointsListMutex = new object[MyJumpGateRemoteAntenna.ChannelCount] { new object(), new object(), new object() };
+		private readonly object[] WaypointsListMutex = new object[MyJumpGateRemoteAntenna.ChannelCount] { new object(), new object(), new object() };
 
 		/// <summary>
 		/// The list of jump gates listening from this antenna
@@ -135,7 +135,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// <summary>
 		/// Queue of pairings that cannot be completed
 		/// </summary>
-		private KeyValuePair<JumpGateUUID, JumpGateUUID>?[] UninitializedPairings = new KeyValuePair<JumpGateUUID, JumpGateUUID>?[MyJumpGateRemoteAntenna.ChannelCount] { null, null, null };
+		private readonly KeyValuePair<JumpGateUUID, JumpGateUUID>?[] UninitializedPairings = new KeyValuePair<JumpGateUUID, JumpGateUUID>?[MyJumpGateRemoteAntenna.ChannelCount] { null, null, null };
 
 		/// <summary>
 		/// A list of all nearby antennas
@@ -146,7 +146,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// Client-side only<br />
 		/// Stores all applicable waypoints for this block
 		/// </summary>
-		private List<MyJumpGateWaypoint>[] WaypointsList = new List<MyJumpGateWaypoint>[MyJumpGateRemoteAntenna.ChannelCount] { new List<MyJumpGateWaypoint>(), new List<MyJumpGateWaypoint>(), new List<MyJumpGateWaypoint>() };
+		private readonly List<MyJumpGateWaypoint>[] WaypointsList = new List<MyJumpGateWaypoint>[MyJumpGateRemoteAntenna.ChannelCount] { new List<MyJumpGateWaypoint>(), new List<MyJumpGateWaypoint>(), new List<MyJumpGateWaypoint>() };
 
 		/// <summary>
 		/// A map of all topmost entities within search range
@@ -204,9 +204,11 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		{
 			base.Clean();
 			this.NearbyEntities.Clear();
+			this.TEMP_DetailedInfoConstructsList.Clear();
 			lock (this.NearbyAntennasMutex) this.NearbyAntennas.Clear();
 			this.NearbyEntities = null;
 			this.NearbyAntennas = null;
+			this.TEMP_DetailedInfoConstructsList = null;
 
 			for (byte i = 0; i < MyJumpGateRemoteAntenna.ChannelCount; ++i)
 			{
@@ -347,7 +349,15 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				sb.Append($"\n[color=#FF78FFFB]--- {MyTexts.GetString("DetailedInfo_JumpGateController_HeaderJumpGateInfo")} ---[/color][color=#FF5ABFBC]\n");
 				sb.Append($" - {MyTexts.GetString("StatusText_Status")}: {((jump_gate == null) ? "N/A" : MyTexts.GetString($"StatusText_{jump_gate.Status}"))}\n");
 				sb.Append($" - {MyTexts.GetString("PhaseText_Phase")}: {((jump_gate == null) ? "N/A" : MyTexts.GetString($"PhaseText_{jump_gate.Phase}"))}\n");
-				sb.Append($" - {MyTexts.GetString("DetailedInfo_JumpGateController_DriveCount")}: {jump_gate?.GetWorkingJumpGateDrives().Count().ToString() ?? "N/A"}\n");
+				sb.Append($" - {MyTexts.GetString("DetailedInfo_JumpGateController_DriveCount")}: {jump_gate?.GetJumpGateDrives().Count().ToString() ?? "N/A"}\n");
+				sb.Append($" - {MyTexts.GetString("DetailedInfo_JumpGateController_WorkingDriveCount")}: {jump_gate?.GetWorkingJumpGateDrives().Count().ToString() ?? "N/A"}\n");
+
+				if (MyJumpGateModSession.Configuration.JumpGateConfiguration.EnableGateExplosions)
+				{
+					string crit_count = (jump_gate == null) ? "N/A" : Math.Ceiling(jump_gate.GetJumpGateDrives().Count() * jump_gate.JumpGateConfiguration.ExplosionDamagePercent).ToString();
+					sb.Append($" - {MyTexts.GetString("DetailedInfo_JumpGateController_CriticalDriveCount")}: {crit_count}\n");
+				}
+
 				sb.Append($" - {MyTexts.GetString("DetailedInfo_JumpGateController_GridSize")}: {jump_gate?.CubeGridSize().ToString() ?? "N/A"}\n");
 				sb.Append($" - {MyTexts.GetString("DetailedInfo_JumpGateController_Radius")}: {((jump_gate == null) ? "N/A" : MyJumpGateModSession.AutoconvertMetricUnits(jump_ellipse.Value.Radii.X, "m", 4))}\n");
 				sb.Append($" - {MyTexts.GetString("DetailedInfo_JumpGateController_EffectiveRadius")}: {((jump_gate == null) ? "N/A" : MyJumpGateModSession.AutoconvertMetricUnits(jump_ellipse.Value.Radii.X, "m", 4))}\n");
@@ -437,7 +447,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		public override void UpdateOnceBeforeFrame()
 		{
 			base.UpdateOnceBeforeFrame();
-			if (!MyJumpGateRemoteAntennaTerminal.IsLoaded) MyJumpGateRemoteAntennaTerminal.Load(this.ModContext);
+			if (!MyJumpGateRemoteAntennaTerminal.IsLoaded) MyJumpGateRemoteAntennaTerminal.Load();
 		}
 
 		/// <summary>
@@ -821,11 +831,12 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		{
 			if (MyNetworkInterface.IsStandaloneMultiplayerClient || this.TerminalBlock?.CubeGrid?.Physics == null || this.MarkedForClose || this.NearbyEntities == null) return;
 			this.AntennaDetector?.Close();
-			this.AntennaDetector = new MyEntity();
-			this.AntennaDetector.EntityId = 0;
+			this.AntennaDetector = new MyEntity() {
+				EntityId = 0,
+				Save = false,
+				Flags = EntityFlags.IsNotGamePrunningStructureObject | EntityFlags.NeedsWorldMatrix,
+			};
 			this.AntennaDetector.Init(new StringBuilder($"JumpGateRemoteAntenna_{this.BlockID}"), null, (MyEntity) this.Entity, 1f);
-			this.AntennaDetector.Save = false;
-			this.AntennaDetector.Flags = EntityFlags.IsNotGamePrunningStructureObject | EntityFlags.NeedsWorldMatrix;
 			this.NearbyEntities.Clear();
 			PhysicsSettings settings = MyAPIGateway.Physics.CreateSettingsForDetector(this.AntennaDetector, this.OnEntityCollision, MyJumpGateModSession.WorldMatrix, Vector3D.Zero, RigidBodyFlag.RBF_KINEMATIC, 15, true);
 			MyAPIGateway.Physics.CreateSpherePhysics(settings, (float) MyJumpGateRemoteAntenna.MaxCollisionDistance);

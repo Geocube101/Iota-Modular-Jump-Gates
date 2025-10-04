@@ -467,6 +467,63 @@ namespace IOTA.ModularJumpGates
 			public bool ConfineUntetheredSpread = false;
 
 			/// <summary>
+			/// Whether jump gates explode when sufficiently damaged<br />
+			/// Also controls whether the "Self Destruct" action is available<br />
+			/// Defaults to false
+			/// </summary>
+			[ProtoMember(24, IsRequired = true)]
+			public bool EnableGateExplosions = false;
+
+			/// <summary>
+			/// The multiplier used to determine a large grid jump gate's explosion size given gate power<br />
+			/// Cannot be NaN, Infinite, or less than 0<br />
+			/// Defaults to 1 (100%)
+			/// </summary>
+			[ProtoMember(25, IsRequired = true)]
+			public float LargeGateExplosionDamageMultiplier = 1;
+
+			/// <summary>
+			/// The multiplier used to determine a small grid jump gate's explosion size given gate power<br />
+			/// Cannot be Nan, Infinite, or less than 0<br />
+			/// Defaults to 1 (100%)
+			/// </summary>
+			[ProtoMember(26, IsRequired = true)]
+			public float SmallGateExplosionDamageMultiplier = 1;
+
+			/// <summary>
+			/// The percentage of large grid gate drives that must be disabled before the gate detonates<br />
+			/// Cannot be NaN, Infinite, less than 0, or greater than 1<br />
+			/// Defaults to 0.75 (75%)
+			/// </summary>
+			[ProtoMember(27, IsRequired = true)]
+			public float LargeGateExplosionDamagePercent = 0.75f;
+
+			/// <summary>
+			/// The percentage of small grid gate drives that must be disabled before the gate detonates<br />
+			/// Cannot be NaN, Infinite, less than 0, or greater than 1<br />
+			/// Defaults to 0.75 (75%)
+			/// </summary>
+			[ProtoMember(28, IsRequired = true)]
+			public float SmallGateExplosionDamagePercent = 0.75f;
+
+			/// <summary>
+			/// The radius (in meters) in which a large grid jump gate can randomly displace its jumped entities when untethered<br />
+			/// Cannot be NaN, Infinite, or less than 0<br />
+			/// Defaults to 0 (Disabled)
+			/// </summary>
+			[ProtoMember(29, IsRequired = true)]
+			public float LargeGateRandomDisplacementRadius = 0;
+
+
+			/// <summary>
+			/// The radius (in meters) in which a small grid jump gate can randomly displace its jumped entities when untethered<br />
+			/// Cannot be NaN, Infinite, or less than 0<br />
+			/// Defaults to 0 (Disabled)
+			/// </summary>
+			[ProtoMember(30, IsRequired = true)]
+			public float SmallGateRandomDisplacementRadius = 0;
+
+			/// <summary>
 			/// Validates all values
 			/// </summary>
 			internal void Validate()
@@ -496,6 +553,13 @@ namespace IOTA.ModularJumpGates
 
 				this.LargeGateDistanceScaleExponent = Math.Log((this.MaxLargeJumpGate50Distance - this.MinimumLargeJumpDistance) / 1000d, 50d);
 				this.SmallGateDistanceScaleExponent = Math.Log((this.MaxSmallJumpGate50Distance - this.MinimumSmallJumpDistance) / 1000d, 50d);
+
+				this.LargeGateExplosionDamageMultiplier = ValidateFloatValue(this.LargeGateExplosionDamageMultiplier, defaults.LargeGateExplosionDamageMultiplier, 0);
+				this.SmallGateExplosionDamageMultiplier = ValidateFloatValue(this.SmallGateExplosionDamageMultiplier, defaults.SmallGateExplosionDamageMultiplier, 0);
+				this.LargeGateExplosionDamagePercent = ValidateFloatValue(this.LargeGateExplosionDamagePercent, defaults.LargeGateExplosionDamagePercent, 0, 1);
+				this.SmallGateExplosionDamagePercent = ValidateFloatValue(this.SmallGateExplosionDamagePercent, defaults.SmallGateExplosionDamagePercent, 0, 1);
+				this.LargeGateRandomDisplacementRadius = ValidateFloatValue(this.LargeGateRandomDisplacementRadius, defaults.LargeGateRandomDisplacementRadius, 0);
+				this.SmallGateRandomDisplacementRadius = ValidateFloatValue(this.SmallGateRandomDisplacementRadius, defaults.SmallGateRandomDisplacementRadius, 0);
 			}
 		}
 
@@ -819,6 +883,21 @@ namespace IOTA.ModularJumpGates
 			/// </summary>
 			public readonly bool ConfineUntetheredSpread;
 
+			/// <summary>
+			/// The multiplier used to determine a small grid jump gate's explosion size given gate power
+			/// </summary>
+			public readonly float ExplosionDamageMultiplier;
+
+			/// <summary>
+			/// The percentage of large grid gate drives that must be disabled before the gate detonates
+			/// </summary>
+			public readonly float ExplosionDamagePercent;
+
+			/// <summary>
+			/// The radius (in meters) in which a large grid jump gate can randomly displace its jumped entities when untethered
+			/// </summary>
+			public readonly float GateRandomDisplacementRadius;
+
 			internal LocalJumpGateConfiguration(MyJumpGate jump_gate, JumpGateConfigurationSchema config)
 			{
 				if (jump_gate == null) throw new ArgumentException("The specified jump gate is null");
@@ -835,6 +914,9 @@ namespace IOTA.ModularJumpGates
 					this.GateKilometerOffsetPerUnitG = config.LargeGateKilometerOffsetPerUnitG;
 					this.GateDistanceScaleExponent = config.LargeGateDistanceScaleExponent;
 					this.ChargingDriveEffectorForceN = config.ChargingLargeDriveEffectorForceN;
+					this.ExplosionDamageMultiplier = config.LargeGateExplosionDamageMultiplier;
+					this.ExplosionDamagePercent = config.LargeGateExplosionDamagePercent;
+					this.GateRandomDisplacementRadius = config.LargeGateRandomDisplacementRadius;
 				}
 				else
 				{
@@ -849,6 +931,9 @@ namespace IOTA.ModularJumpGates
 					this.GateKilometerOffsetPerUnitG = config.SmallGateKilometerOffsetPerUnitG;
 					this.GateDistanceScaleExponent = config.SmallGateDistanceScaleExponent;
 					this.ChargingDriveEffectorForceN = config.ChargingSmallDriveEffectorForceN;
+					this.ExplosionDamageMultiplier = config.SmallGateExplosionDamageMultiplier;
+					this.ExplosionDamagePercent = config.SmallGateExplosionDamagePercent;
+					this.GateRandomDisplacementRadius = config.SmallGateRandomDisplacementRadius;
 				}
 
 				this.IgnoreDockedGrids = config.IgnoreDockedGrids;
@@ -873,6 +958,9 @@ namespace IOTA.ModularJumpGates
 					["ChargingDriveEffectorForceN"] = this.ChargingDriveEffectorForceN,
 					["MaxConcurrentJumps"] = this.MaxConcurrentJumps,
 					["ConfineUntetheredSpread"] = this.ConfineUntetheredSpread,
+					["ExplosionDamageMultiplier"] = this.ExplosionDamageMultiplier,
+					["ExplosionDamagePercent"] = this.ExplosionDamagePercent,
+					["GateRandomDisplacementRadius"] = this.GateRandomDisplacementRadius,
 				};
 			}
 		}
@@ -923,6 +1011,24 @@ namespace IOTA.ModularJumpGates
 		#endregion
 
 		#region Private Static Methods
+		/// <summary>
+		/// Checks if the specified float value is valid
+		/// </summary>
+		/// <param name="value">The value to check</param>
+		/// <param name="default_">The default value if the provided value is invalid</param>
+		/// <param name="min">The minimum allowed value or null if no minimum</param>
+		/// <param name="max">The maximum allowed value or null if no maximum</param>
+		/// <param name="allow_nan">Whether to allow a NaN value</param>
+		/// <param name="allow_inf">Whether to allow an infinite value</param>
+		/// <returns>The specified value, clamped within min and max if applicable, or the default if not valid</returns>
+		private static float ValidateFloatValue(float value, float default_, float? min = null, float? max = null, bool allow_nan = false, bool allow_inf = false)
+		{
+			if (!allow_nan && float.IsNaN(value) || !allow_inf && float.IsInfinity(value)) value = default_;
+			if (min != null) value = Math.Max(min.Value, value);
+			if (max != null) value = Math.Min(max.Value, value);
+			return value;
+		}
+
 		/// <summary>
 		/// Checks if the specified double value is valid
 		/// </summary>

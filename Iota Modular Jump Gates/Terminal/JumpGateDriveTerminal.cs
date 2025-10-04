@@ -22,7 +22,7 @@ namespace IOTA.ModularJumpGates.Terminal
 
 		}
 
-		public static void Load(IMyModContext context)
+		public static void Load()
 		{
 			if (MyJumpGateDriveTerminal.IsLoaded) return;
 			MyJumpGateDriveTerminal.IsLoaded = true;

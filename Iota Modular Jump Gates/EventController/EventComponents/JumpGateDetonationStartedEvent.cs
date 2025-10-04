@@ -3,15 +3,14 @@ using Sandbox.ModAPI;
 using System.Collections.Generic;
 using VRage;
 using VRage.Game.Components;
-using VRage.Game.Entity;
 using VRage.Utils;
 
 namespace IOTA.ModularJumpGates.EventController.EventComponents
 {
-	[MyComponentBuilder(typeof(MyObjectBuilder_EventJumpGateEntityEntered))]
-	[MyComponentType(typeof(JumpGateEntityEnteredEvent))]
+	[MyComponentBuilder(typeof(MyObjectBuilder_EventJumpGateDetonationStarted))]
+	[MyComponentType(typeof(JumpGateDetonationStartedEvent))]
 	[MyEntityDependencyType(typeof(IMyEventControllerBlock))]
-	internal class JumpGateEntityEnteredEvent : MyJumpGateEventBase<bool>
+	internal class JumpGateDetonationStartedEvent : MyJumpGateEventBase<bool>
 	{
 		private bool? TriggerIndex = null;
 		private readonly List<MyJumpGate> ListeningJumpGates = new List<MyJumpGate>();
@@ -20,21 +19,22 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 		public override bool IsConditionSelectionUsed => false;
 		public override bool IsBlocksListUsed => false;
 		public override bool IsJumpGateSelectionUsed => true;
-		public override long UniqueSelectionId => 0x7FFFFFFFFFFFFFFC;
-		public override MyStringId EventDisplayName => MyStringId.GetOrCompute(MyTexts.GetString("DisplayName_JumpGateEntityEnteredEvent"));
-		public override string ComponentTypeDebugString => nameof(JumpGateEntityEnteredEvent);
-		public override string YesNoToolbarYesDescription => MyTexts.GetString("DisplayName_JumpGateEntityEnteredEvent_YesDescription");
-		public override string YesNoToolbarNoDescription => MyTexts.GetString("DisplayName_JumpGateEntityEnteredEvent_NoDescription");
+		public override long UniqueSelectionId => 0x7FFFFFFFFFFFFFEF;
+		public override MyStringId EventDisplayName => MyStringId.GetOrCompute(MyTexts.GetString("DisplayName_JumpGateDetonationStartedEvent"));
+		public override string ComponentTypeDebugString => nameof(JumpGateDetonationStartedEvent);
+		public override string YesNoToolbarYesDescription => MyTexts.GetString("DisplayName_JumpGateDetonationStartedEvent_YesDescription");
+		public override string YesNoToolbarNoDescription => MyTexts.GetString("DisplayName_JumpGateDetonationStartedEvent_NoDescription");
 
-		private void OnEntityCollision(MyJumpGate caller, MyEntity entity, bool is_entering)
+		private void OnDetonationStart(MyJumpGate caller, float timer)
 		{
 			if (!this.IsListeningToJumpGate(caller))
 			{
-				caller.EntityEnterered -= this.OnEntityCollision;
+				caller.OnGateDetonation -= this.OnDetonationStart;
 				return;
 			}
 			
-			this.TriggerIndex = is_entering;
+			this.TriggerIndex = timer != -1;
+			MyAPIGateway.Utilities.ShowNotification($"TIMER={timer}, TRIGGERDEX={this.TriggerIndex}");
 		}
 
 		protected override void Update()
@@ -69,7 +69,7 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 		{
 			base.OnJumpGateAdded(jump_gate);
 			if (!MyNetworkInterface.IsServerLike || this.ListeningJumpGates.Contains(jump_gate)) return;
-			jump_gate.EntityEnterered += this.OnEntityCollision;
+			jump_gate.OnGateDetonation += this.OnDetonationStart;
 			this.ListeningJumpGates.Add(jump_gate);
 		}
 
@@ -77,25 +77,25 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 		{
 			base.OnJumpGateAdded(jump_gate);
 			if (!MyNetworkInterface.IsServerLike) return;
-			jump_gate.EntityEnterered -= this.OnEntityCollision;
+			jump_gate.OnGateDetonation -= this.OnDetonationStart;
 			this.ListeningJumpGates.Remove(jump_gate);
 		}
 
 		protected override void OnSelected()
 		{
 			base.OnSelected();
-			foreach (MyJumpGate listener in this.ListeningJumpGates) listener.EntityEnterered += this.OnEntityCollision;
+			foreach (MyJumpGate listener in this.ListeningJumpGates) listener.OnGateDetonation += this.OnDetonationStart;
 		}
 
 		protected override void OnUnselected()
 		{
 			base.OnUnselected();
-			foreach (MyJumpGate listener in this.ListeningJumpGates) listener.EntityEnterered -= this.OnEntityCollision;
+			foreach (MyJumpGate listener in this.ListeningJumpGates) listener.OnGateDetonation -= this.OnDetonationStart;
 		}
 
 		public override void CreateTerminalInterfaceControls<T>()
 		{
-			base.CreateTerminalControls<T, JumpGateEntityEnteredEvent>();
+			base.CreateTerminalControls<T, JumpGateDetonationStartedEvent>();
 		}
 	}
 }

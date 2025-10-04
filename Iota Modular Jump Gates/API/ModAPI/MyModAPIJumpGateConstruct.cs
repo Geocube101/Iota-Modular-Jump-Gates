@@ -236,7 +236,7 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		/// <returns>Whether target grid is comm linked</returns>
 		public bool IsConstructCommLinked(MyModAPIJumpGateConstruct grid)
 		{
-			return (grid == null) ? false : this.GetMethod<Func<long, bool>>("IsConstructCommLinked")(grid.CubeGridID);
+			return grid != null && this.GetMethod<Func<long, bool>>("IsConstructCommLinked")(grid.CubeGridID);
 		}
 
 		/// <summary>

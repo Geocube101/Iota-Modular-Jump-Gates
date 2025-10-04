@@ -1,4 +1,5 @@
-﻿using Sandbox.ModAPI;
+﻿using IOTA.ModularJumpGates.API.ModAPI.Util;
+using Sandbox.ModAPI;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -8,7 +9,6 @@ using VRage.Game;
 using VRage.Game.Entity;
 using VRage.Game.ModAPI;
 using VRageMath;
-using IOTA.ModularJumpGates.API.ModAPI.Util;
 
 namespace IOTA.ModularJumpGates.API.ModAPI
 {
@@ -40,6 +40,16 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		/// If true, will be synced on next component tick
 		/// </summary>
 		public bool IsDirty => this.GetAttribute<bool>("IsDirty");
+
+		/// <summary>
+		/// Whether this jump gate is actively detonating
+		/// </summary>
+		public bool IsDetonating => this.GetAttribute<bool>("IsDetonating");
+
+		/// <summary>
+		/// This jump gate's self destruct time in game ticks or -1 if not armed
+		/// </summary>
+		public int ManualDetonationTimeout => this.GetAttribute<int>("ManualDetonationTimeout");
 
 		/// <summary>
 		/// The status of this gate
@@ -350,6 +360,33 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		}
 
 		/// <summary>
+		/// Detonates this gate
+		/// </summary>
+		/// <param name="initiator">The drive at which to start the explosion chain</param>
+		public void Detonate(MyModAPIJumpGateDrive initiator = null)
+		{
+			this.GetMethod<Action<long>>("Detonate")(initiator?.BlockID ?? -1);
+		}
+
+		/// <summary>
+		/// Sets the detonation timer on this gate
+		/// </summary>
+		/// <param name="timeout">The time in seconds until detonation</param>
+		/// <exception cref="ArgumentException">If timeout is negative</exception>
+		public void QueueDetonation(float timeout)
+		{
+			this.GetMethod<Action<float>>("QueueDetonation")(timeout);
+		}
+
+		/// <summary>
+		/// Clears a pending detonation
+		/// </summary>
+		public void ClearDetonation()
+		{
+			this.GetMethod<Action>("ClearDetonation")();
+		}
+
+		/// <summary>
 		/// Registers a callback for when an entity enters or exits this gate's jump space<br />
 		/// Callback parameters:<br />
 		///  ... MyJumpGate - The colliding gate
@@ -361,7 +398,7 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		{
 			Action<Dictionary<string, object>, MyEntity, bool> _callback = (gate, entity, is_entering) => callback(MyModAPIJumpGate.New(gate), entity, is_entering);
 			this.EntityEnteredCallbacks[callback] = _callback;
-			this.GetMethod<Action<Action<Dictionary<string, object>, MyEntity, bool>>>("OnEntityCollision")(_callback);
+			this.GetMethod<Action<Action<Dictionary<string, object>, MyEntity, bool>>>("OnDetonationStart")(_callback);
 		}
 
 		/// <summary>
@@ -483,6 +520,11 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		public override bool Equals(object other)
 		{
 			return other != null && other is MyModAPIJumpGate && base.Equals(((MyModAPIJumpGate) other).Guid);
+		}
+
+		public override int GetHashCode()
+		{
+			return base.GetHashCode();
 		}
 
 		/// <summary>

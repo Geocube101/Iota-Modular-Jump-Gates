@@ -1974,7 +1974,7 @@ namespace IOTA.ModularJumpGates
 			bool fixed_ = false;
 
 			if (null_orientation && is_anti_node && target_gate != null) target_gate.GetWorldMatrix(out matrix, true, true);
-			else if (null_orientation) gate.GetWorldMatrix(out matrix, true, (is_anti_node) ? target_gate != null : true);
+			else if (null_orientation) gate.GetWorldMatrix(out matrix, true, !is_anti_node || target_gate != null);
 			else if (particle_orientation.ParticleOrientation == ParticleOrientationEnum.GATE_TRUE_ENDPOINT_NORMAL) gate.GetWorldMatrix(out matrix, true, false);
 			else if (particle_orientation.ParticleOrientation == ParticleOrientationEnum.GATE_DRIVE_NORMAL) gate.GetWorldMatrix(out matrix, false, false);
 			else if (particle_orientation.ParticleOrientation == ParticleOrientationEnum.ANTIGATE_DRIVE_NORMAL) matrix = (target_gate?.GetWorldMatrix(true, true) ?? gate.GetWorldMatrix(true, false));
@@ -3338,7 +3338,7 @@ namespace IOTA.ModularJumpGates
 			{
 				this.Stopped = false;
 				ushort local_tick = (ushort) (current_tick - this.ParticleDefinition.StartTime);
-				Vector3D rotations_per_second = Vector3D.Zero;
+				Vector3D rotations_per_second;
 				Vector3D offset = this.ParticleDefinition.ParticleOffset;
 				Vector4D rps, off;
 				AnimationExpression.ExpressionArguments arguments = new AnimationExpression.ExpressionArguments(current_tick, this.Duration, this.JumpGate, this.TargetGate, drives, entities, ref endpoint, entity_lock_pos ?? this_entity?.WorldMatrix.Translation, this_entity);
@@ -3724,7 +3724,7 @@ namespace IOTA.ModularJumpGates
 				
 				if (frequency == 0)
 				{
-					beam_width = Math.Abs(beam_width = AttributeAnimationDef.GetAnimatedDoubleValue(this.BeamPulseDefinition.Animations?.ParticleRadiusAnimation, arguments, this.BeamPulseDefinition.BeamWidth));
+					beam_width = Math.Abs(AttributeAnimationDef.GetAnimatedDoubleValue(this.BeamPulseDefinition.Animations?.ParticleRadiusAnimation, arguments, this.BeamPulseDefinition.BeamWidth));
 					beam_color = AttributeAnimationDef.GetAnimatedVectorValue(this.BeamPulseDefinition.Animations?.ParticleColorAnimation, arguments, this.BeamPulseDefinition.BeamColor.ToVector4D()) * new Vector4D(new Vector3D(Math.Abs(this.BeamPulseDefinition.BeamBrightness)), 1) * (this.ControllerSettings?.JumpEffectAnimationColorShift().ToVector4D() ?? Vector4D.One);
 					MySimpleObjectDraw.DrawLine(beam_start, beam_end, this.BeamMaterial, ref beam_color, (float) beam_width);
 					return;
@@ -4124,7 +4124,7 @@ namespace IOTA.ModularJumpGates
 		/// <summary>
 		/// The targeted jump gate
 		/// </summary>
-		private MyJumpGate TargetJumpGate;
+		private readonly MyJumpGate TargetJumpGate;
 
 		private List<MyEntity> LockedEntities = new List<MyEntity>();
 
@@ -5131,7 +5131,7 @@ namespace IOTA.ModularJumpGates
 		/// <summary>
 		/// The jump type of the calling gate
 		/// </summary>
-		private MyJumpTypeEnum GateJumpType;
+		private readonly MyJumpTypeEnum GateJumpType;
 
 		/// <summary>
 		/// The "jumping/charging" animation
@@ -5248,7 +5248,7 @@ namespace IOTA.ModularJumpGates
 		/// <param name="controller_settings">The controller settings used to activate said jump gate</param>
 		/// <param name="endpoint">The jump gate's targeted endpoint</param>
 		/// <param name="jump_type">The jump type of the calling gate</param>
-		public MyJumpGateAnimation(AnimationDef def, string full_name, IMyPlayer caller, MyJumpGate jump_gate, MyJumpGate target_gate, MyJumpGateController.MyControllerBlockSettingsStruct controller_settings, MyJumpGateController.MyControllerBlockSettingsStruct target_controller_settings, ref Vector3D endpoint, MyJumpTypeEnum jump_type)
+		public MyJumpGateAnimation(AnimationDef def, string full_name, IMyPlayer caller, MyJumpGate jump_gate, MyJumpGate target_gate, MyJumpGateController.MyControllerBlockSettingsStruct controller_settings, MyJumpGateController.MyControllerBlockSettingsStruct target_controller_settings, MyJumpTypeEnum jump_type)
 		{
 			this.GateJumpingAnimationDef = def.JumpingAnimationDef;
 			this.GateJumpedAnimationDef = def.JumpedAnimationDef;
@@ -5476,8 +5476,8 @@ namespace IOTA.ModularJumpGates
 		public bool Stopped(short index)
 		{
 			if (index < 0 || index > 2) throw new InvalidOperationException("Invalid animation index");
-			ushort current_tick = 0;
-			ushort duration = 0;
+			ushort current_tick;
+			ushort duration;
 			bool stopped = true;
 
 			switch (index)
@@ -5739,11 +5739,11 @@ namespace IOTA.ModularJumpGates
 		/// <param name="controller_settings">The controller settings used to activate the jump gate</param>
 		/// <param name="endpoint">The jump gate's targeted endpoint</param>
 		/// <returns>The playabe animation wrapper</returns>
-		public static MyJumpGateAnimation GetAnimation(string name, IMyPlayer caller, MyJumpGate jump_gate, MyJumpGate target_gate, MyJumpGateController.MyControllerBlockSettingsStruct controller_settings, MyJumpGateController.MyControllerBlockSettingsStruct target_controller_settings, ref Vector3D endpoint, MyJumpTypeEnum jump_type)
+		public static MyJumpGateAnimation GetAnimation(string name, IMyPlayer caller, MyJumpGate jump_gate, MyJumpGate target_gate, MyJumpGateController.MyControllerBlockSettingsStruct controller_settings, MyJumpGateController.MyControllerBlockSettingsStruct target_controller_settings, MyJumpTypeEnum jump_type)
 		{
 			AnimationDef animation_def = MyAnimationHandler.GetAnimationDef(name, jump_gate);
 			if (animation_def == null || jump_gate == null || (!MyNetworkInterface.IsStandaloneMultiplayerClient && !jump_gate.IsValid())) return null;
-			return new MyJumpGateAnimation(animation_def, name, caller, jump_gate, target_gate, controller_settings, target_controller_settings, ref endpoint, jump_type);
+			return new MyJumpGateAnimation(animation_def, name, caller, jump_gate, target_gate, controller_settings, target_controller_settings, jump_type);
 		}
 		#endregion
 	}

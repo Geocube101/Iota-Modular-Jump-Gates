@@ -1,11 +1,13 @@
 ﻿using IOTA.ModularJumpGates.CubeBlock;
 using ProtoBuf;
+using Sandbox.Game;
 using Sandbox.Game.Entities;
 using Sandbox.ModAPI;
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
+using VRage.Game;
 using VRage.Game.Entity;
 using VRage.Game.ModAPI;
 using VRageMath;
@@ -441,11 +443,9 @@ namespace IOTA.ModularJumpGates.Util
 				{
 					MyEntity entity = this.BatchedEntities[i];
 					if (!(entity is MyCubeGrid) || (construct = MyJumpGateModSession.Instance.GetUnclosedJumpGateGrid(entity.EntityId)) == null) continue;
-					//foreach (MyDoorBase door in construct.GetAllFatBlocksOfType<MyDoorBase>()) door.UpdateOnceBeforeFrame();
-					//foreach (MyCubeBlock block in construct.GetAllFatBlocksOfType<MyCubeBlock>()) block.UpdateOnceBeforeFrame();
 				}
 
-				if (this.Callback != null) this.Callback(this);
+				this.Callback?.Invoke(this);
 				this.IsComplete = true;
 			}
 
@@ -710,8 +710,7 @@ namespace IOTA.ModularJumpGates.Util
 			if (this.MarkedForClose || this.SoundEmitter == null) return;
 			this.MarkedForClose = true;
 			if (!immediate) return;
-			if (this.SoundEmitter.IsPlaying) this.SoundEmitter.StopSound(true);
-			this.SoundEmitter.Cleanup();
+			if (this.SoundEmitter.IsPlaying) this.SoundEmitter.StopSound(true, true, true);
 			this.SoundEmitter = null;
 			this.Closed = true;
 		}
@@ -1133,6 +1132,497 @@ namespace IOTA.ModularJumpGates.Util
 		/// </summary>
 		[ProtoMember(4)]
 		public List<ulong> ConstructOwnerIDs;
+		#endregion
+	}
+
+	/// <summary>
+	/// Class holding information on a gate detonation sequence
+	/// </summary>
+	internal sealed class GateDetonationInfo
+	{
+		[ProtoContract(UseProtoMembersOnly = true)]
+		public struct SerializedGateDetonationInfo
+		{
+			[ProtoMember(1)]
+			public readonly bool IsAtmospheric;
+			[ProtoMember(2)]
+			public readonly float DamageMultiplier;
+			[ProtoMember(3)]
+			public readonly double MaxExplosionRange;
+			[ProtoMember(4)]
+			public readonly double MaxExplosionForce;
+			[ProtoMember(5)]
+			public readonly double MaxExplosionDamage;
+			[ProtoMember(6)]
+			public readonly double GateSizeM;
+			[ProtoMember(7)]
+			public readonly JumpGateUUID JumpGate;
+			[ProtoMember(8)]
+			public readonly Vector3D Position;
+			[ProtoMember(9)]
+			public readonly Vector3D Down;
+			[ProtoMember(10)]
+			public readonly DateTime DetonationTime;
+
+			public SerializedGateDetonationInfo(GateDetonationInfo info)
+			{
+				float atmosphere = (info.NearestPlanet == null || !info.NearestPlanet.HasAtmosphere) ? 0 : Math.Max(0, 1 - ((float) Vector3D.Distance(info.Position, info.NearestPlanet.WorldMatrix.Translation) / info.NearestPlanet.AtmosphereRadius));
+				this.IsAtmospheric = atmosphere >= 0.25;
+				this.DamageMultiplier = info.DamageMultiplier;
+				this.MaxExplosionRange = info.MaxExplosionRange;
+				this.MaxExplosionForce = info.MaxExplosionForce;
+				this.MaxExplosionDamage = info.MaxExplosionDamage;
+				this.GateSizeM = info.GateSizeM;
+				this.JumpGate = info.JumpGate;
+				this.Position = info.Position;
+				this.Down = (info.NearestPlanet == null) ? Vector3D.Down : (info.NearestPlanet.WorldMatrix.Translation - info.Position).Normalized();
+				this.DetonationTime = info.DetonationTime;
+			}
+		}
+
+		#region Private Variables
+		/// <summary>
+		/// Ticks since detonation started<br />
+		/// Used to update grids
+		/// </summary>
+		private ushort DetonationTick = 0;
+
+		private readonly Random TimeRandomGenerator = new Random();
+
+		/// <summary>
+		/// The damage multiplier for the explosion
+		/// </summary>
+		private readonly float DamageMultiplier;
+
+		/// <summary>
+		/// Maximum calculated explosion range in meters
+		/// </summary>
+		private double MaxExplosionRange;
+
+		/// <summary>
+		/// Maximum calculated explosion force in newtons
+		/// </summary>
+		private double MaxExplosionForce;
+
+		/// <summary>
+		/// Maximum calculated explosion damage
+		/// </summary>
+		private double MaxExplosionDamage;
+
+		/// <summary>
+		/// The gravity component used for explosion attractor
+		/// </summary>
+		private IMyNaturalGravityComponent NaturalGravity;
+
+		/// <summary>
+		/// Time since detonation start
+		/// </summary>
+		private DateTime DetonationTime;
+
+		/// <summary>
+		/// Current sound emitter for the detonation
+		/// </summary>
+		private MyEntity3DSoundEmitter SoundEmitter;
+
+		/// <summary>
+		/// Current particle effect for the detonation
+		/// </summary>
+		private MyParticleEffect DetonationEffect;
+
+		/// <summary>
+		/// Nearest planet to the detonation or null
+		/// </summary>
+		private MyPlanet NearestPlanet;
+
+		/// <summary>
+		/// The next drive to detonate
+		/// </summary>
+		private MyJumpGateDrive TargetDrive;
+
+		/// <summary>
+		/// All entities hit by this explosion
+		/// </summary>
+		private readonly List<long> HitEntities = new List<long>();
+
+		/// <summary>
+		/// All online players
+		/// </summary>
+		private readonly List<IMyPlayer> AllPlayers = new List<IMyPlayer>();
+
+		/// <summary>
+		/// The list of drives in the jump gate
+		/// </summary>
+		private readonly ImmutableList<MyJumpGateDrive> JumpGateDrives;
+		#endregion
+
+		#region Public Variables
+		/// <summary>
+		/// The total stored power in the gate's drives in megawatts
+		/// </summary>
+		public readonly double TotalGatePowerMW;
+
+		/// <summary>
+		/// The gate's jump space radius in meters
+		/// </summary>
+		public readonly double GateSizeM;
+
+		/// <summary>
+		/// The source jump gate's UUID
+		/// </summary>
+		public readonly JumpGateUUID JumpGate;
+
+		/// <summary>
+		/// The world coordinate of the jump gate's jump node
+		/// </summary>
+		public readonly Vector3D Position;
+
+		/// <summary>
+		/// The time at which the next explosion tick should occur
+		/// </summary>
+		public DateTime NextTickTime { get; private set; }
+		#endregion
+
+		#region Logic
+		/// <summary>
+		/// Creates a new gate detonation sequence
+		/// </summary>
+		/// <param name="jump_gate">The target jump gate</param>
+		/// <param name="initiator">The drive starting the explosion chain</param>
+		public GateDetonationInfo(MyJumpGate jump_gate, MyJumpGateDrive initiator = null)
+		{
+			this.JumpGateDrives = jump_gate.GetJumpGateDrives().ToImmutableList();
+			this.TotalGatePowerMW = this.JumpGateDrives.Sum((drive) => drive.StoredChargeMW);
+			this.GateSizeM = jump_gate.JumpEllipse.Radii.Max();
+			this.JumpGate = JumpGateUUID.FromJumpGate(jump_gate);
+			this.Position = jump_gate.WorldJumpNode;
+			this.NextTickTime = DateTime.UtcNow;
+			this.TargetDrive = initiator ?? this.JumpGateDrives.FirstOrDefault((drive) => !drive.TerminalBlock.MarkedForClose);
+			this.NaturalGravity = MyAPIGateway.GravityProviderSystem.AddNaturalGravity(this.Position, 0, this.GateSizeM * 2, 2, 10);
+			this.DamageMultiplier = jump_gate.JumpGateConfiguration.ExplosionDamageMultiplier;
+			Logger.Log($"Queued jump gate detonation event: {this.JumpGate.GetJumpGateGrid()}::{this.JumpGate.GetJumpGate()}");
+		}
+
+		/// <summary>
+		/// Creates a new gate detonation sequence from serialized information
+		/// </summary>
+		/// <param name="serialized">The serialized detonation information</param>
+		public GateDetonationInfo(ref SerializedGateDetonationInfo serialized)
+		{
+			this.JumpGate = serialized.JumpGate;
+			this.GateSizeM = serialized.GateSizeM;
+			this.DamageMultiplier = serialized.DamageMultiplier;
+			this.MaxExplosionRange = serialized.MaxExplosionRange;
+			this.MaxExplosionForce = serialized.MaxExplosionForce;
+			this.MaxExplosionDamage = serialized.MaxExplosionDamage;
+			this.Position = serialized.Position;
+			this.DetonationTime = serialized.DetonationTime;
+			this.TargetDrive = null;
+			this.NaturalGravity = null;
+
+			MatrixD effect_matrix;
+			float distance_scale;
+			Vector3D position = this.CalculateParticleClientPosition(MyAPIGateway.Session.Camera.Position, out distance_scale);
+
+			if (serialized.IsAtmospheric)
+			{
+				Vector3D up = -serialized.Down;
+				Vector3D pup = Vector3D.CalculatePerpendicularVector(up);
+				MatrixD.CreateWorld(ref position, ref up, ref pup, out effect_matrix);
+			}
+			else effect_matrix = MyJumpGateModSession.WorldMatrix;
+
+			MyAPIGateway.Players.GetPlayers(this.AllPlayers);
+			if (!MyParticlesManager.TryCreateParticleEffect((serialized.IsAtmospheric) ? "IOTA.JumpGateDetonation.Atmosphere" : "IOTA.JumpGateDetonation.Space", ref effect_matrix, ref position, uint.MaxValue, out this.DetonationEffect)) return;
+			this.DetonationEffect.UserScale = distance_scale;
+			this.DetonationTime = DateTime.UtcNow;
+		}
+
+		/// <summary>
+		/// Sets up this detonation sequence's node detonation
+		/// </summary>
+		/// <returns>True if ticking should not continue</returns>
+		private bool SetupGateWorldNodeDetonation()
+		{
+			MyJumpGateModSession.Instance.GetJumpGate(this.JumpGate)?.Dispose();
+			double combined_effector = Math.Sqrt(this.TotalGatePowerMW) * this.GateSizeM * 2 * this.DamageMultiplier;
+			this.NearestPlanet = MyGamePruningStructure.GetClosestPlanet(this.Position);
+			BoundingSphereD explosion_sphere = new BoundingSphereD(this.Position, MathHelper.Clamp(combined_effector / 5, 0, 500));
+			MyExplosionTypeEnum explosion_type;
+			MyVoxelBase voxel = this.NearestPlanet;
+			BoundingSphereD voxel_sphere = new BoundingSphereD(explosion_sphere.Center, Math.Min(explosion_sphere.Radius / 2, 500));
+			this.MaxExplosionRange = combined_effector * 8;
+			this.MaxExplosionDamage = combined_effector * 512;
+			this.MaxExplosionForce = combined_effector * 128;
+			Logger.Debug($"Jump gate CORE detonation event: {this.JumpGate.GetJumpGateGrid()}::{this.JumpGate.GetJumpGate()}, COMBINED_EFFECTOR={combined_effector}, RANGE={this.MaxExplosionRange}, DAMAGE={this.MaxExplosionDamage}, FORCE={this.MaxExplosionForce}", 3);
+
+			if (this.NearestPlanet == null)
+			{
+				List<MyVoxelBase> voxels = new List<MyVoxelBase>();
+				MyGamePruningStructure.GetAllVoxelMapsInSphere(ref voxel_sphere, voxels);
+				voxel = voxels.OrderBy((vox) => Vector3D.DistanceSquared(vox.PositionComp.GetPosition(), voxel_sphere.Center)).FirstOrDefault();
+			}
+
+			if (voxel != null)
+			{
+				IMyVoxelShapeSphere sphere = MyAPIGateway.Session.VoxelMaps.GetSphereVoxelHand();
+				sphere.Center = voxel_sphere.Center;
+				sphere.Radius = (float) voxel_sphere.Radius;
+				MyAPIGateway.Session.VoxelMaps.CutOutShape(voxel, sphere);
+			}
+
+			if (explosion_sphere.Radius < 15) explosion_type = MyExplosionTypeEnum.WARHEAD_EXPLOSION_02;
+			else if (explosion_sphere.Radius < 30) explosion_type = MyExplosionTypeEnum.WARHEAD_EXPLOSION_15;
+			else if (explosion_sphere.Radius < 50) explosion_type = MyExplosionTypeEnum.WARHEAD_EXPLOSION_30;
+			else if (explosion_sphere.Radius < 125) explosion_type = MyExplosionTypeEnum.WARHEAD_EXPLOSION_50;
+			else
+			{
+				if (!MyNetworkInterface.IsDedicatedMultiplayerServer)
+				{
+					float atmosphere = (this.NearestPlanet == null || !this.NearestPlanet.HasAtmosphere) ? 0 : Math.Max(0, 1 - ((float) Vector3D.Distance(this.Position, this.NearestPlanet.WorldMatrix.Translation) / this.NearestPlanet.AtmosphereRadius));
+					MatrixD effect_matrix;
+					float distance_scale;
+					Vector3D position = this.CalculateParticleClientPosition(MyAPIGateway.Session.Camera.Position, out distance_scale);
+
+					if (this.NearestPlanet == null) effect_matrix = MyJumpGateModSession.WorldMatrix;
+					else
+					{
+						Vector3D up = (this.NearestPlanet.PositionComp.GetPosition() - this.Position).Normalized();
+						Vector3D pup = Vector3D.CalculatePerpendicularVector(up);
+						MatrixD.CreateWorld(ref position, ref up, ref pup, out effect_matrix);
+					}
+
+					if (!MyParticlesManager.TryCreateParticleEffect((atmosphere < 0.25f) ? "IOTA.JumpGateDetonation.Space" : "IOTA.JumpGateDetonation.Atmosphere", ref effect_matrix, ref position, uint.MaxValue, out this.DetonationEffect)) return true;
+					this.DetonationEffect.UserScale = distance_scale;
+					this.DetonationTime = DateTime.UtcNow;
+					MyAPIGateway.Players.GetPlayers(this.AllPlayers);
+				}
+
+				if (MyJumpGateModSession.Network.Registered)
+				{
+					MyNetworkInterface.Packet packet = new MyNetworkInterface.Packet {
+						PacketType = MyPacketTypeEnum.GATE_DETONATION,
+						Broadcast = true,
+						TargetID = 0,
+					};
+					packet.Payload(this.ToSerialized());
+					packet.Send();
+				}
+
+				return false;
+			}
+
+			MyExplosionInfo explosion = new MyExplosionInfo
+			{
+				PlayerDamage = 0f,
+				Damage = 100000 * this.DamageMultiplier,
+				ExplosionType = explosion_type,
+				ExplosionSphere = explosion_sphere,
+				LifespanMiliseconds = 5000,
+				ParticleScale = 5f,
+				Direction = (this.NearestPlanet == null) ? Vector3.Down : (Vector3) (this.NearestPlanet.WorldMatrix.Translation - this.Position).Normalized(),
+				ExplosionFlags = MyExplosionFlags.CREATE_DEBRIS | MyExplosionFlags.APPLY_FORCE_AND_DAMAGE | MyExplosionFlags.CREATE_DECALS | MyExplosionFlags.CREATE_PARTICLE_EFFECT | MyExplosionFlags.CREATE_SHRAPNELS | MyExplosionFlags.APPLY_DEFORMATION,
+				PlaySound = true,
+				ObjectsRemoveDelayInMiliseconds = 60,
+				StrengthImpulse = 1f,
+				IgnoreFriendlyFireSetting = true,
+			};
+
+			MyExplosions.AddExplosion(ref explosion, true);
+			return true;
+		}
+
+		/// <summary>
+		/// Ticks this detonation sequence's node detonation
+		/// </summary>
+		/// <returns>True if sequence is complete</returns>
+		private bool TickGateWorldNodeDetonation()
+		{
+			double explosion_speed = 10e3;
+			double sphere_distance = explosion_speed * (DateTime.UtcNow - this.DetonationTime).TotalSeconds;
+			bool complete = sphere_distance > this.MaxExplosionRange * 1.1;
+			
+			if (MyNetworkInterface.IsServerLike)
+			{
+				foreach (IMyPlayer player in this.AllPlayers)
+				{
+					double player_distance;
+					Vector3D character_position;
+					if (player.Character == null || player.Character.Parent != null || this.HitEntities.Contains(player.Character.EntityId) || (player_distance = Vector3D.Distance(character_position = player.Character.GetPosition(), this.Position)) > sphere_distance) continue;
+					double ratio = EasingFunctor.GetEaseResult(player_distance / this.MaxExplosionRange, EasingTypeEnum.EASE_OUT, EasingCurveEnum.QUADRATIC);
+					if (ratio > 1) continue;
+					double player_damage = MathHelper.Lerp(this.MaxExplosionDamage, 0, ratio);
+					double player_force = MathHelper.Lerp(this.MaxExplosionForce, 0, ratio);
+					Vector3D force_dir = (character_position - this.Position).Normalized() * player_force;
+					Logger.Debug($"PLAYER_HIT: ID={player.Character.EntityId}, NAME={player.DisplayName}, DISTANCE={player_distance}, RATIO={ratio}, FORCE={player_force}, DAMAGE={player_damage}", 5);
+					player.Character.DoDamage((float) player_damage, MyDamageType.Explosion, true);
+					player.Character.Physics?.AddForce(VRage.Game.Components.MyPhysicsForceType.APPLY_WORLD_FORCE, force_dir, null, null);
+					this.HitEntities.Add(player.Character.EntityId);
+				}
+
+				if (this.DetonationTick++ % 30 == 0)
+				{
+					foreach (MyJumpGateConstruct construct in MyJumpGateModSession.Instance.GetAllJumpGateGrids())
+					{
+						if (construct.MarkClosed) continue;
+						
+						foreach (IMyCubeGrid grid in construct.GetCubeGrids())
+						{
+							double grid_distance;
+							Vector3D grid_position;
+							if (grid.MarkedForClose || this.HitEntities.Contains(grid.EntityId) || (grid_distance = Vector3D.Distance(grid_position = grid.WorldVolume.Center, this.Position)) > sphere_distance) continue;
+							double ratio = EasingFunctor.GetEaseResult(grid_distance / this.MaxExplosionRange, EasingTypeEnum.EASE_OUT, EasingCurveEnum.QUADRATIC);
+							if (ratio > 1) continue;
+							double grid_force = MathHelper.Lerp(this.MaxExplosionForce, 0, ratio);
+							Vector3D force_dir = (grid_position - this.Position).Normalized();
+							Vector3D force = force_dir * grid_force;
+							grid.IsStatic = false;
+							Logger.Debug($"GRID_HIT: ID={grid.EntityId}, NAME={grid.DisplayName}, DISTANCE={grid_distance}, RATIO={ratio}, FORCE={grid_force}", 5);
+
+							if (grid_force > 750e3)
+							{
+								Vector3D impact_position = grid_position - force_dir * grid.WorldVolume.Radius;
+								BoundingSphereD impact_sphere = new BoundingSphereD(impact_position, grid.WorldVolume.Radius);
+
+								MyExplosionInfo explosion = new MyExplosionInfo {
+									PlayerDamage = 0,
+									Damage = (float) grid_force,
+									ExplosionType = MyExplosionTypeEnum.WARHEAD_EXPLOSION_50,
+									ExplosionSphere = new BoundingSphereD(grid_position, grid.WorldVolume.Radius * 2),
+									LifespanMiliseconds = 5000,
+									ParticleScale = (float) grid.WorldVolume.Radius,
+									Direction = force_dir,
+									VoxelExplosionCenter = grid_position,
+									ExplosionFlags = MyExplosionFlags.CREATE_DEBRIS | MyExplosionFlags.APPLY_FORCE_AND_DAMAGE | MyExplosionFlags.CREATE_DECALS | MyExplosionFlags.CREATE_PARTICLE_EFFECT | MyExplosionFlags.CREATE_SHRAPNELS | MyExplosionFlags.APPLY_DEFORMATION | MyExplosionFlags.CREATE_PARTICLE_DEBRIS,
+									VoxelCutoutScale = 0,
+									PlaySound = true,
+									ObjectsRemoveDelayInMiliseconds = 500,
+									ShouldDetonateAmmo = true,
+									OriginEntity = grid.EntityId,
+									OwnerEntity = (MyCubeGrid) grid,
+									HitEntity = (MyCubeGrid) grid,
+								};
+
+								grid.GetBlocksInsideSphere(ref impact_sphere).ForEach(grid.RemoveDestroyedBlock);
+								MyExplosions.AddExplosion(ref explosion);
+							}
+							else grid.Physics?.AddForce(VRage.Game.Components.MyPhysicsForceType.APPLY_WORLD_FORCE, force, null, null);
+
+							this.HitEntities.Add(grid.EntityId);
+						}
+					}
+				}
+			}
+			
+			Vector3D? camera_position = MyAPIGateway.Session.Camera?.Position;
+			if (camera_position == null || this.DetonationEffect == null) return complete;
+			float distance_scale;
+			Vector3D particle_position = this.CalculateParticleClientPosition(camera_position.Value, out distance_scale);
+			this.DetonationEffect.SetTranslation(ref particle_position);
+			this.DetonationEffect.UserScale = distance_scale;
+			if (Vector3D.Distance(camera_position.Value, this.Position) > sphere_distance) return false;
+			
+			if (this.SoundEmitter == null)
+			{
+				this.SoundEmitter = new MyEntity3DSoundEmitter(null);
+				this.SoundEmitter.SetPosition(this.Position);
+				this.SoundEmitter.VolumeMultiplier = 1.25f;
+				this.SoundEmitter.CustomMaxDistance = (float) this.MaxExplosionRange * 2;
+				this.SoundEmitter.PlaySound(new MySoundPair("IOTA.DetonationEffects.SpaceExplosion"), alwaysHearOnRealistic: true, force3D: true, forcePlaySound: true);
+				return false;
+			}
+			else if (!this.SoundEmitter.IsPlaying && this.DetonationEffect.IsEmittingStopped)
+			{
+				this.SoundEmitter.Cleanup();
+				this.DetonationEffect.Stop();
+				this.SoundEmitter = null;
+				this.DetonationEffect = null;
+				return !MyNetworkInterface.IsServerLike || complete;
+			}
+			else return complete;
+		}
+
+		/// <summary>
+		/// Calculates the necessary position to place particle within client sync distance<br />
+		/// Particle will be scaled based on distance
+		/// </summary>
+		/// <param name="camera_pos">Current camera position</param>
+		/// <param name="scale">Resulting calculated particle scale</param>
+		/// <returns>New particle position</returns>
+		private Vector3D CalculateParticleClientPosition(Vector3D camera_pos, out float scale)
+		{
+			double scalar = this.GateSizeM * 4;
+			Vector3D dir = this.Position - camera_pos;
+			int sync = MyAPIGateway.Session.SessionSettings.SyncDistance;
+			double distance = dir.Length();
+
+			if (distance <= sync)
+			{
+				scale = (float) Math.Round(scalar, 4);
+				return this.Position;
+			}
+
+			scalar /= Math.Sqrt(distance);
+			scale = (float) Math.Round(scalar, 4);
+			return camera_pos + dir.Normalized() * sync * 0.95;
+		}
+
+		/// <summary>
+		/// Ticks this detonation sequence
+		/// </summary>
+		/// <returns>True if sequence is complete</returns>
+		public bool TickDestroyGate()
+		{
+			if (DateTime.UtcNow < this.NextTickTime) return false;
+
+			if (this.TargetDrive == null)
+			{
+				if (this.NaturalGravity != null)
+				{
+					MyAPIGateway.GravityProviderSystem.RemoveNaturalGravity(this.NaturalGravity);
+					this.NaturalGravity = null;
+					if (this.SetupGateWorldNodeDetonation()) return true;
+				}
+
+				return this.TickGateWorldNodeDetonation();
+			}
+			else if (MyNetworkInterface.IsStandaloneMultiplayerClient) return true;
+
+			MyExplosionInfo explosion = new MyExplosionInfo {
+				PlayerDamage = 0,
+				Damage = (float) Math.Max(this.TargetDrive.StoredChargeMW * 10000, 10000),
+				ExplosionType = MyExplosionTypeEnum.WARHEAD_EXPLOSION_15,
+				ExplosionSphere = new BoundingSphereD(this.TargetDrive.WorldMatrix.Translation, this.TargetDrive.ModelBoundingBoxSize.Max() * 2.5),
+				LifespanMiliseconds = 5000,
+				ParticleScale = 2f,
+				Direction = Vector3.Down,
+				VoxelExplosionCenter = this.TargetDrive.WorldMatrix.Translation,
+				ExplosionFlags = MyExplosionFlags.CREATE_DEBRIS | MyExplosionFlags.APPLY_FORCE_AND_DAMAGE | MyExplosionFlags.CREATE_DECALS | MyExplosionFlags.CREATE_PARTICLE_EFFECT | MyExplosionFlags.CREATE_SHRAPNELS | MyExplosionFlags.APPLY_DEFORMATION | MyExplosionFlags.CREATE_PARTICLE_DEBRIS,
+				VoxelCutoutScale = 0,
+				PlaySound = true,
+				ApplyForceAndDamage = true,
+				ObjectsRemoveDelayInMiliseconds = 500,
+				ShouldDetonateAmmo = true,
+				OriginEntity = this.TargetDrive.TerminalBlock?.EntityId ?? 0,
+				OwnerEntity = (MyEntity) this.TargetDrive.TerminalBlock,
+				HitEntity = (MyEntity) this.TargetDrive.TerminalBlock,
+			};
+
+			MyExplosions.AddExplosion(ref explosion);
+			this.TargetDrive.TerminalBlock?.CubeGrid.RemoveBlock(this.TargetDrive.TerminalBlock.SlimBlock, true);
+			this.TargetDrive.TerminalBlock?.Close();
+			this.TargetDrive = this.JumpGateDrives.FirstOrDefault((drive) => !drive.TerminalBlock.MarkedForClose);
+			int milliseconds = (this.TargetDrive == null) ? 3000 : this.TimeRandomGenerator.Next(250, 1000);
+			this.NextTickTime = DateTime.UtcNow.AddMilliseconds(milliseconds);
+			return false;
+		}
+
+		/// <summary>
+		/// </summary>
+		/// <returns>This detonation information serialized</returns>
+		public SerializedGateDetonationInfo ToSerialized()
+		{
+			return new SerializedGateDetonationInfo(this);
+		}
 		#endregion
 	}
 }

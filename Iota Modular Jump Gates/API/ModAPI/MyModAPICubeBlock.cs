@@ -198,7 +198,7 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 			[ProtoMember(15)]
 			private MyAPIJumpGateWaypoint SelectedWaypoint_V = null;
 			[ProtoMember(16)]
-			private List<long> BlacklistedEntities = new List<long>();
+			private readonly List<long> BlacklistedEntities = new List<long>();
 			[ProtoMember(17)]
 			private float MinimumEntityMass_V = 0;
 			[ProtoMember(18)]
@@ -356,7 +356,7 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 						["VectorNormal"] = this.VectorNormal_V,
 						["EffectColorShift"] = this.EffectColorShift_V,
 						["SelectedWaypoint"] = selected_waypoint,
-						["BlacklistedEntities"] = this.BlacklistedEntities?.ToList() ?? new List<long>(),
+						["BlacklistedEntities"] = this.BlacklistedEntities,
 						["MinimumEntityMass"] = this.MinimumEntityMass_V,
 						["MaximumEntityMass"] = this.MaximumEntityMass_V,
 						["MinimumCubeGridSize"] = this.MinimumCubeGridSize_V,

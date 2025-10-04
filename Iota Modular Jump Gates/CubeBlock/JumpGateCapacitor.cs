@@ -192,10 +192,11 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			}
 
 			this.ResourceSource = new MyResourceSourceComponent();
-			MyResourceSourceInfo source_info = new MyResourceSourceInfo();
-			source_info.ResourceTypeId = MyResourceDistributorComponent.ElectricityId;
-			source_info.IsInfiniteCapacity = true;
-			source_info.ProductionToCapacityMultiplier = 1;
+			MyResourceSourceInfo source_info = new MyResourceSourceInfo() {
+				ResourceTypeId = MyResourceDistributorComponent.ElectricityId,
+				IsInfiniteCapacity = true,
+				ProductionToCapacityMultiplier = 1,
+			};
 			this.ResourceSource.Init(VRage.Utils.MyStringHash.GetOrCompute("Battery"), source_info);
 			this.TerminalBlock.Components.Add(this.ResourceSource);
 			this.ResourceSource.Enabled = false;
@@ -216,7 +217,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		public override void UpdateOnceBeforeFrame()
 		{
 			base.UpdateOnceBeforeFrame();
-			if (!MyJumpGateCapacitorTerminal.IsLoaded) MyJumpGateCapacitorTerminal.Load(this.ModContext);
+			if (!MyJumpGateCapacitorTerminal.IsLoaded) MyJumpGateCapacitorTerminal.Load();
 		}
 
 		/// <summary>

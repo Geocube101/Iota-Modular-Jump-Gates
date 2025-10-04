@@ -27,7 +27,7 @@ namespace IOTA.ModularJumpGates.Terminal
 
 		}
 
-		public static void Load(IMyModContext context)
+		public static void Load()
 		{
 			if (MyCubeBlockTerminal.IsLoaded) return;
 			MyCubeBlockTerminal.IsLoaded = true;

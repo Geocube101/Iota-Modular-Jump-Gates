@@ -19,10 +19,21 @@ namespace IOTA.ModularJumpGates.Terminal
 {
 	internal static class MyJumpGateControllerTerminal
 	{
+		public enum MyTerminalSection : byte {
+			SCREENS,
+			JUMP_GATE,
+			ENTITY_FILTER,
+			AUTO_ACTIVATION,
+			COMM_LINK,
+			DEBUG,
+			EXTRA,
+			DETONATION
+		}
+
 		private static List<IMyTerminalControl> TerminalControls = new List<IMyTerminalControl>();
-		private static Dictionary<IMyTerminalControlOnOffSwitch, bool> SectionSwitches = new Dictionary<IMyTerminalControlOnOffSwitch, bool>();
 
 		public static bool IsLoaded { get; private set; } = false;
+		public static MyTerminalSection TerminalSection = MyTerminalSection.JUMP_GATE;
 		public static string MODID_PREFIX { get; private set; } = MyJumpGateModSession.MODID + ".JumpGateController.";
 
 		private static ConcurrentDictionary<long, string> ControllerSearchInputs = new ConcurrentDictionary<long, string>();
@@ -34,6 +45,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				IMyTerminalControlSeparator separator_hr = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSeparator, IMyUpgradeModule>("");
 				separator_hr.Visible = MyJumpGateModSession.IsBlockJumpGateController;
 				separator_hr.SupportsMultipleBlocks = true;
+				MyJumpGateControllerTerminal.TerminalControls.Add(separator_hr);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(separator_hr);
 			}
 
@@ -43,6 +55,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				settings_label_lb.Label = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_Label"));
 				settings_label_lb.Visible = MyJumpGateModSession.IsBlockJumpGateController;
 				settings_label_lb.SupportsMultipleBlocks = true;
+				MyJumpGateControllerTerminal.TerminalControls.Add(settings_label_lb);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(settings_label_lb);
 			}
 
@@ -161,6 +174,56 @@ namespace IOTA.ModularJumpGates.Terminal
 				MyJumpGateControllerTerminal.TerminalControls.Add(jump_gate_name_tb);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(jump_gate_name_tb);
 			}
+
+			// Spacer
+			{
+				IMyTerminalControlLabel spacer_lb = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlLabel, IMyUpgradeModule>(MODID_PREFIX + "JumpGateSectionsSwitchTopSpacer");
+				spacer_lb.Label = MyStringId.GetOrCompute(" ");
+				spacer_lb.Visible = MyJumpGateModSession.IsBlockJumpGateController;
+				spacer_lb.SupportsMultipleBlocks = true;
+				MyJumpGateControllerTerminal.TerminalControls.Add(spacer_lb);
+				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(spacer_lb);
+			}
+
+			// Combobox [Terminal Section]
+			{
+				IMyTerminalControlCombobox terminal_section_cb = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlCombobox, IMyUpgradeModule>(MODID_PREFIX + "ControllerTerminalSection");
+				terminal_section_cb.Title = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_TerminalSection"));
+				terminal_section_cb.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_TerminalSectionTooltip"));
+				terminal_section_cb.SupportsMultipleBlocks = true;
+				terminal_section_cb.Visible = MyJumpGateModSession.IsBlockJumpGateController;	
+				terminal_section_cb.Enabled = (block) => true;
+				terminal_section_cb.ComboBoxContent = (content) => {
+					foreach (MyTerminalSection section in Enum.GetValues(typeof(MyTerminalSection)))
+					{
+						if (section == MyTerminalSection.DETONATION && !MyJumpGateModSession.Configuration.JumpGateConfiguration.EnableGateExplosions) continue;
+
+						content.Add(new MyTerminalControlComboBoxItem() {
+							Key = (byte) section,
+							Value = MyStringId.GetOrCompute($"ControllerTerminalSection_{section}"),
+						});
+					}
+				};
+				terminal_section_cb.Getter = (block) => (MyJumpGateModSession.IsBlockJumpGateController(block)) ? (byte) MyJumpGateControllerTerminal.TerminalSection : 0;
+				terminal_section_cb.Setter = (block, value) => {
+					if (!terminal_section_cb.Enabled(block)) return;
+					MyJumpGateControllerTerminal.TerminalSection = (MyTerminalSection) value;
+					MyAPIGateway.Gui.ChangeInteractedEntity(block, false);
+					MyJumpGateModSession.Instance.RedrawAllTerminalControls();
+				};
+				MyJumpGateControllerTerminal.TerminalControls.Add(terminal_section_cb);
+				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(terminal_section_cb);
+			}
+
+			// Spacer
+			{
+				IMyTerminalControlLabel spacer_lb = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlLabel, IMyUpgradeModule>(MODID_PREFIX + "JumpGateSectionsSwitchBottomSpacer");
+				spacer_lb.Label = MyStringId.GetOrCompute(" ");
+				spacer_lb.Visible = MyJumpGateModSession.IsBlockJumpGateController;
+				spacer_lb.SupportsMultipleBlocks = true;
+				MyJumpGateControllerTerminal.TerminalControls.Add(spacer_lb);
+				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(spacer_lb);
+			}
 		}
 
 		private static void SetupTerminalGateControls()
@@ -168,19 +231,19 @@ namespace IOTA.ModularJumpGates.Terminal
 			// Separator
 			{
 				IMyTerminalControlSeparator separator_hr = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSeparator, IMyUpgradeModule>("");
-				separator_hr.Visible = MyJumpGateModSession.IsBlockJumpGateController;
+				separator_hr.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.JUMP_GATE;
 				separator_hr.SupportsMultipleBlocks = true;
+				MyJumpGateControllerTerminal.TerminalControls.Add(separator_hr);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(separator_hr);
 			}
-
-			IMyTerminalControlOnOffSwitch section_switch = MyJumpGateControllerTerminal.GenerateSectionSwitch("JumpGate", true);
 
 			// Label
 			{
 				IMyTerminalControlLabel settings_label_lb = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlLabel, IMyUpgradeModule>(MODID_PREFIX + "ControllerSetupLabel");
 				settings_label_lb.Label = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_JumpGateSetup"));
-				settings_label_lb.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.SectionSwitches[section_switch];
+				settings_label_lb.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.JUMP_GATE;
 				settings_label_lb.SupportsMultipleBlocks = true;
+				MyJumpGateControllerTerminal.TerminalControls.Add(settings_label_lb);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(settings_label_lb);
 			}
 
@@ -189,7 +252,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				IMyTerminalControlTextbox search_waypoint_tb = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlTextbox, IMyUpgradeModule>(MODID_PREFIX + "SearchControllerWaypoint");
 				search_waypoint_tb.Title = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_SearchDestinationWaypoints"));
 				search_waypoint_tb.SupportsMultipleBlocks = false;
-				search_waypoint_tb.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.SectionSwitches[section_switch];
+				search_waypoint_tb.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.JUMP_GATE;
 				search_waypoint_tb.Enabled = (block) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					MyJumpGate jump_gate = controller?.AttachedJumpGate();
@@ -208,7 +271,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				IMyTerminalControlListbox choose_waypoint_lb = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlListbox, IMyUpgradeModule>(MODID_PREFIX + "ControllerWaypoint");
 				choose_waypoint_lb.Title = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_DestinationWaypoints"));
 				choose_waypoint_lb.SupportsMultipleBlocks = false;
-				choose_waypoint_lb.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.SectionSwitches[section_switch];
+				choose_waypoint_lb.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.JUMP_GATE;
 				choose_waypoint_lb.Enabled = (block) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					MyJumpGate jump_gate = controller?.AttachedJumpGate();
@@ -309,7 +372,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				IMyTerminalControlListbox choose_animation_lb = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlListbox, IMyUpgradeModule>(MODID_PREFIX + "ControllerAnimation");
 				choose_animation_lb.Title = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_JumpGateAnimation"));
 				choose_animation_lb.SupportsMultipleBlocks = true;
-				choose_animation_lb.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.SectionSwitches[section_switch];
+				choose_animation_lb.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.JUMP_GATE;
 				choose_animation_lb.Enabled = (block) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					MyJumpGate jump_gate = controller?.AttachedJumpGate();
@@ -364,8 +427,9 @@ namespace IOTA.ModularJumpGates.Terminal
 			// Separator
 			{
 				IMyTerminalControlSeparator separator_hr = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSeparator, IMyUpgradeModule>("");
-				separator_hr.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.SectionSwitches[section_switch];
+				separator_hr.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.JUMP_GATE;
 				separator_hr.SupportsMultipleBlocks = true;
+				MyJumpGateControllerTerminal.TerminalControls.Add(separator_hr);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(separator_hr);
 			}
 
@@ -375,7 +439,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				do_allow_inbound.Title = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_AllowInbound"));
 				do_allow_inbound.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_AllowInbound_Tooltip"));
 				do_allow_inbound.SupportsMultipleBlocks = true;
-				do_allow_inbound.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.SectionSwitches[section_switch];
+				do_allow_inbound.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.JUMP_GATE;
 				do_allow_inbound.Enabled = (block) => {
 					MyAllowedRemoteSettings allowed_settings = MyJumpGateModSession.GetBlockAsJumpGateController(block)?.ConnectedRemoteAntenna?.BlockSettings.AllowedRemoteSettings ?? MyAllowedRemoteSettings.ALL;
 					return(allowed_settings & MyAllowedRemoteSettings.ROUTING) != 0;
@@ -397,7 +461,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				do_allow_outbound.Title = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_AllowOutbound"));
 				do_allow_outbound.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_AllowOutbound_Tooltip"));
 				do_allow_outbound.SupportsMultipleBlocks = true;
-				do_allow_outbound.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.SectionSwitches[section_switch];
+				do_allow_outbound.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.JUMP_GATE;
 				do_allow_outbound.Enabled = (block) => {
 					MyAllowedRemoteSettings allowed_settings = MyJumpGateModSession.GetBlockAsJumpGateController(block)?.ConnectedRemoteAntenna?.BlockSettings.AllowedRemoteSettings ?? MyAllowedRemoteSettings.ALL;
 					return (allowed_settings & MyAllowedRemoteSettings.ROUTING) != 0;
@@ -417,8 +481,9 @@ namespace IOTA.ModularJumpGates.Terminal
 			{
 				IMyTerminalControlLabel spacer_lb = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlLabel, IMyUpgradeModule>(MODID_PREFIX + "JumpGateSectionBottomSpacer");
 				spacer_lb.Label = MyStringId.GetOrCompute(" ");
-				spacer_lb.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.SectionSwitches[section_switch];
+				spacer_lb.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.JUMP_GATE;
 				spacer_lb.SupportsMultipleBlocks = true;
+				MyJumpGateControllerTerminal.TerminalControls.Add(spacer_lb);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(spacer_lb);
 			}
 		}
@@ -428,19 +493,19 @@ namespace IOTA.ModularJumpGates.Terminal
 			// Separator
 			{
 				IMyTerminalControlSeparator separator_hr = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSeparator, IMyUpgradeModule>("");
-				separator_hr.Visible = MyJumpGateModSession.IsBlockJumpGateController;
+				separator_hr.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.ENTITY_FILTER;
 				separator_hr.SupportsMultipleBlocks = true;
+				MyJumpGateControllerTerminal.TerminalControls.Add(separator_hr);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(separator_hr);
 			}
-
-			IMyTerminalControlOnOffSwitch section_switch = MyJumpGateControllerTerminal.GenerateSectionSwitch("EntityFilter", false);
 			
 			// Label
 			{
 				IMyTerminalControlLabel beacon_label_lb = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlLabel, IMyUpgradeModule>(MODID_PREFIX + "ControllerFilterSettingsLabel");
 				beacon_label_lb.Label = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_EntityFilterSettings"));
-				beacon_label_lb.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.SectionSwitches[section_switch];
+				beacon_label_lb.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.ENTITY_FILTER;
 				beacon_label_lb.SupportsMultipleBlocks = true;
+				MyJumpGateControllerTerminal.TerminalControls.Add(beacon_label_lb);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(beacon_label_lb);
 			}
 
@@ -449,7 +514,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				IMyTerminalControlListbox choose_allowed_entities_lb = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlListbox, IMyUpgradeModule>(MODID_PREFIX + "AllowedEntities");
 				choose_allowed_entities_lb.Title = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_AllowedEntities"));
 				choose_allowed_entities_lb.SupportsMultipleBlocks = false;
-				choose_allowed_entities_lb.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.SectionSwitches[section_switch];
+				choose_allowed_entities_lb.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.ENTITY_FILTER;
 				choose_allowed_entities_lb.Enabled = (block) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					MyJumpGate jump_gate = controller?.AttachedJumpGate();
@@ -499,7 +564,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				allowed_entity_mass_min.Title = MyStringId.GetOrCompute($"{MyTexts.GetString("Terminal_JumpGateController_MinimumMass")} (Kg):");
 				allowed_entity_mass_min.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_FilterMinimumMass_Tooltip"));
 				allowed_entity_mass_min.SupportsMultipleBlocks = true;
-				allowed_entity_mass_min.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.SectionSwitches[section_switch];
+				allowed_entity_mass_min.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.ENTITY_FILTER;
 				allowed_entity_mass_min.Enabled = (block) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					MyAllowedRemoteSettings allowed_settings = controller?.ConnectedRemoteAntenna?.BlockSettings.AllowedRemoteSettings ?? MyAllowedRemoteSettings.ALL;
@@ -526,7 +591,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				allowed_entity_mass_max.Title = MyStringId.GetOrCompute($"{MyTexts.GetString("Terminal_JumpGateController_MaximumMass")} (Kg):");
 				allowed_entity_mass_max.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_FilterMaximumMass_Tooltip"));
 				allowed_entity_mass_max.SupportsMultipleBlocks = true;
-				allowed_entity_mass_max.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.SectionSwitches[section_switch];
+				allowed_entity_mass_max.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.ENTITY_FILTER;
 				allowed_entity_mass_max.Enabled = (block) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					MyAllowedRemoteSettings allowed_settings = controller?.ConnectedRemoteAntenna?.BlockSettings.AllowedRemoteSettings ?? MyAllowedRemoteSettings.ALL;
@@ -556,7 +621,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				allowed_cubegrid_size_min.Title = MyStringId.GetOrCompute($"{MyTexts.GetString("Terminal_JumpGateController_MinimumSize")}:");
 				allowed_cubegrid_size_min.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_MinimumSize_Tooltip"));
 				allowed_cubegrid_size_min.SupportsMultipleBlocks = true;
-				allowed_cubegrid_size_min.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.SectionSwitches[section_switch];
+				allowed_cubegrid_size_min.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.ENTITY_FILTER;
 				allowed_cubegrid_size_min.Enabled = (block) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					MyAllowedRemoteSettings allowed_settings = controller?.ConnectedRemoteAntenna?.BlockSettings.AllowedRemoteSettings ?? MyAllowedRemoteSettings.ALL;
@@ -588,7 +653,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				allowed_cubegrid_size_max.Title = MyStringId.GetOrCompute($"{MyTexts.GetString("Terminal_JumpGateController_MaximumSize")}:");
 				allowed_cubegrid_size_max.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_MaximumSize_Tooltip"));
 				allowed_cubegrid_size_max.SupportsMultipleBlocks = true;
-				allowed_cubegrid_size_max.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.SectionSwitches[section_switch];
+				allowed_cubegrid_size_max.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.ENTITY_FILTER;
 				allowed_cubegrid_size_max.Enabled = (block) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					MyAllowedRemoteSettings allowed_settings = controller?.ConnectedRemoteAntenna?.BlockSettings.AllowedRemoteSettings ?? MyAllowedRemoteSettings.ALL;
@@ -621,8 +686,9 @@ namespace IOTA.ModularJumpGates.Terminal
 			{
 				IMyTerminalControlLabel spacer_lb = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlLabel, IMyUpgradeModule>(MODID_PREFIX + "EntityFilterSectionBottomSpacer");
 				spacer_lb.Label = MyStringId.GetOrCompute(" ");
-				spacer_lb.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.SectionSwitches[section_switch];
+				spacer_lb.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.ENTITY_FILTER;
 				spacer_lb.SupportsMultipleBlocks = true;
+				MyJumpGateControllerTerminal.TerminalControls.Add(spacer_lb);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(spacer_lb);
 			}
 		}
@@ -632,19 +698,19 @@ namespace IOTA.ModularJumpGates.Terminal
 			// Separator
 			{
 				IMyTerminalControlSeparator separator_hr = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSeparator, IMyUpgradeModule>("");
-				separator_hr.Visible = MyJumpGateModSession.IsBlockJumpGateController;
+				separator_hr.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.AUTO_ACTIVATION;
 				separator_hr.SupportsMultipleBlocks = true;
+				MyJumpGateControllerTerminal.TerminalControls.Add(separator_hr);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(separator_hr);
 			}
-
-			IMyTerminalControlOnOffSwitch section_switch = MyJumpGateControllerTerminal.GenerateSectionSwitch("AutoJump", false);
 
 			// Label
 			{
 				IMyTerminalControlLabel settings_label_lb = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlLabel, IMyUpgradeModule>(MODID_PREFIX + "ControllerAutoJumpSettingsLabel");
 				settings_label_lb.Label = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_AutoJumpSettings"));
-				settings_label_lb.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.SectionSwitches[section_switch];
+				settings_label_lb.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.AUTO_ACTIVATION;
 				settings_label_lb.SupportsMultipleBlocks = true;
+				MyJumpGateControllerTerminal.TerminalControls.Add(settings_label_lb);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(settings_label_lb);
 			}
 
@@ -654,7 +720,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				do_auto_activate.Title = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_EnableAutoActivation"));
 				do_auto_activate.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_EnableAutoActivation_Tooltip"));
 				do_auto_activate.SupportsMultipleBlocks = true;
-				do_auto_activate.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.SectionSwitches[section_switch];
+				do_auto_activate.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.AUTO_ACTIVATION;
 				do_auto_activate.Enabled = (block) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					MyAllowedRemoteSettings allowed_settings = controller?.ConnectedRemoteAntenna?.BlockSettings.AllowedRemoteSettings ?? MyAllowedRemoteSettings.ALL;
@@ -680,7 +746,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				autoactivate_mass_min.Title = MyStringId.GetOrCompute($"{MyTexts.GetString("Terminal_JumpGateController_MinimumMass")} (Kg):");
 				autoactivate_mass_min.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_AutoActivateMinimumMass_Tooltip"));
 				autoactivate_mass_min.SupportsMultipleBlocks = true;
-				autoactivate_mass_min.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.SectionSwitches[section_switch];
+				autoactivate_mass_min.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.AUTO_ACTIVATION;
 				autoactivate_mass_min.Enabled = (block) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					MyAllowedRemoteSettings allowed_settings = controller?.ConnectedRemoteAntenna?.BlockSettings.AllowedRemoteSettings ?? MyAllowedRemoteSettings.ALL;
@@ -708,7 +774,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				autoactivate_mass_max.Title = MyStringId.GetOrCompute($"{MyTexts.GetString("Terminal_JumpGateController_MaximumMass")} (Kg):");
 				autoactivate_mass_max.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_AutoActivateMaximumMass_Tooltip"));
 				autoactivate_mass_max.SupportsMultipleBlocks = true;
-				autoactivate_mass_max.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.SectionSwitches[section_switch];
+				autoactivate_mass_max.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.AUTO_ACTIVATION;
 				autoactivate_mass_max.Enabled = (block) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					MyAllowedRemoteSettings allowed_settings = controller?.ConnectedRemoteAntenna?.BlockSettings.AllowedRemoteSettings ?? MyAllowedRemoteSettings.ALL;
@@ -739,7 +805,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				autoactivate_power_min.Title = MyStringId.GetOrCompute($"{MyTexts.GetString("Terminal_JumpGateController_MinimumPower")} (MW):");
 				autoactivate_power_min.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_MinimumPower_Tooltip"));
 				autoactivate_power_min.SupportsMultipleBlocks = true;
-				autoactivate_power_min.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.SectionSwitches[section_switch];
+				autoactivate_power_min.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.AUTO_ACTIVATION;
 				autoactivate_power_min.Enabled = (block) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					MyAllowedRemoteSettings allowed_settings = controller?.ConnectedRemoteAntenna?.BlockSettings.AllowedRemoteSettings ?? MyAllowedRemoteSettings.ALL;
@@ -767,7 +833,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				auto_activate_power_max.Title = MyStringId.GetOrCompute($"{MyTexts.GetString("Terminal_JumpGateController_MaximumPower")} (MW):");
 				auto_activate_power_max.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_MaximumPower_Tooltip"));
 				auto_activate_power_max.SupportsMultipleBlocks = true;
-				auto_activate_power_max.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.SectionSwitches[section_switch];
+				auto_activate_power_max.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.AUTO_ACTIVATION;
 				auto_activate_power_max.Enabled = (block) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					MyAllowedRemoteSettings allowed_settings = controller?.ConnectedRemoteAntenna?.BlockSettings.AllowedRemoteSettings ?? MyAllowedRemoteSettings.ALL;
@@ -798,7 +864,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				autoactivate_delay.Title = MyStringId.GetOrCompute($"{MyTexts.GetString("Terminal_JumpGateController_ActivationDelay")} (s)");
 				autoactivate_delay.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_ActivationDelay_Tooltip"));
 				autoactivate_delay.SupportsMultipleBlocks = true;
-				autoactivate_delay.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.SectionSwitches[section_switch];
+				autoactivate_delay.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.AUTO_ACTIVATION;
 				autoactivate_delay.Enabled = (block) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					MyAllowedRemoteSettings allowed_settings = controller?.ConnectedRemoteAntenna?.BlockSettings.AllowedRemoteSettings ?? MyAllowedRemoteSettings.ALL;
@@ -827,8 +893,9 @@ namespace IOTA.ModularJumpGates.Terminal
 			{
 				IMyTerminalControlLabel spacer_lb = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlLabel, IMyUpgradeModule>(MODID_PREFIX + "AutoJumpSectionBottomSpacer");
 				spacer_lb.Label = MyStringId.GetOrCompute(" ");
-				spacer_lb.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.SectionSwitches[section_switch];
+				spacer_lb.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.AUTO_ACTIVATION;
 				spacer_lb.SupportsMultipleBlocks = true;
+				MyJumpGateControllerTerminal.TerminalControls.Add(spacer_lb);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(spacer_lb);
 			}
 		}
@@ -838,12 +905,11 @@ namespace IOTA.ModularJumpGates.Terminal
 			// Separator
 			{
 				IMyTerminalControlSeparator separator_hr = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSeparator, IMyUpgradeModule>("");
-				separator_hr.Visible = MyJumpGateModSession.IsBlockJumpGateController;
+				separator_hr.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.COMM_LINK;
 				separator_hr.SupportsMultipleBlocks = true;
+				MyJumpGateControllerTerminal.TerminalControls.Add(separator_hr);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(separator_hr);
 			}
-
-			IMyTerminalControlOnOffSwitch section_switch = MyJumpGateControllerTerminal.GenerateSectionSwitch("CommLink", false);
 
 			// Label
 			{
@@ -851,9 +917,10 @@ namespace IOTA.ModularJumpGates.Terminal
 				commlink_label_lb.Label = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_CommLinkSettings"));
 				commlink_label_lb.Visible = (block) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
-					return controller != null && controller.IsWorking && controller.JumpGateGrid != null && !controller.JumpGateGrid.Closed && controller.JumpGateGrid.HasCommLink() && MyJumpGateControllerTerminal.SectionSwitches[section_switch];
+					return controller != null && controller.IsWorking && controller.JumpGateGrid != null && !controller.JumpGateGrid.Closed && controller.JumpGateGrid.HasCommLink() && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.COMM_LINK;
 				};
 				commlink_label_lb.SupportsMultipleBlocks = true;
+				MyJumpGateControllerTerminal.TerminalControls.Add(commlink_label_lb);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(commlink_label_lb);
 			}
 
@@ -865,7 +932,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				do_display_owned.SupportsMultipleBlocks = true;
 				do_display_owned.Visible = (block) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
-					return controller != null && controller.IsWorking && controller.JumpGateGrid != null && !controller.JumpGateGrid.Closed && controller.JumpGateGrid.HasCommLink() && MyJumpGateControllerTerminal.SectionSwitches[section_switch];
+					return controller != null && controller.IsWorking && controller.JumpGateGrid != null && !controller.JumpGateGrid.Closed && controller.JumpGateGrid.HasCommLink() && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.COMM_LINK;
 				};
 				do_display_owned.Enabled = (block) => {
 					MyAllowedRemoteSettings allowed_settings = MyJumpGateModSession.GetBlockAsJumpGateController(block)?.ConnectedRemoteAntenna?.BlockSettings.AllowedRemoteSettings ?? MyAllowedRemoteSettings.ALL;
@@ -890,7 +957,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				do_display_friendly.SupportsMultipleBlocks = true;
 				do_display_friendly.Visible = (block) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
-					return controller != null && controller.IsWorking && controller.JumpGateGrid != null && !controller.JumpGateGrid.Closed && controller.JumpGateGrid.HasCommLink() && MyJumpGateControllerTerminal.SectionSwitches[section_switch];
+					return controller != null && controller.IsWorking && controller.JumpGateGrid != null && !controller.JumpGateGrid.Closed && controller.JumpGateGrid.HasCommLink() && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.COMM_LINK;
 				};
 				do_display_friendly.Enabled = (block) => {
 					MyAllowedRemoteSettings allowed_settings = MyJumpGateModSession.GetBlockAsJumpGateController(block)?.ConnectedRemoteAntenna?.BlockSettings.AllowedRemoteSettings ?? MyAllowedRemoteSettings.ALL;
@@ -915,7 +982,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				do_display_neutral.SupportsMultipleBlocks = true;
 				do_display_neutral.Visible = (block) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
-					return controller != null && controller.IsWorking && controller.JumpGateGrid != null && !controller.JumpGateGrid.Closed && controller.JumpGateGrid.HasCommLink() && MyJumpGateControllerTerminal.SectionSwitches[section_switch];
+					return controller != null && controller.IsWorking && controller.JumpGateGrid != null && !controller.JumpGateGrid.Closed && controller.JumpGateGrid.HasCommLink() && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.COMM_LINK;
 				};
 				do_display_neutral.Enabled = (block) => {
 					MyAllowedRemoteSettings allowed_settings = MyJumpGateModSession.GetBlockAsJumpGateController(block)?.ConnectedRemoteAntenna?.BlockSettings.AllowedRemoteSettings ?? MyAllowedRemoteSettings.ALL;
@@ -940,7 +1007,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				do_display_enemy.SupportsMultipleBlocks = true;
 				do_display_enemy.Visible = (block) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
-					return controller != null && controller.IsWorking && controller.JumpGateGrid != null && !controller.JumpGateGrid.Closed && controller.JumpGateGrid.HasCommLink() && MyJumpGateControllerTerminal.SectionSwitches[section_switch];
+					return controller != null && controller.IsWorking && controller.JumpGateGrid != null && !controller.JumpGateGrid.Closed && controller.JumpGateGrid.HasCommLink() && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.COMM_LINK;
 				};
 				do_display_enemy.Enabled = (block) => {
 					MyAllowedRemoteSettings allowed_settings = MyJumpGateModSession.GetBlockAsJumpGateController(block)?.ConnectedRemoteAntenna?.BlockSettings.AllowedRemoteSettings ?? MyAllowedRemoteSettings.ALL;
@@ -965,7 +1032,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				do_display_unowned.SupportsMultipleBlocks = true;
 				do_display_unowned.Visible = (block) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
-					return controller != null && controller.IsWorking && controller.JumpGateGrid != null && !controller.JumpGateGrid.Closed && controller.JumpGateGrid.HasCommLink() && MyJumpGateControllerTerminal.SectionSwitches[section_switch];
+					return controller != null && controller.IsWorking && controller.JumpGateGrid != null && !controller.JumpGateGrid.Closed && controller.JumpGateGrid.HasCommLink() && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.COMM_LINK;
 				};
 				do_display_unowned.Enabled = (block) => {
 					MyAllowedRemoteSettings allowed_settings = MyJumpGateModSession.GetBlockAsJumpGateController(block)?.ConnectedRemoteAntenna?.BlockSettings.AllowedRemoteSettings ?? MyAllowedRemoteSettings.ALL;
@@ -986,8 +1053,9 @@ namespace IOTA.ModularJumpGates.Terminal
 			{
 				IMyTerminalControlLabel spacer_lb = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlLabel, IMyUpgradeModule>(MODID_PREFIX + "CommLinkSectionBottomSpacer");
 				spacer_lb.Label = MyStringId.GetOrCompute(" ");
-				spacer_lb.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.SectionSwitches[section_switch];
+				spacer_lb.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.COMM_LINK;
 				spacer_lb.SupportsMultipleBlocks = true;
+				MyJumpGateControllerTerminal.TerminalControls.Add(spacer_lb);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(spacer_lb);
 			}
 		}
@@ -997,19 +1065,19 @@ namespace IOTA.ModularJumpGates.Terminal
 			// Separator
 			{
 				IMyTerminalControlSeparator separator_hr = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSeparator, IMyUpgradeModule>("");
-				separator_hr.Visible = MyJumpGateModSession.IsBlockJumpGateController;
+				separator_hr.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.DEBUG;
 				separator_hr.SupportsMultipleBlocks = true;
+				MyJumpGateControllerTerminal.TerminalControls.Add(separator_hr);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(separator_hr);
 			}
-
-			IMyTerminalControlOnOffSwitch section_switch = MyJumpGateControllerTerminal.GenerateSectionSwitch("Debug", false);
 
 			// Label
 			{
 				IMyTerminalControlLabel settings_label_lb = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlLabel, IMyUpgradeModule>(MODID_PREFIX + "ControllerDebugSettingsLabel");
 				settings_label_lb.Label = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_DebugSettings"));
-				settings_label_lb.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.SectionSwitches[section_switch];
+				settings_label_lb.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.DEBUG;
 				settings_label_lb.SupportsMultipleBlocks = true;
+				MyJumpGateControllerTerminal.TerminalControls.Add(settings_label_lb);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(settings_label_lb);
 			}
 
@@ -1019,7 +1087,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				do_debug_mode_of.Title = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_DebugMode"));
 				do_debug_mode_of.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_DebugMode_Tooltip"));
 				do_debug_mode_of.SupportsMultipleBlocks = true;
-				do_debug_mode_of.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.SectionSwitches[section_switch];
+				do_debug_mode_of.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.DEBUG;
 				do_debug_mode_of.Enabled = (block) => true;
 				do_debug_mode_of.OnText = MyStringId.GetOrCompute(MyTexts.GetString("GeneralText_On"));
 				do_debug_mode_of.OffText = MyStringId.GetOrCompute(MyTexts.GetString("GeneralText_Off"));
@@ -1040,7 +1108,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				do_rescan_entities.Title = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_DebugRescanEntities"));
 				do_rescan_entities.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_DebugRescanEntities_Tooltip"));
 				do_rescan_entities.SupportsMultipleBlocks = true;
-				do_rescan_entities.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.SectionSwitches[section_switch];
+				do_rescan_entities.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.DEBUG;
 				do_rescan_entities.Enabled = (block) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					MyJumpGate jump_gate = controller?.AttachedJumpGate();
@@ -1063,7 +1131,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				do_staticify_construct.Title = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_ConvertToStation"));
 				do_staticify_construct.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_ConvertToStation_Tooltip"));
 				do_staticify_construct.SupportsMultipleBlocks = false;
-				do_staticify_construct.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.SectionSwitches[section_switch];
+				do_staticify_construct.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.DEBUG;
 				do_staticify_construct.Enabled = (block) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					return controller != null && controller.JumpGateGrid != null && !controller.JumpGateGrid.Closed && controller.JumpGateGrid.GetCubeGrids().Any((grid) => !grid.IsStatic && grid.Physics != null && grid.LinearVelocity.Length() < 1e-3 && grid.Physics.AngularVelocity.Length() < 1e-3);
@@ -1096,7 +1164,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				do_unstaticify_construct.Title = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_ConvertToShip"));
 				do_unstaticify_construct.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_ConvertToShip_Tooltip"));
 				do_unstaticify_construct.SupportsMultipleBlocks = false;
-				do_unstaticify_construct.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.SectionSwitches[section_switch];
+				do_unstaticify_construct.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.DEBUG;
 				do_unstaticify_construct.Enabled = (block) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					return controller != null && controller.JumpGateGrid != null && !controller.JumpGateGrid.Closed && controller.JumpGateGrid.GetCubeGrids().Any((grid) => grid.IsStatic);
@@ -1129,7 +1197,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				do_reconstruct_grid_gates.Title = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_ReconstructGates"));
 				do_reconstruct_grid_gates.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_ReconstructGates_Tooltip"));
 				do_reconstruct_grid_gates.SupportsMultipleBlocks = false;
-				do_reconstruct_grid_gates.Visible = (block) => MyAPIGateway.Session.IsUserAdmin(MyAPIGateway.Multiplayer.MyId) && MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.SectionSwitches[section_switch];
+				do_reconstruct_grid_gates.Visible = (block) => MyAPIGateway.Session.IsUserAdmin(MyAPIGateway.Multiplayer.MyId) && MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.DEBUG;
 				do_reconstruct_grid_gates.Enabled = (block) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					return controller != null && MyJumpGateModSession.Instance.DebugMode && controller.JumpGateGrid != null && !controller.JumpGateGrid.IsSuspended && !controller.JumpGateGrid.Closed;
@@ -1160,7 +1228,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				do_reset_client_grids.Title = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_ForceGridsUpdate"));
 				do_reset_client_grids.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_ForceGridsUpdate_Tooltip"));
 				do_reset_client_grids.SupportsMultipleBlocks = false;
-				do_reset_client_grids.Visible = (block) => MyNetworkInterface.IsStandaloneMultiplayerClient && MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.SectionSwitches[section_switch];
+				do_reset_client_grids.Visible = (block) => MyNetworkInterface.IsStandaloneMultiplayerClient && MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.DEBUG;
 				do_reset_client_grids.Enabled = (block) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					return controller != null && MyJumpGateModSession.Instance.DebugMode;
@@ -1183,8 +1251,9 @@ namespace IOTA.ModularJumpGates.Terminal
 			{
 				IMyTerminalControlLabel spacer_lb = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlLabel, IMyUpgradeModule>(MODID_PREFIX + "controller_void_spacer_lb");
 				spacer_lb.Label = MyStringId.GetOrCompute(" ");
-				spacer_lb.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.SectionSwitches[section_switch];
+				spacer_lb.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.DEBUG;
 				spacer_lb.SupportsMultipleBlocks = true;
+				MyJumpGateControllerTerminal.TerminalControls.Add(spacer_lb);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(spacer_lb);
 			}
 
@@ -1194,7 +1263,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				do_jump_bt.Title = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_JumpToVoid"));
 				do_jump_bt.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_JumpToVoid_Tooltip"));
 				do_jump_bt.SupportsMultipleBlocks = true;
-				do_jump_bt.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyAPIGateway.Session.IsUserAdmin(MyAPIGateway.Multiplayer.MyId) && MyJumpGateControllerTerminal.SectionSwitches[section_switch];
+				do_jump_bt.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyAPIGateway.Session.IsUserAdmin(MyAPIGateway.Multiplayer.MyId) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.DEBUG;
 				do_jump_bt.Enabled = (block) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					MyJumpGate jump_gate = controller?.AttachedJumpGate();
@@ -1219,7 +1288,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				do_jump_bt.Title = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_JumpFromVoid"));
 				do_jump_bt.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_JumpFromVoid_Tooltip"));
 				do_jump_bt.SupportsMultipleBlocks = true;
-				do_jump_bt.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyAPIGateway.Session.IsUserAdmin(MyAPIGateway.Multiplayer.MyId) && MyJumpGateControllerTerminal.SectionSwitches[section_switch];
+				do_jump_bt.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyAPIGateway.Session.IsUserAdmin(MyAPIGateway.Multiplayer.MyId) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.DEBUG;
 				do_jump_bt.Enabled = (block) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					MyJumpGate jump_gate = controller?.AttachedJumpGate();
@@ -1249,8 +1318,9 @@ namespace IOTA.ModularJumpGates.Terminal
 			{
 				IMyTerminalControlLabel spacer_lb = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlLabel, IMyUpgradeModule>(MODID_PREFIX + "DebugSectionBottomSpacer");
 				spacer_lb.Label = MyStringId.GetOrCompute(" ");
-				spacer_lb.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.SectionSwitches[section_switch];
+				spacer_lb.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.DEBUG;
 				spacer_lb.SupportsMultipleBlocks = true;
+				MyJumpGateControllerTerminal.TerminalControls.Add(spacer_lb);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(spacer_lb);
 			}
 		}
@@ -1262,20 +1332,20 @@ namespace IOTA.ModularJumpGates.Terminal
 				IMyTerminalControlSeparator separator_hr = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSeparator, IMyUpgradeModule>("");
 				separator_hr.Visible = (block) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
-					return controller != null && controller.IsWorking && controller.JumpGateGrid != null && !controller.JumpGateGrid.Closed && controller.JumpGateGrid.HasCommLink();
+					return controller != null && controller.IsWorking && controller.JumpGateGrid != null && !controller.JumpGateGrid.Closed && controller.JumpGateGrid.HasCommLink() && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.EXTRA;
 				};
 				separator_hr.SupportsMultipleBlocks = true;
+				MyJumpGateControllerTerminal.TerminalControls.Add(separator_hr);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(separator_hr);
 			}
-
-			IMyTerminalControlOnOffSwitch section_switch = MyJumpGateControllerTerminal.GenerateSectionSwitch("Extra", false);
 
 			// Label
 			{
 				IMyTerminalControlLabel settings_label_lb = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlLabel, IMyUpgradeModule>(MODID_PREFIX + "ControllerAdditionalSettingsLabel");
 				settings_label_lb.Label = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_AdditionalSettings"));
-				settings_label_lb.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.SectionSwitches[section_switch];
+				settings_label_lb.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.EXTRA;
 				settings_label_lb.SupportsMultipleBlocks = true;
+				MyJumpGateControllerTerminal.TerminalControls.Add(settings_label_lb);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(settings_label_lb);
 			}
 
@@ -1285,7 +1355,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				jump_sphere_radius_sd.Title = MyStringId.GetOrCompute($"{MyTexts.GetString("Terminal_JumpGateController_JumpSpaceRadius")}:");
 				jump_sphere_radius_sd.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_JumpSpaceRadius_Tooltip"));
 				jump_sphere_radius_sd.SupportsMultipleBlocks = true;
-				jump_sphere_radius_sd.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.SectionSwitches[section_switch];
+				jump_sphere_radius_sd.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.EXTRA;
 				jump_sphere_radius_sd.Enabled = (block) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					MyJumpGate jump_gate = controller?.AttachedJumpGate();
@@ -1322,7 +1392,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				jump_space_depth.Title = MyStringId.GetOrCompute($"{MyTexts.GetString("Terminal_JumpGateController_JumpSpaceDepthPercent")}:");
 				jump_space_depth.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_JumpSpaceDepthPercent_Tooltip"));
 				jump_space_depth.SupportsMultipleBlocks = true;
-				jump_space_depth.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.SectionSwitches[section_switch];
+				jump_space_depth.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.EXTRA;
 				jump_space_depth.Enabled = (block) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					MyJumpGate jump_gate = controller?.AttachedJumpGate();
@@ -1354,7 +1424,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				jump_space_fit_type.Title = MyStringId.GetOrCompute($"{MyTexts.GetString("Terminal_JumpGateController_JumpSpaceFitType")}:");
 				jump_space_fit_type.Multiselect = false;
 				jump_space_fit_type.SupportsMultipleBlocks = true;
-				jump_space_fit_type.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.SectionSwitches[section_switch];
+				jump_space_fit_type.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.EXTRA;
 				jump_space_fit_type.Enabled = (block) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					MyJumpGate jump_gate = controller?.AttachedJumpGate();
@@ -1401,7 +1471,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				gravity_alignment_type.Title = MyStringId.GetOrCompute($"{MyTexts.GetString("Terminal_JumpGateController_GravityAlignmentType")}:");
 				gravity_alignment_type.Multiselect = false;
 				gravity_alignment_type.SupportsMultipleBlocks = true;
-				gravity_alignment_type.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.SectionSwitches[section_switch];
+				gravity_alignment_type.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.EXTRA;
 				gravity_alignment_type.Enabled = (block) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					MyJumpGate jump_gate = controller?.AttachedJumpGate();
@@ -1444,7 +1514,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				effect_color_shift_cl.Title = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_EffectColorShift"));
 				effect_color_shift_cl.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_EffectColorShift_Tooltip"));
 				effect_color_shift_cl.SupportsMultipleBlocks = true;
-				effect_color_shift_cl.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.SectionSwitches[section_switch];
+				effect_color_shift_cl.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.EXTRA;
 				effect_color_shift_cl.Enabled = (block) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					MyJumpGate jump_gate = controller?.AttachedJumpGate();
@@ -1468,9 +1538,10 @@ namespace IOTA.ModularJumpGates.Terminal
 				spacer_lb.Label = MyStringId.GetOrCompute(" ");
 				spacer_lb.Visible = (block) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
-					return controller != null && controller.IsWorking && controller.JumpGateGrid != null && !controller.JumpGateGrid.Closed && MyJumpGateControllerTerminal.SectionSwitches[section_switch];
+					return controller != null && controller.IsWorking && controller.JumpGateGrid != null && !controller.JumpGateGrid.Closed && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.EXTRA;
 				};
 				spacer_lb.SupportsMultipleBlocks = true;
+				MyJumpGateControllerTerminal.TerminalControls.Add(spacer_lb);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(spacer_lb);
 			}
 
@@ -1480,7 +1551,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				do_normal_vector_override_off.Title = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_VectorNormalOverride"));
 				do_normal_vector_override_off.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_VectorNormalOverride_Tooltip"));
 				do_normal_vector_override_off.SupportsMultipleBlocks = true;
-				do_normal_vector_override_off.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.SectionSwitches[section_switch];
+				do_normal_vector_override_off.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.EXTRA;
 				do_normal_vector_override_off.Enabled = (block) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					MyJumpGate jump_gate = controller?.AttachedJumpGate();
@@ -1505,8 +1576,9 @@ namespace IOTA.ModularJumpGates.Terminal
 			{
 				IMyTerminalControlLabel settings_label_lb = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlLabel, IMyUpgradeModule>(MODID_PREFIX + "ControllerVectorNormalOverrideLabel");
 				settings_label_lb.Label = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_NormalVector"));
-				settings_label_lb.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.SectionSwitches[section_switch];
+				settings_label_lb.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.EXTRA;
 				settings_label_lb.SupportsMultipleBlocks = true;
+				MyJumpGateControllerTerminal.TerminalControls.Add(settings_label_lb);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(settings_label_lb);
 			}
 
@@ -1516,7 +1588,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				vector_normal_x_sd.Title = MyStringId.GetOrCompute("X:");
 				vector_normal_x_sd.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_NormalVectorComponent_Tooltip").Replace("{%0}", "X"));
 				vector_normal_x_sd.SupportsMultipleBlocks = true;
-				vector_normal_x_sd.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.SectionSwitches[section_switch];
+				vector_normal_x_sd.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.EXTRA;
 				vector_normal_x_sd.Enabled = (block) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					MyJumpGate jump_gate = controller?.AttachedJumpGate();
@@ -1554,7 +1626,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				vector_normal_y_sd.Title = MyStringId.GetOrCompute("Y:");
 				vector_normal_y_sd.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_NormalVectorComponent_Tooltip").Replace("{%0}", "Y"));
 				vector_normal_y_sd.SupportsMultipleBlocks = true;
-				vector_normal_y_sd.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.SectionSwitches[section_switch];
+				vector_normal_y_sd.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.EXTRA;
 				vector_normal_y_sd.Enabled = (block) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					MyJumpGate jump_gate = controller?.AttachedJumpGate();
@@ -1592,7 +1664,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				vector_normal_z_sd.Title = MyStringId.GetOrCompute("Z:");
 				vector_normal_z_sd.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_NormalVectorComponent_Tooltip").Replace("{%0}", "Z"));
 				vector_normal_z_sd.SupportsMultipleBlocks = true;
-				vector_normal_z_sd.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.SectionSwitches[section_switch];
+				vector_normal_z_sd.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.EXTRA;
 				vector_normal_z_sd.Enabled = (block) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					MyJumpGate jump_gate = controller?.AttachedJumpGate();
@@ -1628,8 +1700,9 @@ namespace IOTA.ModularJumpGates.Terminal
 			{
 				IMyTerminalControlLabel spacer_lb = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlLabel, IMyUpgradeModule>(MODID_PREFIX + "ExtraSectionBottomSpacer");
 				spacer_lb.Label = MyStringId.GetOrCompute(" ");
-				spacer_lb.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.SectionSwitches[section_switch];
+				spacer_lb.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.EXTRA;
 				spacer_lb.SupportsMultipleBlocks = true;
+				MyJumpGateControllerTerminal.TerminalControls.Add(spacer_lb);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(spacer_lb);
 			}
 		}
@@ -1639,19 +1712,19 @@ namespace IOTA.ModularJumpGates.Terminal
 			// Separator
 			{
 				IMyTerminalControlSeparator separator_hr = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSeparator, IMyUpgradeModule>("");
-				separator_hr.Visible = MyJumpGateModSession.IsBlockJumpGateController;
+				separator_hr.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.JUMP_GATE;
 				separator_hr.SupportsMultipleBlocks = true;
+				MyJumpGateControllerTerminal.TerminalControls.Add(separator_hr);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(separator_hr);
 			}
-
-			IMyTerminalControlOnOffSwitch section_switch = MyJumpGateControllerTerminal.GenerateSectionSwitch("Actions", true);
 
 			// Label
 			{
 				IMyTerminalControlLabel beacon_label_lb = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlLabel, IMyUpgradeModule>(MODID_PREFIX + "ControllerActionsLabel");
 				beacon_label_lb.Label = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_Actions"));
-				beacon_label_lb.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.SectionSwitches[section_switch];
+				beacon_label_lb.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.JUMP_GATE;
 				beacon_label_lb.SupportsMultipleBlocks = true;
+				MyJumpGateControllerTerminal.TerminalControls.Add(beacon_label_lb);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(beacon_label_lb);
 			}
 
@@ -1659,8 +1732,9 @@ namespace IOTA.ModularJumpGates.Terminal
 			{
 				IMyTerminalControlLabel spacer_lb = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlLabel, IMyUpgradeModule>(MODID_PREFIX + "ActionSectionTopSpacer");
 				spacer_lb.Label = MyStringId.GetOrCompute(" ");
-				spacer_lb.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.SectionSwitches[section_switch];
+				spacer_lb.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.JUMP_GATE;
 				spacer_lb.SupportsMultipleBlocks = true;
+				MyJumpGateControllerTerminal.TerminalControls.Add(spacer_lb);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(spacer_lb);
 			}
 
@@ -1670,7 +1744,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				do_jump_bt.Title = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_Jump"));
 				do_jump_bt.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_Jump_Tooltip"));
 				do_jump_bt.SupportsMultipleBlocks = true;
-				do_jump_bt.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.SectionSwitches[section_switch];
+				do_jump_bt.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.JUMP_GATE;
 				do_jump_bt.Enabled = (block) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					MyJumpGate jump_gate = controller?.AttachedJumpGate();
@@ -1695,7 +1769,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				do_jump_bt.Title = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_CancelJump"));
 				do_jump_bt.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_CancelJump_Tooltip"));
 				do_jump_bt.SupportsMultipleBlocks = true;
-				do_jump_bt.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.SectionSwitches[section_switch];
+				do_jump_bt.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.JUMP_GATE;
 				do_jump_bt.Enabled = (block) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					MyJumpGate jump_gate = controller?.AttachedJumpGate();
@@ -1718,8 +1792,184 @@ namespace IOTA.ModularJumpGates.Terminal
 			{
 				IMyTerminalControlLabel spacer_lb = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlLabel, IMyUpgradeModule>(MODID_PREFIX + "ActionSectionBottomSpacer");
 				spacer_lb.Label = MyStringId.GetOrCompute(" ");
-				spacer_lb.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.SectionSwitches[section_switch];
+				spacer_lb.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.JUMP_GATE;
 				spacer_lb.SupportsMultipleBlocks = true;
+				MyJumpGateControllerTerminal.TerminalControls.Add(spacer_lb);
+				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(spacer_lb);
+			}
+		}
+
+		private static void SetupTerminalGateDetonationControls()
+		{
+			// Separator
+			{
+				IMyTerminalControlSeparator separator_hr = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSeparator, IMyUpgradeModule>("");
+				separator_hr.Visible = (block) => MyJumpGateModSession.Configuration.JumpGateConfiguration.EnableGateExplosions && MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.DETONATION;
+				separator_hr.SupportsMultipleBlocks = true;
+				MyJumpGateControllerTerminal.TerminalControls.Add(separator_hr);
+				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(separator_hr);
+			}
+
+			// Label
+			{
+				IMyTerminalControlLabel beacon_label_lb = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlLabel, IMyUpgradeModule>(MODID_PREFIX + "ControllerDetonationControlLabel");
+				beacon_label_lb.Label = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_DetonationControl"));
+				beacon_label_lb.Visible = (block) => MyJumpGateModSession.Configuration.JumpGateConfiguration.EnableGateExplosions && MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.DETONATION;
+				beacon_label_lb.SupportsMultipleBlocks = true;
+				MyJumpGateControllerTerminal.TerminalControls.Add(beacon_label_lb);
+				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(beacon_label_lb);
+			}
+
+			// Spacer
+			{
+				IMyTerminalControlLabel spacer_lb = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlLabel, IMyUpgradeModule>(MODID_PREFIX + "DetonationControlSectionTopSpacer");
+				spacer_lb.Label = MyStringId.GetOrCompute(" ");
+				spacer_lb.Visible = (block) => MyJumpGateModSession.Configuration.JumpGateConfiguration.EnableGateExplosions && MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.DETONATION;
+				spacer_lb.SupportsMultipleBlocks = true;
+				MyJumpGateControllerTerminal.TerminalControls.Add(spacer_lb);
+				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(spacer_lb);
+			}
+
+			// Checkbox [Arm Self Destruct]
+			{
+				IMyTerminalControlCheckbox do_arm_destruct = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlCheckbox, IMyUpgradeModule>(MODID_PREFIX + "ControllerArmDestruct");
+				do_arm_destruct.Title = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_ArmDestruct"));
+				do_arm_destruct.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_ArmDestruct_Tooltip"));
+				do_arm_destruct.SupportsMultipleBlocks = true;
+				do_arm_destruct.Visible = (block) => MyJumpGateModSession.Configuration.JumpGateConfiguration.EnableGateExplosions && MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.DETONATION;
+				do_arm_destruct.Enabled = (block) => {
+					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
+					MyJumpGate jump_gate = controller?.AttachedJumpGate();
+					MyAllowedRemoteSettings allowed_settings = controller?.ConnectedRemoteAntenna?.BlockSettings.AllowedRemoteSettings ?? MyAllowedRemoteSettings.ALL;
+					return controller != null && jump_gate != null && controller.IsWorking && jump_gate.IsControlled() && jump_gate.ManualDetonationTimeout == -1 && (allowed_settings & MyAllowedRemoteSettings.DETONATION_CONTROL) != 0;
+				};
+				do_arm_destruct.Getter = (block) => MyJumpGateModSession.GetBlockAsJumpGateController(block)?.BlockSettings.GateDetonatorArmed() ?? false;
+				do_arm_destruct.Setter = (block, value) => {
+					if (!do_arm_destruct.Enabled(block)) return;
+					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
+					controller.BaseBlockSettings.GateDetonatorArmed(value);
+					controller.SetDirty();
+					MyJumpGateModSession.Instance.RedrawAllTerminalControls();
+				};
+				MyJumpGateControllerTerminal.TerminalControls.Add(do_arm_destruct);
+				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(do_arm_destruct);
+			}
+
+			// Slider [Self Destruct Countdown]
+			{
+				IMyTerminalControlSlider detonation_delay = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSlider, IMyUpgradeModule>(MODID_PREFIX + "ControllerDetonationDelay");
+				detonation_delay.Title = MyStringId.GetOrCompute($"{MyTexts.GetString("Terminal_JumpGateController_DetonationDelay")} (s)");
+				detonation_delay.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_DetonationDelay_Tooltip"));
+				detonation_delay.SupportsMultipleBlocks = true;
+				detonation_delay.Visible = (block) => MyJumpGateModSession.Configuration.JumpGateConfiguration.EnableGateExplosions && MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.DETONATION;
+				detonation_delay.Enabled = (block) => {
+					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
+					MyJumpGate jump_gate = controller?.AttachedJumpGate();
+					MyAllowedRemoteSettings allowed_settings = controller?.ConnectedRemoteAntenna?.BlockSettings.AllowedRemoteSettings ?? MyAllowedRemoteSettings.ALL;
+					return controller != null && jump_gate != null && controller.IsWorking && jump_gate.IsControlled() && jump_gate.ManualDetonationTimeout == -1 && (allowed_settings & MyAllowedRemoteSettings.DETONATION_CONTROL) != 0;
+				};
+				detonation_delay.SetLimits(0, 3600);
+				detonation_delay.Writer = (block, string_builder) => {
+					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
+					MyJumpGate jump_gate = controller?.AttachedJumpGate();
+
+					if (controller == null) return;
+					else if (jump_gate != null && jump_gate.ManualDetonationTimeout != -1)
+					{
+						float timeout = jump_gate.ManualDetonationTimeout / 60f;
+						string_builder.Append($"{(int) Math.Floor(timeout / 3600):00}:{(int) Math.Floor(timeout % 3600 / 60d):00}:{(int) Math.Floor(timeout % 60d):00}");
+					}
+					else if (controller.IsWorking) string_builder.Append(MyJumpGateModSession.AutoconvertTimeUnits(controller.BlockSettings.GateDetonationTime(), 2));
+					else string_builder.Append($"- {MyTexts.GetString("GeneralText_Offline")} -");
+				};
+				detonation_delay.Getter = (block) => MyJumpGateModSession.GetBlockAsJumpGateController(block)?.BlockSettings.GateDetonationTime() ?? 0;
+				detonation_delay.Setter = (block, value) => {
+					if (!detonation_delay.Enabled(block)) return;
+					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
+					controller.BaseBlockSettings.GateDetonationTime(value);
+					controller.SetDirty();
+				};
+				MyJumpGateControllerTerminal.TerminalControls.Add(detonation_delay);
+				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(detonation_delay);
+			}
+
+			// Spacer
+			{
+				IMyTerminalControlLabel spacer_lb = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlLabel, IMyUpgradeModule>(MODID_PREFIX + "DetonationControlSectionMiddleSpacer");
+				spacer_lb.Label = MyStringId.GetOrCompute(" ");
+				spacer_lb.Visible = (block) => MyJumpGateModSession.Configuration.JumpGateConfiguration.EnableGateExplosions && MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.DETONATION;
+				spacer_lb.SupportsMultipleBlocks = true;
+				MyJumpGateControllerTerminal.TerminalControls.Add(spacer_lb);
+				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(spacer_lb);
+			}
+
+			// Button [Detonate]
+			{
+				IMyTerminalControlButton do_detonation_bt = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlButton, IMyUpgradeModule>(MODID_PREFIX + "ControllerDetonate");
+				do_detonation_bt.Title = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_Detonate"));
+				do_detonation_bt.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_Detonate_Tooltip"));
+				do_detonation_bt.SupportsMultipleBlocks = true;
+				do_detonation_bt.Visible = (block) => MyJumpGateModSession.Configuration.JumpGateConfiguration.EnableGateExplosions && MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.DETONATION;
+				do_detonation_bt.Enabled = (block) => {
+					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
+					MyJumpGate jump_gate = controller?.AttachedJumpGate();
+					MyAllowedRemoteSettings allowed_settings = controller?.ConnectedRemoteAntenna?.BlockSettings.AllowedRemoteSettings ?? MyAllowedRemoteSettings.ALL;
+					return controller != null && jump_gate != null && controller.IsWorking && jump_gate.IsControlled() && controller.BlockSettings.GateDetonatorArmed() && jump_gate.ManualDetonationTimeout == -1 && (allowed_settings & MyAllowedRemoteSettings.DETONATION_CONTROL) != 0;
+				};
+				do_detonation_bt.Action = (block) => {
+					if (!do_detonation_bt.Enabled(block)) return;
+					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
+					MyJumpGate jump_gate = controller?.AttachedJumpGate();
+
+					if (jump_gate != null && !jump_gate.Closed)
+					{
+						jump_gate.QueueDetonation(controller.BlockSettings.GateDetonationTime());
+						jump_gate.SetDirty();
+						MyJumpGateModSession.Instance.RedrawAllTerminalControls();
+					}
+					else MyAPIGateway.Utilities.ShowNotification(MyTexts.GetString("Terminal_JumpGateController_GateNotConnectedError"), 5000, "Red");
+				};
+				MyJumpGateControllerTerminal.TerminalControls.Add(do_detonation_bt);
+				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(do_detonation_bt);
+			}
+
+			// Button [No Detonate]
+			{
+				IMyTerminalControlButton do_nodetonation_bt = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlButton, IMyUpgradeModule>(MODID_PREFIX + "ControllerNoDetonate");
+				do_nodetonation_bt.Title = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_NoDetonate"));
+				do_nodetonation_bt.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_NoDetonate_Tooltip"));
+				do_nodetonation_bt.SupportsMultipleBlocks = true;
+				do_nodetonation_bt.Visible = (block) => MyJumpGateModSession.Configuration.JumpGateConfiguration.EnableGateExplosions && MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.DETONATION;
+				do_nodetonation_bt.Enabled = (block) => {
+					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
+					MyJumpGate jump_gate = controller?.AttachedJumpGate();
+					MyAllowedRemoteSettings allowed_settings = controller?.ConnectedRemoteAntenna?.BlockSettings.AllowedRemoteSettings ?? MyAllowedRemoteSettings.ALL;
+					return controller != null && jump_gate != null && controller.IsWorking && jump_gate.IsControlled() && controller.BlockSettings.GateDetonatorArmed() && jump_gate.ManualDetonationTimeout > 0 && (allowed_settings & MyAllowedRemoteSettings.DETONATION_CONTROL) != 0;
+				};
+				do_nodetonation_bt.Action = (block) => {
+					if (!do_nodetonation_bt.Enabled(block)) return;
+					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
+					MyJumpGate jump_gate = controller?.AttachedJumpGate();
+
+					if (jump_gate != null && !jump_gate.Closed)
+					{
+						jump_gate.ClearDetonation();
+						jump_gate.SetDirty();
+						MyJumpGateModSession.Instance.RedrawAllTerminalControls();
+					}
+					else MyAPIGateway.Utilities.ShowNotification(MyTexts.GetString("Terminal_JumpGateController_GateNotConnectedError"), 5000, "Red");
+				};
+				MyJumpGateControllerTerminal.TerminalControls.Add(do_nodetonation_bt);
+				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(do_nodetonation_bt);
+			}
+
+			// Spacer
+			{
+				IMyTerminalControlLabel spacer_lb = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlLabel, IMyUpgradeModule>(MODID_PREFIX + "DetonationControlSectionBottomSpacer");
+				spacer_lb.Label = MyStringId.GetOrCompute(" ");
+				spacer_lb.Visible = (block) => MyJumpGateModSession.Configuration.JumpGateConfiguration.EnableGateExplosions && MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.DETONATION;
+				spacer_lb.SupportsMultipleBlocks = true;
+				MyJumpGateControllerTerminal.TerminalControls.Add(spacer_lb);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(spacer_lb);
 			}
 		}
@@ -1733,248 +1983,12 @@ namespace IOTA.ModularJumpGates.Terminal
 			MyJumpGateControllerTerminal.SetupTerminalAutoActivateControls();
 			MyJumpGateControllerTerminal.SetupTerminalEntityFilterControls();
 			MyJumpGateControllerTerminal.SetupTerminalGateExtraControls();
+			MyJumpGateControllerTerminal.SetupTerminalGateDetonationControls();
 			MyJumpGateControllerTerminal.SetupTerminalDebugControls();
 		}
 
 		private static void SetupJumpGateControllerTerminalActions()
 		{
-			// Jump
-			{
-				IMyTerminalAction jump_action = MyAPIGateway.TerminalControls.CreateAction<IMyUpgradeModule>(MODID_PREFIX + "ControllerJumpAction");
-				jump_action.Name = new StringBuilder(MyTexts.GetString("Terminal_JumpGateController_Jump"));
-				jump_action.ValidForGroups = true;
-				jump_action.Icon = @"Textures\GUI\Icons\Actions\SmallShipSwitchOn.dds";
-				jump_action.Enabled = MyJumpGateModSession.IsBlockJumpGateController;
-				
-				jump_action.Action = (block) => {
-					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
-					MyJumpGate jump_gate = controller?.AttachedJumpGate();
-					MyAllowedRemoteSettings allowed_settings = controller?.ConnectedRemoteAntenna?.BlockSettings.AllowedRemoteSettings ?? MyAllowedRemoteSettings.ALL;
-					if (controller == null || controller.JumpGateGrid == null || controller.JumpGateGrid.Closed || !controller.IsWorking || (allowed_settings & MyAllowedRemoteSettings.JUMP) == 0) return;
-					
-					if (jump_gate != null && !jump_gate.Closed)
-					{
-						if (!jump_gate.IsIdle()) MyAPIGateway.Utilities.ShowNotification(MyTexts.GetString("Terminal_JumpGateController_GateNotIdleError"), 5000, "Red");
-						else if (controller.BlockSettings.SelectedWaypoint() == null) MyAPIGateway.Utilities.ShowNotification(MyTexts.GetString("Terminal_JumpGateController_NoDestinationError"), 5000, "Red");
-						else jump_gate.Jump(controller.BlockSettings);
-					}
-					else MyAPIGateway.Utilities.ShowNotification(MyTexts.GetString("Terminal_JumpGateController_GateNotConnectedError"), 5000, "Red");
-				};
-
-				jump_action.Writer = (block, string_builder) => {
-					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
-					MyJumpGate jump_gate = controller?.AttachedJumpGate();
-					if (controller == null || jump_gate == null || controller.JumpGateGrid == null || jump_gate.Closed || controller.JumpGateGrid.Closed) return;
-					else if (!controller.IsWorking) string_builder.Append($"- {MyTexts.GetString("GeneralText_Offline")} -");
-					else string_builder.Append(jump_gate.Status.ToString());
-				};
-
-				jump_action.InvalidToolbarTypes = new List<MyToolbarType>() {
-					MyToolbarType.Seat
-				};
-
-				MyAPIGateway.TerminalControls.AddAction<IMyUpgradeModule>(jump_action);
-			}
-
-			// No Jump
-			{
-				IMyTerminalAction nojump_action = MyAPIGateway.TerminalControls.CreateAction<IMyUpgradeModule>(MODID_PREFIX + "ControllerNoJumpAction");
-				nojump_action.Name = new StringBuilder(MyTexts.GetString("Terminal_JumpGateController_CancelJump"));
-				nojump_action.ValidForGroups = true;
-				nojump_action.Icon = @"Textures\GUI\Icons\Actions\SmallShipSwitchOff.dds";
-				nojump_action.Enabled = MyJumpGateModSession.IsBlockJumpGateController;
-
-				nojump_action.Action = (block) => {
-					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
-					MyJumpGate jump_gate = controller?.AttachedJumpGate();
-					MyAllowedRemoteSettings allowed_settings = controller?.ConnectedRemoteAntenna?.BlockSettings.AllowedRemoteSettings ?? MyAllowedRemoteSettings.ALL;
-					if (controller == null || controller.JumpGateGrid == null || controller.JumpGateGrid.Closed || !controller.IsWorking || (allowed_settings & MyAllowedRemoteSettings.NOJUMP) == 0) return;
-
-					if (jump_gate != null && !jump_gate.Closed)
-					{
-						if (jump_gate.Status != MyJumpGateStatus.OUTBOUND) MyAPIGateway.Utilities.ShowNotification(MyTexts.GetString("Terminal_JumpGateController_GateNotJumpingError"), 5000, "Red");
-						else jump_gate.CancelJump();
-					}
-					else MyAPIGateway.Utilities.ShowNotification(MyTexts.GetString("Terminal_JumpGateController_GateNotConnectedError"), 5000, "Red");
-				};
-
-				nojump_action.Writer = (block, string_builder) => {
-					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
-					MyJumpGate jump_gate = controller?.AttachedJumpGate();
-					if (controller == null || jump_gate == null || controller.JumpGateGrid == null || jump_gate.Closed || controller.JumpGateGrid.Closed) return;
-					else if (!controller.IsWorking) string_builder.Append($"- {MyTexts.GetString("GeneralText_Offline")} -");
-					else string_builder.Append(jump_gate.Status.ToString());
-				};
-
-				nojump_action.InvalidToolbarTypes = new List<MyToolbarType>() {
-					MyToolbarType.Seat
-				};
-
-				MyAPIGateway.TerminalControls.AddAction<IMyUpgradeModule>(nojump_action);
-			}
-
-			// Toggle Jump
-			{
-				IMyTerminalAction jump_action = MyAPIGateway.TerminalControls.CreateAction<IMyUpgradeModule>(MODID_PREFIX + "ControllerToggleJumpAction");
-				jump_action.Name = new StringBuilder(MyTexts.GetString("Terminal_JumpGateController_ToggleJump"));
-				jump_action.ValidForGroups = true;
-				jump_action.Icon = @"Textures\GUI\Icons\Actions\SmallShipToggle.dds";
-				jump_action.Enabled = MyJumpGateModSession.IsBlockJumpGateController;
-
-				jump_action.Action = (block) => {
-					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
-					MyJumpGate jump_gate = controller?.AttachedJumpGate();
-					MyAllowedRemoteSettings allowed_settings = controller?.ConnectedRemoteAntenna?.BlockSettings.AllowedRemoteSettings ?? MyAllowedRemoteSettings.ALL;
-					if (controller == null || controller.JumpGateGrid == null || controller.JumpGateGrid.Closed || !controller.IsWorking || (allowed_settings & MyAllowedRemoteSettings.JUMP) == 0 || (allowed_settings & MyAllowedRemoteSettings.NOJUMP) == 0) return;
-
-					if (jump_gate != null && !jump_gate.Closed)
-					{
-						if (jump_gate.IsIdle()) jump_gate.Jump(controller.BlockSettings);
-						else if (jump_gate.Status == MyJumpGateStatus.OUTBOUND) jump_gate.CancelJump();
-						else MyAPIGateway.Utilities.ShowNotification(MyTexts.GetString("JumpFailReason_SRC_BUSY"), 5000, "Red");
-					}
-					else MyAPIGateway.Utilities.ShowNotification(MyTexts.GetString("Terminal_JumpGateController_GateNotConnectedError"), 5000, "Red");
-				};
-
-				jump_action.Writer = (block, string_builder) => {
-					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
-					MyJumpGate jump_gate = controller?.AttachedJumpGate();
-					if (controller == null || jump_gate == null || controller.JumpGateGrid == null || jump_gate.Closed || controller.JumpGateGrid.Closed) return;
-					else if (!controller.IsWorking) string_builder.Append($"- {MyTexts.GetString("GeneralText_Offline")} -");
-					else string_builder.Append(jump_gate.Status.ToString());
-				};
-
-				jump_action.InvalidToolbarTypes = new List<MyToolbarType>() {
-					MyToolbarType.Seat
-				};
-
-				MyAPIGateway.TerminalControls.AddAction<IMyUpgradeModule>(jump_action);
-			}
-
-			// Increase Jump Space Radius
-			{
-				IMyTerminalAction radius_increase_action = MyAPIGateway.TerminalControls.CreateAction<IMyUpgradeModule>(MODID_PREFIX + "ControllerIncreaseJumpSpaceRadiusAction");
-				radius_increase_action.Name = new StringBuilder(MyTexts.GetString("Terminal_JumpGateController_IncreaseJumpSpaceRadius"));
-				radius_increase_action.ValidForGroups = true;
-				radius_increase_action.Icon = @"Textures\GUI\Icons\Actions\Increase.dds";
-				radius_increase_action.Enabled = MyJumpGateModSession.IsBlockJumpGateController;
-				
-				radius_increase_action.Action = (block) => {
-					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
-					MyJumpGate jump_gate = controller?.AttachedJumpGate();
-					MyAllowedRemoteSettings allowed_settings = controller?.ConnectedRemoteAntenna?.BlockSettings.AllowedRemoteSettings ?? MyAllowedRemoteSettings.ALL;
-					if (controller == null || controller.JumpGateGrid == null || controller.JumpGateGrid.Closed || !controller.IsWorking || jump_gate == null || jump_gate.Closed || !jump_gate.IsIdle() || (allowed_settings & MyAllowedRemoteSettings.JUMPSPACE) == 0) return;
-					controller.BaseBlockSettings.JumpSpaceRadius(controller.BlockSettings.JumpSpaceRadius() + 10);
-					controller.SetDirty();
-				};
-
-				radius_increase_action.Writer = (block, string_builder) => {
-					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
-					if (controller == null || controller.JumpGateGrid == null || controller.JumpGateGrid.Closed) return;
-					else if (!controller.IsWorking) string_builder.Append($"- {MyTexts.GetString("GeneralText_Offline")} -");
-					else string_builder.Append(controller.BlockSettings.JumpSpaceRadius());
-				};
-
-				radius_increase_action.InvalidToolbarTypes = new List<MyToolbarType>() {
-					MyToolbarType.Seat
-				};
-
-				MyAPIGateway.TerminalControls.AddAction<IMyUpgradeModule>(radius_increase_action);
-			}
-
-			// Decrease Jump Space Radius
-			{
-				IMyTerminalAction radius_decrease_action = MyAPIGateway.TerminalControls.CreateAction<IMyUpgradeModule>(MODID_PREFIX + "ControllerDecreaseJumpSpaceRadiusAction");
-				radius_decrease_action.Name = new StringBuilder(MyTexts.GetString("Terminal_JumpGateController_DecreaseJumpSpaceRadius"));
-				radius_decrease_action.ValidForGroups = true;
-				radius_decrease_action.Icon = @"Textures\GUI\Icons\Actions\Decrease.dds";
-				radius_decrease_action.Enabled = MyJumpGateModSession.IsBlockJumpGateController;
-
-				radius_decrease_action.Action = (block) => {
-					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
-					MyJumpGate jump_gate = controller?.AttachedJumpGate();
-					MyAllowedRemoteSettings allowed_settings = controller?.ConnectedRemoteAntenna?.BlockSettings.AllowedRemoteSettings ?? MyAllowedRemoteSettings.ALL;
-					if (controller == null || controller.JumpGateGrid == null || controller.JumpGateGrid.Closed || !controller.IsWorking || jump_gate == null || jump_gate.Closed || !jump_gate.IsIdle() || (allowed_settings & MyAllowedRemoteSettings.JUMPSPACE) == 0) return;
-					controller.BaseBlockSettings.JumpSpaceRadius(controller.BlockSettings.JumpSpaceRadius() - 10);
-					controller.SetDirty();
-				};
-
-				radius_decrease_action.Writer = (block, string_builder) => {
-					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
-					if (controller == null || controller.JumpGateGrid == null || controller.JumpGateGrid.Closed) return;
-					else if (!controller.IsWorking) string_builder.Append($"- {MyTexts.GetString("GeneralText_Offline")} -");
-					else string_builder.Append(controller.BlockSettings.JumpSpaceRadius());
-				};
-
-				radius_decrease_action.InvalidToolbarTypes = new List<MyToolbarType>() {
-					MyToolbarType.Seat
-				};
-
-				MyAPIGateway.TerminalControls.AddAction<IMyUpgradeModule>(radius_decrease_action);
-			}
-
-			// Increase Jump Space Depth Percent
-			{
-				IMyTerminalAction radius_increase_action = MyAPIGateway.TerminalControls.CreateAction<IMyUpgradeModule>(MODID_PREFIX + "ControllerIncreaseJumpSpaceDepthPercentAction");
-				radius_increase_action.Name = new StringBuilder(MyTexts.GetString("Terminal_JumpGateController_IncreaseJumpSpaceDepthPercent"));
-				radius_increase_action.ValidForGroups = true;
-				radius_increase_action.Icon = @"Textures\GUI\Icons\Actions\Increase.dds";
-				radius_increase_action.Enabled = MyJumpGateModSession.IsBlockJumpGateController;
-
-				radius_increase_action.Action = (block) => {
-					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
-					MyJumpGate jump_gate = controller?.AttachedJumpGate();
-					MyAllowedRemoteSettings allowed_settings = controller?.ConnectedRemoteAntenna?.BlockSettings.AllowedRemoteSettings ?? MyAllowedRemoteSettings.ALL;
-					if (controller == null || controller.JumpGateGrid == null || controller.JumpGateGrid.Closed || !controller.IsWorking || jump_gate == null || jump_gate.Closed || !jump_gate.IsIdle() || (allowed_settings & MyAllowedRemoteSettings.JUMPSPACE) == 0) return;
-					controller.BaseBlockSettings.JumpSpaceDepthPercent(controller.BlockSettings.JumpSpaceDepthPercent() + 0.1);
-					controller.SetDirty();
-				};
-
-				radius_increase_action.Writer = (block, string_builder) => {
-					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
-					if (controller == null || controller.JumpGateGrid == null || controller.JumpGateGrid.Closed) return;
-					else if (!controller.IsWorking) string_builder.Append($"- {MyTexts.GetString("GeneralText_Offline")} -");
-					else string_builder.Append(controller.BlockSettings.JumpSpaceDepthPercent() * 100);
-				};
-
-				radius_increase_action.InvalidToolbarTypes = new List<MyToolbarType>() {
-					MyToolbarType.Seat
-				};
-
-				MyAPIGateway.TerminalControls.AddAction<IMyUpgradeModule>(radius_increase_action);
-			}
-
-			// Decrease Jump Space Depth Percent
-			{
-				IMyTerminalAction radius_decrease_action = MyAPIGateway.TerminalControls.CreateAction<IMyUpgradeModule>(MODID_PREFIX + "ControllerDecreaseJumpSpaceDepthPercentAction");
-				radius_decrease_action.Name = new StringBuilder(MyTexts.GetString("Terminal_JumpGateController_DecreaseJumpSpaceDepthPercent"));
-				radius_decrease_action.ValidForGroups = true;
-				radius_decrease_action.Icon = @"Textures\GUI\Icons\Actions\Decrease.dds";
-				radius_decrease_action.Enabled = MyJumpGateModSession.IsBlockJumpGateController;
-
-				radius_decrease_action.Action = (block) => {
-					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
-					MyJumpGate jump_gate = controller?.AttachedJumpGate();
-					MyAllowedRemoteSettings allowed_settings = controller?.ConnectedRemoteAntenna?.BlockSettings.AllowedRemoteSettings ?? MyAllowedRemoteSettings.ALL;
-					if (controller == null || controller.JumpGateGrid == null || controller.JumpGateGrid.Closed || !controller.IsWorking || jump_gate == null || jump_gate.Closed || !jump_gate.IsIdle() || (allowed_settings & MyAllowedRemoteSettings.JUMPSPACE) == 0) return;
-					controller.BaseBlockSettings.JumpSpaceDepthPercent(controller.BlockSettings.JumpSpaceDepthPercent() - 0.1);
-					controller.SetDirty();
-				};
-
-				radius_decrease_action.Writer = (block, string_builder) => {
-					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
-					if (controller == null || controller.JumpGateGrid == null || controller.JumpGateGrid.Closed) return;
-					else if (!controller.IsWorking) string_builder.Append($"- {MyTexts.GetString("GeneralText_Offline")} -");
-					else string_builder.Append(controller.BlockSettings.JumpSpaceDepthPercent() * 100);
-				};
-
-				radius_decrease_action.InvalidToolbarTypes = new List<MyToolbarType>() {
-					MyToolbarType.Seat
-				};
-
-				MyAPIGateway.TerminalControls.AddAction<IMyUpgradeModule>(radius_decrease_action);
-			}
-
 			// Allow Inbound Jumps
 			{
 				IMyTerminalAction can_be_inbound_action = MyAPIGateway.TerminalControls.CreateAction<IMyUpgradeModule>(MODID_PREFIX + "ControllerAllowInboundAction");
@@ -1982,27 +1996,23 @@ namespace IOTA.ModularJumpGates.Terminal
 				can_be_inbound_action.ValidForGroups = true;
 				can_be_inbound_action.Icon = @"Textures\GUI\Icons\Actions\StationToggle.dds";
 				can_be_inbound_action.Enabled = MyJumpGateModSession.IsBlockJumpGateController;
-
 				can_be_inbound_action.Action = (block) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					MyJumpGate jump_gate = controller?.AttachedJumpGate();
-					MyAllowedRemoteSettings allowed_settings = controller?.ConnectedRemoteAntenna?.BlockSettings.AllowedRemoteSettings ?? MyAllowedRemoteSettings.ALL;
+					MyAllowedRemoteSettings allowed_settings = controller?.ConnectedRemoteAntenna?.BlockSettings.AllowedRemoteSettings ?? MyAllowedRemoteSettings.NONE;
 					if (controller == null || controller.JumpGateGrid == null || controller.JumpGateGrid.Closed || !controller.IsWorking || (allowed_settings & MyAllowedRemoteSettings.ROUTING) == 0) return;
 					controller.BaseBlockSettings.CanBeInbound(!controller.BlockSettings.CanBeInbound());
 					controller.SetDirty();
 				};
-
 				can_be_inbound_action.Writer = (block, string_builder) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					if (controller == null || controller.JumpGateGrid == null || controller.JumpGateGrid.Closed) return;
 					else if (!controller.IsWorking) string_builder.Append($"- {MyTexts.GetString("GeneralText_Offline")} -");
 					else string_builder.Append(controller.BlockSettings.CanBeInbound());
 				};
-
 				can_be_inbound_action.InvalidToolbarTypes = new List<MyToolbarType>() {
 					MyToolbarType.Seat
 				};
-
 				MyAPIGateway.TerminalControls.AddAction<IMyUpgradeModule>(can_be_inbound_action);
 			}
 
@@ -2013,8 +2023,8 @@ namespace IOTA.ModularJumpGates.Terminal
 				can_be_outbound_action.ValidForGroups = true;
 				can_be_outbound_action.Icon = @"Textures\GUI\Icons\Actions\StationToggle.dds";
 				can_be_outbound_action.Enabled = MyJumpGateModSession.IsBlockJumpGateController;
-
 				can_be_outbound_action.Action = (block) => {
+					if (!can_be_outbound_action.Enabled(block)) return;
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					MyJumpGate jump_gate = controller?.AttachedJumpGate();
 					MyAllowedRemoteSettings allowed_settings = controller?.ConnectedRemoteAntenna?.BlockSettings.AllowedRemoteSettings ?? MyAllowedRemoteSettings.ALL;
@@ -2022,19 +2032,226 @@ namespace IOTA.ModularJumpGates.Terminal
 					controller.BaseBlockSettings.CanBeOutbound(!controller.BlockSettings.CanBeOutbound());
 					controller.SetDirty();
 				};
-
 				can_be_outbound_action.Writer = (block, string_builder) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					if (controller == null || controller.JumpGateGrid == null || controller.JumpGateGrid.Closed) return;
 					else if (!controller.IsWorking) string_builder.Append($"- {MyTexts.GetString("GeneralText_Offline")} -");
 					else string_builder.Append(controller.BlockSettings.CanBeInbound());
 				};
-
 				can_be_outbound_action.InvalidToolbarTypes = new List<MyToolbarType>() {
 					MyToolbarType.Seat
 				};
-
 				MyAPIGateway.TerminalControls.AddAction<IMyUpgradeModule>(can_be_outbound_action);
+			}
+
+			// Jump
+			{
+				IMyTerminalAction jump_action = MyAPIGateway.TerminalControls.CreateAction<IMyUpgradeModule>(MODID_PREFIX + "ControllerJumpAction");
+				jump_action.Name = new StringBuilder(MyTexts.GetString("Terminal_JumpGateController_Jump"));
+				jump_action.ValidForGroups = true;
+				jump_action.Icon = @"Textures\GUI\Icons\Actions\SmallShipSwitchOn.dds";
+				jump_action.Enabled = MyJumpGateModSession.IsBlockJumpGateController;
+				jump_action.Action = (block) => {
+					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
+					MyJumpGate jump_gate = controller?.AttachedJumpGate();
+					MyAllowedRemoteSettings allowed_settings = controller?.ConnectedRemoteAntenna?.BlockSettings.AllowedRemoteSettings ?? MyAllowedRemoteSettings.ALL;
+					if (controller == null || jump_gate == null || !controller.IsWorking || !jump_gate.IsControlled() || controller.BlockSettings.SelectedWaypoint() == null || !controller.BlockSettings.SelectedWaypoint().HasValue() || !jump_gate.IsIdle() || (allowed_settings & MyAllowedRemoteSettings.JUMP) == 0) return;
+					
+					if (jump_gate != null && !jump_gate.Closed)
+					{
+						if (!jump_gate.IsIdle()) MyAPIGateway.Utilities.ShowNotification(MyTexts.GetString("Terminal_JumpGateController_GateNotIdleError"), 5000, "Red");
+						else if (controller.BlockSettings.SelectedWaypoint() == null) MyAPIGateway.Utilities.ShowNotification(MyTexts.GetString("Terminal_JumpGateController_NoDestinationError"), 5000, "Red");
+						else jump_gate.Jump(controller.BlockSettings);
+					}
+					else MyAPIGateway.Utilities.ShowNotification(MyTexts.GetString("Terminal_JumpGateController_GateNotConnectedError"), 5000, "Red");
+				};
+				jump_action.Writer = (block, string_builder) => {
+					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
+					MyJumpGate jump_gate = controller?.AttachedJumpGate();
+					if (controller == null || jump_gate == null || controller.JumpGateGrid == null || jump_gate.Closed || controller.JumpGateGrid.Closed) return;
+					else if (!controller.IsWorking) string_builder.Append($"- {MyTexts.GetString("GeneralText_Offline")} -");
+					else string_builder.Append(jump_gate.Status.ToString());
+				};
+				jump_action.InvalidToolbarTypes = new List<MyToolbarType>() {
+					MyToolbarType.Seat
+				};
+				MyAPIGateway.TerminalControls.AddAction<IMyUpgradeModule>(jump_action);
+			}
+
+			// No Jump
+			{
+				IMyTerminalAction nojump_action = MyAPIGateway.TerminalControls.CreateAction<IMyUpgradeModule>(MODID_PREFIX + "ControllerNoJumpAction");
+				nojump_action.Name = new StringBuilder(MyTexts.GetString("Terminal_JumpGateController_CancelJump"));
+				nojump_action.ValidForGroups = true;
+				nojump_action.Icon = @"Textures\GUI\Icons\Actions\SmallShipSwitchOff.dds";
+				nojump_action.Enabled = MyJumpGateModSession.IsBlockJumpGateController;
+				nojump_action.Action = (block) => {
+					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
+					MyJumpGate jump_gate = controller?.AttachedJumpGate();
+					MyAllowedRemoteSettings allowed_settings = controller?.ConnectedRemoteAntenna?.BlockSettings.AllowedRemoteSettings ?? MyAllowedRemoteSettings.ALL;
+					if (controller == null || jump_gate == null || !controller.IsWorking || !jump_gate.IsControlled() || controller.BlockSettings.SelectedWaypoint() == null || !controller.BlockSettings.SelectedWaypoint().HasValue() || !jump_gate.IsJumping() || (allowed_settings & MyAllowedRemoteSettings.JUMP) == 0) return;
+
+
+					if (jump_gate != null && !jump_gate.Closed)
+					{
+						if (jump_gate.Status != MyJumpGateStatus.OUTBOUND) MyAPIGateway.Utilities.ShowNotification(MyTexts.GetString("Terminal_JumpGateController_GateNotJumpingError"), 5000, "Red");
+						else jump_gate.CancelJump();
+					}
+					else MyAPIGateway.Utilities.ShowNotification(MyTexts.GetString("Terminal_JumpGateController_GateNotConnectedError"), 5000, "Red");
+				};
+				nojump_action.Writer = (block, string_builder) => {
+					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
+					MyJumpGate jump_gate = controller?.AttachedJumpGate();
+					if (controller == null || jump_gate == null || controller.JumpGateGrid == null || jump_gate.Closed || controller.JumpGateGrid.Closed) return;
+					else if (!controller.IsWorking) string_builder.Append($"- {MyTexts.GetString("GeneralText_Offline")} -");
+					else string_builder.Append(jump_gate.Status.ToString());
+				};
+				nojump_action.InvalidToolbarTypes = new List<MyToolbarType>() {
+					MyToolbarType.Seat
+				};
+				MyAPIGateway.TerminalControls.AddAction<IMyUpgradeModule>(nojump_action);
+			}
+
+			// Toggle Jump
+			{
+				IMyTerminalAction jump_action = MyAPIGateway.TerminalControls.CreateAction<IMyUpgradeModule>(MODID_PREFIX + "ControllerToggleJumpAction");
+				jump_action.Name = new StringBuilder(MyTexts.GetString("Terminal_JumpGateController_ToggleJump"));
+				jump_action.ValidForGroups = true;
+				jump_action.Icon = @"Textures\GUI\Icons\Actions\SmallShipToggle.dds";
+				jump_action.Enabled = MyJumpGateModSession.IsBlockJumpGateController;
+				jump_action.Action = (block) => {
+					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
+					MyJumpGate jump_gate = controller?.AttachedJumpGate();
+					MyAllowedRemoteSettings allowed_settings = controller?.ConnectedRemoteAntenna?.BlockSettings.AllowedRemoteSettings ?? MyAllowedRemoteSettings.ALL;
+					if (controller == null || jump_gate == null || !controller.IsWorking || !jump_gate.IsControlled() || controller.BlockSettings.SelectedWaypoint() == null || !controller.BlockSettings.SelectedWaypoint().HasValue() || (allowed_settings & MyAllowedRemoteSettings.JUMP) == 0) return;
+
+					if (jump_gate != null && !jump_gate.Closed)
+					{
+						if (jump_gate.IsIdle()) jump_gate.Jump(controller.BlockSettings);
+						else if (jump_gate.Status == MyJumpGateStatus.OUTBOUND) jump_gate.CancelJump();
+						else MyAPIGateway.Utilities.ShowNotification(MyTexts.GetString("JumpFailReason_SRC_BUSY"), 5000, "Red");
+					}
+					else MyAPIGateway.Utilities.ShowNotification(MyTexts.GetString("Terminal_JumpGateController_GateNotConnectedError"), 5000, "Red");
+				};
+				jump_action.Writer = (block, string_builder) => {
+					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
+					MyJumpGate jump_gate = controller?.AttachedJumpGate();
+					if (controller == null || jump_gate == null || controller.JumpGateGrid == null || jump_gate.Closed || controller.JumpGateGrid.Closed) return;
+					else if (!controller.IsWorking) string_builder.Append($"- {MyTexts.GetString("GeneralText_Offline")} -");
+					else string_builder.Append(jump_gate.Status.ToString());
+				};
+				jump_action.InvalidToolbarTypes = new List<MyToolbarType>() {
+					MyToolbarType.Seat
+				};
+				MyAPIGateway.TerminalControls.AddAction<IMyUpgradeModule>(jump_action);
+			}
+
+			// Increase Jump Space Radius
+			{
+				IMyTerminalAction radius_increase_action = MyAPIGateway.TerminalControls.CreateAction<IMyUpgradeModule>(MODID_PREFIX + "ControllerIncreaseJumpSpaceRadiusAction");
+				radius_increase_action.Name = new StringBuilder(MyTexts.GetString("Terminal_JumpGateController_IncreaseJumpSpaceRadius"));
+				radius_increase_action.ValidForGroups = true;
+				radius_increase_action.Icon = @"Textures\GUI\Icons\Actions\Increase.dds";
+				radius_increase_action.Enabled = MyJumpGateModSession.IsBlockJumpGateController;
+				radius_increase_action.Action = (block) => {
+					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
+					MyJumpGate jump_gate = controller?.AttachedJumpGate();
+					MyAllowedRemoteSettings allowed_settings = controller?.ConnectedRemoteAntenna?.BlockSettings.AllowedRemoteSettings ?? MyAllowedRemoteSettings.ALL;
+					if (controller == null || !controller.IsWorking || controller.JumpGateGrid == null || controller.JumpGateGrid.Closed || (jump_gate != null && !jump_gate.IsIdle()) || (allowed_settings & MyAllowedRemoteSettings.JUMPSPACE) == 0) return;
+					controller.BaseBlockSettings.JumpSpaceRadius(controller.BlockSettings.JumpSpaceRadius() + 10);
+					controller.SetDirty();
+				};
+				radius_increase_action.Writer = (block, string_builder) => {
+					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
+					if (controller == null || controller.JumpGateGrid == null || controller.JumpGateGrid.Closed) return;
+					else if (!controller.IsWorking) string_builder.Append($"- {MyTexts.GetString("GeneralText_Offline")} -");
+					else string_builder.Append(controller.BlockSettings.JumpSpaceRadius());
+				};
+				radius_increase_action.InvalidToolbarTypes = new List<MyToolbarType>() {
+					MyToolbarType.Seat
+				};
+				MyAPIGateway.TerminalControls.AddAction<IMyUpgradeModule>(radius_increase_action);
+			}
+
+			// Decrease Jump Space Radius
+			{
+				IMyTerminalAction radius_decrease_action = MyAPIGateway.TerminalControls.CreateAction<IMyUpgradeModule>(MODID_PREFIX + "ControllerDecreaseJumpSpaceRadiusAction");
+				radius_decrease_action.Name = new StringBuilder(MyTexts.GetString("Terminal_JumpGateController_DecreaseJumpSpaceRadius"));
+				radius_decrease_action.ValidForGroups = true;
+				radius_decrease_action.Icon = @"Textures\GUI\Icons\Actions\Decrease.dds";
+				radius_decrease_action.Enabled = MyJumpGateModSession.IsBlockJumpGateController;
+				radius_decrease_action.Action = (block) => {
+					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
+					MyJumpGate jump_gate = controller?.AttachedJumpGate();
+					MyAllowedRemoteSettings allowed_settings = controller?.ConnectedRemoteAntenna?.BlockSettings.AllowedRemoteSettings ?? MyAllowedRemoteSettings.ALL;
+					if (controller == null || !controller.IsWorking || controller.JumpGateGrid == null || controller.JumpGateGrid.Closed || (jump_gate != null && !jump_gate.IsIdle()) || (allowed_settings & MyAllowedRemoteSettings.JUMPSPACE) == 0) return;
+					controller.BaseBlockSettings.JumpSpaceRadius(controller.BlockSettings.JumpSpaceRadius() - 10);
+					controller.SetDirty();
+				};
+				radius_decrease_action.Writer = (block, string_builder) => {
+					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
+					if (controller == null || controller.JumpGateGrid == null || controller.JumpGateGrid.Closed) return;
+					else if (!controller.IsWorking) string_builder.Append($"- {MyTexts.GetString("GeneralText_Offline")} -");
+					else string_builder.Append(controller.BlockSettings.JumpSpaceRadius());
+				};
+				radius_decrease_action.InvalidToolbarTypes = new List<MyToolbarType>() {
+					MyToolbarType.Seat
+				};
+				MyAPIGateway.TerminalControls.AddAction<IMyUpgradeModule>(radius_decrease_action);
+			}
+
+			// Increase Jump Space Depth Percent
+			{
+				IMyTerminalAction radius_increase_action = MyAPIGateway.TerminalControls.CreateAction<IMyUpgradeModule>(MODID_PREFIX + "ControllerIncreaseJumpSpaceDepthPercentAction");
+				radius_increase_action.Name = new StringBuilder(MyTexts.GetString("Terminal_JumpGateController_IncreaseJumpSpaceDepthPercent"));
+				radius_increase_action.ValidForGroups = true;
+				radius_increase_action.Icon = @"Textures\GUI\Icons\Actions\Increase.dds";
+				radius_increase_action.Enabled = MyJumpGateModSession.IsBlockJumpGateController;
+				radius_increase_action.Action = (block) => {
+					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
+					MyJumpGate jump_gate = controller?.AttachedJumpGate();
+					MyAllowedRemoteSettings allowed_settings = controller?.ConnectedRemoteAntenna?.BlockSettings.AllowedRemoteSettings ?? MyAllowedRemoteSettings.ALL;
+					if (controller == null || !controller.IsWorking || controller.JumpGateGrid == null || controller.JumpGateGrid.Closed || (jump_gate != null && !jump_gate.IsIdle()) || (allowed_settings & MyAllowedRemoteSettings.JUMPSPACE) == 0) return;
+					controller.BaseBlockSettings.JumpSpaceDepthPercent(controller.BlockSettings.JumpSpaceDepthPercent() + 0.1);
+					controller.SetDirty();
+				};
+				radius_increase_action.Writer = (block, string_builder) => {
+					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
+					if (controller == null || controller.JumpGateGrid == null || controller.JumpGateGrid.Closed) return;
+					else if (!controller.IsWorking) string_builder.Append($"- {MyTexts.GetString("GeneralText_Offline")} -");
+					else string_builder.Append(controller.BlockSettings.JumpSpaceDepthPercent() * 100);
+				};
+				radius_increase_action.InvalidToolbarTypes = new List<MyToolbarType>() {
+					MyToolbarType.Seat
+				};
+				MyAPIGateway.TerminalControls.AddAction<IMyUpgradeModule>(radius_increase_action);
+			}
+
+			// Decrease Jump Space Depth Percent
+			{
+				IMyTerminalAction radius_decrease_action = MyAPIGateway.TerminalControls.CreateAction<IMyUpgradeModule>(MODID_PREFIX + "ControllerDecreaseJumpSpaceDepthPercentAction");
+				radius_decrease_action.Name = new StringBuilder(MyTexts.GetString("Terminal_JumpGateController_DecreaseJumpSpaceDepthPercent"));
+				radius_decrease_action.ValidForGroups = true;
+				radius_decrease_action.Icon = @"Textures\GUI\Icons\Actions\Decrease.dds";
+				radius_decrease_action.Enabled = MyJumpGateModSession.IsBlockJumpGateController;
+				radius_decrease_action.Action = (block) => {
+					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
+					MyJumpGate jump_gate = controller?.AttachedJumpGate();
+					MyAllowedRemoteSettings allowed_settings = controller?.ConnectedRemoteAntenna?.BlockSettings.AllowedRemoteSettings ?? MyAllowedRemoteSettings.ALL;
+					if (controller == null || !controller.IsWorking || controller.JumpGateGrid == null || controller.JumpGateGrid.Closed || (jump_gate != null && !jump_gate.IsIdle()) || (allowed_settings & MyAllowedRemoteSettings.JUMPSPACE) == 0) return;
+					controller.BaseBlockSettings.JumpSpaceDepthPercent(controller.BlockSettings.JumpSpaceDepthPercent() - 0.1);
+					controller.SetDirty();
+				};
+				radius_decrease_action.Writer = (block, string_builder) => {
+					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
+					if (controller == null || controller.JumpGateGrid == null || controller.JumpGateGrid.Closed) return;
+					else if (!controller.IsWorking) string_builder.Append($"- {MyTexts.GetString("GeneralText_Offline")} -");
+					else string_builder.Append(controller.BlockSettings.JumpSpaceDepthPercent() * 100);
+				};
+				radius_decrease_action.InvalidToolbarTypes = new List<MyToolbarType>() {
+					MyToolbarType.Seat
+				};
+				MyAPIGateway.TerminalControls.AddAction<IMyUpgradeModule>(radius_decrease_action);
 			}
 
 			// Allow Jumps from Unowned
@@ -2044,7 +2261,6 @@ namespace IOTA.ModularJumpGates.Terminal
 				allow_unowned_action.ValidForGroups = true;
 				allow_unowned_action.Icon = @"Textures\GUI\Icons\Actions\StationToggle.dds";
 				allow_unowned_action.Enabled = MyJumpGateModSession.IsBlockJumpGateController;
-
 				allow_unowned_action.Action = (block) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					MyJumpGate jump_gate = controller?.AttachedJumpGate();
@@ -2053,18 +2269,15 @@ namespace IOTA.ModularJumpGates.Terminal
 					controller.BaseBlockSettings.CanAcceptUnowned(!controller.BlockSettings.CanAcceptUnowned());
 					controller.SetDirty();
 				};
-
 				allow_unowned_action.Writer = (block, string_builder) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					if (controller == null || controller.JumpGateGrid == null || controller.JumpGateGrid.Closed) return;
 					else if (!controller.IsWorking) string_builder.Append($"- {MyTexts.GetString("GeneralText_Offline")} -");
 					else string_builder.Append(controller.BlockSettings.CanAcceptUnowned());
 				};
-
 				allow_unowned_action.InvalidToolbarTypes = new List<MyToolbarType>() {
 					MyToolbarType.Seat
 				};
-
 				MyAPIGateway.TerminalControls.AddAction<IMyUpgradeModule>(allow_unowned_action);
 			}
 
@@ -2075,7 +2288,6 @@ namespace IOTA.ModularJumpGates.Terminal
 				allow_enemy_action.ValidForGroups = true;
 				allow_enemy_action.Icon = @"Textures\GUI\Icons\Actions\StationToggle.dds";
 				allow_enemy_action.Enabled = MyJumpGateModSession.IsBlockJumpGateController;
-
 				allow_enemy_action.Action = (block) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					MyJumpGate jump_gate = controller?.AttachedJumpGate();
@@ -2084,18 +2296,15 @@ namespace IOTA.ModularJumpGates.Terminal
 					controller.BaseBlockSettings.CanAcceptEnemy(!controller.BlockSettings.CanAcceptEnemy());
 					controller.SetDirty();
 				};
-
 				allow_enemy_action.Writer = (block, string_builder) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					if (controller == null || controller.JumpGateGrid == null || controller.JumpGateGrid.Closed) return;
 					else if (!controller.IsWorking) string_builder.Append($"- {MyTexts.GetString("GeneralText_Offline")} -");
 					else string_builder.Append(controller.BlockSettings.CanAcceptEnemy());
 				};
-
 				allow_enemy_action.InvalidToolbarTypes = new List<MyToolbarType>() {
 					MyToolbarType.Seat
 				};
-
 				MyAPIGateway.TerminalControls.AddAction<IMyUpgradeModule>(allow_enemy_action);
 			}
 
@@ -2106,7 +2315,6 @@ namespace IOTA.ModularJumpGates.Terminal
 				allow_neutral_action.ValidForGroups = true;
 				allow_neutral_action.Icon = @"Textures\GUI\Icons\Actions\StationToggle.dds";
 				allow_neutral_action.Enabled = MyJumpGateModSession.IsBlockJumpGateController;
-
 				allow_neutral_action.Action = (block) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					MyJumpGate jump_gate = controller?.AttachedJumpGate();
@@ -2115,18 +2323,15 @@ namespace IOTA.ModularJumpGates.Terminal
 					controller.BaseBlockSettings.CanAcceptNeutral(!controller.BlockSettings.CanAcceptNeutral());
 					controller.SetDirty();
 				};
-
 				allow_neutral_action.Writer = (block, string_builder) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					if (controller == null || controller.JumpGateGrid == null || controller.JumpGateGrid.Closed) return;
 					else if (!controller.IsWorking) string_builder.Append($"- {MyTexts.GetString("GeneralText_Offline")} -");
 					else string_builder.Append(controller.BlockSettings.CanAcceptNeutral());
 				};
-
 				allow_neutral_action.InvalidToolbarTypes = new List<MyToolbarType>() {
 					MyToolbarType.Seat
 				};
-
 				MyAPIGateway.TerminalControls.AddAction<IMyUpgradeModule>(allow_neutral_action);
 			}
 
@@ -2137,7 +2342,6 @@ namespace IOTA.ModularJumpGates.Terminal
 				allow_friendly_action.ValidForGroups = true;
 				allow_friendly_action.Icon = @"Textures\GUI\Icons\Actions\StationToggle.dds";
 				allow_friendly_action.Enabled = MyJumpGateModSession.IsBlockJumpGateController;
-
 				allow_friendly_action.Action = (block) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					MyJumpGate jump_gate = controller?.AttachedJumpGate();
@@ -2146,18 +2350,15 @@ namespace IOTA.ModularJumpGates.Terminal
 					controller.BaseBlockSettings.CanAcceptFriendly(!controller.BlockSettings.CanAcceptFriendly());
 					controller.SetDirty();
 				};
-
 				allow_friendly_action.Writer = (block, string_builder) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					if (controller == null || controller.JumpGateGrid == null || controller.JumpGateGrid.Closed) return;
 					else if (!controller.IsWorking) string_builder.Append($"- {MyTexts.GetString("GeneralText_Offline")} -");
 					else string_builder.Append(controller.BlockSettings.CanAcceptFriendly());
 				};
-
 				allow_friendly_action.InvalidToolbarTypes = new List<MyToolbarType>() {
 					MyToolbarType.Seat
 				};
-
 				MyAPIGateway.TerminalControls.AddAction<IMyUpgradeModule>(allow_friendly_action);
 			}
 
@@ -2168,7 +2369,6 @@ namespace IOTA.ModularJumpGates.Terminal
 				allow_owned_action.ValidForGroups = true;
 				allow_owned_action.Icon = @"Textures\GUI\Icons\Actions\StationToggle.dds";
 				allow_owned_action.Enabled = MyJumpGateModSession.IsBlockJumpGateController;
-
 				allow_owned_action.Action = (block) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					MyJumpGate jump_gate = controller?.AttachedJumpGate();
@@ -2177,18 +2377,15 @@ namespace IOTA.ModularJumpGates.Terminal
 					controller.BaseBlockSettings.CanAcceptOwned(!controller.BlockSettings.CanAcceptOwned());
 					controller.SetDirty();
 				};
-
 				allow_owned_action.Writer = (block, string_builder) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					if (controller == null || controller.JumpGateGrid == null || controller.JumpGateGrid.Closed) return;
 					else if (!controller.IsWorking) string_builder.Append($"- {MyTexts.GetString("GeneralText_Offline")} -");
 					else string_builder.Append(controller.BlockSettings.CanAcceptOwned());
 				};
-
 				allow_owned_action.InvalidToolbarTypes = new List<MyToolbarType>() {
 					MyToolbarType.Seat
 				};
-
 				MyAPIGateway.TerminalControls.AddAction<IMyUpgradeModule>(allow_owned_action);
 			}
 
@@ -2199,7 +2396,6 @@ namespace IOTA.ModularJumpGates.Terminal
 				jump_action.ValidForGroups = true;
 				jump_action.Icon = @"Textures\GUI\Icons\Actions\StationSwitchOn.dds";
 				jump_action.Enabled = MyJumpGateModSession.IsBlockJumpGateController;
-
 				jump_action.Action = (block) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					if (controller == null || controller.JumpGateGrid == null || controller.JumpGateGrid.Closed || !controller.JumpGateGrid.GetCubeGrids().Any((grid) => !grid.IsStatic && grid.Physics != null && grid.LinearVelocity.Length() < 1e-3 && grid.Physics.AngularVelocity.Length() < 1e-3)) return;
@@ -2216,7 +2412,6 @@ namespace IOTA.ModularJumpGates.Terminal
 						packet.Send();
 					}
 				};
-
 				jump_action.Writer = (block, string_builder) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					if (controller == null || controller.JumpGateGrid == null || controller.JumpGateGrid.Closed) return;
@@ -2235,11 +2430,9 @@ namespace IOTA.ModularJumpGates.Terminal
 						string_builder.Append($"{count}/{total}");
 					}
 				};
-
 				jump_action.InvalidToolbarTypes = new List<MyToolbarType>() {
 					MyToolbarType.Seat
 				};
-
 				MyAPIGateway.TerminalControls.AddAction<IMyUpgradeModule>(jump_action);
 			}
 
@@ -2250,7 +2443,6 @@ namespace IOTA.ModularJumpGates.Terminal
 				jump_action.ValidForGroups = true;
 				jump_action.Icon = @"Textures\GUI\Icons\Actions\StationSwitchOff.dds";
 				jump_action.Enabled = MyJumpGateModSession.IsBlockJumpGateController;
-
 				jump_action.Action = (block) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					bool enabled = controller != null && controller.JumpGateGrid != null && !controller.JumpGateGrid.Closed && controller.JumpGateGrid.GetCubeGrids().Any((grid) => grid.IsStatic);
@@ -2268,7 +2460,6 @@ namespace IOTA.ModularJumpGates.Terminal
 						packet.Send();
 					}
 				};
-
 				jump_action.Writer = (block, string_builder) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					if (controller == null || controller.JumpGateGrid == null || controller.JumpGateGrid.Closed) return;
@@ -2287,12 +2478,356 @@ namespace IOTA.ModularJumpGates.Terminal
 						string_builder.Append($"{count}/{total}");
 					}
 				};
-
 				jump_action.InvalidToolbarTypes = new List<MyToolbarType>() {
 					MyToolbarType.Seat
 				};
-
 				MyAPIGateway.TerminalControls.AddAction<IMyUpgradeModule>(jump_action);
+			}
+
+			// Cycle Gravity Alignment
+			{
+				IMyTerminalAction armed_action = MyAPIGateway.TerminalControls.CreateAction<IMyUpgradeModule>(MODID_PREFIX + "ControllerCycleGravityAlignmentAction");
+				armed_action.Name = new StringBuilder(MyTexts.GetString("Terminal_JumpGateController_CycleGravityAlignment"));
+				armed_action.ValidForGroups = true;
+				armed_action.Icon = @"Textures\GUI\Icons\Actions\Reset.dds";
+				armed_action.Enabled = MyJumpGateModSession.IsBlockJumpGateController;
+				armed_action.Action = (block) => {
+					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
+					MyJumpGate jump_gate = controller?.AttachedJumpGate();
+					MyAllowedRemoteSettings allowed_settings = controller?.ConnectedRemoteAntenna?.BlockSettings.AllowedRemoteSettings ?? MyAllowedRemoteSettings.ALL;
+					if (controller == null || controller.JumpGateGrid == null || controller.JumpGateGrid.Closed || !controller.IsWorking || (allowed_settings & MyAllowedRemoteSettings.JUMPSPACE) == 0) return;
+					byte alignment = (byte) controller.BlockSettings.GravityAlignmentType();
+					controller.BaseBlockSettings.GravityAlignmentType((MyGravityAlignmentType) ((alignment + 1) % 4));
+				};
+				armed_action.Writer = (block, string_builder) => {
+					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
+					MyJumpGate jump_gate = controller?.AttachedJumpGate();
+					if (controller == null || jump_gate == null || controller.JumpGateGrid == null || jump_gate.Closed || controller.JumpGateGrid.Closed) return;
+					else if (!controller.IsWorking) string_builder.Append($"- {MyTexts.GetString("GeneralText_Offline")} -");
+					else string_builder.Append(MyTexts.GetString($"GravityAlignmentType_{controller.BlockSettings.GravityAlignmentType()}"));
+				};
+				armed_action.InvalidToolbarTypes = new List<MyToolbarType>() {
+					MyToolbarType.Seat
+				};
+				MyAPIGateway.TerminalControls.AddAction<IMyUpgradeModule>(armed_action);
+			}
+
+			// Detonation Timer
+			{
+				foreach (int seconds in new int[3] { 1, 10, 30 })
+				{
+					int detonation_seconds = seconds;
+
+					// Increase Detonation Timer
+					{
+						IMyTerminalAction timer_increase_action = MyAPIGateway.TerminalControls.CreateAction<IMyUpgradeModule>(MODID_PREFIX + $"ControllerIncreaseDetonationTimer{detonation_seconds}Action");
+						timer_increase_action.Name = new StringBuilder(MyTexts.GetString($"Terminal_JumpGateController_IncreaseDetonationTimer{detonation_seconds}"));
+						timer_increase_action.ValidForGroups = true;
+						timer_increase_action.Icon = @"Textures\GUI\Icons\Actions\Increase.dds";
+						timer_increase_action.Enabled = MyJumpGateModSession.IsBlockJumpGateController;
+						timer_increase_action.Action = (block) => {
+							MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
+							MyJumpGate jump_gate = controller?.AttachedJumpGate();
+							MyAllowedRemoteSettings allowed_settings = controller?.ConnectedRemoteAntenna?.BlockSettings.AllowedRemoteSettings ?? MyAllowedRemoteSettings.ALL;
+							if (controller == null || jump_gate == null || !controller.IsWorking || !jump_gate.IsControlled() || jump_gate.ManualDetonationTimeout != -1 || (allowed_settings & MyAllowedRemoteSettings.DETONATION_CONTROL) == 0) return;
+							controller.BaseBlockSettings.GateDetonationTime(controller.BlockSettings.GateDetonationTime() + detonation_seconds);
+							controller.SetDirty();
+						};
+						timer_increase_action.Writer = (block, string_builder) => {
+							MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
+							MyJumpGate jump_gate = controller?.AttachedJumpGate();
+
+							if (controller == null) return;
+							else if (jump_gate != null && jump_gate.ManualDetonationTimeout != -1)
+							{
+								float timeout = jump_gate.ManualDetonationTimeout / 60f;
+								string_builder.Append($"{(int) Math.Floor(timeout / 3600):00}:{(int) Math.Floor(timeout % 3600 / 60d):00}:{(int) Math.Floor(timeout % 60d):00}");
+							}
+							else if (controller.IsWorking) string_builder.Append(MyJumpGateModSession.AutoconvertTimeUnits(controller.BlockSettings.GateDetonationTime(), 2));
+							else string_builder.Append($"- {MyTexts.GetString("GeneralText_Offline")} -");
+						};
+						timer_increase_action.InvalidToolbarTypes = new List<MyToolbarType>() {
+							MyToolbarType.Seat
+						};
+						MyAPIGateway.TerminalControls.AddAction<IMyUpgradeModule>(timer_increase_action);
+					}
+
+					// Decrease Detonation Timer
+					{
+						IMyTerminalAction timer_decrease_action = MyAPIGateway.TerminalControls.CreateAction<IMyUpgradeModule>(MODID_PREFIX + $"ControllerDecreaseDetonationTimer{detonation_seconds}Action");
+						timer_decrease_action.Name = new StringBuilder(MyTexts.GetString($"Terminal_JumpGateController_DecreaseDetonationTimer{detonation_seconds}"));
+						timer_decrease_action.ValidForGroups = true;
+						timer_decrease_action.Icon = @"Textures\GUI\Icons\Actions\Decrease.dds";
+						timer_decrease_action.Enabled = MyJumpGateModSession.IsBlockJumpGateController;
+						timer_decrease_action.Action = (block) => {
+							MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
+							MyJumpGate jump_gate = controller?.AttachedJumpGate();
+							MyAllowedRemoteSettings allowed_settings = controller?.ConnectedRemoteAntenna?.BlockSettings.AllowedRemoteSettings ?? MyAllowedRemoteSettings.ALL;
+							if (controller == null || jump_gate == null || !controller.IsWorking || !jump_gate.IsControlled() || jump_gate.ManualDetonationTimeout != -1 || (allowed_settings & MyAllowedRemoteSettings.DETONATION_CONTROL) == 0) return;
+							controller.BaseBlockSettings.GateDetonationTime(controller.BlockSettings.GateDetonationTime() - detonation_seconds);
+							controller.SetDirty();
+						};
+						timer_decrease_action.Writer = (block, string_builder) => {
+							MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
+							MyJumpGate jump_gate = controller?.AttachedJumpGate();
+
+							if (controller == null) return;
+							else if (jump_gate != null && jump_gate.ManualDetonationTimeout != -1)
+							{
+								float timeout = jump_gate.ManualDetonationTimeout / 60f;
+								string_builder.Append($"{(int) Math.Floor(timeout / 3600):00}:{(int) Math.Floor(timeout % 3600 / 60d):00}:{(int) Math.Floor(timeout % 60d):00}");
+							}
+							else if (controller.IsWorking) string_builder.Append(MyJumpGateModSession.AutoconvertTimeUnits(controller.BlockSettings.GateDetonationTime(), 2));
+							else string_builder.Append($"- {MyTexts.GetString("GeneralText_Offline")} -");
+						};
+						timer_decrease_action.InvalidToolbarTypes = new List<MyToolbarType>() {
+							MyToolbarType.Seat
+						};
+						MyAPIGateway.TerminalControls.AddAction<IMyUpgradeModule>(timer_decrease_action);
+					}
+				}
+			}
+
+			// Toggle Detonator Armed
+			{
+				IMyTerminalAction armed_action = MyAPIGateway.TerminalControls.CreateAction<IMyUpgradeModule>(MODID_PREFIX + "ControllerToggleDetonatorArmedAction");
+				armed_action.Name = new StringBuilder(MyTexts.GetString("Terminal_JumpGateController_ToggleDetonatorArmed"));
+				armed_action.ValidForGroups = true;
+				armed_action.Icon = @"Textures\GUI\Icons\Actions\SmallShipToggle.dds";
+				armed_action.Enabled = MyJumpGateModSession.IsBlockJumpGateController;
+				armed_action.Action = (block) => {
+					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
+					MyJumpGate jump_gate = controller?.AttachedJumpGate();
+					MyAllowedRemoteSettings allowed_settings = controller?.ConnectedRemoteAntenna?.BlockSettings.AllowedRemoteSettings ?? MyAllowedRemoteSettings.ALL;
+					if (controller == null || jump_gate == null || !controller.IsWorking || !jump_gate.IsControlled() || jump_gate.ManualDetonationTimeout != -1 || (allowed_settings & MyAllowedRemoteSettings.DETONATION_CONTROL) == 0) return;
+					controller.BaseBlockSettings.GateDetonatorArmed(!controller.BaseBlockSettings.GateDetonatorArmed());
+					controller.SetDirty();
+				};
+				armed_action.Writer = (block, string_builder) => {
+					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
+					MyJumpGate jump_gate = controller?.AttachedJumpGate();
+					if (controller == null || jump_gate == null || controller.JumpGateGrid == null || jump_gate.Closed || controller.JumpGateGrid.Closed) return;
+					else if (!controller.IsWorking) string_builder.Append($"- {MyTexts.GetString("GeneralText_Offline")} -");
+					else string_builder.Append(MyTexts.GetString(controller.BlockSettings.GateDetonatorArmed() ? "Terminal_JumpGateController_DetonatorArmed" : "Terminal_JumpGateController_DetonatorDisarmed"));
+				};
+				armed_action.InvalidToolbarTypes = new List<MyToolbarType>() {
+					MyToolbarType.Seat
+				};
+				MyAPIGateway.TerminalControls.AddAction<IMyUpgradeModule>(armed_action);
+			}
+
+			// Arm Detonator
+			{
+				IMyTerminalAction arm_action = MyAPIGateway.TerminalControls.CreateAction<IMyUpgradeModule>(MODID_PREFIX + "ControllerDetonatorArmAction");
+				arm_action.Name = new StringBuilder(MyTexts.GetString("Terminal_JumpGateController_ArmDetonator"));
+				arm_action.ValidForGroups = true;
+				arm_action.Icon = @"Textures\GUI\Icons\Actions\SwitchOn.dds";
+				arm_action.Enabled = MyJumpGateModSession.IsBlockJumpGateController;
+				arm_action.Action = (block) => {
+					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
+					MyJumpGate jump_gate = controller?.AttachedJumpGate();
+					MyAllowedRemoteSettings allowed_settings = controller?.ConnectedRemoteAntenna?.BlockSettings.AllowedRemoteSettings ?? MyAllowedRemoteSettings.ALL;
+					if (controller == null || jump_gate == null || !controller.IsWorking || !jump_gate.IsControlled() || jump_gate.ManualDetonationTimeout != -1 || (allowed_settings & MyAllowedRemoteSettings.DETONATION_CONTROL) == 0) return;
+					controller.BaseBlockSettings.GateDetonatorArmed(true);
+					controller.SetDirty();
+				};
+				arm_action.Writer = (block, string_builder) => {
+					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
+					MyJumpGate jump_gate = controller?.AttachedJumpGate();
+					if (controller == null || jump_gate == null || controller.JumpGateGrid == null || jump_gate.Closed || controller.JumpGateGrid.Closed) return;
+					else if (!controller.IsWorking) string_builder.Append($"- {MyTexts.GetString("GeneralText_Offline")} -");
+					else string_builder.Append(MyTexts.GetString(controller.BlockSettings.GateDetonatorArmed() ? "Terminal_JumpGateController_DetonatorArmed" : "Terminal_JumpGateController_DetonatorDisarmed"));
+				};
+				arm_action.InvalidToolbarTypes = new List<MyToolbarType>() {
+					MyToolbarType.Seat
+				};
+				MyAPIGateway.TerminalControls.AddAction<IMyUpgradeModule>(arm_action);
+			}
+
+			// Disarm Detonator
+			{
+				IMyTerminalAction disarm_action = MyAPIGateway.TerminalControls.CreateAction<IMyUpgradeModule>(MODID_PREFIX + "ControllerDetonatorDisarmAction");
+				disarm_action.Name = new StringBuilder(MyTexts.GetString("Terminal_JumpGateController_DisarmDetonator"));
+				disarm_action.ValidForGroups = true;
+				disarm_action.Icon = @"Textures\GUI\Icons\Actions\SwitchOff.dds";
+				disarm_action.Enabled = MyJumpGateModSession.IsBlockJumpGateController;
+				disarm_action.Action = (block) => {
+					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
+					MyJumpGate jump_gate = controller?.AttachedJumpGate();
+					MyAllowedRemoteSettings allowed_settings = controller?.ConnectedRemoteAntenna?.BlockSettings.AllowedRemoteSettings ?? MyAllowedRemoteSettings.ALL;
+					if (controller == null || jump_gate == null || !controller.IsWorking || !jump_gate.IsControlled() || jump_gate.ManualDetonationTimeout != -1 || (allowed_settings & MyAllowedRemoteSettings.DETONATION_CONTROL) == 0) return;
+					controller.BaseBlockSettings.GateDetonatorArmed(false);
+					controller.SetDirty();
+				};
+				disarm_action.Writer = (block, string_builder) => {
+					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
+					MyJumpGate jump_gate = controller?.AttachedJumpGate();
+					if (controller == null || jump_gate == null || controller.JumpGateGrid == null || jump_gate.Closed || controller.JumpGateGrid.Closed) return;
+					else if (!controller.IsWorking) string_builder.Append($"- {MyTexts.GetString("GeneralText_Offline")} -");
+					else string_builder.Append(MyTexts.GetString(controller.BlockSettings.GateDetonatorArmed() ? "Terminal_JumpGateController_DetonatorArmed" : "Terminal_JumpGateController_DetonatorDisarmed"));
+				};
+				disarm_action.InvalidToolbarTypes = new List<MyToolbarType>() {
+					MyToolbarType.Seat
+				};
+				MyAPIGateway.TerminalControls.AddAction<IMyUpgradeModule>(disarm_action);
+			}
+
+			// Begin Detonation
+			{
+				IMyTerminalAction detonate_action = MyAPIGateway.TerminalControls.CreateAction<IMyUpgradeModule>(MODID_PREFIX + "ControllerDetonateAction");
+				detonate_action.Name = new StringBuilder(MyTexts.GetString("Terminal_JumpGateController_Detonate"));
+				detonate_action.ValidForGroups = true;
+				detonate_action.Icon = @"Textures\GUI\Icons\Actions\SubsystemTargeting_Power.dds";
+				detonate_action.Enabled = MyJumpGateModSession.IsBlockJumpGateController;
+				detonate_action.Action = (block) => {
+					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
+					MyJumpGate jump_gate = controller?.AttachedJumpGate();
+					MyAllowedRemoteSettings allowed_settings = controller?.ConnectedRemoteAntenna?.BlockSettings.AllowedRemoteSettings ?? MyAllowedRemoteSettings.ALL;
+					if (controller == null || jump_gate == null || !controller.IsWorking || !jump_gate.IsControlled() || jump_gate.ManualDetonationTimeout != -1 || !controller.BlockSettings.GateDetonatorArmed() || (allowed_settings & MyAllowedRemoteSettings.DETONATION_CONTROL) == 0) return;
+
+					if (jump_gate != null && !jump_gate.Closed)
+					{
+						jump_gate.QueueDetonation(controller.BlockSettings.GateDetonationTime());
+						jump_gate.SetDirty();
+						MyJumpGateModSession.Instance.RedrawAllTerminalControls();
+					}
+					else MyAPIGateway.Utilities.ShowNotification(MyTexts.GetString("Terminal_JumpGateController_GateNotConnectedError"), 5000, "Red");
+				};
+				detonate_action.Writer = (block, string_builder) => {
+					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
+					MyJumpGate jump_gate = controller?.AttachedJumpGate();
+
+					if (controller == null) return;
+					else if (jump_gate != null && jump_gate.ManualDetonationTimeout != -1)
+					{
+						float timeout = jump_gate.ManualDetonationTimeout / 60f;
+						string_builder.Append($"{(int) Math.Floor(timeout / 3600):00}:{(int) Math.Floor(timeout % 3600 / 60d):00}:{(int) Math.Floor(timeout % 60d):00}");
+					}
+					else if (controller.IsWorking && !controller.BlockSettings.GateDetonatorArmed()) string_builder.Append(MyTexts.GetString("Terminal_JumpGateController_DetonatorDisarmed"));
+					else if (controller.IsWorking) string_builder.Append(MyJumpGateModSession.AutoconvertTimeUnits(controller.BlockSettings.GateDetonationTime(), 2));
+					else string_builder.Append($"- {MyTexts.GetString("GeneralText_Offline")} -");
+				};
+				detonate_action.InvalidToolbarTypes = new List<MyToolbarType>() {
+					MyToolbarType.Seat
+				};
+				MyAPIGateway.TerminalControls.AddAction<IMyUpgradeModule>(detonate_action);
+			}
+
+			// Cancel Detonation
+			{
+				IMyTerminalAction nodetonate_action = MyAPIGateway.TerminalControls.CreateAction<IMyUpgradeModule>(MODID_PREFIX + "ControllerNoDetonateAction");
+				nodetonate_action.Name = new StringBuilder(MyTexts.GetString("Terminal_JumpGateController_NoDetonate"));
+				nodetonate_action.ValidForGroups = true;
+				nodetonate_action.Icon = @"Textures\GUI\Icons\Actions\SubsystemTargeting_None.dds";
+				nodetonate_action.Enabled = MyJumpGateModSession.IsBlockJumpGateController;
+				nodetonate_action.Action = (block) => {
+					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
+					MyJumpGate jump_gate = controller?.AttachedJumpGate();
+					MyAllowedRemoteSettings allowed_settings = controller?.ConnectedRemoteAntenna?.BlockSettings.AllowedRemoteSettings ?? MyAllowedRemoteSettings.ALL;
+					if (controller == null || jump_gate == null || !controller.IsWorking || !jump_gate.IsControlled() || jump_gate.ManualDetonationTimeout == -1 || !controller.BlockSettings.GateDetonatorArmed() || (allowed_settings & MyAllowedRemoteSettings.DETONATION_CONTROL) == 0) return;
+
+					if (jump_gate != null && !jump_gate.Closed)
+					{
+						jump_gate.ClearDetonation();
+						jump_gate.SetDirty();
+						MyJumpGateModSession.Instance.RedrawAllTerminalControls();
+					}
+					else MyAPIGateway.Utilities.ShowNotification(MyTexts.GetString("Terminal_JumpGateController_GateNotConnectedError"), 5000, "Red");
+				};
+				nodetonate_action.Writer = (block, string_builder) => {
+					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
+					MyJumpGate jump_gate = controller?.AttachedJumpGate();
+
+					if (controller == null) return;
+					else if (jump_gate != null && jump_gate.ManualDetonationTimeout != -1)
+					{
+						float timeout = jump_gate.ManualDetonationTimeout / 60f;
+						string_builder.Append($"{(int) Math.Floor(timeout / 3600):00}:{(int) Math.Floor(timeout % 3600 / 60d):00}:{(int) Math.Floor(timeout % 60d):00}");
+					}
+					else if (controller.IsWorking && !controller.BlockSettings.GateDetonatorArmed()) string_builder.Append(MyTexts.GetString("Terminal_JumpGateController_DetonatorDisarmed"));
+					else if (controller.IsWorking) string_builder.Append(MyJumpGateModSession.AutoconvertTimeUnits(controller.BlockSettings.GateDetonationTime(), 2));
+					else string_builder.Append($"- {MyTexts.GetString("GeneralText_Offline")} -");
+				};
+				nodetonate_action.InvalidToolbarTypes = new List<MyToolbarType>() {
+					MyToolbarType.Seat
+				};
+				MyAPIGateway.TerminalControls.AddAction<IMyUpgradeModule>(nodetonate_action);
+			}
+
+			// Toggle Detonation
+			{
+				IMyTerminalAction toggle_detonate_action = MyAPIGateway.TerminalControls.CreateAction<IMyUpgradeModule>(MODID_PREFIX + "ControllerToggleDetonateAction");
+				toggle_detonate_action.Name = new StringBuilder(MyTexts.GetString("Terminal_JumpGateController_ToggleDetonate"));
+				toggle_detonate_action.ValidForGroups = true;
+				toggle_detonate_action.Icon = @"Textures\GUI\Icons\Actions\MeteorToggle.dds";
+				toggle_detonate_action.Enabled = MyJumpGateModSession.IsBlockJumpGateController;
+				toggle_detonate_action.Action = (block) => {
+					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
+					MyJumpGate jump_gate = controller?.AttachedJumpGate();
+					MyAllowedRemoteSettings allowed_settings = controller?.ConnectedRemoteAntenna?.BlockSettings.AllowedRemoteSettings ?? MyAllowedRemoteSettings.ALL;
+					if (controller == null || jump_gate == null || !controller.IsWorking || !jump_gate.IsControlled() || !controller.BlockSettings.GateDetonatorArmed() || (allowed_settings & MyAllowedRemoteSettings.DETONATION_CONTROL) == 0) return;
+
+					if (jump_gate != null && !jump_gate.Closed)
+					{
+						if (jump_gate.ManualDetonationTimeout != -1) jump_gate.ClearDetonation();
+						else jump_gate.QueueDetonation(controller.BlockSettings.GateDetonationTime());
+						jump_gate.SetDirty();
+						MyJumpGateModSession.Instance.RedrawAllTerminalControls();
+					}
+					else MyAPIGateway.Utilities.ShowNotification(MyTexts.GetString("Terminal_JumpGateController_GateNotConnectedError"), 5000, "Red");
+				};
+				toggle_detonate_action.Writer = (block, string_builder) => {
+					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
+					MyJumpGate jump_gate = controller?.AttachedJumpGate();
+
+					if (controller == null) return;
+					else if (jump_gate != null && jump_gate.ManualDetonationTimeout != -1)
+					{
+						float timeout = jump_gate.ManualDetonationTimeout / 60f;
+						string_builder.Append($"{(int) Math.Floor(timeout / 3600):00}:{(int) Math.Floor(timeout % 3600 / 60d):00}:{(int) Math.Floor(timeout % 60d):00}");
+					}
+					else if (controller.IsWorking && !controller.BlockSettings.GateDetonatorArmed()) string_builder.Append(MyTexts.GetString("Terminal_JumpGateController_DetonatorDisarmed"));
+					else if (controller.IsWorking) string_builder.Append(MyJumpGateModSession.AutoconvertTimeUnits(controller.BlockSettings.GateDetonationTime(), 2));
+					else string_builder.Append($"- {MyTexts.GetString("GeneralText_Offline")} -");
+				};
+				toggle_detonate_action.InvalidToolbarTypes = new List<MyToolbarType>() {
+					MyToolbarType.Seat
+				};
+				MyAPIGateway.TerminalControls.AddAction<IMyUpgradeModule>(toggle_detonate_action);
+			}
+
+			// Detonate
+			{
+				IMyTerminalAction dodetonate_action = MyAPIGateway.TerminalControls.CreateAction<IMyUpgradeModule>(MODID_PREFIX + "ControllerDoDetonateAction");
+				dodetonate_action.Name = new StringBuilder(MyTexts.GetString("Terminal_JumpGateController_DoDetonate"));
+				dodetonate_action.ValidForGroups = true;
+				dodetonate_action.Icon = @"Textures\GUI\Icons\Actions\MeteorSwitchOn.dds";
+				dodetonate_action.Enabled = MyJumpGateModSession.IsBlockJumpGateController;
+				dodetonate_action.Action = (block) => {
+					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
+					MyJumpGate jump_gate = controller?.AttachedJumpGate();
+					MyAllowedRemoteSettings allowed_settings = controller?.ConnectedRemoteAntenna?.BlockSettings.AllowedRemoteSettings ?? MyAllowedRemoteSettings.ALL;
+					if (controller == null || jump_gate == null || !controller.IsWorking || !jump_gate.IsControlled() || jump_gate.ManualDetonationTimeout != -1 || !controller.BlockSettings.GateDetonatorArmed() || (allowed_settings & MyAllowedRemoteSettings.DETONATION_CONTROL) == 0) return;
+
+					if (jump_gate != null && !jump_gate.Closed)
+					{
+						jump_gate.Detonate();
+						MyJumpGateModSession.Instance.RedrawAllTerminalControls();
+					}
+					else MyAPIGateway.Utilities.ShowNotification(MyTexts.GetString("Terminal_JumpGateController_GateNotConnectedError"), 5000, "Red");
+				};
+				dodetonate_action.Writer = (block, string_builder) => {
+					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
+					MyJumpGate jump_gate = controller?.AttachedJumpGate();
+					if (controller == null) return;
+					else if (controller.IsWorking && !controller.BlockSettings.GateDetonatorArmed()) string_builder.Append(MyTexts.GetString("Terminal_JumpGateController_DetonatorDisarmed"));
+					else if (controller.IsWorking) string_builder.Append(MyTexts.GetString("Terminal_JumpGateController_WARN_DETONATE"));
+					else string_builder.Append($"- {MyTexts.GetString("GeneralText_Offline")} -");
+				};
+				dodetonate_action.InvalidToolbarTypes = new List<MyToolbarType>() {
+					MyToolbarType.Seat
+				};
+				MyAPIGateway.TerminalControls.AddAction<IMyUpgradeModule>(dodetonate_action);
 			}
 		}
 
@@ -2300,40 +2835,7 @@ namespace IOTA.ModularJumpGates.Terminal
 		{
 		}
 
-		private static IMyTerminalControlOnOffSwitch GenerateSectionSwitch(string name, bool default_enabled)
-		{
-			// Section Switch
-			IMyTerminalControlOnOffSwitch section_switch = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlOnOffSwitch, IMyUpgradeModule>(MODID_PREFIX + $"{name}SectionSwitch");
-			section_switch.Title = MyStringId.GetOrCompute(MyTexts.GetString($"Terminal_JumpGateController_{name}SectionSwitch"));
-			section_switch.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString($"Terminal_JumpGateController_{name}SectionSwitch_Tooltip"));
-			section_switch.SupportsMultipleBlocks = true;
-			section_switch.Visible = MyJumpGateModSession.IsBlockJumpGateController;
-			section_switch.Enabled = (block) => true;
-			section_switch.OnText = MyStringId.GetOrCompute(MyTexts.GetString("GeneralText_On"));
-			section_switch.OffText = MyStringId.GetOrCompute(MyTexts.GetString("GeneralText_Off"));
-			section_switch.Getter = (block) => MyJumpGateControllerTerminal.SectionSwitches[section_switch];
-			section_switch.Setter = (block, value) => {
-				if (!MyJumpGateModSession.IsBlockJumpGateController(block)) return;
-				MyJumpGateControllerTerminal.SectionSwitches[section_switch] = value;
-				MyJumpGateModSession.Instance.RedrawAllTerminalControls();
-				IMyEntity interacting = MyAPIGateway.Gui.InteractedEntity;
-				MyAPIGateway.Gui.ChangeInteractedEntity(interacting, false);
-			};
-			//MyJumpGateControllerTerminal.TerminalControls.Add(section_switch);
-			MyJumpGateControllerTerminal.SectionSwitches[section_switch] = true;
-
-			// Spacer
-			IMyTerminalControlLabel spacer_lb = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlLabel, IMyUpgradeModule>(MODID_PREFIX + $"Controller{name}SectionSwitchSpacer");
-			spacer_lb.Label = MyStringId.GetOrCompute(" ");
-			spacer_lb.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.SectionSwitches[section_switch];
-			spacer_lb.SupportsMultipleBlocks = true;
-
-			//MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(spacer_lb);
-			//MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(section_switch);
-			return section_switch;
-		}
-
-		public static void Load(IMyModContext context)
+		public static void Load()
 		{
 			if (MyJumpGateControllerTerminal.IsLoaded) return;
 			MyJumpGateControllerTerminal.IsLoaded = true;
@@ -2348,16 +2850,25 @@ namespace IOTA.ModularJumpGates.Terminal
 			MyJumpGateControllerTerminal.IsLoaded = false;
 			MyJumpGateControllerTerminal.MODID_PREFIX = null;
 			MyJumpGateControllerTerminal.TerminalControls.Clear();
-			MyJumpGateControllerTerminal.SectionSwitches.Clear();
 			MyJumpGateControllerTerminal.ControllerSearchInputs.Clear();
 			MyJumpGateControllerTerminal.TerminalControls = null;
-			MyJumpGateControllerTerminal.SectionSwitches = null;
 			MyJumpGateControllerTerminal.ControllerSearchInputs = null;
 		}
 
 		public static void ResetSearchInputs()
 		{
 			MyJumpGateControllerTerminal.ControllerSearchInputs.Clear();
+		}
+
+		public static void UpdateRedrawControls()
+		{
+			if (!MyJumpGateControllerTerminal.IsLoaded) return;
+			foreach (IMyTerminalControl control in MyJumpGateControllerTerminal.TerminalControls) control.UpdateVisual();
+		}
+
+		public static bool IsControl(IMyTerminalControl control)
+		{
+			return MyJumpGateControllerTerminal.TerminalControls.Contains(control);
 		}
 
 		public static bool DoesWaypointMatchSearch(MyJumpGateController controller, MyJumpGateWaypoint waypoint, Vector3D this_pos, out string name, out string tooltip)
@@ -2441,12 +2952,6 @@ namespace IOTA.ModularJumpGates.Terminal
 			}
 
 			return matched;
-		}
-
-		public static void UpdateRedrawControls()
-		{
-			if (!MyJumpGateControllerTerminal.IsLoaded) return;
-			foreach (IMyTerminalControl control in MyJumpGateControllerTerminal.TerminalControls) control.UpdateVisual();
 		}
 	}
 }

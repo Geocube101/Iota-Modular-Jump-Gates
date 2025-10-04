@@ -3,6 +3,7 @@ using IOTA.ModularJumpGates.Util;
 using ProtoBuf;
 using Sandbox.Common.ObjectBuilders;
 using Sandbox.Game.EntityComponents;
+using Sandbox.ModAPI;
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -53,7 +54,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// <summary>
 		/// Used for animating the drive's emissitter emissives
 		/// </summary>
-		private ulong[] EmitterEmissiveTick = new ulong[2] { 0, 0 };
+		private readonly ulong[] EmitterEmissiveTick = new ulong[2] { 0, 0 };
 
 		/// <summary>
 		/// The starting color of the emitter emissives
@@ -82,7 +83,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		#endregion
 
 		#region Public Variables
-		public override bool IsPowered => (this.IsPowerInvalid > 0) ? true : base.IsPowered;
+		public override bool IsPowered => this.IsPowerInvalid > 0 || base.IsPowered;
 
 		/// <summary>
 		/// The stored capacitor charge in MegaWatts
@@ -260,7 +261,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			base.UpdateOnceBeforeFrame();
 			this.TerminalBlock?.SetEmissiveParts("Emissive0", Color.Black, 0);
 			this.TerminalBlock?.SetEmissiveParts("Emissive2", Color.Black, 0);
-			if (!MyJumpGateDriveTerminal.IsLoaded) MyJumpGateDriveTerminal.Load(this.ModContext);
+			if (!MyJumpGateDriveTerminal.IsLoaded) MyJumpGateDriveTerminal.Load();
 		}
 
 		/// <summary>

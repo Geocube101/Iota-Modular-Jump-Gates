@@ -1,4 +1,5 @@
 ﻿using IOTA.ModularJumpGates.ChatCommands;
+using IOTA.ModularJumpGates.Util;
 using Sandbox.ModAPI;
 using System;
 using System.Collections.Generic;
@@ -35,7 +36,7 @@ namespace IOTA.ModularJumpGates.Commands
 
 			foreach (char c in message)
 			{
-				if (Char.IsWhiteSpace(c) && split)
+				if (char.IsWhiteSpace(c) && split)
 				{
 					arguments.Add(part);
 					part = "";
@@ -83,7 +84,11 @@ namespace IOTA.ModularJumpGates.Commands
 				}
 
 				try { result = command.Execute(caller, arguments.Skip(argument_index).ToList()); }
-				catch (Exception err) { result = MyChatCommand.MyCommandResult.Error(command, err); }
+				catch (Exception err)
+				{
+					result = MyChatCommand.MyCommandResult.Error(command, err);
+					Logger.Error($"Error during command callback: \"{command.FullCommandName}\"\n  ...\n[ {err.GetType().Name} ]: {err.Message}\n{err.StackTrace}\n{err.InnerException}");
+				}
 			}
 
 			string outcome = (result.Successfull) ? MyTexts.GetString("ChatCommandHandler_Success") : MyTexts.GetString("ChatCommandHandler_Fail");
@@ -254,7 +259,7 @@ namespace IOTA.ModularJumpGates.Commands
 			}
 		}
 
-		private Dictionary<string, MyChatCommand> SubCommands = new Dictionary<string, MyChatCommand>();
+		private readonly Dictionary<string, MyChatCommand> SubCommands = new Dictionary<string, MyChatCommand>();
 
 		/// <summary>
 		/// Whether this command requires admin priviledges
@@ -289,7 +294,7 @@ namespace IOTA.ModularJumpGates.Commands
 		/// <summary>
 		/// The name of this command, prefixed by parent commands
 		/// </summary>
-		public string FullCommandName => String.Join(" > ", this.ParentStack().Reverse().Select((cmd) => cmd.CommandName));
+		public string FullCommandName => string.Join(" > ", this.ParentStack().Reverse().Select((cmd) => cmd.CommandName));
 
 		/// <summary>
 		/// This command's parent command, or null if this is a root command

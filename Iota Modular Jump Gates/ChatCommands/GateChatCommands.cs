@@ -63,7 +63,7 @@ namespace IOTA.ModularJumpGates.ChatCommands
 				JumpGateUUID uuid;
 				packet.GeneralPayload(out uuid);
 				MyJumpGate gate = MyJumpGateModSession.Instance.GetJumpGate(uuid);
-				string response = null;
+				string response;
 				if (gate == null || gate.Closed) response = MyTexts.GetString("ChatCommandHandler_GateInfoCommand_GateNotFound");
 				else response = this.GenerateGateInfo(packet.SenderID, gate);
 				packet = packet.Forward(packet.SenderID, false);

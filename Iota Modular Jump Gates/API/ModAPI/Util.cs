@@ -419,10 +419,10 @@ namespace IOTA.ModularJumpGates.API.ModAPI.Util
 					int next_j = (j + 1) % theta_count;
 
 					// Draw horizontal line (same latitude)
-					BoundingEllipsoidD.DrawTransparentLine(current, vertices[i, next_j], MyStringId.GetOrCompute("WeaponLaser"), ref color_v, thickness);
+					BoundingEllipsoidD.DrawTransparentLine(current, vertices[i, next_j], material, ref color_v, thickness);
 
 					// Draw vertical line (next latitude)
-					if (i + 1 < phi_count) BoundingEllipsoidD.DrawTransparentLine(current, vertices[i + 1, j], MyStringId.GetOrCompute("WeaponLaser"), ref color_v, thickness);
+					if (i + 1 < phi_count) BoundingEllipsoidD.DrawTransparentLine(current, vertices[i + 1, j], material, ref color_v, thickness);
 				}
 			}
 		}

@@ -47,29 +47,66 @@ namespace IOTA.ModularJumpGates
 
 		public sealed class MyThreadedUpdateInfo
 		{
-			private ConcurrentQueue<long> GridQueue = new ConcurrentQueue<long>();
+			private readonly object ReadBufferLock = new object();
+			private readonly object WriteBufferLock = new object();
+			private List<long> GridBuffer1 = new List<long>();
+			private List<long> GridBuffer2 = new List<long>();
+			private List<long> ReadBuffer;
+			private List<long> WriteBuffer;
 
 			public bool IsFinished = true;
 
-			public MyThreadedUpdateInfo() { }
+			public MyThreadedUpdateInfo()
+			{
+				this.ReadBuffer = this.GridBuffer1;
+				this.WriteBuffer = this.GridBuffer2;
+			}
 
 			public void Dispose()
 			{
-				long gridid;
-				while (this.GridQueue != null && this.GridQueue.TryDequeue(out gridid)) ;
-				this.GridQueue = null;
-				this.IsFinished = true;
+				lock (this.ReadBufferLock)
+				{
+					lock (this.WriteBufferLock)
+					{
+						this.IsFinished = true;
+						this.GridBuffer1?.Clear();
+						this.GridBuffer2?.Clear();
+						this.GridBuffer1 = null;
+						this.GridBuffer2 = null;
+						this.ReadBuffer = null;
+						this.WriteBuffer = null;
+					}
+				}
+			}
+
+			public void Swap()
+			{
+				lock (this.ReadBufferLock)
+				{
+					lock (this.WriteBufferLock)
+					{
+						List<long> temp = this.ReadBuffer;
+						this.ReadBuffer = this.WriteBuffer;
+						this.WriteBuffer = temp;
+					}
+				}
 			}
 
 			public void EnqueueID(long id)
 			{
-				this.GridQueue?.Enqueue(id);
+				lock (this.WriteBufferLock) this.WriteBuffer?.Add(id);
 			}
 
-			public bool TryDequeueNextID(out long id)
+			public IEnumerable<long> ReadEnqueuedIDs()
 			{
-				id = default(long);
-				return this.GridQueue?.TryDequeue(out id) ?? false;
+				lock (this.ReadBufferLock)
+				{
+					if (this.ReadBuffer != null)
+					{
+						foreach (long id in this.ReadBuffer) yield return id;
+						this.ReadBuffer.Clear();
+					}
+				}
 			}
 		}
 
@@ -131,12 +168,12 @@ namespace IOTA.ModularJumpGates
 		/// <summary>
 		/// The time in game ticks after session start to update grids
 		/// </summary>
-		private ushort FirstUpdateTimeTicks = 300;
+		private readonly ushort FirstUpdateTimeTicks = 300;
 
 		/// <summary>
 		/// The time in game ticks after which all grids are sent from server to all clients
 		/// </summary>
-		private ushort GridNetworkUpdateDelay = 18000;
+		private readonly ushort GridNetworkUpdateDelay = 18000;
 
 		/// <summary>
 		/// The gameplay frame counter's value 1 tick ago
@@ -212,6 +249,11 @@ namespace IOTA.ModularJumpGates
 		/// Master map for storing entity warps
 		/// </summary>
 		private ConcurrentDictionary<long, EntityWarpInfo> EntityWarps = new ConcurrentDictionary<long, EntityWarpInfo>();
+
+		/// <summary>
+		/// Master map for storing gate detonations
+		/// </summary>
+		private ConcurrentDictionary<JumpGateUUID, GateDetonationInfo> GateDetonations = new ConcurrentDictionary<JumpGateUUID, GateDetonationInfo>();
 		#endregion
 
 		#region Internal Variables
@@ -504,8 +546,29 @@ namespace IOTA.ModularJumpGates
 			else if (value == 0) return "0";
 			int l10 = (int) Math.Floor(Math.Log10(Math.Abs(value)));
 			string sign = (value < 0) ? "-" : "";
-			value = value / Math.Pow(10, l10);
+			value /= Math.Pow(10, l10);
 			return $"{sign}{Math.Round(value, places)}{e}{l10}";
+		}
+
+		/// <summary>
+		/// Converts a value to time units
+		/// </summary>
+		/// <param name="seconds">The seconds to convert</param>
+		/// <param name="places">The number of places to round to</param>
+		/// <returns>The resulting value in time notation</returns>
+		public static string AutoconvertTimeUnits(double seconds, int places)
+		{
+			seconds = Math.Round(seconds, places + 2);
+			if (seconds == 1) return $"1 second";
+			else if (seconds < 60) return $"{Math.Round(seconds, places)} seconds";
+			else if (seconds == 60) return $"1 minute";
+			else if (seconds < 3600) return $"{Math.Round(seconds / 60, places)} minutes";
+			else if (seconds == 3600) return $"1 hour";
+			else if (seconds < 86400) return $"{Math.Round(seconds / 3600, places)} hours";
+			else if (seconds == 86400) return $"1 day";
+			else if (seconds < 604800) return $"{Math.Round(seconds / 86400, places)} days";
+			else if (seconds == 604800) return $"1 week";
+			else return $"{Math.Round(seconds / 604800, places)} weeks";
 		}
 
 		/// <summary>
@@ -604,6 +667,7 @@ namespace IOTA.ModularJumpGates
 				MyJumpGateModSession.Network.Off(MyPacketTypeEnum.UPDATE_CONFIG, this.OnConfigurationUpdate);
 				MyJumpGateModSession.Network.Off(MyPacketTypeEnum.MARK_GATES_DIRTY, this.OnNetworkGridGateReconstruct);
 				MyJumpGateModSession.Network.Off(MyPacketTypeEnum.CONSTRUCT_UPDATE_NOTICE, this.OnNetworkConstructUpdateNotice);
+				MyJumpGateModSession.Network.Off(MyPacketTypeEnum.GATE_DETONATION, this.OnNetworkJumpGateDetonation);
 				MyJumpGateModSession.Network.Unregister();
 			}
 
@@ -620,7 +684,6 @@ namespace IOTA.ModularJumpGates
 
 			this.FlushClosureQueues();
 			Logger.Log($"Closed {closed_grids_count} Grids");
-			MyJumpGateConstruct _;
 			foreach (KeyValuePair<ulong, AnimationInfo> pair in this.JumpGateAnimations) pair.Value.Animation.Clean();
 			foreach (KeyValuePair<long, EntityWarpInfo> pair in this.EntityWarps) pair.Value.Close();
 			foreach (MyThreadedUpdateInfo info in this.GridUpdateThreads) info.Dispose();
@@ -631,6 +694,7 @@ namespace IOTA.ModularJumpGates
 			this.GridReinitCounts.Clear();
 			this.JumpGateAnimations.Clear();
 			this.EntityWarps.Clear();
+			this.GateDetonations.Clear();
 			this.PartialSuspendedGridsQueue.Clear();
 			this.GridAddRequests.Clear();
 			this.GridUpdateThreads.Clear();
@@ -644,6 +708,7 @@ namespace IOTA.ModularJumpGates
 			this.GridReinitCounts = null;
 			this.JumpGateAnimations = null;
 			this.EntityWarps = null;
+			this.GateDetonations = null;
 			this.PartialSuspendedGridsQueue = null;
 			this.GridAddRequests = null;
 			this.GridUpdateThreads = null;
@@ -715,6 +780,7 @@ namespace IOTA.ModularJumpGates
 				MyJumpGateModSession.Network.On(MyPacketTypeEnum.DOWNLOAD_GRID, this.OnNetworkGridDownload);
 				MyJumpGateModSession.Network.On(MyPacketTypeEnum.UPDATE_CONFIG, this.OnConfigurationUpdate);
 				MyJumpGateModSession.Network.On(MyPacketTypeEnum.CONSTRUCT_UPDATE_NOTICE, this.OnNetworkConstructUpdateNotice);
+				MyJumpGateModSession.Network.On(MyPacketTypeEnum.GATE_DETONATION, this.OnNetworkJumpGateDetonation);
 			}
 
 			if (MyNetworkInterface.IsMultiplayerServer)
@@ -817,14 +883,14 @@ namespace IOTA.ModularJumpGates
 				++this.GameTick;
 				this.GameTick = (this.GameTick >= 0xFFFFFFFFFFFFFFF0) ? 0 : this.GameTick;
 				this.EntityLoadedDelayTicks -= (this.EntityLoadedDelayTicks > 0) ? (ushort) 1 : (ushort) 0;
-
+				
 				// Update grids
 				if (MyNetworkInterface.IsStandaloneMultiplayerClient && this.GameTick == this.FirstUpdateTimeTicks)
 				{
 					this.RequestGridsDownload();
 					Logger.Debug($"INITAL_GRID_UPDATE", 2);
 				}
-
+				
 				// Check initialization
 				if (MyNetworkInterface.IsServerLike && !this.AllSessionEntitiesLoaded) return;
 
@@ -857,7 +923,7 @@ namespace IOTA.ModularJumpGates
 						MyAPIGateway.Parallel.StartBackground(() => this.TickUpdateGrids(update_info));
 					}
 				}
-
+				
 				// Redraw Terminal Controls
 				if (MyNetworkInterface.IsClientLike && this.InitializationComplete && (this.GameTick % 60 == 0 || this.__RedrawAllTerminalControls))
 				{
@@ -869,12 +935,12 @@ namespace IOTA.ModularJumpGates
 					MyJumpGateRemoteLinkTerminal.UpdateRedrawControls();
 					this.__RedrawAllTerminalControls = false;
 				}
-				if (MyAPIGateway.Gui.GetCurrentScreen != MyTerminalPageEnum.ControlPanel)
+				if (MyNetworkInterface.IsClientLike && MyAPIGateway.Gui.GetCurrentScreen != MyTerminalPageEnum.ControlPanel)
 				{
 					MyJumpGateControllerTerminal.ResetSearchInputs();
 					MyJumpGateRemoteAntennaTerminal.ResetSearchInputs();
 				}
-
+				
 				// Update grid non-threadable
 				foreach (KeyValuePair<long, MyJumpGateConstruct> pair in this.GridMap)
 				{
@@ -892,7 +958,7 @@ namespace IOTA.ModularJumpGates
 						}
 					}
 				}
-
+				
 				bool paused = MyNetworkInterface.IsSingleplayer && MyAPIGateway.Session.GameplayFrameCounter == this.LastGameplayFrameCounter;
 				this.LastGameplayFrameCounter = MyAPIGateway.Session.GameplayFrameCounter;
 
@@ -907,7 +973,7 @@ namespace IOTA.ModularJumpGates
 							this.EntityWarps.Remove(pair.Key);
 						}
 					}
-
+					
 					// Tick queued animations
 					Particle.Render();
 					foreach (KeyValuePair<ulong, AnimationInfo> pair in this.JumpGateAnimations)
@@ -919,7 +985,7 @@ namespace IOTA.ModularJumpGates
 
 						if (animation.Stopped(animation_info.AnimationIndex))
 						{
-							if (animation_info.CompletionCallback != null) animation_info.CompletionCallback(animation_info.IterCallbackException);
+							animation_info.CompletionCallback?.Invoke(animation_info.IterCallbackException);
 							this.JumpGateAnimations.Remove(pair.Key);
 						}
 						else if (animation_info.IterCallback != null)
@@ -941,8 +1007,16 @@ namespace IOTA.ModularJumpGates
 						}
 						else if (animation.JumpGate.Closed) animation.Stop();
 					}
-				}
+					
+					// Tick queued gate detonations
+					DateTime now = DateTime.UtcNow;
 
+					foreach (KeyValuePair<JumpGateUUID, GateDetonationInfo> pair in this.GateDetonations)
+					{
+						if (now >= pair.Value.NextTickTime && pair.Value.TickDestroyGate()) this.GateDetonations.Remove(pair.Key);
+					}
+				}
+				
 				// Update Log
 				if (this.GameTick % 300 == 0) Logger.Flush();
 			}
@@ -1152,6 +1226,26 @@ namespace IOTA.ModularJumpGates
 		private void OnTerminalSelector(IMyTerminalBlock block, List<IMyTerminalControl> controls)
 		{
 			this.InteractedBlock = (MyJumpGateModSession.IsBlockCubeBlockBase(block)) ? block.EntityId : -1;
+			List<string> standard_control_ids = new List<string>() { "OnOff", "ShowInTerminal", "ShowInInventory", "ShowInToolbarConfig", "Name", "ShowOnHUD", "CustomData" };
+
+			if (MyJumpGateModSession.IsBlockJumpGateController(block))
+			{
+				List<IMyTerminalControl> lcd_controls = controls.Where((control) => !standard_control_ids.Contains(control.Id) && !MyJumpGateControllerTerminal.IsControl(control)).ToList();
+				foreach (IMyTerminalControl control in lcd_controls) controls.Remove(control);
+				if (MyJumpGateControllerTerminal.TerminalSection == MyJumpGateControllerTerminal.MyTerminalSection.SCREENS) controls.AddList(lcd_controls);
+			}
+			else if (MyJumpGateModSession.IsBlockJumpGateRemoteAntenna(block))
+			{
+				List<IMyTerminalControl> removed = new List<IMyTerminalControl>();
+
+				foreach (IMyTerminalControl control in controls)
+				{
+					if (control.Id.Length == 0 || MyJumpGateRemoteAntennaTerminal.IsControl(control) || standard_control_ids.Contains(control.Id)) continue;
+					removed.Add(control);
+				}
+
+				controls.RemoveAll(removed.Contains);
+			}
 		}
 
 		/// <summary>
@@ -1292,6 +1386,20 @@ namespace IOTA.ModularJumpGates
 		}
 
 		/// <summary>
+		/// Event handler for jump gate detonation
+		/// </summary>
+		/// <param name="packet">The received packet</param>
+		private void OnNetworkJumpGateDetonation(MyNetworkInterface.Packet packet)
+		{
+			if (packet == null || packet.PhaseFrame != 1 || !MyNetworkInterface.IsStandaloneMultiplayerClient) return;
+			GateDetonationInfo.SerializedGateDetonationInfo detonation_info = packet.Payload<GateDetonationInfo.SerializedGateDetonationInfo>();
+			MyJumpGate jump_gate = this.GetJumpGate(detonation_info.JumpGate);
+			jump_gate?.StopSounds();
+			this.GateDetonations.TryAdd(detonation_info.JumpGate, new GateDetonationInfo(ref detonation_info));
+			Logger.Debug($"Jump gate server CORE detonation event: {detonation_info.JumpGate.GetJumpGateGrid()}::{detonation_info.JumpGate.GetJumpGate()}, RANGE={detonation_info.MaxExplosionRange}, DAMAGE={detonation_info.MaxExplosionDamage}, FORCE={detonation_info.MaxExplosionForce}", 3);
+		}
+
+		/// <summary>
 		/// Event handler for configuration update
 		/// </summary>
 		/// <param name="packet">The received packet</param>
@@ -1305,6 +1413,14 @@ namespace IOTA.ModularJumpGates
 				if (config == null) return;
 				MyJumpGateModSession.Configuration = config;
 				foreach (KeyValuePair<long, MyJumpGateConstruct> pair in this.GridMap) pair.Value.ReloadConfigurations();
+
+				if (MyNetworkInterface.IsClientLike)
+				{
+					if (!config.JumpGateConfiguration.EnableGateExplosions && MyJumpGateControllerTerminal.TerminalSection == MyJumpGateControllerTerminal.MyTerminalSection.DETONATION) MyJumpGateControllerTerminal.TerminalSection = MyJumpGateControllerTerminal.MyTerminalSection.JUMP_GATE;
+					if (!config.JumpGateConfiguration.EnableGateExplosions && MyJumpGateRemoteAntennaTerminal.TerminalSection == MyJumpGateRemoteAntennaTerminal.MyTerminalSection.DETONATION) MyJumpGateRemoteAntennaTerminal.TerminalSection = MyJumpGateRemoteAntennaTerminal.MyTerminalSection.JUMP_GATE;
+					this.RedrawAllTerminalControls();
+				}
+
 				MyAPIGateway.Utilities.ShowMessage(MyJumpGateModSession.DISPLAYNAME, MyTexts.GetString("Session_OnConfigReload"));
 			}
 		}
@@ -1320,9 +1436,9 @@ namespace IOTA.ModularJumpGates
 			try
 			{
 				grid_queue.IsFinished = false;
-				long gridid;
+				grid_queue.Swap();
 
-				while (grid_queue.TryDequeueNextID(out gridid))
+				foreach (long gridid in grid_queue.ReadEnqueuedIDs())
 				{
 					MyJumpGateConstruct grid = this.GridMap.GetValueOrDefault(gridid, null);
 
@@ -1409,10 +1525,27 @@ namespace IOTA.ModularJumpGates
 		/// </summary>
 		private void FlushClosureQueues()
 		{
-			KeyValuePair<MyJumpGateConstruct, bool> pair;
-			while (this.GridCloseRequests.TryDequeue(out pair)) if (!pair.Key.Closed) pair.Key.Close(pair.Value);
-			MyJumpGate gate;
-			while (this.GateCloseRequests.TryDequeue(out gate)) if (!gate.Closed) gate.Close();
+			int count = this.GridCloseRequests.Count;
+
+			for (int i = 0; i < count; ++i)
+			{
+				KeyValuePair<MyJumpGateConstruct, bool> pair;
+				if (!this.GridCloseRequests.TryDequeue(out pair)) break;
+				pair.Key.IsClosing = true;
+				if (!pair.Key.CanFinalizeClosure()) this.GridCloseRequests.Enqueue(pair);
+				else if (!pair.Key.Closed) pair.Key.Close(pair.Value);
+			}
+
+			count = this.GateCloseRequests.Count;
+
+			for (int i = 0; i < count; ++i)
+			{
+				MyJumpGate gate;
+				if (!this.GateCloseRequests.TryDequeue(out gate)) break;
+				gate.IsClosing = true;
+				if (!gate.CanFinalizeClosure()) this.GateCloseRequests.Enqueue(gate);
+				else if (!gate.Closed) gate.Close();
+			}
 		}
 
 		/// <summary>
@@ -1524,15 +1657,26 @@ namespace IOTA.ModularJumpGates
 			config.Validate();
 			MyJumpGateModSession.Configuration = config;
 			foreach (KeyValuePair<long, MyJumpGateConstruct> pair in this.GridMap) pair.Value.ReloadConfigurations();
+			
+			if (MyNetworkInterface.IsClientLike)
+			{
+				if (!config.JumpGateConfiguration.EnableGateExplosions && MyJumpGateControllerTerminal.TerminalSection == MyJumpGateControllerTerminal.MyTerminalSection.DETONATION) MyJumpGateControllerTerminal.TerminalSection = MyJumpGateControllerTerminal.MyTerminalSection.JUMP_GATE;
+				if (!config.JumpGateConfiguration.EnableGateExplosions && MyJumpGateRemoteAntennaTerminal.TerminalSection == MyJumpGateRemoteAntennaTerminal.MyTerminalSection.DETONATION) MyJumpGateRemoteAntennaTerminal.TerminalSection = MyJumpGateRemoteAntennaTerminal.MyTerminalSection.JUMP_GATE;
+				this.RedrawAllTerminalControls();
+			}
 
-			MyNetworkInterface.Packet packet = new MyNetworkInterface.Packet {
-				PacketType = MyPacketTypeEnum.UPDATE_CONFIG,
-				Broadcast = true,
-				TargetID = 0,
-			};
+			if (MyJumpGateModSession.Network.Registered)
+			{
+				MyNetworkInterface.Packet packet = new MyNetworkInterface.Packet {
+					PacketType = MyPacketTypeEnum.UPDATE_CONFIG,
+					Broadcast = true,
+					TargetID = 0,
+				};
 
-			packet.Payload(config);
-			packet.Send();
+				packet.Payload(config);
+				packet.Send();
+			}
+
 			Logger.Log("Global mod configuration was modified");
 		}
 
@@ -1588,17 +1732,6 @@ namespace IOTA.ModularJumpGates
 		{
 			if (gate == null || gate.Closed) return;
 			this.GateCloseRequests.Enqueue(gate);
-		}
-
-		/// <summary>
-		/// Gets all animations playing from the specified jump gate
-		/// </summary>
-		/// <param name="gate">The gate to poll</param>
-		/// <param name="animations">All animations playing for the specified gate<br />List will not be cleared</param>
-		public void GetGateAnimationsPlaying(List<MyJumpGateAnimation> animations, MyJumpGate gate, Func<MyJumpGateConstruct, bool> filter = null)
-		{
-			if (gate == null) return;
-			foreach (KeyValuePair<ulong, AnimationInfo> pair in this.JumpGateAnimations) if (pair.Value.Animation.JumpGate == gate) animations.Add(pair.Value.Animation);
 		}
 
 		/// <summary>
@@ -1687,6 +1820,18 @@ namespace IOTA.ModularJumpGates
 		public void QueuePartialConstructForReload(long main_grid_id)
 		{
 			this.PartialSuspendedGridsQueue[main_grid_id] = 60;
+		}
+
+		/// <summary>
+		/// Detonates the specified jump gate<br />
+		/// Gate must be valid and not marked closed
+		/// </summary>
+		/// <param name="gate">The gate to detonate</param>
+		/// <param name="initiator">The drive at which to start the explosion chain</param>
+		public void DetonateJumpGate(MyJumpGate gate, MyJumpGateDrive initiator = null)
+		{
+			if (gate == null || gate.MarkClosed || !gate.IsValid()) return;
+			this.GateDetonations.TryAdd(JumpGateUUID.FromJumpGate(gate), new GateDetonationInfo(gate, initiator));
 		}
 
 		/// <summary>
@@ -1797,6 +1942,15 @@ namespace IOTA.ModularJumpGates
 		{
 			try { return (this.SessionUpdateTimeTicks.Count == 0) ? -1 : this.SessionUpdateTimeTicks.Max(); }
 			catch (InvalidOperationException) { return -1; }
+		}
+
+		/// <summary>
+		/// </summary>
+		/// <param name="uuid">The UUID of the gate</param>
+		/// <returns>The gate's detonation info or null if not found</returns>
+		public GateDetonationInfo GetGateDetonationInfo(JumpGateUUID uuid)
+		{
+			return this.GateDetonations.GetValueOrDefault(uuid, null);
 		}
 
 		/// <summary>
@@ -1993,6 +2147,25 @@ namespace IOTA.ModularJumpGates
 		public IEnumerable<MyJumpGateConstruct> GetAllJumpGateGrids()
 		{
 			return this.GridMap?.Select((pair) => pair.Value).Where(this.IsJumpGateGridMultiplayerValid) ?? Enumerable.Empty<MyJumpGateConstruct>();
+		}
+
+		/// <summary>
+		/// Gets all animations playing from the specified jump gate
+		/// </summary>
+		/// <param name="gate">The gate to poll</param>
+		/// <return>All animations playing for the specified gate</return>
+		public IEnumerable<MyJumpGateAnimation> GetGateAnimationsPlaying(MyJumpGate gate)
+		{
+			if (gate != null)
+			{
+				foreach (KeyValuePair<ulong, AnimationInfo> pair in this.JumpGateAnimations)
+				{
+					if (pair.Value.Animation.JumpGate == gate)
+					{
+						yield return pair.Value.Animation;
+					}
+				}
+			}
 		}
 
 		/// <summary>

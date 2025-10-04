@@ -61,7 +61,7 @@ namespace IOTA.ModularJumpGates.ChatCommands
 				long id;
 				packet.GeneralPayload(out id);
 				MyJumpGateConstruct construct = MyJumpGateModSession.Instance.GetJumpGateGrid(id);
-				string response = null;
+				string response;
 				if (construct == null || construct.Closed) response = MyTexts.GetString("ChatCommandHandler_GridInfoCommand_GridNotFound");
 				else response = this.GenerateConstructInfo(packet.SenderID, construct);
 				packet = packet.Forward(packet.SenderID, false);
