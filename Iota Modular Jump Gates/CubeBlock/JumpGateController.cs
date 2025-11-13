@@ -143,12 +143,12 @@ namespace IOTA.ModularJumpGates.CubeBlock
 						object selected_waypoint = mapping.GetValueOrDefault("SelectedWaypoint", null);
 						MyJumpGateWaypoint result_waypoint = null;
 						if (selected_waypoint == null) result_waypoint = null;
-						else if (selected_waypoint is IMyGps) result_waypoint = new MyJumpGateWaypoint((IMyGps) selected_waypoint);
+						else if (selected_waypoint is IMyGps) result_waypoint = new MyJumpGateWaypoint((IMyGps) selected_waypoint, MyAPIGateway.Multiplayer.MyId);
 						else if (selected_waypoint is Vector3D)
 						{
 							Vector3D position = (Vector3D) selected_waypoint;
 							IMyGps gps = MyAPIGateway.Session.GPS.Create("�TemporaryGPS�", $"[{Math.Round(position.X, 2)}, {Math.Round(position.Y, 2)}, {Math.Round(position.Z, 2)}]", position, false);
-							result_waypoint = new MyJumpGateWaypoint(gps);
+							result_waypoint = new MyJumpGateWaypoint(gps, MyAPIGateway.Multiplayer.MyId);
 						}
 						else if (selected_waypoint is long[])
 						{
@@ -642,6 +642,11 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		private List<IMyCubeGrid> TEMP_DetailedInfoConstructsList = new List<IMyCubeGrid>();
 
 		/// <summary>
+		/// Temporary list of GPSs
+		/// </summary>
+		private List<IMyGps> TEMP_WaypointGPS = new List<IMyGps>();
+
+		/// <summary>
 		/// Temporary list of jump gate drives for holo display
 		/// </summary>
 		private Dictionary<MyJumpGateDrive, KeyValuePair<MatrixD, BoundingBoxD>> TEMP_DriveHoloBoxes = new Dictionary<MyJumpGateDrive, KeyValuePair<MatrixD, BoundingBoxD>>();
@@ -752,6 +757,21 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		}
 		#endregion
 
+		#region Public Static Methods
+		/// <summary>
+		/// Checks if the specified GPS is valid for use as a waypoint<br />
+		/// If RSS is enabled, hidden GPS markers are ignored
+		/// </summary>
+		/// <param name="gps">The GPS</param>
+		/// <returns>True if valid</returns>
+		public static bool IsGPSValid(IMyGps gps)
+		{
+			bool has_rss = MyJumpGateModSession.MODSLIST.RealSolarSystemsEnabled;
+			bool show_hidden = MyJumpGateModSession.Configuration.GeneralConfiguration.ShowHiddenGPSMarkers && !has_rss;
+			return gps != null && gps.Coords.IsValid() && (show_hidden || gps.ShowOnHud);
+		}
+		#endregion
+
 		#region Constructors
 		public MyJumpGateController() : base() { }
 
@@ -798,6 +818,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				double distance_ratio = jump_gate?.CalculateDistanceRatio(ref endpoint) ?? -1;
 				double total_mass_kg = 0;
 				StringBuilder entity_list = new StringBuilder();
+				string faction_control_ratio = "N/A";
 
 				if (jump_gate != null)
 				{
@@ -836,6 +857,8 @@ namespace IOTA.ModularJumpGates.CubeBlock
 
 						entity_list.Append($"[color=#FF911CBF] - {name.Substring(0, name.Length - chop_length)}{info}[/color]\n");
 					}
+
+					faction_control_ratio = $"{Math.Round(jump_gate.GetFactionControlRatio(MyAPIGateway.Session.Player) * 100)}%";
 				}
 
 				double total_required_power_mw = jump_gate?.CalculateTotalRequiredPower(endpoint, null, total_mass_kg) ?? double.NaN;
@@ -861,6 +884,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 					sb.Append($" - {MyTexts.GetString("DetailedInfo_JumpGateController_CriticalDriveCount")}: {crit_count}\n");
 				}
 
+				sb.Append($" - {MyTexts.GetString("DetailedInfo_JumpGateController_FactionControlRatio")}: {faction_control_ratio} / {Math.Round(MyJumpGateModSession.Configuration.JumpGateConfiguration.MinimumControlOwnerFactionRatio * 100)}%\n");
 				sb.Append($" - {MyTexts.GetString("DetailedInfo_JumpGateController_GridSize")}: {jump_gate?.CubeGridSize().ToString() ?? "N/A"}\n");
 				sb.Append($" - {MyTexts.GetString("DetailedInfo_JumpGateController_Radius")}: {((jump_gate == null) ? "N/A" : MyJumpGateModSession.AutoconvertMetricUnits(jump_ellipse.Value.Radii.X, "m", 4))}\n");
 				sb.Append($" - {MyTexts.GetString("DetailedInfo_JumpGateController_EffectiveRadius")}: {((jump_gate == null) ? "N/A" : MyJumpGateModSession.AutoconvertMetricUnits(jump_ellipse.Value.Radii.X, "m", 4))}\n");
@@ -935,6 +959,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 
 			this.TEMP_DetailedInfoConstructsList.Clear();
 			this.TEMP_DriveHoloBoxes.Clear();
+			this.TEMP_WaypointGPS.Clear();
 
 			this.WaypointsList = null;
 			this.WaypointsListMutex = null;
@@ -942,6 +967,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			this.MultiPanelComponent = null;
 			this.TEMP_DetailedInfoConstructsList = null;
 			this.TEMP_DriveHoloBoxes = null;
+			this.TEMP_WaypointGPS = null;
 			this.BaseBlockSettings = null;
 		}
 
@@ -1124,7 +1150,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				lock (this.WaypointsListMutex)
 				{
 					this.WaypointsList.AddRange(this.JumpGateGrid.GetBeaconsWithinReverseBroadcastSphere().Where((beacon) => (distance = Vector3D.Distance(jump_node, beacon.BeaconPosition)) >= jump_gate.JumpGateConfiguration.MinimumJumpDistance && distance <= jump_gate.JumpGateConfiguration.MaximumJumpDistance).OrderBy((beacon) => Vector3D.Distance(beacon.BeaconPosition, jump_node)).Select((beacon) => new MyJumpGateWaypoint(beacon)));
-					this.WaypointsList.AddRange(MyAPIGateway.Session.GPS.GetGpsList(player_identity).Where((gps) => gps.Coords.IsValid()).OrderBy((gps) => Vector3D.Distance(gps.Coords, jump_node)).Select((gps) => new MyJumpGateWaypoint(gps)));
+					this.WaypointsList.AddRange(MyAPIGateway.Session.GPS.GetGpsList(player_identity).Where(MyJumpGateController.IsGPSValid).OrderBy((gps) => Vector3D.Distance(gps.Coords, jump_node)).Select((gps) => new MyJumpGateWaypoint(gps, MyAPIGateway.Multiplayer.MyId)));
 				}
 			}
 			
@@ -1133,6 +1159,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			{
 				MyJumpGateWaypoint selected_waypoint = this.BlockSettings.SelectedWaypoint();
 				Vector3D? waypoint_endpoint = selected_waypoint?.GetEndpoint();
+				bool waypoint_cleared = false;
 
 				if (waypoint_endpoint != null)
 				{
@@ -1143,7 +1170,23 @@ namespace IOTA.ModularJumpGates.CubeBlock
 					{
 						this.BaseBlockSettings.SelectedWaypoint(null);
 						this.SetDirty();
+						waypoint_cleared = true;
 					}
+				}
+
+				if (!waypoint_cleared && selected_waypoint != null && selected_waypoint.WaypointType == MyWaypointType.GPS && MyJumpGateModSession.MODSLIST.RealSolarSystemsEnabled)
+				{
+					MyGpsWrapper gps = selected_waypoint.GPS;
+					MyGpsWrapper src = gps.GetProxiedRSSGPS();
+					long identity = MyAPIGateway.Players.TryGetIdentityId(gps.OwnerID);
+					
+					if (src == null)
+					{
+						this.BaseBlockSettings.SelectedWaypoint(null);
+						this.SetDirty();
+					}
+
+					this.TEMP_WaypointGPS.Clear();
 				}
 			}
 			
@@ -1179,6 +1222,10 @@ namespace IOTA.ModularJumpGates.CubeBlock
 
 					if (jump_gate_valid && this.AttachedJumpGateDrives.Count((drive) => drive.IsWorking) >= 2)
 					{
+						bool tick = this.LocalGameTick % 60 < 30;
+						long owner = MyAPIGateway.Session.Player.IdentityId;
+						IMyFaction faction = MyAPIGateway.Session.Factions.TryGetPlayerFaction(owner);
+
 						MatrixD holo_matrix = jump_ellipse.WorldMatrix;
 						holo_matrix.Translation = table_holo_center;
 						MatrixD scaled_matrix = this.HoloDisplayScalar * holo_matrix;
@@ -1195,7 +1242,9 @@ namespace IOTA.ModularJumpGates.CubeBlock
 
 						foreach (MyJumpGateDrive drive in this.AttachedJumpGateDrives)
 						{
-							Color color = (drive.IsWorking) ? aqua : red;
+							IMyFaction drive_faction = MyAPIGateway.Session.Factions.TryGetPlayerFaction(drive.OwnerID);
+							bool owned = (faction == null && drive_faction == null && owner == drive.OwnerID) || (faction != null && drive_faction != null && faction.FactionId == drive_faction.FactionId);
+							Color color = (owned || tick) ? ((drive.IsWorking) ? aqua : red) : Color.OrangeRed;
 							MatrixD drive_matrix = this.HoloDisplayScalar * drive.WorldMatrix;
 							Vector3D pos = MyJumpGateModSession.WorldVectorToLocalVectorP(ref jump_ellipse.WorldMatrix, drive.WorldMatrix.Translation);
 							drive_matrix.Translation = MyJumpGateModSession.LocalVectorToWorldVectorP(ref scaled_matrix, pos);

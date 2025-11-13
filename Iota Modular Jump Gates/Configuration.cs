@@ -524,6 +524,14 @@ namespace IOTA.ModularJumpGates
 			public float SmallGateRandomDisplacementRadius = 0;
 
 			/// <summary>
+			/// The minimum percentage of a jump gate's drives that must be owned by the controller owner's faction to allow binding<br />
+			/// Cannot be NaN, Infinite, less than 0, or greater than 1<br />
+			/// Defaults to 0.25 (25%)
+			/// </summary>
+			[ProtoMember(31, IsRequired = true)]
+			public float MinimumControlOwnerFactionRatio = 0.25f;
+
+			/// <summary>
 			/// Validates all values
 			/// </summary>
 			internal void Validate()
@@ -560,6 +568,7 @@ namespace IOTA.ModularJumpGates
 				this.SmallGateExplosionDamagePercent = ValidateFloatValue(this.SmallGateExplosionDamagePercent, defaults.SmallGateExplosionDamagePercent, 0, 1);
 				this.LargeGateRandomDisplacementRadius = ValidateFloatValue(this.LargeGateRandomDisplacementRadius, defaults.LargeGateRandomDisplacementRadius, 0);
 				this.SmallGateRandomDisplacementRadius = ValidateFloatValue(this.SmallGateRandomDisplacementRadius, defaults.SmallGateRandomDisplacementRadius, 0);
+				this.MinimumControlOwnerFactionRatio = ValidateFloatValue(this.MinimumControlOwnerFactionRatio, defaults.MinimumControlOwnerFactionRatio, 0, 1);
 			}
 		}
 
@@ -660,6 +669,13 @@ namespace IOTA.ModularJumpGates
 			/// </summary>
 			[ProtoMember(7, IsRequired = true)]
 			public bool SyphonReactorPower = true;
+
+			/// <summary>
+			/// If true, hidden/disabled GPS markers will be shown as a destination on the jump gate controller/antenna<br />
+			/// Defaults to false
+			/// </summary>
+			[ProtoMember(8, IsRequired = true)]
+			public bool ShowHiddenGPSMarkers = false;
 
 			/// <summary>
 			/// Validates all values
@@ -898,6 +914,11 @@ namespace IOTA.ModularJumpGates
 			/// </summary>
 			public readonly float GateRandomDisplacementRadius;
 
+			/// <summary>
+			/// The minimum percentage of a jump gate's drives that must be owned by the controller owner's faction to allow binding
+			/// </summary>
+			public readonly float MinimumControlOwnerFactionRatio;
+
 			internal LocalJumpGateConfiguration(MyJumpGate jump_gate, JumpGateConfigurationSchema config)
 			{
 				if (jump_gate == null) throw new ArgumentException("The specified jump gate is null");
@@ -939,6 +960,7 @@ namespace IOTA.ModularJumpGates
 				this.IgnoreDockedGrids = config.IgnoreDockedGrids;
 				this.MaxConcurrentJumps = config.MaxConcurrentJumps;
 				this.ConfineUntetheredSpread = config.ConfineUntetheredSpread;
+				this.MinimumControlOwnerFactionRatio = config.MinimumControlOwnerFactionRatio;
 			}
 
 			internal Dictionary<string, object> ToDictionary()
@@ -961,6 +983,7 @@ namespace IOTA.ModularJumpGates
 					["ExplosionDamageMultiplier"] = this.ExplosionDamageMultiplier,
 					["ExplosionDamagePercent"] = this.ExplosionDamagePercent,
 					["GateRandomDisplacementRadius"] = this.GateRandomDisplacementRadius,
+					["MinimumControlOwnerFactionRatio"] = this.MinimumControlOwnerFactionRatio,
 				};
 			}
 		}

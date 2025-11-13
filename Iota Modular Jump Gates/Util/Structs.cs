@@ -965,6 +965,16 @@ namespace IOTA.ModularJumpGates.Util
 			else if (object.ReferenceEquals(this, other)) return true;
 			else return this.BeaconID == other.BeaconID;
 		}
+
+		/// <returns>This Beacon's owner or null</returns>
+		public IMyPlayer GetOwner()
+		{
+			IMyBeacon beacon = this.Beacon;
+			if (beacon == null) return null;
+			List<IMyPlayer> players = new List<IMyPlayer>();
+			MyAPIGateway.Players.GetPlayers(players);
+			return players.FirstOrDefault((player) => player.IdentityId == beacon.OwnerId);
+		}
 		#endregion
 	}
 

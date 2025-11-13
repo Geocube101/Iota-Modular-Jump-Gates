@@ -1,5 +1,8 @@
 ﻿using ProtoBuf;
+using Sandbox.ModAPI;
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using VRage;
 using VRage.Game.ModAPI;
 using VRageMath;
@@ -14,10 +17,14 @@ namespace IOTA.ModularJumpGates.Util
     [ProtoContract]
 	internal class MyGpsWrapper : IEquatable<MyGpsWrapper>
     {
+		#region Public Static Variables
+		public static string RSSProxySuffix => " : PROXY_DO_NOT_EDIT";
+		#endregion
+
 		#region Public Variables
-        /// <summary>
-        /// The GPS's coordinates
-        /// </summary>
+		/// <summary>
+		/// The GPS's coordinates
+		/// </summary>
 		[ProtoMember(1)]
         public Vector3D Coords;
 
@@ -38,6 +45,12 @@ namespace IOTA.ModularJumpGates.Util
         /// </summary>
         [ProtoMember(4)]
         public string Description;
+
+		/// <summary>
+		/// The GPS's owner ID
+		/// </summary>
+		[ProtoMember(5)]
+		public ulong OwnerID;
 		#endregion
 
 		#region Public Static Operators
@@ -68,19 +81,20 @@ namespace IOTA.ModularJumpGates.Util
 		#endregion
 
 		#region Constructors
-        /// <summary>
-        /// Dummy default constructor for ProtoBuf
-        /// </summary>
+		/// <summary>
+		/// Dummy default constructor for ProtoBuf
+		/// </summary>
 		public MyGpsWrapper() { }
 
 		/// <summary>
 		/// Creates a new MyGpsWrapper from a GPS
 		/// </summary>
 		/// <param name="gps">The source GPS</param>
-		public MyGpsWrapper(IMyGps gps)
+		public MyGpsWrapper(IMyGps gps, ulong owner)
         {
             if (gps != null)
             {
+				this.OwnerID = owner;
                 this.Coords = gps.Coords;
                 this.Name = gps.Name;
                 this.Description = gps.Description;
@@ -120,7 +134,61 @@ namespace IOTA.ModularJumpGates.Util
 		{
 			if (object.ReferenceEquals(other, null)) return false;
 			else if (object.ReferenceEquals(this, other)) return true;
-			return this.Coords == other.Coords && this.GPSColor == other.GPSColor && this.Name == other.Name && this.Description == other.Description;
+			return this.OwnerID == other.OwnerID && this.Coords == other.Coords && this.GPSColor == other.GPSColor && this.Name == other.Name && this.Description == other.Description;
+		}
+
+		/// <returns>Whether this GPS is an RSS proxy</returns>
+		public bool IsRSSProxy()
+		{
+			return MyJumpGateModSession.MODSLIST.RealSolarSystemsEnabled && this.Name.StartsWith("'") && this.Name.EndsWith("'") && this.Description.EndsWith(MyGpsWrapper.RSSProxySuffix);
+		}
+
+		/// <param name="gps">The proxy gps</param>
+		/// <returns>Whether the specified GPS is an RSS proxy of this</returns>
+		public bool IsRSSProxiedBy(IMyGps gps)
+		{
+			return MyJumpGateModSession.MODSLIST.RealSolarSystemsEnabled && gps != null && gps.Name == $"'{this.Name}'" && gps.Description == $"{this.Description}{MyGpsWrapper.RSSProxySuffix}";
+		}
+
+		/// <param name="gps">The proxy gps</param>
+		/// <returns>Whether the specified GPS is an RSS proxy of this</returns>
+		public bool IsRSSProxiedBy(MyGpsWrapper gps)
+		{
+			return MyJumpGateModSession.MODSLIST.RealSolarSystemsEnabled && gps != null && gps.Name == $"'{this.Name}'" && gps.Description == $"{this.Description}{MyGpsWrapper.RSSProxySuffix}";
+		}
+
+		/// <returns>The GPS this object wraps</returns>
+		public IMyGps GetSourceGPS()
+		{
+			return MyAPIGateway.Session.GPS.GetGpsList(MyAPIGateway.Players.TryGetIdentityId(this.OwnerID)).FirstOrDefault((gps) => gps.Name == this.Name && gps.Description == this.Description && Vector3D.DistanceSquared(gps.Coords, this.Coords) < 100);
+		}
+
+		/// <returns>This GPS's owner or null</returns>
+		public IMyPlayer GetOwner()
+		{
+			if (this.OwnerID == 0) return null;
+			List<IMyPlayer> players = new List<IMyPlayer>();
+			MyAPIGateway.Players.GetPlayers(players);
+			return players.FirstOrDefault((player) => player.SteamUserId == this.OwnerID);
+		}
+
+		/// <returns>The original GPS this wrapper is proxying</returns>
+		public MyGpsWrapper GetProxiedRSSGPS()
+		{
+			if (!MyJumpGateModSession.MODSLIST.RealSolarSystemsEnabled || !this.IsRSSProxy()) return this;
+			string name = this.Name.Substring(1, this.Name.Length - 2);
+			string description = this.Description.Substring(0, this.Description.Length - MyGpsWrapper.RSSProxySuffix.Length);
+			IMyGps src = MyAPIGateway.Session.GPS.GetGpsList(MyAPIGateway.Players.TryGetIdentityId(this.OwnerID)).FirstOrDefault((gps) => gps.Name == name && gps.Description == description);
+			return (src == null) ? null : new MyGpsWrapper(src, this.OwnerID);
+		}
+
+		/// <returns>All RSS proxy GPS</returns>
+		public IEnumerable<IMyGps> GetRSSProxies()
+		{
+			foreach (IMyGps gps in MyAPIGateway.Session.GPS.GetGpsList(MyAPIGateway.Players.TryGetIdentityId(this.OwnerID)))
+			{
+				if (this.IsRSSProxiedBy(gps)) yield return gps;
+			}
 		}
 		#endregion
 	}
@@ -316,9 +384,10 @@ namespace IOTA.ModularJumpGates.Util
 		/// Creates a new waypoint targeting the specified GPS
 		/// </summary>
 		/// <param name="gps">The non-null GPS</param>
-		public MyJumpGateWaypoint(IMyGps gps)
+		/// <param name="owner">The GPS's owner steam ID</param>
+		public MyJumpGateWaypoint(IMyGps gps, ulong owner)
         {
-            this.GPS = new MyGpsWrapper(gps);
+            this.GPS = new MyGpsWrapper(gps, owner);
             this.WaypointType = MyWaypointType.GPS;
         }
 
@@ -463,24 +532,44 @@ namespace IOTA.ModularJumpGates.Util
 
 			if (this.WaypointType == MyWaypointType.JUMP_GATE && destination_jump_gate != null && (MyNetworkInterface.IsStandaloneMultiplayerClient || destination_jump_gate.IsComplete()))
 			{
+				IMyPlayer owner = destination_jump_gate.GetPrimaryOwner();
+				IMyFaction faction = (owner == null) ? null : MyAPIGateway.Session.Factions.TryGetPlayerFaction(owner.IdentityId);
 				string grid_name = destination_jump_gate.JumpGateGrid?.PrimaryCubeGridCustomName ?? "N/A";
 				string grid_name_cut = (grid_name.Length > cutoff) ? $"{grid_name.Substring(0, cutoff - 3)}..." : grid_name;
 				string gate_name = destination_jump_gate.GetPrintableName();
 				string gate_name_cut = (gate_name.Length > cutoff) ? $"{gate_name.Substring(0, cutoff - 3)}..." : gate_name;
-				string value = MyTexts.GetString("Terminal_JumpGateController_JumpGateWaypointTooltip").Replace("{%0}", MyJumpGateModSession.AutoconvertMetricUnits(distance, "m", 2));
-				tooltip = $"{grid_name} - {gate_name}: ({value})";
-				name = $"{grid_name_cut} - {gate_name_cut}: ({value})";
+				string owner_name = owner?.DisplayName ?? "N/A";
+				string faction_name = faction?.Name ?? "N/A";
+				string value = MyJumpGateModSession.AutoconvertMetricUnits(distance, "m", 2);
+				string name_value = MyTexts.GetString("Terminal_JumpGateController_JumpGateWaypointName").Replace("{%0}", value);
+				tooltip = MyTexts.GetString("Terminal_JumpGateController_JumpGateWaypointTooltip").Replace("{%0}", grid_name).Replace("{%1}", gate_name).Replace("{%2}", value).Replace("{%3}", owner_name).Replace("{%4}", faction_name);
+				name = $"{grid_name_cut} - {gate_name_cut}: ({name_value})";
 			}
 			else if (this.WaypointType == MyWaypointType.GPS)
 			{
 				MyGpsWrapper gps = this.GPS;
-				string value = MyTexts.GetString("Terminal_JumpGateController_GPSWaypointTooltip").Replace("{%0}", MyJumpGateModSession.AutoconvertMetricUnits(distance, "m", 2));
-				name = tooltip = $"{gps.Name} ({value})";
+				IMyPlayer owner = gps.GetOwner();
+				IMyFaction faction = (owner == null) ? null : MyAPIGateway.Session.Factions.TryGetPlayerFaction(owner.IdentityId);
+				string value = MyJumpGateModSession.AutoconvertMetricUnits(distance, "m", 2);
+				string name_value = MyTexts.GetString("Terminal_JumpGateController_GPSWaypointName").Replace("{%0}", value);
+				string owner_name = owner?.DisplayName ?? "N/A";
+				string faction_name = faction?.Name ?? "N/A";
+				tooltip = MyTexts.GetString("Terminal_JumpGateController_GPSWaypointTooltip").Replace("{%0}", gps.Name).Replace("{%1}", value).Replace("{%2}", owner_name).Replace("{%3}", faction_name);
+				name = $"{gps.Name} ({name_value})";
 			}
 			else if (this.WaypointType == MyWaypointType.BEACON)
 			{
-				string value = MyTexts.GetString("Terminal_JumpGateController_BeaconWaypointTooltip").Replace("{%0}", MyJumpGateModSession.AutoconvertMetricUnits(distance, "m", 2));
-				name = tooltip = $"{this.Beacon.BroadcastName} ({value})";
+				IMyBeacon beacon = this.Beacon.Beacon;
+				IMyPlayer owner = this.Beacon.GetOwner();
+				IMyFaction faction = (owner == null) ? null : MyAPIGateway.Session.Factions.TryGetPlayerFaction(owner.IdentityId);
+				string value = MyJumpGateModSession.AutoconvertMetricUnits(distance, "m", 2);
+				string name_value = MyTexts.GetString("Terminal_JumpGateController_BeaconWaypointName").Replace("{%0}", value);
+				string grid_name = MyJumpGateModSession.Instance.GetJumpGateGrid(this.Beacon.Beacon?.CubeGrid)?.PrimaryCubeGridCustomName ?? "N/A";
+				string beacon_name = this.Beacon.BroadcastName ?? "N/A";
+				string owner_name = owner?.DisplayName ?? "N/A";
+				string faction_name = faction?.Name ?? "N/A";
+				tooltip = MyTexts.GetString("Terminal_JumpGateController_BeaconWaypointTooltip").Replace("{%0}", grid_name).Replace("{%1}", beacon_name).Replace("{%2}", value).Replace("{%3}", owner_name).Replace("{%4}", faction_name);
+				name = $"{this.Beacon.BroadcastName} ({value})";
 			}
 		}
 		#endregion

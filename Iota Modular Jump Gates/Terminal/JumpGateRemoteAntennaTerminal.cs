@@ -122,12 +122,14 @@ namespace IOTA.ModularJumpGates.Terminal
 						MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block0);
 						if (antenna == null || antenna.JumpGateGrid == null || antenna.JumpGateGrid.Closed) return;
 						content_list.Add(new MyTerminalControlListBoxItem(MyStringId.GetOrCompute($"-- {MyTexts.GetString("Terminal_JumpGateController_Deselect")} --"), MyStringId.GetOrCompute(""), -1L));
+						IMyPlayer self = MyAPIGateway.Session.Player;
+						float ratio = MyJumpGateModSession.Configuration.JumpGateConfiguration.MinimumControlOwnerFactionRatio;
 
 						foreach (MyJumpGate jump_gate in antenna.JumpGateGrid.GetJumpGates().OrderBy((gate) => gate.JumpGateID))
 						{
 							byte gate_channel = antenna.GetJumpGateInboundControlChannel(jump_gate);
 							
-							if (!jump_gate.Closed && jump_gate.IsValid() && (gate_channel == 0xFF || gate_channel == channel) && (jump_gate.Controller == null || jump_gate.Controller.JumpGateGrid != antenna.JumpGateGrid) && (jump_gate.RemoteAntenna == null || jump_gate.RemoteAntenna == antenna))
+							if (!jump_gate.Closed && jump_gate.IsValid() && (gate_channel == 0xFF || gate_channel == channel) && (jump_gate.Controller == null || jump_gate.Controller.JumpGateGrid != antenna.JumpGateGrid) && (jump_gate.RemoteAntenna == null || jump_gate.RemoteAntenna == antenna) && jump_gate.GetFactionControlRatio(self) >= ratio)
 							{
 								string tooltip = $"{MyTexts.GetString("Terminal_JumpGateController_ActiveJumpGateTooltip0").Replace("{%0}", jump_gate.GetJumpGateDrives().Count().ToString()).Replace("{%1}", jump_gate.JumpGateID.ToString())}";
 								MyTerminalControlListBoxItem item = new MyTerminalControlListBoxItem(MyStringId.GetOrCompute($"{jump_gate.GetPrintableName()}"), MyStringId.GetOrCompute(tooltip), jump_gate.JumpGateID);

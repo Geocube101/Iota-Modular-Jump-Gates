@@ -110,6 +110,18 @@ namespace IOTA.ModularJumpGates
 			}
 		}
 
+		public sealed class MyExternalModInfo
+		{
+			public readonly bool RealSolarSystemsEnabled;
+			public readonly ImmutableHashSet<ulong> LoadedModIDs;
+
+			public MyExternalModInfo(IMyModContext context)
+			{
+				this.LoadedModIDs = MyAPIGateway.Session.Mods.Select((mod) => mod.GetWorkshopId().Id).ToImmutableHashSet();
+				this.RealSolarSystemsEnabled = this.LoadedModIDs.Contains(3351055036);
+			}
+		}
+
 		#region Public Static Variables
 		/// <summary>
 		/// The Guid used to store information in mod storage components
@@ -134,7 +146,12 @@ namespace IOTA.ModularJumpGates
 		/// <summary>
 		/// The materials holder for common materials
 		/// </summary>
-		public static MyMaterialsHolder MATERIALS = new MyMaterialsHolder();
+		public static MyMaterialsHolder MATERIALS { get; private set; } = new MyMaterialsHolder();
+
+		/// <summary>
+		/// External mod information
+		/// </summary>
+		public static MyExternalModInfo MODSLIST { get; private set; } = null;
 
 		/// <summary>
 		/// Configuration variables as loaded from file or recieved from server
@@ -733,6 +750,7 @@ namespace IOTA.ModularJumpGates
 			MyJumpGateModSession.Configuration = null;
 			MyJumpGateModSession.Network = null;
 			MyJumpGateModSession.MATERIALS = null;
+			MyJumpGateModSession.MODSLIST = null;
 
 			this.SessionStatus = MySessionStatusEnum.OFFLINE;
 
@@ -807,6 +825,7 @@ namespace IOTA.ModularJumpGates
 			base.BeforeStart();
 			Logger.Log("INIT - Loading Data...");
 			MyAnimationHandler.Load();
+			MyJumpGateModSession.MODSLIST = new MyExternalModInfo(this.ModContext);
 			if (MyJumpGateModSession.Network.Registered && MyNetworkInterface.IsStandaloneMultiplayerClient) this.RequestGridsDownload();
 			if (!MyNetworkInterface.IsDedicatedMultiplayerServer) MyAPIGateway.Utilities.ShowMessage(MyJumpGateModSession.DISPLAYNAME, "Initializing Constructs...");
 			MyAPIGateway.TerminalControls.CustomControlGetter += this.OnTerminalSelector;

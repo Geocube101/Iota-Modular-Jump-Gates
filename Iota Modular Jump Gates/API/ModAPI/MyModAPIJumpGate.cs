@@ -556,6 +556,26 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		}
 
 		/// <summary>
+		/// Gets the number of functional drives in this jump gate out of the total number of drives<br />
+		/// If this is not server like, returns -1
+		/// </summary>
+		/// <returns>The percentage of functional drives or -1 if not server like</returns>
+		public float GetFunctionalDrivePercentage()
+		{
+			return this.GetMethod<Func<float>>("GetFunctionalDrivePercentage")();
+		}
+
+		/// <summary>
+		/// Gets the percentage of drives owned by the player or player's faction
+		/// </summary>
+		/// <param name="player">The player</param>
+		/// <returns>Percentage of owned drives</returns>
+		public float GetFactionControlRatio(IMyPlayer player)
+		{
+			return this.GetMethod<Func<IMyPlayer, float>>("GetFactionControlRatio")(player);
+		}
+
+		/// <summary>
 		/// Plays a sound from this gate
 		/// </summary>
 		/// <param name="sound">The sound to play</param>
@@ -674,6 +694,36 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		public double JumpNodeRadius()
 		{
 			return this.GetMethod<Func<double>>("JumpNodeRadius")();
+		}
+
+		/// <summary>
+		/// Gets the ID of the person with the most drives on this gate<br />
+		/// If a control object is attached, owner of controller is returned
+		/// </summary>
+		/// <returns>Primary owner ID or -1 if closed</returns>
+		public long GetPrimaryOwnerID()
+		{
+			return this.GetMethod<Func<long>>("GetPrimaryOwnerID")();
+		}
+
+		/// <summary>
+		/// Gets the ID of the person with the most drives on this gate<br />
+		/// If a control object is attached, owner of controller is returned
+		/// </summary>
+		/// <returns>Primary owner ID or -1 if closed</returns>
+		public ulong GetPrimaryOwnerSteamID()
+		{
+			return this.GetMethod<Func<ulong>>("GetPrimaryOwnerSteamID")();
+		}
+
+		/// <summary>
+		/// Gets the ID of the person with the most drives on this gate<br />
+		/// If a control object is attached, owner of controller is returned
+		/// </summary>
+		/// <returns>Primary owner ID or -1 if closed</returns>
+		public IMyPlayer GetPrimaryOwner()
+		{
+			return this.GetMethod<Func<IMyPlayer>>("GetPrimaryOwner")();
 		}
 
 		/// <summary>

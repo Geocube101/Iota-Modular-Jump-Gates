@@ -78,10 +78,12 @@ namespace IOTA.ModularJumpGates.Terminal
 					if (controller == null || controller.JumpGateGrid == null || controller.JumpGateGrid.Closed) return;
 					content_list.Add(new MyTerminalControlListBoxItem(MyStringId.GetOrCompute($"-- {MyTexts.GetString("Terminal_JumpGateController_Deselect")} --"), MyStringId.NullOrEmpty, -1L));
 					long selected_jump_gate_id = controller.BaseBlockSettings.JumpGateID();
+					float ratio = MyJumpGateModSession.Configuration.JumpGateConfiguration.MinimumControlOwnerFactionRatio;
+					IMyPlayer self = MyAPIGateway.Session.Player;
 
 					foreach (MyJumpGate jump_gate in controller.JumpGateGrid.GetJumpGates().OrderBy((gate) => gate.JumpGateID))
 					{
-						if (!jump_gate.Closed && jump_gate.IsValid() && jump_gate.RemoteAntenna == null && (jump_gate.Controller == null || jump_gate.Controller == controller))
+						if (!jump_gate.Closed && jump_gate.IsValid() && jump_gate.RemoteAntenna == null && (jump_gate.Controller == null || jump_gate.Controller == controller) && jump_gate.GetFactionControlRatio(self) >= ratio)
 						{
 							string tooltip = $"{MyTexts.GetString("Terminal_JumpGateController_ActiveJumpGateTooltip0").Replace("{%0}", jump_gate.GetJumpGateDrives().Count().ToString()).Replace("{%1}", jump_gate.JumpGateID.ToString())}";
 							MyTerminalControlListBoxItem item = new MyTerminalControlListBoxItem(MyStringId.GetOrCompute($"{jump_gate.GetPrintableName()}"), MyStringId.GetOrCompute(tooltip), jump_gate);

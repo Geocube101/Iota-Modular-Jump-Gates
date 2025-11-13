@@ -3460,6 +3460,29 @@ namespace IOTA.ModularJumpGates
 				if (MyNetworkInterface.IsServerLike && this.ManualDetonationTimeout == 0) this.Detonate();
 				else if (this.ManualDetonationTimeout > 0) --this.ManualDetonationTimeout;
 
+				// Kick Unauthorized Controllers
+				if (MyNetworkInterface.IsServerLike)
+				{
+					float ratio = this.JumpGateConfiguration.MinimumControlOwnerFactionRatio;
+					List<IMyPlayer> players = new List<IMyPlayer>();
+					MyAPIGateway.Players.GetPlayers(players);
+					IMyPlayer controller = players.FirstOrDefault((player) => player.SteamUserId == this.Controller?.OwnerSteamID);
+					
+					if (controller != null && this.GetFactionControlRatio(controller) < ratio)
+					{
+						if (this.RemoteAntenna != null && this.RemoteAntenna.GetInboundControlGate(this.RemoteAntennaChannel) == this)
+						{
+							this.RemoteAntenna.SetGateForInboundControl(this.RemoteAntennaChannel, null);
+							this.RemoteAntenna = null;
+						}
+						else if (this.Controller != null && this.Controller.AttachedJumpGate() == this)
+						{
+							this.Controller.AttachedJumpGate(null);
+							this.Controller = null;
+						}
+					}
+				}
+
 				if (this.IsDirty && MyJumpGateModSession.Network.Registered) this.SendNetworkJumpGateUpdate();
 			}
 			finally
@@ -4040,6 +4063,29 @@ namespace IOTA.ModularJumpGates
 		}
 
 		/// <summary>
+		/// Gets the percentage of drives owned by the player or player's faction
+		/// </summary>
+		/// <param name="player">The player</param>
+		/// <returns>Percentage of owned drives</returns>
+		public float GetFactionControlRatio(IMyPlayer player)
+		{
+			if (player == null || this.Closed) return 0;
+			IMyFaction player_faction = MyAPIGateway.Session.Factions.TryGetPlayerFaction(player.IdentityId);
+			uint total = 0;
+			uint owned = 0;
+
+			foreach (MyJumpGateDrive drive in this.GetJumpGateDrives())
+			{
+				++total;
+				IMyFaction drive_faction = MyAPIGateway.Session.Factions.TryGetPlayerFaction(drive.TerminalBlock.OwnerId);
+				if (player_faction != null && drive_faction != null && player_faction.FactionId == drive_faction.FactionId) ++owned;
+				else if (player_faction == null && drive_faction == null && drive.TerminalBlock.OwnerId == player.IdentityId) ++owned;
+			}
+
+			return (float) ((double) owned / (double) total);
+		}
+
+		/// <summary>
 		/// Plays a sound from this gate
 		/// </summary>
 		/// <param name="sound">The sound to play</param>
@@ -4201,6 +4247,46 @@ namespace IOTA.ModularJumpGates
 			if (this.Closed) return 0;
 			double controller_limit = this.ControlObject?.BlockSettings?.JumpSpaceRadius() ?? double.MaxValue;
 			return Math.Min(this.TrueLocalJumpEllipse.Radii.X, controller_limit);
+		}
+
+		/// <summary>
+		/// Gets the ID of the person with the most drives on this gate<br />
+		/// If a control object is attached, owner of controller is returned
+		/// </summary>
+		/// <returns>Primary owner ID or -1 if closed</returns>
+		public long GetPrimaryOwnerID()
+		{
+			if (this.Closed) return -1;
+			else if (this.ControlObject == null) return this.GetJumpGateDrives().Select((drive) => drive.OwnerID).GroupBy(i => i).OrderByDescending(grp => grp.Count()).Select(grp => grp.Key).FirstOrDefault();
+			else if (this.ControlObject.IsController) return this.ControlObject.Controller.OwnerID;
+			else return this.ControlObject.RemoteAntenna.OwnerID;
+		}
+
+		/// <summary>
+		/// Gets the steam ID of the person with the most drives on this gate<br />
+		/// If a control object is attached, owner of controller is returned
+		/// </summary>
+		/// <returns>Primary owner steam ID or 0 if closed</returns>
+		public ulong GetPrimaryOwnerSteamID()
+		{
+			if (this.Closed) return 0;
+			else if (this.ControlObject == null) return this.GetJumpGateDrives().Select((drive) => drive.OwnerSteamID).GroupBy(i => i).OrderByDescending(grp => grp.Count()).Select(grp => grp.Key).FirstOrDefault();
+			else if (this.ControlObject.IsController) return this.ControlObject.Controller.OwnerSteamID;
+			else return this.ControlObject.RemoteAntenna.OwnerSteamID;
+		}
+
+		/// <summary>
+		/// Gets the player with the most drives on this gate<br />
+		/// If a control object is attached, owner of controller is returned
+		/// </summary>
+		/// <returns>Primary owner player or null if closed</returns>
+		public IMyPlayer GetPrimaryOwner()
+		{
+			ulong steam_id = this.GetPrimaryOwnerSteamID();
+			if (steam_id == 0) return null;
+			List<IMyPlayer> players = new List<IMyPlayer>();
+			MyAPIGateway.Players.GetPlayers(players);
+			return players.FirstOrDefault((player) => player.SteamUserId == steam_id);
 		}
 
 		/// <summary>

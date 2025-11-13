@@ -2,6 +2,7 @@
 using Sandbox.ModAPI;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using VRage.Game;
 using VRage.Game.ModAPI;
 using VRage.Utils;
@@ -780,6 +781,16 @@ namespace IOTA.ModularJumpGates.API.ModAPI.Util
 			else if (object.ReferenceEquals(this, other)) return true;
 			else return this.BeaconID == other.BeaconID;
 		}
+
+		/// <returns>This Beacon's owner or null</returns>
+		public IMyPlayer GetOwner()
+		{
+			IMyBeacon beacon = this.Beacon;
+			if (beacon == null) return null;
+			List<IMyPlayer> players = new List<IMyPlayer>();
+			MyAPIGateway.Players.GetPlayers(players);
+			return players.FirstOrDefault((player) => player.IdentityId == beacon.OwnerId);
+		}
 		#endregion
 	}
 
@@ -813,6 +824,12 @@ namespace IOTA.ModularJumpGates.API.ModAPI.Util
 		/// </summary>
 		[ProtoMember(4)]
 		public string Description;
+
+		/// <summary>
+		/// The GPS's owner ID
+		/// </summary>
+		[ProtoMember(5)]
+		public ulong OwnerID;
 		#endregion
 
 		#region Public Static Operators
@@ -895,6 +912,15 @@ namespace IOTA.ModularJumpGates.API.ModAPI.Util
 			if (object.ReferenceEquals(other, null)) return false;
 			else if (object.ReferenceEquals(this, other)) return true;
 			return this.Coords == other.Coords && this.GPSColor == other.GPSColor && this.Name == other.Name && this.Description == other.Description;
+		}
+
+		/// <returns>This GPS's owner or null</returns>
+		public IMyPlayer GetOwner()
+		{
+			if (this.OwnerID == 0) return null;
+			List<IMyPlayer> players = new List<IMyPlayer>();
+			MyAPIGateway.Players.GetPlayers(players);
+			return players.FirstOrDefault((player) => player.SteamUserId == this.OwnerID);
 		}
 		#endregion
 	}
