@@ -10,6 +10,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using VRage;
 using VRage.Game;
 using VRage.Game.Components;
 using VRage.Game.Entity;
@@ -2056,6 +2057,12 @@ namespace IOTA.ModularJumpGates
 		/// </summary>
 		[ProtoMember(4)]
 		public NumberRange<double> AllowedJumpGateEndpointDistance = NumberRange<double>.RangeII(-1, double.PositiveInfinity);
+
+		/// <summary>
+		/// The allowed date range
+		/// </summary>
+		[ProtoMember(5)]
+		public DateTimeRange AllowedDate = DateTimeRange.RangeII(DateTime.MinValue, DateTime.MaxValue);
 		#endregion
 
 		#region Internal Methods
@@ -2072,7 +2079,8 @@ namespace IOTA.ModularJumpGates
 			return this.AllowedJumpGateRadius.Match(jump_gate.JumpNodeRadius())
 				&& this.AllowedJumpGateSize.Match((uint) jump_gate.GetJumpGateDrives().Count())
 				&& this.AllowedJumpGateWorkingSize.Match((uint) jump_gate.GetWorkingJumpGateDrives().Count())
-				&& this.AllowedJumpGateEndpointDistance.Match(distance);
+				&& this.AllowedJumpGateEndpointDistance.Match(distance)
+				&& this.AllowedDate.Match(DateTime.Now);
 		}
 		#endregion
 	}
@@ -2986,6 +2994,14 @@ namespace IOTA.ModularJumpGates
 		/// </summary>
 		[ProtoMember(3)]
 		internal ulong? SubtypeID = null;
+
+		/// <summary>
+		/// The weight of this animation<br />
+		/// A random animation will be selected from the animations with this ID that pass the constraint check<br />
+		/// This value controls how often this animation is selected based on the total weights
+		/// </summary>
+		[ProtoMember(12)]
+		internal byte RandomWeight = 1;
 		#endregion
 
 		#region Public Variables
@@ -3037,7 +3053,7 @@ namespace IOTA.ModularJumpGates
 		/// The AnimationConstraintDef definition defining a jump gate constraint for this animation
 		/// </summary>
 		[ProtoMember(11)]
-		public AnimationConstraintDef AnimationConstraint = null;
+		public AnimationConstraintDef[] AnimationConstraints = null;
 		#endregion
 
 		#region Constructors
@@ -3052,11 +3068,13 @@ namespace IOTA.ModularJumpGates
 		/// <param name="name">The animation's name</param>
 		/// <param name="description">The animation's description</param>
 		/// <param name="serialize">Whether to serialize this animation to XML on session unload<br />Serialized animations are stored in the global mod storage folder</param>
-		public AnimationDef(string name, string description = null, bool serialize = false)
+		/// <param name="random_weight">Random weight used to control random change this animation is selected (higher = more likely)</param>
+		public AnimationDef(string name, string description = null, bool serialize = false, byte random_weight = 1)
 		{
 			this.AnimationName = name;
 			this.Description = description;
 			this.SerializeOnEnd = serialize;
+			this.RandomWeight = random_weight;
 			MyAnimationHandler.AddAnimationDefinition(this);
 		}
 		#endregion
@@ -3724,6 +3742,7 @@ namespace IOTA.ModularJumpGates
 				
 				if (frequency == 0)
 				{
+					arguments.SetThis(beam_end);
 					beam_width = Math.Abs(AttributeAnimationDef.GetAnimatedDoubleValue(this.BeamPulseDefinition.Animations?.ParticleRadiusAnimation, arguments, this.BeamPulseDefinition.BeamWidth));
 					beam_color = AttributeAnimationDef.GetAnimatedVectorValue(this.BeamPulseDefinition.Animations?.ParticleColorAnimation, arguments, this.BeamPulseDefinition.BeamColor.ToVector4D()) * new Vector4D(new Vector3D(Math.Abs(this.BeamPulseDefinition.BeamBrightness)), 1) * (this.ControllerSettings?.JumpEffectAnimationColorShift().ToVector4D() ?? Vector4D.One);
 					MySimpleObjectDraw.DrawLine(beam_start, beam_end, this.BeamMaterial, ref beam_color, (float) beam_width);
@@ -5561,6 +5580,7 @@ namespace IOTA.ModularJumpGates
 			new AnimationDefinitions();
 			string animations_list_file = "Data/Animations.txt";
 
+			// Load external mod animations
 			foreach (MyObjectBuilder_Checkpoint.ModItem mod in MyAPIGateway.Session.Mods)
 			{
 				if (MyAPIGateway.Utilities.FileExistsInModLocation(animations_list_file, mod))
@@ -5593,15 +5613,10 @@ namespace IOTA.ModularJumpGates
 
 									string name = (animation.AnimationName == null || animation.AnimationName.Trim().Length == 0) ? "<NULL>" : animation.AnimationName.Trim();
 									string full_name = $"{mod.FriendlyName}.{animation.GetType().FullName}.{name}";
-
-									if (MyAnimationHandler.Animations.ContainsKey(full_name)) Logger.Warn($"\tDuplicate animation: {full_name}; SKIPPED");
-									else
-									{
-										animation.SourceMod = mod.Name;
-										animation.Prepare();
-										MyAnimationHandler.Animations.Add(full_name, new List<AnimationDef>() { animation });
-										++count;
-									}
+									animation.SourceMod = mod.Name;
+									animation.Prepare();
+									MyAnimationHandler.Animations.Add(full_name, new List<AnimationDef>() { animation });
+									++count;
 								}
 								catch (Exception e)
 								{
@@ -5620,24 +5635,20 @@ namespace IOTA.ModularJumpGates
 				}
 			}
 
+			// Load mod animations
 			foreach (AnimationDef animation in MyAnimationHandler.PreloadedAnimationDefinitions)
 			{
 				if (!animation.Enabled) continue;
 				string name = (animation.AnimationName == null || animation.AnimationName.Trim().Length == 0) ? "<NULL>" : animation.AnimationName.Trim();
 				string full_name = $"{animation.GetType().FullName}.{name}";
-				if (animation.AnimationConstraint == null) animation.SubtypeID = null;
+				if (animation.AnimationConstraints == null || animation.AnimationConstraints.Length == 0) animation.SubtypeID = null;
 				else animation.SubtypeID = MyAnimationHandler.NextSubtypeID++;
 				animation.Prepare();
-
-				if (MyAnimationHandler.Animations.ContainsKey(full_name))
-				{
-					bool duplicate = MyAnimationHandler.Animations[full_name].Where((def) => def.SubtypeID == null).Any();
-					if (duplicate) Logger.Warn($"Duplicate animation: {full_name}; SKIPPED");
-					else MyAnimationHandler.Animations[full_name].Add(animation);
-				}
+				if (MyAnimationHandler.Animations.ContainsKey(full_name)) MyAnimationHandler.Animations[full_name].Add(animation);
 				else MyAnimationHandler.Animations.Add(full_name, new List<AnimationDef>() { animation });
 			}
 
+			// Load Mod-API animations
 			foreach (KeyValuePair<IMyModContext, List<AnimationDef>> pair in MyJumpGateModSession.Instance.ModAPIInterface.ModAnimationDefinitions)
 			{
 				foreach (AnimationDef animation in pair.Value)
@@ -5645,17 +5656,11 @@ namespace IOTA.ModularJumpGates
 					if (!animation.Enabled) continue;
 					string name = (animation.AnimationName == null || animation.AnimationName.Trim().Length == 0) ? "<NULL>" : animation.AnimationName.Trim();
 					string full_name = $"{pair.Key.ModName}.{animation.GetType().FullName}.{name}";
-					if (animation.AnimationConstraint == null) animation.SubtypeID = null;
+					if (animation.AnimationConstraints == null || animation.AnimationConstraints.Length == 0) animation.SubtypeID = null;
 					else animation.SubtypeID = MyAnimationHandler.NextSubtypeID++;
 					animation.SourceMod = pair.Key.ModName;
 					animation.Prepare();
-
-					if (MyAnimationHandler.Animations.ContainsKey(full_name))
-					{
-						bool duplicate = MyAnimationHandler.Animations[full_name].Where((def) => def.SubtypeID == null).Any();
-						if (duplicate) Logger.Warn($"Duplicate animation: {full_name}; SKIPPED");
-						else MyAnimationHandler.Animations[full_name].Add(animation);
-					}
+					if (MyAnimationHandler.Animations.ContainsKey(full_name)) MyAnimationHandler.Animations[full_name].Add(animation);
 					else MyAnimationHandler.Animations.Add(full_name, new List<AnimationDef>() { animation });
 				}
 			}
@@ -5717,16 +5722,39 @@ namespace IOTA.ModularJumpGates
 		/// </summary>
 		/// <param name="name">The animation's full name</param>
 		/// <param name="jump_gate">The calling jump gate</param>
+		/// <param name="roll">Whether to run random selection or get first matching</param>
 		/// <returns>The animation definition or null if the jump gate fails the animation's constraint</returns>
-		public static AnimationDef GetAnimationDef(string name, MyJumpGate jump_gate)
+		public static AnimationDef GetAnimationDef(string name, MyJumpGate jump_gate, bool roll)
 		{
 			List<AnimationDef> animations = MyAnimationHandler.Animations.GetValueOrDefault(name, null);
+			AnimationDef default_ = null;
+			AnimationDef matched = null;
+
 			if (animations == null) return null;
 			else if (jump_gate == null) return animations.FirstOrDefault();
 			else if (!MyNetworkInterface.IsStandaloneMultiplayerClient && !jump_gate.IsValid()) return null;
-			AnimationDef _default = animations.Where((animation) => animation.AnimationConstraint == null).FirstOrDefault();
-			AnimationDef matched = animations.Where((animation) => animation.AnimationConstraint?.Validate(jump_gate) ?? false).FirstOrDefault();
-			return matched ?? _default ?? null;
+			else if (roll)
+			{
+				byte total_weight = (byte) animations.Sum((animation) => animation.RandomWeight);
+				byte target_weight = (byte) new Random().Next(0x00, total_weight + 1);
+				byte weights = 0;
+
+				foreach (AnimationDef animation in animations)
+				{
+					if (default_ == null && (animation.AnimationConstraints == null || animation.AnimationConstraints.Length == 0)) default_ = animation;
+					weights += animation.RandomWeight;
+					if (weights < target_weight || animation.RandomWeight == 0 || (animation.AnimationConstraints != null && !animation.AnimationConstraints.All((constraint) => constraint.Validate(jump_gate)))) continue;
+					matched = animation;
+					break;
+				}
+			}
+			else
+			{
+				default_ = animations.FirstOrDefault((animation) => animation.AnimationConstraints == null || animation.AnimationConstraints.Length == 0);
+				matched = animations.FirstOrDefault((animation) => animation.AnimationConstraints != null && animation.AnimationConstraints.All((constraint) => constraint.Validate(jump_gate)));
+			}
+
+			return matched ?? default_ ?? null;
 		}
 
 		/// <summary>
@@ -5741,7 +5769,7 @@ namespace IOTA.ModularJumpGates
 		/// <returns>The playabe animation wrapper</returns>
 		public static MyJumpGateAnimation GetAnimation(string name, IMyPlayer caller, MyJumpGate jump_gate, MyJumpGate target_gate, MyJumpGateController.MyControllerBlockSettingsStruct controller_settings, MyJumpGateController.MyControllerBlockSettingsStruct target_controller_settings, MyJumpTypeEnum jump_type)
 		{
-			AnimationDef animation_def = MyAnimationHandler.GetAnimationDef(name, jump_gate);
+			AnimationDef animation_def = MyAnimationHandler.GetAnimationDef(name, jump_gate, true);
 			if (animation_def == null || jump_gate == null || (!MyNetworkInterface.IsStandaloneMultiplayerClient && !jump_gate.IsValid())) return null;
 			return new MyJumpGateAnimation(animation_def, name, caller, jump_gate, target_gate, controller_settings, target_controller_settings, jump_type);
 		}

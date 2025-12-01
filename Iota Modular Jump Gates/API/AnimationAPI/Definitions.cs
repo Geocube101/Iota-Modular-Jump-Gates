@@ -1,5 +1,6 @@
 ﻿using IOTA.ModularJumpGates.API.AnimationAPI.Util;
 using ProtoBuf;
+using System;
 using VRageMath;
 
 namespace IOTA.ModularJumpGates.API.AnimationAPI.Definitions
@@ -118,6 +119,12 @@ namespace IOTA.ModularJumpGates.API.AnimationAPI.Definitions
 		/// </summary>
 		[ProtoMember(4)]
 		public NumberRange<double> AllowedJumpGateEndpointDistance = NumberRange<double>.RangeII(-1, double.PositiveInfinity);
+
+		/// <summary>
+		/// The allowed date range
+		/// </summary>
+		[ProtoMember(5)]
+		public DateTimeRange AllowedDate = DateTimeRange.RangeII(DateTime.MinValue, DateTime.MaxValue);
 		#endregion
 	}
 
@@ -930,6 +937,14 @@ namespace IOTA.ModularJumpGates.API.AnimationAPI.Definitions
 		/// </summary>
 		[ProtoMember(3)]
 		internal ulong? SubtypeID = null;
+
+		/// <summary>
+		/// The weight of this animation<br />
+		/// A random animation will be selected from the animations with this ID that pass the constraint check<br />
+		/// This value controls how often this animation is selected based on the total weights
+		/// </summary>
+		[ProtoMember(12)]
+		internal byte RandomWeight = 1;
 		#endregion
 
 		#region Public Variables
@@ -996,11 +1011,13 @@ namespace IOTA.ModularJumpGates.API.AnimationAPI.Definitions
 		/// <param name="name">The animation's name</param>
 		/// <param name="description">The animation's description</param>
 		/// <param name="serialize">Whether to serialize this animation to XML on session unload<br />Serialized animations are stored in the global mod storage folder</param>
-		public AnimationDef(string name, string description = null, bool serialize = false)
+		/// <param name="random_weight">Random weight used to control random change this animation is selected (higher = more likely)</param>
+		public AnimationDef(string name, string description = null, bool serialize = false, byte random_weight = 1)
 		{
 			this.AnimationName = name;
 			this.Description = description;
 			this.SerializeOnEnd = serialize;
+			this.RandomWeight = random_weight;
 			MyAnimationAPISession.AddAnimation(this);
 		}
 		#endregion

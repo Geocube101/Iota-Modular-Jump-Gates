@@ -12,7 +12,7 @@ namespace IOTA.ModularJumpGates.API.AnimationAPI
 		private static Action<IMyModContext, byte[]> AnimationAdder;
 		private static List<Definitions.AnimationDef> AnimationDefinitions = new List<Definitions.AnimationDef>();
 		public static long ModAPIID => 3313236685;
-		public static int[] ModAPIVersion { get; private set; } = new int[2] { 1, 1 };
+		public static int[] ModAPIVersion { get; private set; } = new int[2] { 1, 3 };
 		public static bool Initialized { get; private set; } = false;
 
 		/// <summary>

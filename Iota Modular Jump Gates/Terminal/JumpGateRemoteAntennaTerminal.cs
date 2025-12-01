@@ -503,7 +503,7 @@ namespace IOTA.ModularJumpGates.Terminal
 					{
 						string animation_name;
 						string description;
-						AnimationDef animation = MyAnimationHandler.GetAnimationDef(full_name, jump_gate);
+						AnimationDef animation = MyAnimationHandler.GetAnimationDef(full_name, jump_gate, false);
 
 						if (animation == null)
 						{
