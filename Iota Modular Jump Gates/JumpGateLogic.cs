@@ -1583,11 +1583,11 @@ namespace IOTA.ModularJumpGates
 						foreach (MyEntity root in entities_to_jump)
 						{
 							MyEntity entity = root;
-							List<MyEntity> batch = new List<MyEntity>() { entity };
 							MatrixD entity_final_matrix;
 							BoundingBoxD obstruction_aabb;
 							MyJumpGateConstruct parent = (entity is MyCubeGrid) ? MyJumpGateModSession.Instance.GetUnclosedJumpGateGrid(entity.EntityId) : null;
 							entity = (parent == null) ? entity : (MyCubeGrid) parent.CubeGrid;
+							List<MyEntity> batch = new List<MyEntity>() { entity };
 							MatrixD orientation_matrix = (parent != null && parent != this.JumpGateGrid) ? parent.GetConstructCalculatedOrienation() : entity.WorldMatrix;
 							Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} BATCHING - BATCH_PARENT={entity.EntityId}; ISGRID={parent != null}", 5);
 
@@ -1794,9 +1794,25 @@ namespace IOTA.ModularJumpGates
 							else
 							{
 								foreach (MyEntity merger in mergers.Distinct()) batch.RemoveAll(this.EntityBatches[merger].Batch.Contains);
-								this.EntityBatches[entity] = new EntityBatch(batch, ref entity_target_position, ref obstruction_aabb, ref entity_final_matrix, ref gravity_vector);
+								this.EntityBatches[entity] = new EntityBatch(batch.Distinct().ToList(), ref entity_target_position, ref obstruction_aabb, ref entity_final_matrix, ref gravity_vector);
 								Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} ... BATCH_ADDED_{entity.EntityId}", 4);
 							}
+						}
+
+						// Finalize batches (remove duplicate constructs)
+						foreach (KeyValuePair<MyEntity, EntityBatch> pair in this.EntityBatches)
+						{
+							MyJumpGateConstruct construct;
+							HashSet<MyJumpGateConstruct> seen_constructs = new HashSet<MyJumpGateConstruct>();
+							int count = pair.Value.Batch.Count;
+							pair.Value.Batch.RemoveAll((child) => {
+								construct = MyJumpGateModSession.Instance.GetJumpGateGrid(child as MyCubeGrid);
+								if (construct == null) return false;
+								if (seen_constructs.Contains(construct)) return true;
+								seen_constructs.Add(construct);
+								return false;
+							});
+							Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} JUMP_ENTITY_TRANSIT - Removed {pair.Value.Batch.Count - count} duplicate subgrid(s) from batch", 4);
 						}
 
 						// Teleport batches
@@ -1867,7 +1883,7 @@ namespace IOTA.ModularJumpGates
 							double available_power = this.CalculateTotalAvailableInstantPower();
 							double power_scaler = (target_gate == null) ? this.JumpGateConfiguration.UntetheredJumpEnergyCost : 1;
 							double required_power = Math.Round(batch_mass * this.CalculateUnitPowerRequiredForJump(ref default_endpoint), 8) * power_scaler / 1000;
-							Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} ... INSTANT_POWER_SYPHON - BATCH_MASS={batch_mass} Kg; AVAILABLE_INSTANT_POWER={available_power} MW", 4);
+							Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} ... INSTANT_POWER_SYPHON - BATCH_MASS={batch_mass} Kg; AVAILABLE_INSTANT_POWER={available_power} MW; MAX_AVAILABLE_INSTANT_POWER={this.CalculateTotalPossibleInstantPower()}", 4);
 							Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} ... ... INITIAL - REQUIRED_POWER={required_power} Mw", 4);
 
 							if (available_power < required_power)
@@ -2847,7 +2863,7 @@ namespace IOTA.ModularJumpGates
 						double total_mass_kg = entities_to_jump.Sum((entity) => (double) entity.Key.Physics.Mass);
 						double power_scaler = this.JumpGateConfiguration.UntetheredJumpEnergyCost;
 						double remaining_power_mw = Math.Round(total_mass_kg * this.CalculateUnitPowerRequiredForJump(ref endpoint), 8) * power_scaler / 1000;
-						Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} ... INSTANT_POWER_SYPHON - TOTAL_MASS={total_mass_kg} Kg; AVAILABLE_INSTANT_POWER={this.CalculateTotalAvailableInstantPower()} MW", 4);
+						Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} ... INSTANT_POWER_SYPHON - TOTAL_MASS={total_mass_kg} Kg; AVAILABLE_INSTANT_POWER={this.CalculateTotalAvailableInstantPower()} MW; MAX_AVAILABLE_INSTANT_POWER={this.CalculateTotalPossibleInstantPower()}", 4);
 						Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} ... ... INITIAL - REQUIRED_POWER={remaining_power_mw} Mw", 4);
 						remaining_power_mw = Math.Round(this.SyphonGridDrivePower(remaining_power_mw), 8);
 						Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} ... ... POST_DRIVES - REQUIRED_POWER={remaining_power_mw} Mw", 4);

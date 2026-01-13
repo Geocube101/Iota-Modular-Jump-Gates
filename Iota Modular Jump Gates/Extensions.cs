@@ -97,5 +97,16 @@ namespace IOTA.ModularJumpGates.Extensions
 			result.M44 = value.M44;
 			return result;
 		}
+
+		/// <summary>
+		/// Removes all duplicate elements from this list
+		/// </summary>
+		/// <typeparam name="T">The list typename</typeparam>
+		/// <param name="list">The list to distinctify</param>
+		public static void Distinctify<T>(this List<T> list)
+		{
+			HashSet<T> seen = new HashSet<T>();
+			list.RemoveAll(item => !seen.Add(item));
+		}
 	}
 }
