@@ -678,6 +678,13 @@ namespace IOTA.ModularJumpGates
 			public bool ShowHiddenGPSMarkers = false;
 
 			/// <summary>
+			/// Maximum number of mod-specific log files that can be store before deleting<br />
+			/// Defaults to 25
+			/// </summary>
+			[ProtoMember(9, IsRequired = true)]
+			public uint MaxStoredModSpecificLogFiles = 25;
+
+			/// <summary>
 			/// Validates all values
 			/// </summary>
 			internal void Validate()

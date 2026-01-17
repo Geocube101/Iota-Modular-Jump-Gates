@@ -10,12 +10,12 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using VRage;
 using VRage.Game;
 using VRage.Game.Components;
 using VRage.Game.Entity;
 using VRage.Game.ModAPI;
 using VRage.ModAPI;
+using VRage.Render.Particles;
 using VRage.Utils;
 using VRageMath;
 
@@ -3313,6 +3313,7 @@ namespace IOTA.ModularJumpGates
 					this.ParticleTransientIDs.Add(transient_id);
 					this.ParticleRotations.Add(Vector3D.Zero);
 				}
+				else Logger.Error($"Error creating particle effect: {particle_name}/{transient_id}; ENABLED={MyParticlesManager.Enabled}");
 			}
 
 			Particle.QueueParticleForRender(this);
@@ -3352,7 +3353,7 @@ namespace IOTA.ModularJumpGates
 			this.EffectPosition = base_matrix.Translation;
 
 			if (this.ParticleEffects == null || this.ParticleEffects.Count == 0) return;
-			else if (this.IsPlayableInQueue && current_tick >= this.ParticleDefinition.StartTime && current_tick <= this.ParticleDefinition.StartTime + this.Duration)
+			else if (this.IsPlayableInQueue && current_tick >= this.ParticleDefinition.StartTime && current_tick < this.ParticleDefinition.StartTime + this.Duration)
 			{
 				this.Stopped = false;
 				ushort local_tick = (ushort) (current_tick - this.ParticleDefinition.StartTime);
@@ -3542,7 +3543,7 @@ namespace IOTA.ModularJumpGates
 		{
 			if (this.JumpGate == null || this.JumpGate.Closed) return;
 
-			if (current_tick >= this.SoundDefinition.StartTime && current_tick <= this.SoundDefinition.StartTime + this.Duration)
+			if (current_tick >= this.SoundDefinition.StartTime && current_tick < this.SoundDefinition.StartTime + this.Duration)
 			{
 				bool is_start = current_tick == this.SoundDefinition.StartTime;
 				ushort local_tick = (ushort) (current_tick - this.SoundDefinition.StartTime);
@@ -3712,7 +3713,7 @@ namespace IOTA.ModularJumpGates
 		/// <param name="jump_node">The calling gate's world jump node</param>
 		public void Tick(ushort current_tick, List<MyJumpGateDrive> drives, List<MyEntity> entities, ref Vector3D endpoint, ref Vector3D jump_node)
 		{
-			if (!this.JumpGate.Closed && current_tick >= this.BeamPulseDefinition.StartTime && current_tick <= this.BeamPulseDefinition.StartTime + this.Duration && this.Duration > 0)
+			if (!this.JumpGate.Closed && current_tick >= this.BeamPulseDefinition.StartTime && current_tick < this.BeamPulseDefinition.StartTime + this.Duration && this.Duration > 0)
 			{
 				ushort local_tick = (ushort) (current_tick - this.BeamPulseDefinition.StartTime);
 				double tick_ratio = (this.BeamPulseDefinition.TravelTime == 0) ? 1 : MathHelper.Clamp(((double) local_tick) / this.BeamPulseDefinition.TravelTime, 0, 1);
@@ -3858,7 +3859,7 @@ namespace IOTA.ModularJumpGates
 		/// <param name="endpoint">The gate's targeted endpoint</param>
 		public void Tick(ushort current_tick, List<MyJumpGateDrive> drives, List<MyEntity> entities, ref Vector3D endpoint)
 		{
-			if (!this.JumpGate.Closed && current_tick >= this.DriveEmissiveColorDef.StartTime && current_tick <= this.DriveEmissiveColorDef.StartTime + this.Duration && this.Duration > 0)
+			if (!this.JumpGate.Closed && current_tick >= this.DriveEmissiveColorDef.StartTime && current_tick < this.DriveEmissiveColorDef.StartTime + this.Duration && this.Duration > 0)
 			{
 				double tick = current_tick - this.DriveEmissiveColorDef.StartTime;
 				ushort local_tick = (ushort) (current_tick - this.DriveEmissiveColorDef.StartTime);
@@ -3960,7 +3961,7 @@ namespace IOTA.ModularJumpGates
 		/// <param name="endpoint">The gate's targeted endpoint</param>
 		public void Tick(ushort current_tick, List<MyJumpGateDrive> drives, List<MyEntity> entities, ref Vector3D endpoint)
 		{
-			if (!this.JumpGate.Closed && current_tick >= this.NodePhysicsDefinition.StartTime && current_tick <= this.NodePhysicsDefinition.StartTime + this.Duration && this.Duration > 0)
+			if (!this.JumpGate.Closed && current_tick >= this.NodePhysicsDefinition.StartTime && current_tick < this.NodePhysicsDefinition.StartTime + this.Duration && this.Duration > 0)
 			{
 				ushort local_tick = (ushort) (current_tick - this.NodePhysicsDefinition.StartTime);
 				Vector3D jump_node = this.JumpGate.WorldJumpNode;
@@ -4186,7 +4187,7 @@ namespace IOTA.ModularJumpGates
 		/// <param name="endpoint">The gate's targeted endpoint</param>
 		public void Tick(ushort current_tick, List<MyJumpGateDrive> drives, List<MyEntity> entities, ref Vector3D endpoint)
 		{
-			if (!this.JumpGate.Closed && current_tick >= this.DriveEntityLockDefinition.StartTime && current_tick <= this.DriveEntityLockDefinition.StartTime + this.Duration && this.Duration > 0 && this.DriveEntityLockDefinition.EntityLockParticles != null)
+			if (!this.JumpGate.Closed && current_tick >= this.DriveEntityLockDefinition.StartTime && current_tick < this.DriveEntityLockDefinition.StartTime + this.Duration && this.Duration > 0 && this.DriveEntityLockDefinition.EntityLockParticles != null)
 			{
 				ushort local_tick = (ushort) (current_tick - this.DriveEntityLockDefinition.StartTime);
 				Vector3D jump_node = this.JumpGate.WorldJumpNode;
@@ -4707,9 +4708,10 @@ namespace IOTA.ModularJumpGates
 
 				if (this.JumpType == MyJumpTypeEnum.STANDARD || this.JumpType == MyJumpTypeEnum.INBOUND_VOID)
 				{
-					foreach (Particle particle in this.AntiNodeParticles) particle.Tick(this.CurrentTick, null, jump_gate_drives, jump_gate_entities, ref anti_node);
-					foreach (Sound sound in this.AntiNodeSounds) sound.Tick(this.CurrentTick, jump_gate_drives, jump_gate_entities, ref anti_node, null);
-					this.AntiNodePhysics?.Tick(this.CurrentTick, jump_gate_drives, jump_gate_entities, ref anti_node);
+					List<MyJumpGateDrive> drives = (this.JumpType == MyJumpTypeEnum.INBOUND_VOID) ? jump_gate_drives : target_jump_gate_drives;
+					foreach (Particle particle in this.AntiNodeParticles) particle.Tick(this.CurrentTick, null, drives, jump_gate_entities, ref anti_node);
+					foreach (Sound sound in this.AntiNodeSounds) sound.Tick(this.CurrentTick, drives, jump_gate_entities, ref anti_node, null);
+					this.AntiNodePhysics?.Tick(this.CurrentTick, drives, jump_gate_entities, ref anti_node);
 				}
 			}
 
@@ -4929,9 +4931,10 @@ namespace IOTA.ModularJumpGates
 
 				if (this.JumpType == MyJumpTypeEnum.STANDARD || this.JumpType == MyJumpTypeEnum.INBOUND_VOID)
 				{
-					foreach (Particle particle in this.AntiNodeParticles) particle.Tick(this.CurrentTick, null, jump_gate_drives, jump_gate_entities, ref anti_node);
-					foreach (Sound sound in this.AntiNodeSounds) sound.Tick(this.CurrentTick, jump_gate_drives, jump_gate_entities, ref anti_node, null);
-					this.AntiNodePhysics?.Tick(this.CurrentTick, jump_gate_drives, jump_gate_entities, ref anti_node);
+					List<MyJumpGateDrive> drives = (this.JumpType == MyJumpTypeEnum.INBOUND_VOID) ? jump_gate_drives : target_jump_gate_drives;
+					foreach (Particle particle in this.AntiNodeParticles) particle.Tick(this.CurrentTick, null, drives, jump_gate_entities, ref anti_node);
+					foreach (Sound sound in this.AntiNodeSounds) sound.Tick(this.CurrentTick, drives, jump_gate_entities, ref anti_node, null);
+					this.AntiNodePhysics?.Tick(this.CurrentTick, drives, jump_gate_entities, ref anti_node);
 				}
 			}
 
@@ -5117,9 +5120,10 @@ namespace IOTA.ModularJumpGates
 
 				if (this.JumpType == MyJumpTypeEnum.STANDARD || this.JumpType == MyJumpTypeEnum.INBOUND_VOID)
 				{
-					foreach (Particle particle in this.AntiNodeParticles) particle.Tick(this.CurrentTick, null, jump_gate_drives, jump_gate_entities, ref anti_node);
-					foreach (Sound sound in this.AntiNodeSounds) sound.Tick(this.CurrentTick, jump_gate_drives, jump_gate_entities, ref anti_node, null);
-					this.AntiNodePhysics?.Tick(this.CurrentTick, jump_gate_drives, jump_gate_entities, ref anti_node);
+					List<MyJumpGateDrive> drives = (this.JumpType == MyJumpTypeEnum.INBOUND_VOID) ? jump_gate_drives : target_jump_gate_drives;
+					foreach (Particle particle in this.AntiNodeParticles) particle.Tick(this.CurrentTick, null, drives, jump_gate_entities, ref anti_node);
+					foreach (Sound sound in this.AntiNodeSounds) sound.Tick(this.CurrentTick, drives, jump_gate_entities, ref anti_node, null);
+					this.AntiNodePhysics?.Tick(this.CurrentTick, drives, jump_gate_entities, ref anti_node);
 				}
 			}
 

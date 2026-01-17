@@ -1812,7 +1812,7 @@ namespace IOTA.ModularJumpGates
 								seen_constructs.Add(construct);
 								return false;
 							});
-							Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} JUMP_ENTITY_TRANSIT - Removed {pair.Value.Batch.Count - count} duplicate subgrid(s) from batch", 4);
+							Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} JUMP_ENTITY_TRANSIT - Removed {count - pair.Value.Batch.Count} duplicate subgrid(s) from batch", 4);
 						}
 
 						// Teleport batches

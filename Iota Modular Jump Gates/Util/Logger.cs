@@ -50,7 +50,7 @@ namespace IOTA.ModularJumpGates.Util
 
             try
             {
-				TextWriter writer = MyAPIGateway.Utilities.WriteFileInLocalStorage(filename, MyJumpGateModSession.Instance.GetType());
+				TextWriter writer = MyJumpGateModSession.Instance.CreateNewModSpecificLogFile(filename);
 				Logger.Log($"Mod-specific log file created");
 				Logger.ModLogWriter = writer;
 				Logger.ModLogWriter.WriteLine($"-=-=-= [ Iota's Modular Jump Gates (LOG) ] =-=-=-\n");
@@ -70,7 +70,7 @@ namespace IOTA.ModularJumpGates.Util
             catch (Exception e)
 			{
 				Logger.ModLogWriter = null;
-				Logger.Critical($"Failed to open mod-specific log file\n  ...\n[ {e.GetType().Name} ]: {e.Message}\n{e.StackTrace}\n{e.InnerException}");
+				Logger.Error($"Failed to open mod-specific log file\n  ...\n[ {e.GetType().Name} ]: {e.Message}\n{e.StackTrace}\n{e.InnerException}");
 			}
         }
 

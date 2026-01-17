@@ -147,6 +147,17 @@ namespace IOTA.ModularJumpGates
 			}
 
 			/// <summary>
+			/// Creates a generic payload using an event ID and null data
+			/// </summary>
+			/// <param name="event_id">The event ID</param>
+			/// <exception cref="ArgumentNullException">If the event ID is null or empty</exception>
+			public void GeneralPayload(string event_id)
+			{
+				if (event_id == null || event_id.Length == 0) throw new ArgumentNullException("event_id");
+				this.Payload(new KeyValuePair<string, string>(event_id, ""));
+			}
+
+			/// <summary>
 			/// Creates a generic payload using an event ID and data
 			/// </summary>
 			/// <typeparam name="T">The typename of this data</typeparam>
@@ -446,6 +457,25 @@ namespace IOTA.ModularJumpGates
 			List<Action<Packet>> callbacks;
 			if (!this.EventCallbacks.TryGetValue(type, out callbacks)) return;
 			lock (this.MutexLock) if (callbacks.Contains(callback)) callbacks.Remove(callback);
+		}
+
+		/// <summary>
+		/// Creates a general packet with the specified event ID and null data
+		/// </summary>
+		/// <param name="event_id">The event ID (cannot be null or empty)</param>
+		/// <param name="target">The target to send to</param>
+		/// <param name="broadcast">Whether to broadcast to all</param>
+		/// <returns>The constructed packet</returns>
+		public Packet CreateGeneralPacket(string event_id, ulong target = 0, bool broadcast = false)
+		{
+			Packet packet = new Packet
+			{
+				PacketType = MyPacketTypeEnum.GENERAL,
+				Broadcast = broadcast,
+				TargetID = target,
+			};
+			packet.GeneralPayload(event_id);
+			return packet;
 		}
 
 		/// <summary>

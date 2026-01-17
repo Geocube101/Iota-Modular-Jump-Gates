@@ -6,6 +6,7 @@ using IOTA.ModularJumpGates.ISC;
 using IOTA.ModularJumpGates.Terminal;
 using IOTA.ModularJumpGates.Util;
 using IOTA.ModularJumpGates.Util.ConcurrentCollections;
+using ProtoBuf;
 using Sandbox.Engine.Utils;
 using Sandbox.Game;
 using Sandbox.ModAPI;
@@ -122,6 +123,27 @@ namespace IOTA.ModularJumpGates
 			}
 		}
 
+		[ProtoContract]
+		public sealed class MyModLogFileInfo
+		{
+			[ProtoMember(1)]
+			public readonly string Filename;
+			[ProtoMember(2)]
+			public long ModificationTime;
+
+			public MyModLogFileInfo() { }
+			public MyModLogFileInfo(string filename)
+			{
+				this.Filename = filename;
+				this.ModificationTime = DateTime.UtcNow.Ticks;
+			}
+
+			public void UpdateTime()
+			{
+				this.ModificationTime = DateTime.UtcNow.Ticks;
+			}
+		}
+
 		#region Public Static Variables
 		/// <summary>
 		/// The Guid used to store information in mod storage components
@@ -198,6 +220,11 @@ namespace IOTA.ModularJumpGates
 		private int LastGameplayFrameCounter = 0;
 
 		/// <summary>
+		/// The fallback maximum number of mod-specific log files that can be stored
+		/// </summary>
+		private uint FallbackMaxModSpecificLogFiles = 0;
+
+		/// <summary>
 		/// Stores the next index for queued animations
 		/// </summary>
 		private ulong AnimationQueueIndex = 0;
@@ -208,9 +235,19 @@ namespace IOTA.ModularJumpGates
 		private long InteractedBlock = -1;
 
 		/// <summary>
+		/// The variable name to access the mod log file list
+		/// </summary>
+		private string ModLogSettingsFile = "ModLogStorage.dat";
+
+		/// <summary>
 		/// Stores the last opened terminal page
 		/// </summary>
 		private MyTerminalPageEnum LastTerminalPage = MyTerminalPageEnum.None;
+
+		/// <summary>
+		/// Collection of mod-specific log file names and save times
+		/// </summary>
+		private List<MyModLogFileInfo> ModSpecificLogFiles = null;
 
 		/// <summary>
 		/// Master map of threaded construct update queues
@@ -307,6 +344,16 @@ namespace IOTA.ModularJumpGates
 		public bool DebugMode = false;
 
 		/// <summary>
+		/// The maximum number of mod-specific log files that can be stored
+		/// </summary>
+		public uint MaxModSpecificLogFiles => MyJumpGateModSession.Configuration?.GeneralConfiguration?.MaxStoredModSpecificLogFiles ?? this.FallbackMaxModSpecificLogFiles;
+
+		/// <summary>
+		/// The current number of mod-specific log files
+		/// </summary>
+		public int ModSpecificLogFileCount => this.ModSpecificLogFiles?.Count ?? 0;
+
+		/// <summary>
 		/// The current session component status
 		/// </summary>
 		public MySessionStatusEnum SessionStatus { get; private set; } = MySessionStatusEnum.OFFLINE;
@@ -315,6 +362,11 @@ namespace IOTA.ModularJumpGates
 		/// Interface for handling API requests
 		/// </summary>
 		public MyAPIInterface ModAPIInterface { get; private set; } = new MyAPIInterface();
+
+		/// <summary>
+		/// The currently active mod-specific log file name
+		/// </summary>
+		public string ActiveModLogFile { get; private set; }
 		#endregion
 
 		#region Public Static Methods
@@ -671,6 +723,7 @@ namespace IOTA.ModularJumpGates
 			Logger.Log("Closing...");
 			base.UnloadData();
 			this.ModAPIInterface.Close();
+			this.UpdateSaveLogFileList();
 			MyAnimationHandler.Unload();
 			MyChatCommandHandler.Close();
 
@@ -729,6 +782,7 @@ namespace IOTA.ModularJumpGates
 			this.PartialSuspendedGridsQueue = null;
 			this.GridAddRequests = null;
 			this.GridUpdateThreads = null;
+			this.ActiveModLogFile = null;
 
 			MyAPIGateway.Entities.OnEntityAdd -= this.OnEntityAdd;
 			MyAPIGateway.Entities.OnEntityRemove -= this.OnEntityRemove;
@@ -782,6 +836,8 @@ namespace IOTA.ModularJumpGates
 			// ...and many more things, ask in #programming-modding in keen's discord for what you want to do to be pointed at the available things to use.
 
 			MyJumpGateModSession.Instance = this;
+			bool log_decode_success = this.UpdateLoadLogFileList();
+			int log_file_count = this.ModSpecificLogFiles.Count;
 			Logger.Init();
 			Logger.Log("PREINIT - Loading Data...");
 			this.SessionStatus = MySessionStatusEnum.LOADING;
@@ -789,6 +845,8 @@ namespace IOTA.ModularJumpGates
 			MyJumpGateModSession.Network = new MyNetworkInterface(0xFFFF, this.ModContext.ModId);
 			if (MyNetworkInterface.IsServerLike && !MyAPIGateway.Utilities.GetVariable($"{MyJumpGateModSession.MODID}.DebugMode", out this.DebugMode)) this.DebugMode = false;
 			this.UpdateOnPause = true;
+			if (log_decode_success) Logger.Log($"Mod-Specific log file list loaded from sandbox.sbc; Capacity={log_file_count}/{this.MaxModSpecificLogFiles}");
+			else Logger.Warn("Failed to load mod-specific log file list. System cannot auto-delete extra log files");
 
 			if (!MyNetworkInterface.IsSingleplayer)
 			{
@@ -835,18 +893,21 @@ namespace IOTA.ModularJumpGates
 			// Display startup messages
 			TextReader file_reader;
 			string filename;
+			string content;
 			MyObjectBuilder_Checkpoint.ModItem moditem = this.ModContext.ModItem;
 
 			if (MyAPIGateway.Session.IsUserAdmin(MyAPIGateway.Multiplayer.MyId))
 			{
 				filename = "Data/StartupMessage/Admin.txt";
 				file_reader = (MyAPIGateway.Utilities.FileExistsInModLocation(filename, moditem)) ? MyAPIGateway.Utilities.ReadFileInModLocation(filename, moditem) : null;
-				if (file_reader != null) MyAPIGateway.Utilities.ShowMessage(MyJumpGateModSession.DISPLAYNAME, file_reader.ReadToEnd());
+				content = file_reader?.ReadToEnd();
+				if (!string.IsNullOrEmpty(content)) MyAPIGateway.Utilities.ShowMessage(MyJumpGateModSession.DISPLAYNAME, content);
 			}
 
 			filename = "Data/StartupMessage/General.txt";
 			file_reader = (MyAPIGateway.Utilities.FileExistsInModLocation(filename, moditem)) ? MyAPIGateway.Utilities.ReadFileInModLocation(filename, moditem) : null;
-			if (file_reader != null) MyAPIGateway.Utilities.ShowMessage(MyJumpGateModSession.DISPLAYNAME, file_reader.ReadToEnd());
+			content = file_reader?.ReadToEnd();
+			if (!string.IsNullOrEmpty(content)) MyAPIGateway.Utilities.ShowMessage(MyJumpGateModSession.DISPLAYNAME, content);
 		}
 
 		/// <summary>
@@ -1205,6 +1266,7 @@ namespace IOTA.ModularJumpGates
 			if (MyNetworkInterface.IsMultiplayerClient) return;
 			MyJumpGateModSession.Configuration?.Save();
 			MyAPIGateway.Utilities.SetVariable($"{MyJumpGateModSession.MODID}.DebugMode", this.DebugMode);
+			this.UpdateSaveLogFileList();
 		}
 		#endregion
 
@@ -1644,6 +1706,50 @@ namespace IOTA.ModularJumpGates
 		}
 
 		/// <summary>
+		/// Stores the mod-specific log file list to sandbox.sbc
+		/// </summary>
+		private void UpdateSaveLogFileList()
+		{
+			uint max_logfiles = this.MaxModSpecificLogFiles;
+			BinaryWriter writer = MyAPIGateway.Utilities.WriteBinaryFileInLocalStorage(this.ModLogSettingsFile, this.GetType());
+			this.ModSpecificLogFiles.LastOrDefault()?.UpdateTime();
+			this.ModSpecificLogFiles.RemoveAll((file) => file.Filename != this.ActiveModLogFile && !MyAPIGateway.Utilities.FileExistsInLocalStorage(file.Filename, this.GetType()));
+			writer.Write(this.MaxModSpecificLogFiles);
+			writer.Write(MyAPIGateway.Utilities.SerializeToBinary(this.ModSpecificLogFiles));
+			Logger.Log($"Mod-Specific log file settings updated; Capacity={this.ModSpecificLogFiles.Count}/{max_logfiles}");
+		}
+
+		/// <summary>
+		/// Loads the mod-specific log file list from sandbox.sbc
+		/// </summary>
+		/// <returns>Whether data was successfully loaded</returns>
+		private bool UpdateLoadLogFileList()
+		{
+			if (!MyAPIGateway.Utilities.FileExistsInLocalStorage(this.ModLogSettingsFile, this.GetType()))
+			{
+				this.ModSpecificLogFiles = new List<MyModLogFileInfo>();
+				return false;
+			}
+
+			BinaryReader reader = MyAPIGateway.Utilities.ReadBinaryFileInLocalStorage(this.ModLogSettingsFile, this.GetType());
+			this.FallbackMaxModSpecificLogFiles = reader.ReadUInt32();
+			byte[] buffer = new byte[reader.BaseStream.Length - reader.BaseStream.Position];
+			reader.Read(buffer, 0, buffer.Length);
+
+			try
+			{
+				this.ModSpecificLogFiles = MyAPIGateway.Utilities.SerializeFromBinary<List<MyModLogFileInfo>>(buffer) ?? new List<MyModLogFileInfo>();
+				this.ModSpecificLogFiles.RemoveAll((file) => file.Filename != this.ActiveModLogFile && !MyAPIGateway.Utilities.FileExistsInLocalStorage(file.Filename, this.GetType()));
+			}
+			catch (Exception e)
+			{
+				throw new ModFileLoadingException("Failed to deserialize mod-specific log file settings", e);
+			}
+
+			return true;
+		}
+
+		/// <summary>
 		/// Deserializes and stores a MyJumpGateConstruct if applicable
 		/// </summary>
 		/// <param name="serialized">The serialized jump gate grid</param>
@@ -1854,6 +1960,38 @@ namespace IOTA.ModularJumpGates
 		}
 
 		/// <summary>
+		/// Purges all but the current active log file
+		/// </summary>
+		public void PurgeAllStoredLogFiles()
+		{
+			for (int i = 0; i < this.ModSpecificLogFiles.Count; ++i)
+			{
+				MyModLogFileInfo info = this.ModSpecificLogFiles[i];
+				if (info.Filename == this.ActiveModLogFile) continue;
+				MyAPIGateway.Utilities.DeleteFileInLocalStorage(info.Filename, this.GetType());
+				this.ModSpecificLogFiles.RemoveAt(i--);
+			}
+		}
+
+		/// <summary>
+		/// Purges the oldenst log files keeping the newest 'n' files<br />
+		/// Current file will not be purged
+		/// </summary>
+		/// <param name="count">The number of log files to keep or 0 to purge all</param>
+		public void PurgeStoredLogFiles(uint count)
+		{
+			if (count == 0)
+			{
+				this.PurgeAllStoredLogFiles();
+				return;
+			}
+
+			List<MyModLogFileInfo> closed = this.ModSpecificLogFiles.Where((info) => info.Filename != this.ActiveModLogFile).OrderBy((info) => info.ModificationTime).Skip((int) count).ToList();
+			foreach (MyModLogFileInfo file in closed) MyAPIGateway.Utilities.DeleteFileInLocalStorage(file.Filename, this.GetType());
+			this.ModSpecificLogFiles.RemoveAll((info) => closed.Contains(info));
+		}
+
+		/// <summary>
 		/// </summary>
 		/// <returns>Whether all stored grids had at least one update</returns>
 		public bool AllFirstTickComplete()
@@ -1961,6 +2099,21 @@ namespace IOTA.ModularJumpGates
 		{
 			try { return (this.SessionUpdateTimeTicks.Count == 0) ? -1 : this.SessionUpdateTimeTicks.Max(); }
 			catch (InvalidOperationException) { return -1; }
+		}
+
+		/// <summary>
+		/// Creates a new mod-specific log file<br />
+		/// Extra log files will be deleted if max stored log files is exceeded
+		/// </summary>
+		/// <param name="filename">The new filename</param>
+		/// <returns>A file writer</returns>
+		public TextWriter CreateNewModSpecificLogFile(string filename)
+		{
+			uint max_count = this.MaxModSpecificLogFiles;
+			this.ActiveModLogFile = filename;
+			this.ModSpecificLogFiles.Add(new MyModLogFileInfo(filename));
+			this.PurgeStoredLogFiles(max_count);
+			return MyAPIGateway.Utilities.WriteFileInLocalStorage(filename, this.GetType());
 		}
 
 		/// <summary>

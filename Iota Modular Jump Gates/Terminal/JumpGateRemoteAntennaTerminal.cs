@@ -513,8 +513,17 @@ namespace IOTA.ModularJumpGates.Terminal
 						else
 						{
 							animation_name = animation.AnimationName;
-							description = full_name;
-							if (animation.Description != null && animation.Description.Length > 0) description += $":\n{animation.Description}";
+
+							description = MyTexts.GetString("Terminal_JumpGateController_JumpGateAnimationDescription")
+								.Replace("{%0}", animation_name)
+								.Replace("{%1}", (animation.Description == null || animation.Description.Length == 0) ? "N/A" : animation.Description)
+								.Replace("{%2}", full_name)
+								.Replace("{%3}", MyJumpGateModSession.AutoconvertTimeUnits((animation.JumpingAnimationDef?.Duration ?? 0) / 60d, 2))
+								.Replace("{%4}", MyJumpGateModSession.AutoconvertTimeUnits((animation.JumpedAnimationDef?.Duration ?? 0) / 60d, 2))
+								.Replace("{%5}", MyJumpGateModSession.AutoconvertTimeUnits((animation.JumpedAnimationDef?.TravelTime ?? 0) / 60d, 2))
+								.Replace("{%6}", MyJumpGateModSession.AutoconvertTimeUnits((animation.FailedAnimationDef?.Duration ?? 0) / 60d, 2))
+								.Replace("{%7}", animation.SourceMod ?? MyJumpGateModSession.MODID)
+							;
 						}
 
 						MyTerminalControlListBoxItem item = new MyTerminalControlListBoxItem(MyStringId.GetOrCompute(animation_name), MyStringId.GetOrCompute(description), full_name);

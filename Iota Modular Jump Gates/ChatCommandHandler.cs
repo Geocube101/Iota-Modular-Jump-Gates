@@ -20,6 +20,7 @@ namespace IOTA.ModularJumpGates.Commands
 			new MyHelpChatCommand(),
 			new MyGateChatCommand(),
 			new MyConstructChatCommand(),
+			new MyLogFileChatCommand(),
 		};
 
 		public static bool Initialized { get; private set; } = false;
@@ -249,6 +250,20 @@ namespace IOTA.ModularJumpGates.Commands
 			public static MyCommandResult InvalidSubCommand(MyChatCommand command, bool list_commands = true)
 			{
 				return new MyCommandResult(false, command.FullCommandName, (list_commands) ? MyTexts.GetString("ChatCommandHandler_ErrorInvalidSubCommand1").Replace("{%0}", string.Join("\n", command.GetSubCommands().Select((subcommand) => $" > \"{subcommand.CommandName}\""))) : MyTexts.GetString("ChatCommandHandler_ErrorInvalidSubCommand0"));
+			}
+
+			/// <summary>
+			/// Creates an "InvalidCommandArgument" command result
+			/// </summary>
+			/// <param name="command">The calling command</param>
+			/// <returns></returns>
+			public static MyCommandResult InvalidCommandArgument(MyChatCommand command, uint argument_index, string supplied_argument, params string[] accepted_choices)
+			{
+				return new MyCommandResult(false, command.FullCommandName, MyTexts.GetString("ChatCommandHandler_ErrorInvalidArgument")
+					.Replace("{%0}", argument_index.ToString())
+					.Replace("{%1}", string.Join("|", accepted_choices))
+					.Replace("{%2}", supplied_argument)
+				);
 			}
 
 			private MyCommandResult(bool success, string name, string message)
