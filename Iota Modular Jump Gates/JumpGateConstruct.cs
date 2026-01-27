@@ -819,12 +819,16 @@ namespace IOTA.ModularJumpGates
 					jump_gate.UpdateDriveIntersectNodes(node_group);
 					jump_gate.SetColliderDirty();
 					jump_gate.SetJumpSpaceEllipsoidDirty();
+					foreach (MyJumpGateDrive drive in drive_group) drive.SetAttachedJumpGate(jump_gate);
+					jump_gate.Init();
 				}
 				else if (jump_gate != null && jump_gate.MarkClosed && !jump_gate.Closed) MyJumpGateModSession.Instance.CloseGate(jump_gate);
-				else this.JumpGates[primary_id] = (jump_gate = new MyJumpGate(this, primary_id, ref jump_node, node_group));
-
-				foreach (MyJumpGateDrive drive in drive_group) drive.SetAttachedJumpGate(jump_gate);
-				jump_gate.Init();
+				else
+				{
+					this.JumpGates[primary_id] = (jump_gate = new MyJumpGate(this, primary_id, ref jump_node, node_group));
+					foreach (MyJumpGateDrive drive in drive_group) drive.SetAttachedJumpGate(jump_gate);
+					jump_gate.Init();
+				}
 			}
 
 			foreach (MyJumpGateDrive unmapped in unmapped_drives) unmapped.SetAttachedJumpGate(null);
@@ -1171,6 +1175,7 @@ namespace IOTA.ModularJumpGates
 				{
 					this.SetupConstruct();
 					IMyCubeGrid main_grid = this.GetMainCubeGrid();
+					MyJumpGateConstruct duplicate;
 
 					if (main_grid != this.CubeGrid && !MyJumpGateModSession.Instance.HasCubeGrid(main_grid.EntityId))
 					{
@@ -1197,8 +1202,9 @@ namespace IOTA.ModularJumpGates
 						Logger.Debug($"[{grid_id}]] - Grid is not Main Grid @ {main_grid.EntityId}; CLOSED", 2);
 						return;
 					}
-					else if (MyJumpGateModSession.Instance.HasDuplicateGrid(this))
+					else if ((duplicate = MyJumpGateModSession.Instance.GetDuplicateGrid(this)) != null)
 					{
+						MyJumpGateModSession.Instance.CloseGrid(duplicate, false);
 						Logger.Debug($"[{grid_id}]] - Grid duplicate exists; UPDATE_SKIPPED", 2);
 						return;
 					}
@@ -1210,7 +1216,7 @@ namespace IOTA.ModularJumpGates
 				bool first_update = this.LocalGameTick == 0;
 				if (!first_update && this.JumpGateBlocks.Count == 0) return;
 				this.LocalGameTick = (this.LocalGameTick + 1) % 0xFFFFFFFFFFFFFFF0;
-				bool full_gate_update = this.MarkUpdateJumpGates || first_update || this.LocalGameTick == 180;
+				bool full_gate_update = this.MarkUpdateJumpGates || this.LocalGameTick == 180;
 				bool gate_entity_update = this.LocalGameTick % 30 == 0;
 				this.MarkUpdateJumpGates = false;
 				bool is_dirty = this.IsDirty || full_gate_update;
@@ -1241,7 +1247,7 @@ namespace IOTA.ModularJumpGates
 				}
 
 				// Update jump gates
-				this.TickUpdateJumpGates(full_gate_update, gate_entity_update);
+				if (this.LocalGameTick > 1) this.TickUpdateJumpGates(full_gate_update, gate_entity_update);
 
 				// Finalize update
 				this.FullyInitialized = this.FullyInitialized || first_update;

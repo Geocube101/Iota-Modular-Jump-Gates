@@ -98,6 +98,8 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			private bool GateDetonatorArmed_V = false;
 			[ProtoMember(29)]
 			private float GateDetonationTime_V = 10;
+			[ProtoMember(30)]
+			private bool DoSustainedWormhole_V = false;
 
 			private readonly object WriterLock = new object();
 
@@ -138,6 +140,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 					this.JumpGateName_V = (name != null && (name.StartsWith("#") || name.Contains(';'))) ? this.JumpGateName_V : name;
 					this.GateDetonatorArmed_V = (bool) mapping.GetValueOrDefault("GateDetonatorArmed", this.GateDetonatorArmed_V);
 					this.GateDetonationTime_V = (float) mapping.GetValueOrDefault("GateDetonationTime", this.GateDetonationTime_V);
+					this.DoSustainedWormhole_V = (bool) mapping.GetValueOrDefault("DoSustainedWormhole", this.DoSustainedWormhole_V);
 
 					{
 						object selected_waypoint = mapping.GetValueOrDefault("SelectedWaypoint", null);
@@ -241,6 +244,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 						["MaximumCubeGridSize"] = this.MaximumCubeGridSize_V,
 						["GateDetonatorArmed"] = this.GateDetonatorArmed_V,
 						["GateDetonationTime"] = this.GateDetonationTime_V,
+						["DoSustainedWormhole"] = this.DoSustainedWormhole_V,
 					};
 				}
 			}
@@ -468,6 +472,10 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			{
 				lock (this.WriterLock) this.GateDetonationTime_V = MathHelper.Clamp(seconds, 0, 3600);
 			}
+			public void DoSustainedWormhole(bool sustained)
+			{
+				lock (this.WriterLock) this.DoSustainedWormhole_V = sustained;
+			}
 
 			public bool CanAutoActivate()
 			{
@@ -594,6 +602,10 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			{
 				return this.GateDetonationTime_V;
 			}
+			public bool DoSustainedWormhole()
+			{
+				return this.DoSustainedWormhole_V;
+			}
 		}
 
 		#region Private Static Variables
@@ -690,6 +702,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				this.OverlayedBlockSettings.JumpEffectAnimationName(((allowed & MyAllowedRemoteSettings.ANIMATIONS) != 0) ? this.BaseBlockSettings.JumpEffectAnimationName() : remote.JumpEffectAnimationName());
 				this.OverlayedBlockSettings.CanBeInbound(((allowed & MyAllowedRemoteSettings.ROUTING) != 0) ? this.BaseBlockSettings.CanBeInbound() : remote.CanBeInbound());
 				this.OverlayedBlockSettings.CanBeOutbound(((allowed & MyAllowedRemoteSettings.ROUTING) != 0) ? this.BaseBlockSettings.CanBeOutbound() : remote.CanBeOutbound());
+				this.OverlayedBlockSettings.DoSustainedWormhole(((allowed & MyAllowedRemoteSettings.ROUTING) != 0) ? this.BaseBlockSettings.DoSustainedWormhole() : remote.DoSustainedWormhole());
 				this.OverlayedBlockSettings.SetBlacklistedEntities(((allowed & MyAllowedRemoteSettings.ENTITY_FILTER) != 0) ? this.BaseBlockSettings.GetBlacklistedEntities() : remote.GetBlacklistedEntities());
 				this.OverlayedBlockSettings.AllowedEntityMass(((allowed & MyAllowedRemoteSettings.ENTITY_FILTER) != 0) ? this.BaseBlockSettings.AllowedEntityMass() : remote.AllowedEntityMass());
 				this.OverlayedBlockSettings.AllowedCubeGridSize(((allowed & MyAllowedRemoteSettings.ENTITY_FILTER) != 0) ? this.BaseBlockSettings.AllowedCubeGridSize() : remote.AllowedCubeGridSize());

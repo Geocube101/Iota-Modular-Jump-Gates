@@ -203,7 +203,7 @@ namespace IOTA.ModularJumpGates.API
 				["AllFirstTickComplete"] = (Func<bool>) MyJumpGateModSession.Instance.AllFirstTickComplete,
 				["HasCubeGrid"] = (Func<long, bool>) MyJumpGateModSession.Instance.HasCubeGrid,
 				["IsJumpGateGridMultiplayerValid"] = (Func<long, bool>) ((construct_id) => MyJumpGateModSession.Instance.IsJumpGateGridMultiplayerValid(MyJumpGateModSession.Instance.GetJumpGateGrid(construct_id))),
-				["HasDuplicateGrid"] = (Func<long, bool>) ((construct_id) => MyJumpGateModSession.Instance.HasDuplicateGrid(MyJumpGateModSession.Instance.GetJumpGateGrid(construct_id))),
+				["HasDuplicateGrid"] = (Func<long, bool>) ((construct_id) => MyJumpGateModSession.Instance.GetDuplicateGrid(MyJumpGateModSession.Instance.GetJumpGateGrid(construct_id)) != null),
 				["MoveGrid"] = (Func<long, long, bool>) ((construct_id, new_id) => MyJumpGateModSession.Instance.MoveGrid(MyJumpGateModSession.Instance.GetJumpGateGrid(construct_id), new_id)),
 				["AverageGridUpdateTime60"] = (Func<double>) MyJumpGateModSession.Instance.AverageGridUpdateTime60,
 				["LocalLongestGridUpdateTime60"] = (Func<double>) MyJumpGateModSession.Instance.LocalLongestGridUpdateTime60,

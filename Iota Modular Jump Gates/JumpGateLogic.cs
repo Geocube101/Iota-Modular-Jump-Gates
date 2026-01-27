@@ -25,6 +25,7 @@ namespace IOTA.ModularJumpGates
 {
 	public enum MyJumpGateStatus : byte { NONE, SWITCHING, IDLE, OUTBOUND, INBOUND, CANCELLED, INVALID = 0xFF };
 	public enum MyJumpGatePhase : byte { NONE, IDLE, CHARGING, JUMPING, RESETTING, INVALID = 0xFF };
+	public enum MyJumpGateWormholePhase : byte { NONE, OPENING, ACTIVE, CLOSING, INVALID = 0xFF };
 	public enum MyGateInvalidationReason : byte { NONE, CLOSED, INSUFFICIENT_DRIVES, NULL_GRID, NULL_STATUS, NULL_PHASE, INVALID_ID, INSUFFICIENT_NODES };
 	public enum MyJumpFailReason : byte { NONE, SUCCESS, IN_PROGRESS,
 		SRC_INVALID, CONTROLLER_NOT_CONNECTED, SRC_DISABLED, SRC_NOT_CONFIGURED, SRC_BUSY, SRC_ROUTING_DISABLED, SRC_INBOUND_ONLY, SRC_ROUTING_CHANGED, SRC_CLOSED, SRC_DAMAGED,
@@ -1144,7 +1145,9 @@ namespace IOTA.ModularJumpGates
 		private void JumpWrapper(MyJumpGateController.MyControllerBlockSettingsStruct controller_settings, MyJumpGateController.MyControllerBlockSettingsStruct target_controller_settings, Vector3D? client_true_endpoint, MyJumpTypeEnum jump_type)
 		{
 			Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID}: Jump Wrapper on {(MyNetworkInterface.IsServerLike ? "server" : "client")}", 4);
-			if (MyNetworkInterface.IsServerLike) this.ExecuteJumpServer(controller_settings, target_controller_settings);
+			if (MyNetworkInterface.IsServerLike && controller_settings.DoSustainedWormhole()) this.ExecuteWormholeServer(controller_settings, target_controller_settings);
+			else if (MyNetworkInterface.IsServerLike) this.ExecuteJumpServer(controller_settings, target_controller_settings);
+			else if (MyNetworkInterface.IsMultiplayerClient && controller_settings.DoSustainedWormhole()) this.ExecuteWormholeClient(controller_settings, target_controller_settings, client_true_endpoint.Value, jump_type);
 			else if (MyNetworkInterface.IsMultiplayerClient) this.ExecuteJumpClient(controller_settings, target_controller_settings, client_true_endpoint.Value, jump_type);
 		}
 
@@ -2248,6 +2251,26 @@ namespace IOTA.ModularJumpGates
 			{
 				SendJumpResponse(MyJumpGate.GetFailureDescription(MyJumpFailReason.UNKNOWN_ERROR), false);
 			}
+		}
+
+		/// <summary>
+		/// Executes the gate wormhole jump for multiplayer server and singleplayer sessons
+		/// </summary>
+		/// <param name="controller_settings">The controller settings to use for the jump</param>
+		/// <param name="target_controller_settings">The controller settings of the target gate's controller</param>
+		private void ExecuteWormholeServer(MyJumpGateController.MyControllerBlockSettingsStruct controller_settings, MyJumpGateController.MyControllerBlockSettingsStruct target_controller_settings)
+		{
+
+		}
+
+		/// <summary>
+		/// Executes the gate wormhole jump for multiplayer server and singleplayer sessons
+		/// </summary>
+		/// <param name="controller_settings">The controller settings to use for the jump</param>
+		/// <param name="target_controller_settings">The controller settings of the target gate's controller</param>
+		private void ExecuteWormholeClient(MyJumpGateController.MyControllerBlockSettingsStruct controller_settings, MyJumpGateController.MyControllerBlockSettingsStruct target_controller_settings, Vector3D true_endpoint, MyJumpTypeEnum jump_type)
+		{
+
 		}
 
 		/// <summary>
@@ -3453,7 +3476,22 @@ namespace IOTA.ModularJumpGates
 				// Clean Invalid
 				if (invalid_reason != MyGateInvalidationReason.NONE)
 				{
-					Logger.Debug($"Invalid Jump Gate {(this.JumpGateGrid?.CubeGrid?.EntityId.ToString() ?? "N/A")}::{this.JumpGateID} - {invalid_reason}", 2);
+					string main_grid = this.JumpGateGrid?.CubeGrid?.EntityId.ToString() ?? "N/A";
+					Logger.Debug($"Invalid Jump Gate {main_grid}::{this.JumpGateID} - {invalid_reason}", 2);
+
+					switch (invalid_reason)
+					{
+						case MyGateInvalidationReason.CLOSED:
+							Logger.Debug($" ... Closure Info - {main_grid}::{this.JumpGateID} - CLOSED={this.Closed}, MARKED_CLOSED={this.MarkClosed}", 2);
+							break;
+						case MyGateInvalidationReason.INSUFFICIENT_DRIVES:
+						{
+							List<MyJumpGateDrive> drives = this.GetJumpGateDrives().ToList();
+							Logger.Debug($" ... Closure Info - {main_grid}::{this.JumpGateID} - DRIVE_COUNT={drives.Count}, INTERSECTIONS={this.InnerDriveIntersectNodes.Count}, DRIVE_INFO=\n[{string.Join("\n ... ", drives.Select((drive) => $"GRID={drive.CubeGridID}, GATE={drive.JumpGateID}, CLOSED={drive.IsClosed}"))}]", 2);
+							break;
+						}
+					}
+
 					this.Status = MyJumpGateStatus.NONE;
 					this.Phase = MyJumpGatePhase.NONE;
 					this.Dispose();

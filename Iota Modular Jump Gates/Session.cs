@@ -245,6 +245,11 @@ namespace IOTA.ModularJumpGates
 		private MyTerminalPageEnum LastTerminalPage = MyTerminalPageEnum.None;
 
 		/// <summary>
+		/// The error that occured loading the mod log file list
+		/// </summary>
+		private ModFileLoadingException ModLogListError = null;
+
+		/// <summary>
 		/// Collection of mod-specific log file names and save times
 		/// </summary>
 		private List<MyModLogFileInfo> ModSpecificLogFiles = null;
@@ -908,6 +913,13 @@ namespace IOTA.ModularJumpGates
 			file_reader = (MyAPIGateway.Utilities.FileExistsInModLocation(filename, moditem)) ? MyAPIGateway.Utilities.ReadFileInModLocation(filename, moditem) : null;
 			content = file_reader?.ReadToEnd();
 			if (!string.IsNullOrEmpty(content)) MyAPIGateway.Utilities.ShowMessage(MyJumpGateModSession.DISPLAYNAME, content);
+
+			if (this.ModLogListError != null)
+			{
+				Logger.Error($"Error whilst reading mod-log file list\n  ...\n[ {this.ModLogListError.GetType().Name} ]: {this.ModLogListError.Message}\n{this.ModLogListError.StackTrace}\n{this.ModLogListError.InnerException}");
+				MyAPIGateway.Utilities.ShowMessage(MyJumpGateModSession.DISPLAYNAME, "An error occured loading the mod-log list.\nExisting mod log files may not be deleted automatically.\nCheck the log for more details");
+				this.ModLogListError = null;
+			}
 		}
 
 		/// <summary>
@@ -1731,19 +1743,18 @@ namespace IOTA.ModularJumpGates
 				return false;
 			}
 
-			BinaryReader reader = MyAPIGateway.Utilities.ReadBinaryFileInLocalStorage(this.ModLogSettingsFile, this.GetType());
-			this.FallbackMaxModSpecificLogFiles = reader.ReadUInt32();
-			byte[] buffer = new byte[reader.BaseStream.Length - reader.BaseStream.Position];
-			reader.Read(buffer, 0, buffer.Length);
-
 			try
 			{
+				BinaryReader reader = MyAPIGateway.Utilities.ReadBinaryFileInLocalStorage(this.ModLogSettingsFile, this.GetType());
+				this.FallbackMaxModSpecificLogFiles = reader.ReadUInt32();
+				byte[] buffer = new byte[reader.BaseStream.Length - reader.BaseStream.Position];
+				reader.Read(buffer, 0, buffer.Length);
 				this.ModSpecificLogFiles = MyAPIGateway.Utilities.SerializeFromBinary<List<MyModLogFileInfo>>(buffer) ?? new List<MyModLogFileInfo>();
 				this.ModSpecificLogFiles.RemoveAll((file) => file.Filename != this.ActiveModLogFile && !MyAPIGateway.Utilities.FileExistsInLocalStorage(file.Filename, this.GetType()));
 			}
 			catch (Exception e)
 			{
-				throw new ModFileLoadingException("Failed to deserialize mod-specific log file settings", e);
+				this.ModLogListError = new ModFileLoadingException("Failed to deserialize mod-specific log file settings", e);
 			}
 
 			return true;
@@ -2025,17 +2036,6 @@ namespace IOTA.ModularJumpGates
 		}
 
 		/// <summary>
-		/// </summary>
-		/// <param name="grid">The grid construct</param>
-		/// <returns>True if this grid has a duplicate construct</returns>
-		public bool HasDuplicateGrid(MyJumpGateConstruct grid)
-		{
-			if (grid == null) return false;
-			foreach (IMyCubeGrid subgrid in grid.GetCubeGrids()) if (subgrid.EntityId != grid.CubeGridID && this.GridMap.ContainsKey(subgrid.EntityId)) return true;
-			return false;
-		}
-
-		/// <summary>
 		/// Moves the specified construct position in the internal grid map<br />
 		/// New ID must be an available spot and a subgrid ID of the specified construct
 		/// </summary>
@@ -2281,6 +2281,18 @@ namespace IOTA.ModularJumpGates
 		{
 			if (uuid == null) return null;
 			return this.GetDirectJumpGateGrid(uuid.GetJumpGateGrid());
+		}
+
+		/// <summary>
+		/// </summary>
+		/// <param name="grid">The grid construct</param>
+		/// <returns>A grid's duplicate construct or null</returns>
+		public MyJumpGateConstruct GetDuplicateGrid(MyJumpGateConstruct grid)
+		{
+			if (grid == null) return null;
+			MyJumpGateConstruct duplicate;
+			foreach (IMyCubeGrid subgrid in grid.GetCubeGrids()) if (subgrid.EntityId != grid.CubeGridID && this.GridMap.TryGetValue(subgrid.EntityId, out duplicate)) return duplicate;
+			return null;
 		}
 
 		/// <summary>
