@@ -36,7 +36,7 @@ namespace IOTA.ModularJumpGates
 	public enum MyGateColliderStatus : byte { NONE, ATTACHED, CLOSED };
 	public enum MyJumpTypeEnum : byte { STANDARD, INBOUND_VOID, OUTBOUND_VOID }
 	public enum MyJumpSpaceFitType : byte { INNER, OUTER, AVERAGE }
-
+	
 	internal class MyJumpGate : IEquatable<MyJumpGate>
 	{
 		#region JumpGate Classes
@@ -46,7 +46,7 @@ namespace IOTA.ModularJumpGates
 		[ProtoContract]
 		private sealed class JumpGateInfo
 		{
-			public enum TypeEnum { JUMP_START, JUMP_FAIL, JUMP_SUCCESS, CLOSED };
+			public enum TypeEnum { JUMP_START, JUMP_FAIL, JUMP_SUCCESS, WORMHOLE_OPEN, WORMHOLE_CLOSE, CLOSED };
 
 			#region Public Variables
 			/// <summary>
@@ -1266,6 +1266,7 @@ namespace IOTA.ModularJumpGates
 					else if (target_gate == null || !target_gate.IsComplete() || control_object == null || !control_object.IsWorking || target_controller_settings == null) result = MyJumpFailReason.DST_UNAVAILABLE;
 					else if (!target_controller_settings.CanBeInbound() && !target_controller_settings.CanBeOutbound()) result = MyJumpFailReason.DST_ROUTING_DISABLED;
 					else if (!target_controller_settings.CanBeInbound()) result = MyJumpFailReason.DST_OUTBOUND_ONLY;
+					else if (target_controller_settings.DoSustainedWormhole()) result = MyJumpFailReason.DST_UNAVAILABLE;
 					else if (control_object != null && !control_object.IsFactionRelationValid(this.Controller.OwnerSteamID)) result = MyJumpFailReason.DST_FORBIDDEN;
 					else if (target_gate.JumpGateGrid.GetAttachedJumpGateDrives().Count(working_dst_drive_filter) < 2) result = MyJumpFailReason.DST_DISABLED;
 					else if (target_gate.Status == MyJumpGateStatus.NONE) result = MyJumpFailReason.DST_NOT_CONFIGURED;
@@ -2093,7 +2094,7 @@ namespace IOTA.ModularJumpGates
 				if (packet == null || packet.PhaseFrame != 1) return;
 				JumpGateInfo jump_gate_info = packet.Payload<JumpGateInfo>();
 
-				if (MyNetworkInterface.IsStandaloneMultiplayerClient && jump_gate_info.Type != JumpGateInfo.TypeEnum.JUMP_START && jump_gate_info.JumpGateID == JumpGateUUID.FromJumpGate(this))
+				if (MyNetworkInterface.IsStandaloneMultiplayerClient && jump_gate_info.Type != JumpGateInfo.TypeEnum.JUMP_START && jump_gate_info.Type != JumpGateInfo.TypeEnum.WORMHOLE_OPEN && jump_gate_info.JumpGateID == JumpGateUUID.FromJumpGate(this))
 				{
 					Logger.Debug($"[{this.JumpGateGrid.CubeGridID}-{this.JumpGateID}]: Got network server jump response");
 					this.ServerJumpResponse = jump_gate_info;
@@ -2260,7 +2261,348 @@ namespace IOTA.ModularJumpGates
 		/// <param name="target_controller_settings">The controller settings of the target gate's controller</param>
 		private void ExecuteWormholeServer(MyJumpGateController.MyControllerBlockSettingsStruct controller_settings, MyJumpGateController.MyControllerBlockSettingsStruct target_controller_settings)
 		{
+			if (this.Closed) return;
+			MyJumpGate target_gate = null;
+			MyJumpGateAnimation gate_animation = null;
+			MyJumpGateWaypoint dst = controller_settings.SelectedWaypoint();
+			List<MyEntity> entities_to_jump = null;
+			List<MyJumpGate> other_gates = new List<MyJumpGate>();
+			Func<MyJumpGateDrive, bool> working_src_drive_filter = (drive) => drive.JumpGateID == this.JumpGateID && drive.IsWorking;
+			Func<MyJumpGateDrive, bool> working_dst_drive_filter = (drive) => target_gate != null && drive.JumpGateID == target_gate.JumpGateID && drive.IsWorking;
+			MyJumpFailReason result = MyJumpFailReason.NONE;
+			this.JumpFailureReason = new KeyValuePair<MyJumpFailReason, bool>(MyJumpFailReason.IN_PROGRESS, true);
+			this.AutoActivateStartTime = DateTime.UtcNow + new TimeSpan(0, 0, 30);
+			bool is_init = true;
+			Vector3D jump_node = this.WorldJumpNode;
+			JumpGateUUID this_id = JumpGateUUID.FromJumpGate(this);
+			BoundingEllipsoidD jump_ellipse = this.JumpEllipse;
 
+			// Fix This
+			Action<MyJumpFailReason, bool, string> SendJumpResponse = (reason, result_status, override_message) => {
+				this.Status = MyJumpGateStatus.SWITCHING;
+				this.Phase = MyJumpGatePhase.RESETTING;
+				this.JumpFailureReason = new KeyValuePair<MyJumpFailReason, bool>((result_status) ? MyJumpFailReason.SUCCESS : reason, is_init);
+				string message = override_message ?? MyJumpGate.GetFailureDescription(this.JumpFailureReason.Key);
+
+				if (target_gate != null)
+				{
+					target_gate.Status = MyJumpGateStatus.SWITCHING;
+					target_gate.Phase = MyJumpGatePhase.RESETTING;
+					target_gate.SetColliderDirty();
+				}
+
+				// Is server, broadcast jump results
+				if (MyNetworkInterface.IsMultiplayerServer)
+				{
+					List<EntityWarpInfo> batch_warps = new List<EntityWarpInfo>();
+					MyJumpGateModSession.Instance.GetEntityBatchWarpsForGate(this, batch_warps);
+
+					MyNetworkInterface.Packet packet = new MyNetworkInterface.Packet
+					{
+						PacketType = MyPacketTypeEnum.JUMP_GATE_JUMP,
+						TargetID = 0,
+						Broadcast = true,
+					};
+
+					packet.Payload(new JumpGateInfo
+					{
+						Type = (result_status) ? JumpGateInfo.TypeEnum.JUMP_SUCCESS : JumpGateInfo.TypeEnum.JUMP_FAIL,
+						JumpType = MyJumpTypeEnum.STANDARD,
+						JumpGateID = (this.JumpGateGrid == null) ? this_id : JumpGateUUID.FromJumpGate(this),
+						ControllerSettings = controller_settings,
+						ResultMessage = message,
+						CancelOverride = this.Status == MyJumpGateStatus.CANCELLED,
+						EntityBatches = this.EntityBatches?.Select((pair) => pair.Value.ToSerialized()).ToList(),
+						EntityWarps = batch_warps.Select((warp) => warp.ToSerialized()).ToList(),
+					});
+					packet.Send();
+					Logger.Debug($"[{this.JumpGateGrid.CubeGridID}-{this.JumpGateID}]: Sent network server jump response");
+				}
+
+				Action<Exception> onend = (error) => {
+					gate_animation?.Clean();
+					this.TrueEndpoint = null;
+					this.EntityBatches?.Clear();
+					if (target_gate != null && !target_gate.Closed && !target_gate.MarkClosed) target_gate.Reset();
+					else if (!this.Closed) this.Reset();
+				};
+
+				if (gate_animation != null) MyJumpGateModSession.Instance.PlayAnimation(gate_animation, (result_status) ? MyJumpGateAnimation.AnimationTypeEnum.JUMPED : MyJumpGateAnimation.AnimationTypeEnum.FAILED, null, onend);
+				else onend(null);
+				--MyJumpGateModSession.Instance.ConcurrentJumpsCounter;
+				this.SendHudMessage(message, 3000, (result_status) ? "White" : "Red");
+				Logger.Debug($"[{this.JumpGateGrid?.CubeGridID ?? -1}]-{this.JumpGateID} END_JUMP {result_status}/{message}", 3);
+			};
+
+			Action<Vector3D> SendUpdatedJumpEndpoint = (new_endpoint) => {
+				MyNetworkInterface.Packet packet = new MyNetworkInterface.Packet
+				{
+					PacketType = MyPacketTypeEnum.UPDATE_JUMP_ENDPOINT,
+					Broadcast = true,
+					TargetID = 0,
+				};
+				packet.Payload(new KeyValuePair<JumpGateUUID, Vector3D>(this_id, new_endpoint));
+				packet.Send();
+			};
+
+			try
+			{
+				// Check this gate
+				Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} WORMHOLE_JUMP_PRECHECK", 3);
+				++MyJumpGateModSession.Instance.ConcurrentJumpsCounter;
+
+				if (!this.IsValid()) result = MyJumpFailReason.SRC_INVALID;
+				else if (!this.IsControlled() || !this.Controller.IsWorking) result = MyJumpFailReason.CONTROLLER_NOT_CONNECTED;
+				else if (this.JumpGateGrid.GetAttachedJumpGateDrives().Count(working_src_drive_filter) < 2) result = MyJumpFailReason.SRC_DISABLED;
+				else if (this.Status == MyJumpGateStatus.NONE) result = MyJumpFailReason.SRC_NOT_CONFIGURED;
+				else if (!this.IsIdle()) result = MyJumpFailReason.SRC_BUSY;
+				else if (!controller_settings.CanBeInbound() && !controller_settings.CanBeOutbound()) result = MyJumpFailReason.SRC_ROUTING_DISABLED;
+				else if (!controller_settings.CanBeOutbound()) result = MyJumpFailReason.SRC_INBOUND_ONLY;
+				else if (dst == null || dst.WaypointType != MyWaypointType.JUMP_GATE) result = MyJumpFailReason.NULL_DESTINATION;
+				else if (this.JumpGateConfiguration.MaxConcurrentJumps > 0 && MyJumpGateModSession.Instance.ConcurrentJumpsCounter > this.JumpGateConfiguration.MaxConcurrentJumps) result = MyJumpFailReason.SUBSPACE_BUSY;
+				else if (MyJumpGateModSession.Configuration.JumpGateConfiguration.EnableGateExplosions && 1 - this.GetFunctionalDrivePercentage() > this.JumpGateConfiguration.ExplosionDamagePercent) result = MyJumpFailReason.SRC_DAMAGED;
+
+				// Check target gate
+				MyJumpGateConstruct grid = MyJumpGateModSession.Instance.GetJumpGateGrid(dst.JumpGate.GetJumpGateGrid());
+				target_gate = grid?.GetJumpGate(dst.JumpGate.GetJumpGate());
+				MyJumpGateControlObject control_object = target_gate?.ControlObject;
+				target_controller_settings = control_object?.BlockSettings;
+
+				if (MyJumpGateModSession.Configuration.ConstructConfiguration.RequireGridCommLink && !this.JumpGateGrid.IsConstructCommLinked(grid)) result = MyJumpFailReason.RADIO_LINK_FAILED;
+				else if (target_gate == null || !target_gate.IsComplete() || control_object == null || !control_object.IsWorking || target_controller_settings == null) result = MyJumpFailReason.DST_UNAVAILABLE;
+				else if (!target_controller_settings.CanBeInbound() && !target_controller_settings.CanBeOutbound()) result = MyJumpFailReason.DST_ROUTING_DISABLED;
+				else if (!target_controller_settings.CanBeInbound()) result = MyJumpFailReason.DST_OUTBOUND_ONLY;
+				else if (!target_controller_settings.DoSustainedWormhole()) result = MyJumpFailReason.DESTINATION_UNAVAILABLE;
+				else if (control_object != null && !control_object.IsFactionRelationValid(this.Controller.OwnerSteamID)) result = MyJumpFailReason.DST_FORBIDDEN;
+				else if (target_gate.JumpGateGrid.GetAttachedJumpGateDrives().Count(working_dst_drive_filter) < 2) result = MyJumpFailReason.DST_DISABLED;
+				else if (target_gate.Status == MyJumpGateStatus.NONE) result = MyJumpFailReason.DST_NOT_CONFIGURED;
+				else if (!target_gate.IsIdle()) result = MyJumpFailReason.DST_BUSY;
+				else if (MyJumpGateModSession.Configuration.JumpGateConfiguration.EnableGateExplosions && 1 - target_gate.GetFunctionalDrivePercentage() > target_gate.JumpGateConfiguration.ExplosionDamagePercent) result = MyJumpFailReason.DST_DAMAGED;
+				else target_gate.ConnectAsInbound(this);
+				if (result != MyJumpFailReason.NONE) target_gate = null;
+
+				// Check gate overlap
+				if (result == MyJumpFailReason.NONE)
+				{
+					other_gates.AddRange(MyJumpGateModSession.Instance.GetAllJumpGates());
+
+					foreach (MyJumpGate other_gate in other_gates)
+					{
+						if (other_gate != this && (other_gate.Status == MyJumpGateStatus.OUTBOUND || other_gate == target_gate) && jump_ellipse.Intersects(other_gate.JumpEllipse))
+						{
+							result = MyJumpFailReason.JUMP_SPACE_TRANSPOSED;
+							break;
+						}
+					}
+
+					other_gates.Clear();
+				}
+
+				// Send jump-failure if failed
+				if (result != MyJumpFailReason.NONE)
+				{
+					SendJumpResponse(result, false, null);
+					return;
+				}
+
+				// Setup endpoint
+				Vector3D? _endpoint = dst.GetEndpoint();
+
+				if (_endpoint == null)
+				{
+					SendJumpResponse(MyJumpFailReason.DESTINATION_UNAVAILABLE, false, null);
+					return;
+				}
+
+				Vector3D endpoint = _endpoint.Value;
+				Vector3D default_endpoint = endpoint;
+				double distance_to_endpoint = Vector3D.Distance(endpoint, jump_node);
+				this.TrueEndpoint = endpoint;
+
+				// Setup gate animation
+				string gate_animation_name = controller_settings.JumpEffectAnimationName();
+				gate_animation = MyAnimationHandler.GetAnimation(gate_animation_name, MyAPIGateway.Session.Player, this, target_gate, controller_settings, target_controller_settings, MyJumpTypeEnum.STANDARD);
+
+				if (gate_animation == null)
+				{
+					SendJumpResponse(MyJumpFailReason.NULL_ANIMATION, false, null);
+					return;
+				}
+
+				// Final setup
+				double tick_duration = 1000d / 60d;
+				double time_to_jump_ms = (gate_animation == null) ? 0 : gate_animation.Durations()[0] * tick_duration;
+				IMyHudNotification hud_notification = MyAPIGateway.Utilities.CreateNotification(MyTexts.GetString("Notification_JumpGate_GateActivationIn").Replace("{%0}", "--.-s"), (int) Math.Round(time_to_jump_ms), "White");
+				IMyHudNotification cancel_request_notificiation = null;
+
+				if (!MyNetworkInterface.IsDedicatedMultiplayerServer)
+				{
+					hud_notification.Show();
+					this.ShearBlocksWarning.AliveTime = (int) Math.Round(time_to_jump_ms);
+				}
+
+				// If server, broadcast jump start
+				if (MyNetworkInterface.IsMultiplayerServer)
+				{
+					MyNetworkInterface.Packet packet = new MyNetworkInterface.Packet
+					{
+						PacketType = MyPacketTypeEnum.JUMP_GATE_JUMP,
+						TargetID = 0,
+						Broadcast = true,
+					};
+
+					packet.Payload(new JumpGateInfo
+					{
+						Type = JumpGateInfo.TypeEnum.WORMHOLE_OPEN,
+						JumpGateID = JumpGateUUID.FromJumpGate(this),
+						ControllerSettings = controller_settings,
+						TargetControllerSettings = target_controller_settings,
+						TrueEndpoint = endpoint,
+					});
+
+					packet.Send();
+				}
+
+				// Update gate status
+				foreach (MyJumpGateDrive drive in this.GetJumpGateDrives()) drive.PrepareDriveForGateJump();
+				this.Status = MyJumpGateStatus.OUTBOUND;
+				this.Phase = MyJumpGatePhase.CHARGING;
+				is_init = false;
+				MyJumpGateModSession.Instance.RedrawAllTerminalControls();
+				Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} WORMHOLE_JUMP_CHARGE, TARGET_TYPE={dst.WaypointType}, ENDPOINT={endpoint}, DISTANCE={distance_to_endpoint}", 3);
+
+				// Play animation and check for invalidation of jump event
+				MyJumpGateModSession.Instance.PlayAnimation(gate_animation, MyJumpGateAnimation.AnimationTypeEnum.JUMPING, () => {
+					grid = MyJumpGateModSession.Instance.GetJumpGateGrid(dst.JumpGate.GetJumpGateGrid());
+					control_object = target_gate.ControlObject;
+
+					if (!this.IsValid()) result = MyJumpFailReason.SRC_INVALID;
+					else if (!this.IsControlled() || !this.Controller.IsWorking) result = MyJumpFailReason.CONTROLLER_NOT_CONNECTED;
+					else if (this.JumpGateGrid.GetAttachedJumpGateDrives().Count(working_src_drive_filter) < 2) result = MyJumpFailReason.SRC_DISABLED;
+					else if (this.Status == MyJumpGateStatus.NONE) result = MyJumpFailReason.SRC_NOT_CONFIGURED;
+					else if (!controller_settings.CanBeInbound() && !controller_settings.CanBeOutbound()) result = MyJumpFailReason.SRC_ROUTING_CHANGED;
+					else if (!controller_settings.CanBeOutbound()) result = MyJumpFailReason.SRC_ROUTING_CHANGED;
+					else if (dst == null || dst.WaypointType == MyWaypointType.NONE) result = MyJumpFailReason.NULL_DESTINATION;
+					else if (MyJumpGateModSession.Configuration.ConstructConfiguration.RequireGridCommLink && !this.JumpGateGrid.IsConstructCommLinked(grid)) result = MyJumpFailReason.DST_RADIO_CONNECTION_INTERRUPTED;
+					else if (target_gate.Closed || control_object == null || !control_object.IsWorking) result = MyJumpFailReason.DST_UNAVAILABLE;
+					else if (!target_controller_settings.CanBeInbound()) result = MyJumpFailReason.DST_ROUTING_CHANGED;
+					else if (control_object != null && !control_object.IsFactionRelationValid(this.Controller.OwnerSteamID)) result = MyJumpFailReason.DST_FORBIDDEN;
+					else if (target_gate.JumpGateGrid.GetAttachedJumpGateDrives().Count(working_dst_drive_filter) < 2) result = MyJumpFailReason.DST_DISABLED;
+					else if (target_gate.Status == MyJumpGateStatus.NONE) result = MyJumpFailReason.DST_NOT_CONFIGURED;
+					else if (target_gate.SenderGate != this) result = MyJumpFailReason.DST_VOIDED;
+					else
+					{
+						endpoint = target_gate.WorldJumpNode;
+						if (MyJumpGateModSession.Network.Registered && endpoint != this.TrueEndpoint) SendUpdatedJumpEndpoint(endpoint);
+						this.TrueEndpoint = endpoint;
+					}
+
+					if (MyJumpGateModSession.Instance.GameTick % 30 == 0)
+					{
+						other_gates.AddRange(MyJumpGateModSession.Instance.GetAllJumpGates());
+
+						foreach (MyJumpGate other_gate in other_gates)
+						{
+							if (other_gate != this && other_gate.Status == MyJumpGateStatus.OUTBOUND && jump_ellipse.Intersects(other_gate.JumpEllipse))
+							{
+								result = MyJumpFailReason.JUMP_SPACE_TRANSPOSED;
+								break;
+							}
+						}
+
+						other_gates.Clear();
+					}
+
+					time_to_jump_ms -= tick_duration;
+					hud_notification.Text = MyTexts.GetString("Notification_JumpGate_GateActivationIn").Replace("{%0}", MyJumpGateModSession.AutoconvertMetricUnits(Math.Max(0, time_to_jump_ms / 1000d), "s", 1));
+					hud_notification.Hide();
+					cancel_request_notificiation?.Hide();
+					Vector3D character_pos = MyAPIGateway.Session.LocalHumanPlayer?.GetPosition() ?? Vector3D.PositiveInfinity;
+					bool show_notifs = character_pos != null && this.IsPointInHudBroadcastRange(ref character_pos);
+
+					if (show_notifs)
+					{
+						hud_notification.Show();
+						cancel_request_notificiation?.Show();
+						if (this.ShearBlocks.Count == 0) this.ShearBlocksWarning?.Hide();
+						else this.ShearBlocksWarning.Show();
+					}
+
+					if (this.Closed || this.JumpGateGrid == null || this.JumpGateGrid.Closed) result = MyJumpFailReason.SRC_CLOSED;
+					else if (this.Status == MyJumpGateStatus.CANCELLED && gate_animation.ImmediateCancel) result = MyJumpFailReason.CANCELLED;
+					else if (this.Status == MyJumpGateStatus.CANCELLED && cancel_request_notificiation == null && show_notifs)
+					{
+						cancel_request_notificiation = MyAPIGateway.Utilities.CreateNotification(MyTexts.GetString("Notification_JumpGate_JumpCancelling"), (int) Math.Round(time_to_jump_ms), "Red");
+						cancel_request_notificiation.Show();
+					}
+
+					List<MyJumpGateDrive> working_drives = new List<MyJumpGateDrive>();
+					working_drives.AddRange(this.GetWorkingJumpGateDrives());
+
+					foreach (MyJumpGateDrive drive in working_drives)
+					{
+						if (drive.IsNullWrapper) continue;
+						Vector3D force_dir = (drive.TerminalBlock.WorldMatrix.Translation - this.WorldJumpNode).Normalized() * this.JumpGateConfiguration.ChargingDriveEffectorForceN;
+						drive.TerminalBlock.GetTopMostParent().Physics.AddForce(VRage.Game.Components.MyPhysicsForceType.APPLY_WORLD_FORCE, force_dir, drive.TerminalBlock.WorldMatrix.Translation, null);
+					}
+
+					return result == MyJumpFailReason.NONE;
+				}, (Exception err) => {
+
+					try
+					{
+						// Confirm no errors occured
+						Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} WORMHOLE_JUMP_POST_CHECK", 3);
+						if (err != null) result = MyJumpFailReason.UNKNOWN_ERROR;
+						else if (this.Status == MyJumpGateStatus.CANCELLED) result = MyJumpFailReason.CANCELLED;
+						hud_notification.Hide();
+						cancel_request_notificiation?.Hide();
+						this.ShearBlocksWarning?.Hide();
+
+						if (result != MyJumpFailReason.NONE)
+						{
+							SendJumpResponse(result, false, null);
+							return;
+						}
+
+						this.Phase = MyJumpGatePhase.JUMPING;
+						this.LastAutojumpAttemptTime = DateTime.MinValue;
+						if (target_gate != null) target_gate.Phase = MyJumpGatePhase.JUMPING;
+						entities_to_jump = this.GetEntitiesInJumpSpace(true).Select((pair) => pair.Key).ToList();
+						Random prng = new Random();
+
+						if (entities_to_jump.Count == 0)
+						{
+							SendJumpResponse(MyJumpFailReason.NO_ENTITIES, false, null);
+							return;
+						}
+
+						// Jump entities
+						if (dst.WaypointType == MyWaypointType.SERVER)
+						{
+							SendJumpResponse(MyJumpFailReason.CROSS_SERVER_JUMP, false, null);
+							return;
+						}
+
+						Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} WORMHOLE_JUMP_ACTIVE", 3);
+					}
+					catch (Exception e)
+					{
+						SendJumpResponse(MyJumpFailReason.UNKNOWN_ERROR, false, null);
+						int drive_count = this.GetJumpGateDrives().Count();
+						int working_drive_count = this.GetWorkingJumpGateDrives().Count();
+						Logger.Error($"Error during jump gate jump:\n\tPHASE=POSTANIM\n\tGATE_CUBE_GRID={this.JumpGateGrid?.CubeGrid?.EntityId.ToString() ?? "N/A"}\n\tGATE_ID={this.JumpGateID}\n\tGATE_SIZE={drive_count}\n\tGATE_SIZE_WORKING={working_drive_count}\nMESSAGE={e.Message}\n\tSTACKTRACE:\n{e.StackTrace}");
+					}
+
+				});
+			}
+			catch (Exception e)
+			{
+				SendJumpResponse(MyJumpFailReason.UNKNOWN_ERROR, false, null);
+				int drive_count = this.GetJumpGateDrives().Count();
+				int working_drive_count = this.GetWorkingJumpGateDrives().Count();
+				Logger.Error($"Error during jump gate jump:\n\tPHASE=PREANIM\n\tGATE_CUBE_GRID={this.JumpGateGrid?.CubeGrid?.EntityId.ToString() ?? "N/A"}\n\tGATE_ID={this.JumpGateID}\n\tGATE_SIZE={drive_count}\n\tGATE_SIZE_WORKING={working_drive_count}\nMESSAGE={e.Message}\n\tSTACKTRACE:\n{e.StackTrace}");
+			}
 		}
 
 		/// <summary>

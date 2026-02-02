@@ -1723,12 +1723,26 @@ namespace IOTA.ModularJumpGates
 		private void UpdateSaveLogFileList()
 		{
 			uint max_logfiles = this.MaxModSpecificLogFiles;
-			BinaryWriter writer = MyAPIGateway.Utilities.WriteBinaryFileInLocalStorage(this.ModLogSettingsFile, this.GetType());
-			this.ModSpecificLogFiles.LastOrDefault()?.UpdateTime();
-			this.ModSpecificLogFiles.RemoveAll((file) => file.Filename != this.ActiveModLogFile && !MyAPIGateway.Utilities.FileExistsInLocalStorage(file.Filename, this.GetType()));
-			writer.Write(this.MaxModSpecificLogFiles);
-			writer.Write(MyAPIGateway.Utilities.SerializeToBinary(this.ModSpecificLogFiles));
-			Logger.Log($"Mod-Specific log file settings updated; Capacity={this.ModSpecificLogFiles.Count}/{max_logfiles}");
+			BinaryWriter writer = null;
+
+			try
+			{
+				writer = MyAPIGateway.Utilities.WriteBinaryFileInLocalStorage(this.ModLogSettingsFile, this.GetType());
+				this.ModSpecificLogFiles.LastOrDefault()?.UpdateTime();
+				this.ModSpecificLogFiles.RemoveAll((file) => file.Filename != this.ActiveModLogFile && !MyAPIGateway.Utilities.FileExistsInLocalStorage(file.Filename, this.GetType()));
+				writer.Write(this.MaxModSpecificLogFiles);
+				writer.Write(MyAPIGateway.Utilities.SerializeToBinary(this.ModSpecificLogFiles));
+				Logger.Log($"Mod-Specific log file settings updated; Capacity={this.ModSpecificLogFiles.Count}/{max_logfiles}");
+			}
+			catch (Exception e)
+			{
+				Logger.Error($"Failed to serialize mod-specific log file settings\n  ...\n[ {e.GetType().Name} ]: {e.Message}\n{e.StackTrace}\n{e.InnerException}");
+				MyAPIGateway.Utilities.ShowMessage(MyJumpGateModSession.DISPLAYNAME, "Failed to save mod-specific log file settings; See log for details");
+			}
+			finally
+			{
+				writer?.Close();
+			}
 		}
 
 		/// <summary>
@@ -1743,9 +1757,11 @@ namespace IOTA.ModularJumpGates
 				return false;
 			}
 
+			BinaryReader reader = null;
+
 			try
 			{
-				BinaryReader reader = MyAPIGateway.Utilities.ReadBinaryFileInLocalStorage(this.ModLogSettingsFile, this.GetType());
+				reader = MyAPIGateway.Utilities.ReadBinaryFileInLocalStorage(this.ModLogSettingsFile, this.GetType());
 				this.FallbackMaxModSpecificLogFiles = reader.ReadUInt32();
 				byte[] buffer = new byte[reader.BaseStream.Length - reader.BaseStream.Position];
 				reader.Read(buffer, 0, buffer.Length);
@@ -1755,6 +1771,10 @@ namespace IOTA.ModularJumpGates
 			catch (Exception e)
 			{
 				this.ModLogListError = new ModFileLoadingException("Failed to deserialize mod-specific log file settings", e);
+			}
+			finally
+			{
+				reader?.Close();
 			}
 
 			return true;
