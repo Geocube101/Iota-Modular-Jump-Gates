@@ -3,15 +3,18 @@ using Sandbox.ModAPI;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using VRage.Game;
 using VRage.Game.ModAPI;
+using VRage.Utils;
 using VRageMath;
+using VRageRender;
 
 namespace IOTA.ModularJumpGates.API.ModAPI
 {
 	public class MyModAPISession : MyModAPIObjectBase
 	{
 		public static long ModAPIID => 3313236685;
-		public static int[] ModAPIVersion { get; private set; } = new int[2] { 1, 5 };
+		public static int[] ModAPIVersion { get; private set; } = new int[2] { 2, 0 };
 		public static MyModAPISession Instance { get; private set; } = null;
 
 		/// <summary>
@@ -24,6 +27,13 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 			MyModAPISession.Instance = null;
 			MyModAPISession.ModAPIVersion = null;
 			MyModAPIObjectBase.DisposeAll();
+		}
+
+		public static void DrawTransparentLine(Vector3D start, Vector3D end, MyStringId? material, ref Vector4 color, float thickness, MyBillboard.BlendTypeEnum blendtype = MyBillboard.BlendTypeEnum.Standard)
+		{
+			Vector3D dir = end - start;
+			float len = (float) dir.Length();
+			MyTransparentGeometry.AddLineBillboard(material ?? MyStringId.GetOrCompute("GizmoDrawLine"), color, start, dir.Normalized(), len, thickness, blendtype);
 		}
 
 		/// <summary>
@@ -97,6 +107,36 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		public void RequestGridsDownload()
 		{
 			this.GetMethod<Action>("RequestGridsDownload")();
+		}
+
+		/// <summary>
+		/// Detonates the specified jump gate<br />
+		/// Gate must be valid and not marked closed
+		/// </summary>
+		/// <param name="gate">The gate to detonate</param>
+		/// <param name="initiator">The drive at which to start the explosion chain</param>
+		public void DetonateJumpGate(MyModAPIJumpGate gate, MyModAPIJumpGateDrive initiator = null)
+		{
+			if (gate == null || gate.MarkClosed || !gate.IsValid()) return;
+			this.GetMethod<Action<long[], long?>>("DetonateJumpGate")(JumpGateUUID.FromJumpGate(gate).Packed(), initiator?.BlockID);
+		}
+
+		/// <summary>
+		/// Purges all but the current active log file
+		/// </summary>
+		public void PurgeAllStoredLogFiles()
+		{
+			this.GetMethod<Action>("PurgeAllStoredLogFiles")();
+		}
+
+		/// <summary>
+		/// Purges the oldenst log files keeping the newest 'n' files<br />
+		/// Current file will not be purged
+		/// </summary>
+		/// <param name="count">The number of log files to keep or 0 to purge all</param>
+		public void PurgeStoredLogFiles(uint count)
+		{
+			this.GetMethod<Action<uint>>("PurgeStoredLogFiles")(count);
 		}
 
 		/// <summary>

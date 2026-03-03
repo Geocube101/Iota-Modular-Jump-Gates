@@ -652,8 +652,8 @@ namespace IOTA.ModularJumpGates
 			{
 				if (drive.IsLargeGrid) indexable_large_drives.Add(drive);
 				else if (drive.IsSmallGrid) indexable_small_drives.Add(drive);
+				else throw new InvalidOperationException($"A block was neither large nor small grid - DRIVE::{drive.BlockID}");
 			}
-
 
 			for (int i = 0; i < indexable_large_drives.Count - 1; ++i)
 			{
@@ -817,7 +817,6 @@ namespace IOTA.ModularJumpGates
 					jump_gate.ConstructMatrix = this.CubeGrid.WorldMatrix;
 					jump_gate.WorldJumpNode = jump_node;
 					jump_gate.UpdateDriveIntersectNodes(node_group);
-					jump_gate.SetColliderDirty();
 					jump_gate.SetJumpSpaceEllipsoidDirty();
 					foreach (MyJumpGateDrive drive in drive_group) drive.SetAttachedJumpGate(jump_gate);
 					jump_gate.Init();
@@ -860,7 +859,7 @@ namespace IOTA.ModularJumpGates
 					continue;
 				}
 
-				jump_gate.Update(full_gate_update, gate_entity_update);
+				jump_gate.Update(this.LocalGameTick, full_gate_update, gate_entity_update);
 				if (!jump_gate.MarkClosed && (!jump_gate.IsValid() || jump_gate.JumpGateGrid != this)) jump_gate.Dispose();
 			}
 		}
@@ -1350,9 +1349,17 @@ namespace IOTA.ModularJumpGates
 		/// Marks this construct for gate reconstruction<br />
 		/// Gate drive intersections will be updated and gates reconstructed on next tick
 		/// </summary>
-		public void MarkGatesForUpdate()
+		/// <param name="update_drive_combinations">Whether to recalculate drive combinations</param>
+		public void MarkGatesForUpdate(bool update_drive_combinations = false)
 		{
 			this.MarkUpdateJumpGates = !this.Closed;
+
+			if (update_drive_combinations)
+			{
+				this.DriveCombinations = null;
+				this.UpdateDriveCombinations(ref update_drive_combinations);
+			}
+
 			Logger.Debug($"[{this.CubeGridID}] Marked all gates for reconstruct", 5);
 		}
 
@@ -1695,6 +1702,15 @@ namespace IOTA.ModularJumpGates
         {
             return !this.Closed && grid != null && (this.CubeGrids?.ContainsKey(grid.EntityId) ?? false);
         }
+
+		/// <param name="entity">The entity to check</param>
+		/// <returns>Whether entity is a functional part of this construct</returns>
+		public bool IsEntityPartOfConstruct(MyEntity entity)
+		{
+			if (entity == null) return false;
+			else if (entity is MyCubeGrid) return this.HasCubeGrid(entity.EntityId);
+			else return this.JumpGates.All((pair) => !pair.Value.IsEntityPartOfJumpGate(entity));
+		}
 
 		/// <summary>
 		/// Checks if the specified grid is reachable from this one via antennas

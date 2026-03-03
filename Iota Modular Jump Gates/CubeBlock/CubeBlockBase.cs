@@ -329,7 +329,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			if (this.TerminalBlock == null || this.TerminalBlock?.CubeGrid?.Physics == null) return;
 			this.ResourceSink?.Update();
 			
-			if (!this.IsClosed && (this.JumpGateGrid == null || this.JumpGateGrid.Closed || !MyJumpGateModSession.Instance.IsJumpGateGridMultiplayerValid(this.JumpGateGrid) || !this.JumpGateGrid.HasCubeGrid(this.TerminalBlock.CubeGrid)))
+			if (!this.IsClosed && (this.JumpGateGrid == null || this.JumpGateGrid.Closed || !MyJumpGateModSession.Instance.IsJumpGateGridMultiplayerValid(this.JumpGateGrid) || !this.JumpGateGrid.HasCubeGrid(this.TerminalBlock.CubeGrid) || this.JumpGateGrid.GetCubeBlock(this.BlockID) != this))
 			{
 				MyJumpGateConstruct new_construct = MyJumpGateModSession.Instance.GetUnclosedJumpGateGrid(this.TerminalBlock.CubeGrid);
 				if (new_construct != this.JumpGateGrid) this.OnConstructChanged(new_construct);
@@ -460,7 +460,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				{
 					local_sb.Append($"Detailed Info Error:\n{e.Message}\n ... \n{e.StackTrace}");
 				}
-
+				
 				string[] lines = this.LastDetailedInfoString.Trim(' ', '\t', '\n').Split('\n');
 				int max_length = 9;
 
@@ -648,7 +648,10 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// Overridable<br />
 		/// Called once when all session constructs are initialized
 		/// </summary>
-		protected virtual void UpdateOnceAfterInit() { }
+		protected virtual void UpdateOnceAfterInit()
+		{
+			MyCockpitTerminal.Load();
+		}
 		#endregion
 
 		#region Public Methods

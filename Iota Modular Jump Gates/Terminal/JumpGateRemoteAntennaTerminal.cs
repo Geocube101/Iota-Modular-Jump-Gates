@@ -496,7 +496,8 @@ namespace IOTA.ModularJumpGates.Terminal
 					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block2);
 					if (antenna == null || antenna.JumpGateGrid == null || antenna.JumpGateGrid.Closed) return;
 					MyJumpGate jump_gate = antenna.GetInboundControlGate(antenna.CurrentTerminalChannel);
-					string selected_animation = antenna.BlockSettings.BaseControllerSettings[antenna.CurrentTerminalChannel].JumpEffectAnimationName();
+					MyJumpGateController.MyControllerBlockSettingsStruct controller_settings = antenna.BlockSettings.BaseControllerSettings[antenna.CurrentTerminalChannel];
+					string selected_animation = controller_settings.JumpEffectAnimationName();
 					string _default = "IOTA.ModularJumpGates.AnimationDef.Standard";
 
 					foreach (string full_name in MyAnimationHandler.GetAnimationNames())
@@ -504,11 +505,29 @@ namespace IOTA.ModularJumpGates.Terminal
 						string animation_name;
 						string description;
 						AnimationDef animation = MyAnimationHandler.GetAnimationDef(full_name, jump_gate, false);
+						if (animation.IsWormholeAnimation() != controller_settings.DoSustainedWormhole()) continue;
 
 						if (animation == null)
 						{
 							animation_name = $"-{MyTexts.GetString("GeneralText_Unavailable")}-";
 							description = MyTexts.GetString("Terminal_JumpGateController_JumpGateAnimationUnavailable");
+						}
+						else if (animation.IsWormholeAnimation())
+						{
+							animation_name = animation.AnimationName;
+
+							description = MyTexts.GetString("Terminal_JumpGateController_JumpGateWormholeAnimationDescription")
+								.Replace("{%0}", animation_name)
+								.Replace("{%1}", (animation.Description == null || animation.Description.Length == 0) ? "N/A" : animation.Description)
+								.Replace("{%2}", full_name)
+								.Replace("{%3}", MyJumpGateModSession.AutoconvertTimeUnits((animation.WormholeOpenAnimationDef?.Duration ?? 0) / 60d, 2))
+								.Replace("{%4}", MyJumpGateModSession.AutoconvertTimeUnits((animation.WormholeCloseAnimationDef?.Duration ?? 0) / 60d, 2))
+								.Replace("{%5}", MyJumpGateModSession.AutoconvertTimeUnits((animation.JumpingAnimationDef?.Duration ?? 0) / 60d, 2))
+								.Replace("{%6}", MyJumpGateModSession.AutoconvertTimeUnits((animation.JumpedAnimationDef?.Duration ?? 0) / 60d, 2))
+								.Replace("{%7}", MyJumpGateModSession.AutoconvertTimeUnits((animation.JumpedAnimationDef?.TravelTime ?? 0) / 60d, 2))
+								.Replace("{%8}", MyJumpGateModSession.AutoconvertTimeUnits((animation.FailedAnimationDef?.Duration ?? 0) / 60d, 2))
+								.Replace("{%9}", animation.SourceMod ?? MyJumpGateModSession.MODID)
+							;
 						}
 						else
 						{
@@ -594,6 +613,83 @@ namespace IOTA.ModularJumpGates.Terminal
 				};
 				MyJumpGateRemoteAntennaTerminal.TerminalControls.Add(do_allow_outbound);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(do_allow_outbound);
+			}
+
+			// Separator
+			{
+				IMyTerminalControlSeparator separator_hr = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSeparator, IMyUpgradeModule>("");
+				separator_hr.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateRemoteAntenna(block) && MyJumpGateRemoteAntennaTerminal.TerminalSection == MyTerminalSection.JUMP_GATE;
+				separator_hr.SupportsMultipleBlocks = true;
+				MyJumpGateRemoteAntennaTerminal.TerminalControls.Add(separator_hr);
+				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(separator_hr);
+			}
+
+			// Spacer
+			{
+				IMyTerminalControlLabel spacer_lb = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlLabel, IMyUpgradeModule>(MODID_PREFIX + "JumpGateSectionMiddleSpacer");
+				spacer_lb.Label = MyStringId.GetOrCompute(" ");
+				spacer_lb.Visible = (block) => MyJumpGateRemoteAntennaTerminal.TerminalSection == MyTerminalSection.JUMP_GATE && MyJumpGateModSession.IsBlockJumpGateRemoteAntenna(block);
+				spacer_lb.SupportsMultipleBlocks = true;
+				MyJumpGateRemoteAntennaTerminal.TerminalControls.Add(spacer_lb);
+				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(spacer_lb);
+			}
+
+			// OnOffSwitch [Do Wormhole]
+			{
+				IMyTerminalControlOnOffSwitch do_wormhole_activate = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlOnOffSwitch, IMyUpgradeModule>(MODID_PREFIX + "DoWormholeActivate");
+				do_wormhole_activate.Title = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_EnableWormholeActivation"));
+				do_wormhole_activate.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_EnableWormholeActivation_Tooltip"));
+				do_wormhole_activate.SupportsMultipleBlocks = true;
+				do_wormhole_activate.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateRemoteAntenna(block) && MyJumpGateRemoteAntennaTerminal.TerminalSection == MyTerminalSection.JUMP_GATE;
+				do_wormhole_activate.Enabled = (block) => {
+					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
+					MyJumpGate jump_gate = antenna?.GetInboundControlGate(antenna.CurrentTerminalChannel);
+					if (antenna == null || !antenna.IsWorking || antenna.JumpGateGrid == null || antenna.JumpGateGrid.Closed) return false;
+					else return jump_gate == null || jump_gate.IsIdle();
+				};
+				do_wormhole_activate.OnText = MyStringId.GetOrCompute(MyTexts.GetString("GeneralText_On"));
+				do_wormhole_activate.OffText = MyStringId.GetOrCompute(MyTexts.GetString("GeneralText_Off"));
+				do_wormhole_activate.Getter = (block) => {
+					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
+					return antenna?.BlockSettings.BaseControllerSettings[antenna.CurrentTerminalChannel].DoSustainedWormhole() ?? false;
+				};
+				do_wormhole_activate.Setter = (block, value) => {
+					if (!do_wormhole_activate.Enabled(block)) return;
+					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
+					antenna.BlockSettings.BaseControllerSettings[antenna.CurrentTerminalChannel].DoSustainedWormhole(value);
+					antenna.SetDirty();
+					MyJumpGateModSession.Instance.RedrawAllTerminalControls();
+				};
+				MyJumpGateRemoteAntennaTerminal.TerminalControls.Add(do_wormhole_activate);
+				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(do_wormhole_activate);
+			}
+
+			// OnOffSwitch [Do Wormhole Admin Bypass]
+			{
+				IMyTerminalControlOnOffSwitch do_wormhole_admin_bypass = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlOnOffSwitch, IMyUpgradeModule>(MODID_PREFIX + "DoWormholeAdminBypass");
+				do_wormhole_admin_bypass.Title = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_EnableWormholeAdminBypass"));
+				do_wormhole_admin_bypass.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_EnableWormholeAdminBypass_Tooltip"));
+				do_wormhole_admin_bypass.SupportsMultipleBlocks = true;
+				do_wormhole_admin_bypass.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateRemoteAntenna(block) && MyJumpGateRemoteAntennaTerminal.TerminalSection == MyTerminalSection.JUMP_GATE;
+				do_wormhole_admin_bypass.Enabled = (block) => {
+					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
+					return MyAPIGateway.Session.IsUserAdmin(MyAPIGateway.Multiplayer.MyId) && antenna != null && antenna.IsWorking && antenna.JumpGateGrid != null && !antenna.JumpGateGrid.Closed;
+				};
+				do_wormhole_admin_bypass.OnText = MyStringId.GetOrCompute(MyTexts.GetString("GeneralText_On"));
+				do_wormhole_admin_bypass.OffText = MyStringId.GetOrCompute(MyTexts.GetString("GeneralText_Off"));
+				do_wormhole_admin_bypass.Getter = (block) => {
+					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
+					return antenna?.BlockSettings.BaseControllerSettings[antenna.CurrentTerminalChannel].DoAdminWormholeBypass() ?? false;
+				};
+				do_wormhole_admin_bypass.Setter = (block, value) => {
+					if (!do_wormhole_admin_bypass.Enabled(block)) return;
+					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
+					antenna.BlockSettings.BaseControllerSettings[antenna.CurrentTerminalChannel].DoAdminWormholeBypass(value);
+					antenna.SetDirty();
+					MyJumpGateModSession.Instance.RedrawAllTerminalControls();
+				};
+				MyJumpGateRemoteAntennaTerminal.TerminalControls.Add(do_wormhole_admin_bypass);
+				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(do_wormhole_admin_bypass);
 			}
 
 			// Spacer
@@ -1343,7 +1439,18 @@ namespace IOTA.ModularJumpGates.Terminal
 				do_reconstruct_grid_gates.Action = (block) => {
 					if (!do_reconstruct_grid_gates.Enabled(block)) return;
 					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
-					antenna.JumpGateGrid.MarkGatesForUpdate();
+
+					if (MyNetworkInterface.IsStandaloneMultiplayerClient)
+					{
+						MyNetworkInterface.Packet packet = new MyNetworkInterface.Packet {
+							PacketType = MyPacketTypeEnum.MARK_GATES_DIRTY,
+							TargetID = 0,
+							Broadcast = false,
+						};
+						packet.Payload(new KeyValuePair<long, bool>(antenna.JumpGateGrid.CubeGridID, false));
+						packet.Send();
+					}
+					else antenna.JumpGateGrid?.MarkGatesForUpdate();
 				};
 				MyJumpGateRemoteAntennaTerminal.TerminalControls.Add(do_reconstruct_grid_gates);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(do_reconstruct_grid_gates);

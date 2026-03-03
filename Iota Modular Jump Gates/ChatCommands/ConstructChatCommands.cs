@@ -27,6 +27,7 @@ namespace IOTA.ModularJumpGates.ChatCommands
 			this.AddSubCommand(new MyConstructInfoChatCommand());
 			this.AddSubCommand(new MyConstructReconstructChatCommand());
 			this.AddSubCommand(new MyConstructTickFailChatCommand());
+			this.AddSubCommand(new MyConstructForceStationChatCommand());
 			base.Init();
 			return true;
 		}
@@ -165,11 +166,13 @@ namespace IOTA.ModularJumpGates.ChatCommands
 
 		public override string CommandDescription => MyTexts.GetString("ChatCommandHandler_GridRebuildCommand_Description");
 
-		public override string CommandHelp => $"{this.CommandName} [all|nearest]";
+		public override string CommandHelp => $"{this.CommandName} [all|nearest] [true|false]";
 
 		public override MyCommandResult Execute(IMyPlayer caller, List<string> arguments)
 		{
 			string target_type = arguments.FirstOrDefault() ?? "all";
+			bool update_combinations = false;
+			if (arguments.Count > 1 && !bool.TryParse(arguments[1], out update_combinations)) return MyCommandResult.InvalidCommandArgument(this, 1, arguments[1], "true", "false");
 			
 			if (target_type == "all")
 			{
@@ -181,7 +184,7 @@ namespace IOTA.ModularJumpGates.ChatCommands
 						TargetID = 0,
 						Broadcast = false,
 					};
-					packet.Payload(-1L);
+					packet.Payload(new KeyValuePair<long, bool>(-1L, update_combinations));
 					packet.Send();
 					return MyCommandResult.Success(this, MyTexts.GetString("ChatCommandHandler_GridRebuildCommand_OnMPSuccess"));
 				}
@@ -192,7 +195,7 @@ namespace IOTA.ModularJumpGates.ChatCommands
 					foreach (MyJumpGateConstruct construct in MyJumpGateModSession.Instance.GetAllJumpGateGrids())
 					{
 						if (construct == null || construct.Closed) continue;
-						construct.MarkGatesForUpdate();
+						construct.MarkGatesForUpdate(update_combinations);
 						++count;
 					}
 
@@ -214,13 +217,13 @@ namespace IOTA.ModularJumpGates.ChatCommands
 						TargetID = 0,
 						Broadcast = false,
 					};
-					packet.Payload(closest.CubeGridID);
+					packet.Payload(new KeyValuePair<long, bool>(closest.CubeGridID, update_combinations));
 					packet.Send();
 					return MyCommandResult.Success(this, MyTexts.GetString("ChatCommandHandler_GridRebuildCommand_OnMPSuccess"));
 				}
 				else
 				{
-					closest.MarkGatesForUpdate();
+					closest.MarkGatesForUpdate(update_combinations);
 					return MyCommandResult.Success(this, MyTexts.GetString("ChatCommandHandler_GridRebuildCommand_OnSuccess").Replace("{%0}", "1"));
 				}
 			}
@@ -307,6 +310,87 @@ namespace IOTA.ModularJumpGates.ChatCommands
 			{
 				closest.RaiseTickFailure(count);
 				return MyCommandResult.Success(this, MyTexts.GetString("ChatCommandHandler_GridTickFailCommand_OnSuccess"));
+			}
+		}
+	}
+
+	internal class MyConstructForceStationChatCommand : MyChatCommand
+	{
+		public override bool RequiresAdmin => true;
+
+		public override bool RequiresNonNullCaller => true;
+
+		public bool AwaitingResponse = false;
+
+		public override string CommandName => MyTexts.GetString("ChatCommandHandler_GridForceConstructCommand_Name");
+
+		public override string CommandDescription => MyTexts.GetString("ChatCommandHandler_GridForceConstructCommand_Description");
+
+		public override string CommandHelp => this.CommandName;
+
+		private void OnGridForceConstructPacket(MyNetworkInterface.Packet packet)
+		{
+			if (packet == null || packet.PacketType != MyPacketTypeEnum.GENERAL) return;
+			string eid = packet.GenericEventID;
+
+			if (eid == "gridforcestation_request" && packet.PhaseFrame == 1)
+			{
+				long id;
+				packet.GeneralPayload(out id);
+				MyJumpGateConstruct construct = MyJumpGateModSession.Instance.GetJumpGateGrid(id);
+				string response;
+
+				if (construct == null || construct.Closed) response = MyTexts.GetString("ChatCommandHandler_GridInfoCommand_GridNotFound");
+				else
+				{
+					construct.SetConstructStaticness(true);
+					response = MyTexts.GetString("ChatCommandHandler_GridForceStationCommand_OnSuccess");
+				}
+
+				packet = packet.Forward(packet.SenderID, false);
+				packet.GeneralPayload("gridforcestation_response");
+				packet.Send();
+			}
+			else if (eid == "gridforcestation_response" && packet.PhaseFrame == 2)
+			{
+				MyAPIGateway.Utilities.ShowMessage(MyJumpGateModSession.DISPLAYNAME, MyTexts.GetString("ChatCommandHandler_GridForceStationCommand_OnSuccess"));
+			}
+		}
+
+		public override void Deinit()
+		{
+			base.Deinit();
+			if (!(MyJumpGateModSession.Network?.Registered ?? false)) return;
+			MyJumpGateModSession.Network.Off(MyPacketTypeEnum.GENERAL, this.OnGridForceConstructPacket);
+		}
+
+		public override bool Init()
+		{
+			base.Init();
+			if (!(MyJumpGateModSession.Network?.Registered ?? false)) return true;
+			MyJumpGateModSession.Network.On(MyPacketTypeEnum.GENERAL, this.OnGridForceConstructPacket);
+			return true;
+		}
+
+		public override MyCommandResult Execute(IMyPlayer caller, List<string> arguments)
+		{
+			if (arguments.Count != 0) return MyCommandResult.InvalidNumberArguments(this, 0, 0, arguments.Count);
+			double scan_distance = 1500 * 1500;
+			Vector3D position = caller.GetPosition();
+			MyJumpGateConstruct closest = MyJumpGateModSession.Instance.GetAllJumpGateGrids().Where((grid) => grid != null && !grid.Closed && Vector3D.DistanceSquared(position, grid.ConstructMassCenter()) <= scan_distance).OrderBy((grid) => Vector3D.DistanceSquared(position, grid.ConstructMassCenter())).FirstOrDefault();
+			if (closest == null) return MyCommandResult.Failure(this, MyTexts.GetString("ChatCommandHandler_GridInfoCommand_GridNotFound"));
+
+			if (MyNetworkInterface.IsServerLike)
+			{
+				closest.SetConstructStaticness(true);
+				MyAPIGateway.Utilities.ShowMessage(MyJumpGateModSession.DISPLAYNAME, MyTexts.GetString("ChatCommandHandler_GridForceStationCommand_OnSuccess"));
+				return MyCommandResult.Success(this);
+			}
+			else
+			{
+				MyNetworkInterface.Packet packet = MyJumpGateModSession.Network.CreateGeneralPacket("gridforcestation_request", closest.CubeGridID);
+				packet.Send();
+				return MyCommandResult.Success(this, MyTexts.GetString("ChatCommandHandler_GridInfoCommand_OnMPSuccess"));
 			}
 		}
 	}

@@ -309,27 +309,9 @@ namespace IOTA.ModularJumpGates.CubeBlock
 
 				if (jump_gate != null)
 				{
-					foreach (KeyValuePair<MyEntity, float> pair in jump_gate.GetEntitiesInJumpSpace(true))
+					foreach (KeyValuePair<MyEntity, float> pair in jump_gate.GetEntitiesReadyForJump(true))
 					{
 						string name = $" {pair.Key.DisplayName}";
-						string info = $" - {MyJumpGateModSession.AutoconvertMetricUnits(pair.Value * 1e3, "g", 4)}";
-						const int max_length = 30;
-						int remaining_length = max_length - info.Length - name.Length;
-						int chop_length = -Math.Min(remaining_length, 0);
-						total_mass_kg += pair.Value;
-
-						if (chop_length > 0)
-						{
-							chop_length += 3;
-							info = $"...{info}";
-						}
-
-						entity_list.Append($"[color=#FF911CBF] - {name.Substring(0, name.Length - chop_length)}{info}[/color]\n");
-					}
-
-					foreach (KeyValuePair<long, float> pair in jump_gate.GetUninitializedEntititesInJumpSpace(true))
-					{
-						string name = $" U:{pair.Key}";
 						string info = $" - {MyJumpGateModSession.AutoconvertMetricUnits(pair.Value * 1e3, "g", 4)}";
 						const int max_length = 30;
 						int remaining_length = max_length - info.Length - name.Length;

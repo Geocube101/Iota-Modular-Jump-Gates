@@ -329,6 +329,35 @@ namespace IOTA.ModularJumpGates.API.AnimationAPI.Util
 		/// </summary>
 		RANDOM,
 	}
+
+	public enum CollisionShapeEnum : byte { NONE, ELLIPSOID, CUBE, CYLINDER }
+
+	public enum CollisionEffectTypeEnum : byte
+	{
+		NONE,
+
+		/// <summary>
+		/// Damages all entities inside this collider<br />
+		/// Effect arguments:<br />
+		///  ... 0: Tick modulo (only ticked every n ticks)<br />
+		///  ... 1: Damage per tick<br />
+		/// </summary>
+		DAMAGE,
+
+		/// <summary>
+		/// Jumps all entities inside this collider<br />
+		/// Effect arguments:<br />
+		///  ... 0: Tick modulo (only ticked every n ticks)<br />
+		/// </summary>
+		JUMP,
+
+		/// <summary>
+		/// Deletes all entities inside this collider
+		/// Effect arguments:<br />
+		///  ... 0: Tick modulo (only ticked every n ticks)<br />
+		/// </summary>
+		DELETE,
+	}
 	#endregion
 
 	#region Animation Util Classes

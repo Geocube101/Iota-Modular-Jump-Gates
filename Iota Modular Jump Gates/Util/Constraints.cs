@@ -1,5 +1,6 @@
 ﻿using ProtoBuf;
 using System;
+using System.Xml.Serialization;
 
 namespace IOTA.ModularJumpGates.Util
 {
@@ -25,6 +26,8 @@ namespace IOTA.ModularJumpGates.Util
 	/// Class representing a numerical range
 	/// </summary>
 	/// <typeparam name="T">The typename; must implement IComparable</typeparam>
+	[Serializable]
+	[XmlRoot("NumberRange")]
 	[ProtoContract]
 	public struct NumberRange<T> : ConstraintValue<T> where T : IComparable<T>
 	{
@@ -33,24 +36,28 @@ namespace IOTA.ModularJumpGates.Util
 		/// The lower value of this range
 		/// </summary>
 		[ProtoMember(1)]
+		[XmlElement("LowerBound")]
 		public T LowerBound;
 
 		/// <summary>
 		/// The upper value of this range
 		/// </summary>
 		[ProtoMember(2)]
+		[XmlElement("UpperBound")]
 		public T UpperBound;
 
 		/// <summary>
 		/// Whether the lower value is inclusive
 		/// </summary>
 		[ProtoMember(3)]
+		[XmlElement("LowerInclusive")]
 		public bool LowerInclusive;
 
 		/// <summary>
 		/// Whether the upper value is inclusive
 		/// </summary>
 		[ProtoMember(4)]
+		[XmlElement("UpperInclusive")]
 		public bool UpperInclusive;
 		#endregion
 
@@ -146,6 +153,8 @@ namespace IOTA.ModularJumpGates.Util
 	/// Class representing a date-time range
 	/// </summary>
 	/// <typeparam name="T">The typename; must implement IComparable</typeparam>
+	[Serializable]
+	[XmlRoot("DateTimeRange")]
 	[ProtoContract]
 	public struct DateTimeRange : ConstraintValue<DateTime>
 	{
@@ -166,30 +175,35 @@ namespace IOTA.ModularJumpGates.Util
 		/// The lower value of this range
 		/// </summary>
 		[ProtoMember(1)]
+		[XmlElement("LowerBound")]
 		public DateTime LowerBound;
 
 		/// <summary>
 		/// The upper value of this range
 		/// </summary>
 		[ProtoMember(2)]
+		[XmlElement("UpperBound")]
 		public DateTime UpperBound;
 
 		/// <summary>
 		/// Whether the lower value is inclusive
 		/// </summary>
 		[ProtoMember(3)]
+		[XmlElement("LowerInclusive")]
 		public bool LowerInclusive;
 
 		/// <summary>
 		/// Whether the upper value is inclusive
 		/// </summary>
 		[ProtoMember(4)]
+		[XmlElement("UpperInclusive")]
 		public bool UpperInclusive;
 
 		/// <summary>
 		/// The date-time compontents to compare
 		/// </summary>
 		[ProtoMember(5)]
+		[XmlElement("ComponentCompare")]
 		public ComponentCompareType ComponentCompare;
 		#endregion
 

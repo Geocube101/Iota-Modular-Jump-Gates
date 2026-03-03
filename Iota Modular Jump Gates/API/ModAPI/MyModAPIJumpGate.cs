@@ -47,6 +47,11 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		public bool IsDetonating => this.GetAttribute<bool>("IsDetonating");
 
 		/// <summary>
+		/// Whether the gate has an active sustained wormhole
+		/// </summary>
+		public bool IsWormholeActive => this.GetAttribute<bool>("IsWormholeActive");
+
+		/// <summary>
 		/// This jump gate's self destruct time in game ticks or -1 if not armed
 		/// </summary>
 		public int ManualDetonationTimeout => this.GetAttribute<int>("ManualDetonationTimeout");
@@ -110,6 +115,11 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		public MatrixD ConstructMatrix => this.GetAttribute<MatrixD>("ConstructMatrix");
 
 		/// <summary>
+		/// The inverse world matrix of this gate's jump gate grid's main cube grid
+		/// </summary>
+		public MatrixD ConstructMatrixInv => this.GetAttribute<MatrixD>("ConstructMatrixInv");
+
+		/// <summary>
 		/// The UTC date time representation of MyJumpGate.LastUpdateTime
 		/// </summary>
 		public DateTime LastUpdateDateTimeUTC
@@ -124,6 +134,11 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 				this.SetAttribute<DateTime>("LastUpdateDateTimeUTC", value);
 			}
 		}
+
+		/// <summary>
+		/// The time at which this gate opened as a wormhole
+		/// </summary>
+		public DateTime? WormholeStartTime => this.GetAttribute<DateTime?>("WormholeStartTime");
 
 		/// <summary>
 		/// The gate configuration variables for this gate
@@ -751,10 +766,11 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		/// </summary>
 		/// <param name="use_endpoint">Whether to calculate the world matrix using this gate's endpoint</param>
 		/// <param name="use_normal_override">Whether to calculate the world matrix using this gate's normal override</param>
+		/// <param name="normalized">Whether to normalize the world matrix</param>
 		/// <returns>This gate's world matrix</returns>
-		public MatrixD GetWorldMatrix(bool use_endpoint, bool use_normal_override)
+		public MatrixD GetWorldMatrix(bool use_endpoint, bool use_normal_override, bool normalized = true)
 		{
-			return this.GetMethod<Func<bool, bool, MatrixD>>("GetWorldMatrix")(use_endpoint, use_normal_override);
+			return this.GetMethod<Func<bool, bool, bool, MatrixD>>("GetWorldMatrix")(use_endpoint, use_normal_override, normalized);
 		}
 
 		/// <summary>
@@ -793,17 +809,6 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		}
 
 		/// <summary>
-		/// Gets all entities within this gate's jump space ellipsoid not yet initialized on client<br />
-		/// Resulting key-value pair is a long (entity ID) and a flot (entity's mass in kilograms)
-		/// </summary>
-		/// <param name="filtered">Whether to remove blacklisted entities per this gate's controller</param>
-		/// <returns>An IEnumerable referencing all entities within the jump space</returns>
-		public IEnumerable<KeyValuePair<long, float>> GetUninitializedEntititesInJumpSpace(bool filtered = false)
-		{
-			return this.GetMethod<Func<bool, IEnumerable<KeyValuePair<long, float>>>>("GetUninitializedEntititesInJumpSpace")(filtered);
-		}
-
-		/// <summary>
 		/// Gets all entities within this gate's jump space ellipsoid<br />
 		/// Resulting key-value pair is a long (entity ID) and a flot (entity's mass in kilograms)
 		/// </summary>
@@ -812,6 +817,29 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		public IEnumerable<KeyValuePair<MyEntity, float>> GetEntitiesInJumpSpace(bool filtered = false)
 		{
 			return this.GetMethod<Func<bool, IEnumerable<KeyValuePair<MyEntity, float>>>>("GetEntitiesInJumpSpace")(filtered);
+		}
+
+		/// <summary>
+		/// Gets all entities within this gate's jump space collider sphere
+		/// </summary>
+		/// <param name="filtered">Whether to remove blacklisted entities per this gate's controller</param>
+		/// <returns>An IEnumerable referencing all entities within the jump space collider</returns>
+		public IEnumerable<MyEntity> GetEntitiesInCollider(bool filtered = false)
+		{
+			return this.GetMethod<Func<bool, IEnumerable<MyEntity>>>("GetEntitiesInCollider")(filtered);
+		}
+
+		/// <summary>
+		/// Gets all entities within a jump collider<br />
+		/// If a wormhole is currenly active and at least one jump collider defined, the entities will be those currently intersecting the collider<br />
+		/// Otherwise, the entities will be those within the jump space ellipsoid<br />
+		/// Resulting key-value pair is an entity and a float (entity's mass in kilograms)
+		/// </summary>
+		/// <param name="filtered">Whether to remove blacklisted entities per this gate's controller</param>
+		/// <returns>An IEnumerable referencing all entities within a jump space</returns>
+		public IEnumerable<KeyValuePair<MyEntity, float>> GetEntitiesReadyForJump(bool filtered = false)
+		{
+			return this.GetMethod<Func<bool, IEnumerable<KeyValuePair<MyEntity, float>>>>("GetEntitiesReadyForJump")(filtered);
 		}
 	}
 }

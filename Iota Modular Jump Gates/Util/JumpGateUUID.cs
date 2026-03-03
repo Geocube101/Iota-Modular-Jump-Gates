@@ -72,8 +72,7 @@ namespace IOTA.ModularJumpGates.Util
 		public static JumpGateUUID FromBlock(MyCubeBlockBase block)
 		{
 			if (block == null) throw new ArgumentNullException("block was null");
-			long grid_id = block.JumpGateGrid?.CubeGridID ?? -1;
-			return new JumpGateUUID(grid_id, block.TerminalBlock.EntityId);
+			return new JumpGateUUID(block.JumpGateGrid?.CubeGridID ?? -1, block.TerminalBlock.EntityId);
 		}
 
 		/// <summary>
@@ -95,7 +94,7 @@ namespace IOTA.ModularJumpGates.Util
 		public static JumpGateUUID FromJumpGate(MyJumpGate jump_gate)
 		{
 			if (jump_gate == null) throw new ArgumentNullException("jump_gate was null");
-			return new JumpGateUUID(jump_gate.JumpGateGrid.CubeGridID, -jump_gate.JumpGateID);
+			return new JumpGateUUID(jump_gate.JumpGateGrid?.CubeGridID ?? -1, -jump_gate.JumpGateID);
 		}
 		#endregion
 

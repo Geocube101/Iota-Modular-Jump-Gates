@@ -116,9 +116,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateCapacitor_Charge")}: {Math.Round(charge_ratio * 100, 1)}%\n");
 				info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateCapacitor_BufferSize")}: {MyJumpGateModSession.AutoconvertMetricUnits(this.CapacitorConfiguration.MaxCapacitorChargeMW * 1e6, "W", 4)}\n");
 				info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateCapacitor_ChargeEfficiency")}: {Math.Round(this.CapacitorConfiguration.CapacitorChargeEfficiency * 100, 2)}%\n");
-				if (double.IsInfinity(charge_time)) info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateCapacitor_ChargeTime")} --:--:--\n");
-				else if (double.IsNaN(charge_time) || charge_time < 0) info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateCapacitor_ChargeTime")} 00:00:00\n");
-				else info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateCapacitor_ChargeTime")} {(int) Math.Floor(charge_time / 3600):00}:{(int) Math.Floor(charge_time % 3600 / 60d):00}:{(int) Math.Floor(charge_time % 60d):00}\n");
+				info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateCapacitor_ChargeTime")}: {MyJumpGateModSession.AutoconvertTimeHHMMSS(charge_time)}");
 			}
 			else if (this.ResourceSource != null && !this.BlockSettings.RechargeEnabled)
 			{
@@ -136,9 +134,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateCapacitor_Charge")}: {Math.Round((discharge_ratio) * 100, 1)}%\n");
 				info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateCapacitor_BufferSize")}: {MyJumpGateModSession.AutoconvertMetricUnits(this.CapacitorConfiguration.MaxCapacitorChargeMW * 1e6, "W", 4)}\n");
 				info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateCapacitor_DischargeEfficiency")}: {Math.Round(this.CapacitorConfiguration.CapacitorDischargeEfficiency * 100, 2)}%\n");
-				if (double.IsInfinity(discharge_time)) info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateCapacitor_DischargeTime")} --:--:--\n");
-				else if (double.IsNaN(discharge_time) || discharge_time < 0) info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateCapacitor_DischargeTime")} 00:00:00\n");
-				else info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateCapacitor_DischargeTime")} {(int) Math.Floor(discharge_time / 3600):00}:{(int) Math.Floor(discharge_time % 3600 / 60d):00}:{(int) Math.Floor(discharge_time % 60d):00}\n");
+				info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateCapacitor_ChargeTime")}: {MyJumpGateModSession.AutoconvertTimeHHMMSS(discharge_time)}");
 			}
 		}
 

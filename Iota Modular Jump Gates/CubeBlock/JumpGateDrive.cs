@@ -3,7 +3,6 @@ using IOTA.ModularJumpGates.Util;
 using ProtoBuf;
 using Sandbox.Common.ObjectBuilders;
 using Sandbox.Game.EntityComponents;
-using Sandbox.ModAPI;
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -108,7 +107,9 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			get
 			{
 				MyJumpGate jump_gate = this.JumpGateGrid?.GetJumpGate(this.JumpGateID);
-				return (jump_gate == null || jump_gate.Phase == MyJumpGatePhase.NONE || jump_gate.Phase == MyJumpGatePhase.IDLE || jump_gate.Status == MyJumpGateStatus.INBOUND) ? this.DriveConfiguration.BaseIdleInputWattageMW : this.DriveConfiguration.BaseActiveInputWattageMW;
+				if (jump_gate == null || jump_gate.Phase == MyJumpGatePhase.NONE || jump_gate.Phase == MyJumpGatePhase.IDLE || jump_gate.Status == MyJumpGateStatus.INBOUND) return this.DriveConfiguration.BaseIdleInputWattageMW;
+				double power_draw = this.DriveConfiguration.BaseActiveInputWattageMW;
+				return (jump_gate.IsWormholeActive) ? power_draw * jump_gate.JumpGateConfiguration.GateWormholePowerMultiplier : power_draw;
 			}
 		}
 
@@ -378,12 +379,6 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			if (MyJumpGateModSession.Network.Registered) MyJumpGateModSession.Network.Off(MyPacketTypeEnum.UPDATE_CAPACITOR, this.OnNetworkBlockUpdate);
 		}
 
-		protected override void OnConstructChanged(MyJumpGateConstruct new_construct)
-		{
-			base.OnConstructChanged(new_construct);
-			this.JumpGateGrid?.MarkGatesForUpdate();
-		}
-
 		/// <summary>
 		/// Serializes block for streaming and saving
 		/// </summary>
@@ -600,8 +595,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			else if (this.RaycastDummy == null)
 			{
 				double collision_distance = (this.TerminalBlock.ModelCollision.BoundingBoxSizeHalf * Vector3.Abs(Base6Directions.GetIntVector(Base6Directions.Direction.Forward))).Length();
-				Vector3D direction = this.TerminalBlock.WorldMatrix.GetDirectionVector(Base6Directions.Direction.Forward);
-				return this.TerminalBlock.WorldMatrix.Translation + direction * (distance + collision_distance);
+				return this.TerminalBlock.WorldMatrix.Translation + this.TerminalBlock.WorldMatrix.Forward * (distance + collision_distance);
 			}
 			else
 			{
@@ -622,8 +616,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			else if (this.RaycastDummy == null)
 			{
 				double collision_distance = (this.TerminalBlock.ModelCollision.BoundingBoxSizeHalf * Vector3.Abs(Base6Directions.GetIntVector(Base6Directions.Direction.Forward))).Length();
-				Vector3D direction = this.TerminalBlock.WorldMatrix.GetDirectionVector(Base6Directions.Direction.Forward);
-				return this.TerminalBlock.WorldMatrix.Translation + direction;
+				return this.TerminalBlock.WorldMatrix.Translation + (this.TerminalBlock.WorldMatrix.Forward * collision_distance);
 			}
 			else
 			{

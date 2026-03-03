@@ -16,8 +16,8 @@ namespace IOTA.ModularJumpGates.API
 {
 	internal class MyAPIInterface
 	{
-		public static int[] ModAPIVersion { get; private set; } = new int[2] { 1, 5 };
-		public static int[] AnimationAPIVersion { get; private set; } = new int[2] { 1, 3 };
+		public static int[] ModAPIVersion { get; private set; } = new int[2] { 2, 0 };
+		public static int[] AnimationAPIVersion { get; private set; } = new int[2] { 2, 0 };
 
 		private bool Registered = false;
 		private Dictionary<IMyModContext, Action> ModAPIUnloaderCallbacks = new Dictionary<IMyModContext, Action>();
@@ -219,6 +219,9 @@ namespace IOTA.ModularJumpGates.API
 				["GetDirectJumpGateGridC"] = (Func<IMyCubeGrid, Dictionary<string, object>>) ((grid) => this.ReturnConstructWrapper(MyJumpGateModSession.Instance.GetDirectJumpGateGrid(grid))),
 				["GetDirectJumpGateGridG"] = (Func<long[], Dictionary<string, object>>) ((grid_id) => this.ReturnConstructWrapper(MyJumpGateModSession.Instance.GetDirectJumpGateGrid(new JumpGateUUID(grid_id)))),
 				["GetJumpGate"] = (Func<long[], Dictionary<string, object>>) ((gate_id) => this.ReturnJumpGateWrapper(MyJumpGateModSession.Instance.GetJumpGate(new JumpGateUUID(gate_id)))),
+				["DetonateJumpGate"] = (Action<long[], long?>) ((gate_id, initiator_id) => MyJumpGateModSession.Instance.DetonateJumpGate(MyJumpGateModSession.Instance.GetJumpGate(new JumpGateUUID(gate_id)), (initiator_id == null) ? null : MyJumpGateModSession.Instance.GetJumpGateBlock<MyJumpGateDrive>(initiator_id.Value))),
+				["PurgeAllStoredLogFiles"] = (Action) MyJumpGateModSession.Instance.PurgeAllStoredLogFiles,
+				["PurgeStoredLogFiles"] = (Action<uint>) MyJumpGateModSession.Instance.PurgeStoredLogFiles,
 			};
 		}
 
@@ -437,7 +440,7 @@ namespace IOTA.ModularJumpGates.API
 				["RemapJumpGateIDs"] = (Action) construct.RemapJumpGateIDs,
 				["Destroy"] = (Action) construct.Destroy,
 				["ClearResetTimes"] = (Action) construct.ClearResetTimes,
-				["MarkGatesForUpdate"] = (Action) construct.MarkGatesForUpdate,
+				["MarkGatesForUpdate"] = (Action<bool>) construct.MarkGatesForUpdate,
 				["RequestGateUpdate"] = (Action) construct.RequestGateUpdate,
 				["SetDirty"] = (Action) construct.SetDirty,
 				["SetConstructStaticness"] = (Action<bool>) construct.SetConstructStaticness,
@@ -528,6 +531,7 @@ namespace IOTA.ModularJumpGates.API
 				["Closed"] = new object[2] { (Func<bool>) (() => gate.Closed), null },
 				["IsDirty"] = new object[2] { (Func<bool>) (() => gate.IsDirty), null },
 				["IsDetonating"] = new object[2] { (Func<bool>) (() => gate.IsDetonating), null },
+				["IsWormholeActive"] = new object[2] { (Func<bool>) (() => gate.IsWormholeActive), null },
 				["Status"] = new object[2] { (Func<byte>) (() => (byte) gate.Status), null },
 				["Phase"] = new object[2] { (Func<byte>) (() => (byte) gate.Phase), null },
 				["ManualDetonationTimeout"] = new object[2] { (Func<int>) (() => gate.ManualDetonationTimeout), null },
@@ -539,7 +543,9 @@ namespace IOTA.ModularJumpGates.API
 				["JumpNodeVelocity"] = new object[2] { (Func<Vector3D>) (() => gate.JumpNodeVelocity), null },
 				["PrimaryDrivePlane"] = new object[2] { (Func<PlaneD?>) (() => gate.PrimaryDrivePlane), null },
 				["ConstructMatrix"] = new object[2] { (Func<MatrixD>) (() => gate.ConstructMatrix), null },
+				["ConstructMatrixInv"] = new object[2] { (Func<MatrixD>) (() => gate.ConstructMatrixInv), null },
 				["LastUpdateDateTimeUTC"] = new object[2] { (Func<DateTime>) (() => gate.LastUpdateDateTimeUTC), (Action<DateTime>) ((datetime) => gate.LastUpdateDateTimeUTC = datetime) },
+				["WormholeStartTime"] = new object[2] { (Func<DateTime?>) (() => gate.WormholeStartTime), null },
 				["JumpGateConfiguration"] = new object[2] { (Func<Dictionary<string, object>>) (() => gate.JumpGateConfiguration.ToDictionary()), null },
 				["Controller"] = new object[2] { (Func<Dictionary<string, object>>) (() => this.ReturnCubeBlockControllerWrapper(gate.Controller)), null },
 				["RemoteAntenna"] = new object[2] { (Func<Dictionary<string, object>>) (() => this.ReturnCubeBlockRemoteAntennaWrapper(gate.RemoteAntenna)), null },
@@ -619,13 +625,14 @@ namespace IOTA.ModularJumpGates.API
 				["GetPrimaryOwner"] = (Func<IMyPlayer>) gate.GetPrimaryOwner,
 				["CubeGridSize"] = (Func<MyCubeSize>) gate.CubeGridSize,
 				["GetEffectiveJumpEllipse"] = (Func<byte[]>) (() => gate.GetEffectiveJumpEllipse().ToSerialized()),
-				["GetWorldMatrix"] = (Func<bool, bool, MatrixD>) gate.GetWorldMatrix,
+				["GetWorldMatrix"] = (Func<bool, bool, bool, MatrixD>) gate.GetWorldMatrix,
 				["GetName"] = (Func<string>) gate.GetName,
 				["GetPrintableName"] = (Func<string>) gate.GetPrintableName,
 				["GetJumpGateDrives"] = (Func<IEnumerable<Dictionary<string, object>>>) (() => gate.GetJumpGateDrives().Select(this.ReturnCubeBlockDriveWrapper)),
 				["GetWorkingJumpGateDrives"] = (Func<IEnumerable<Dictionary<string, object>>>) (() => gate.GetWorkingJumpGateDrives().Select(this.ReturnCubeBlockDriveWrapper)),
-				["GetUninitializedEntititesInJumpSpace"] = (Func<bool, IEnumerable<KeyValuePair<long, float>>>) gate.GetUninitializedEntititesInJumpSpace,
 				["GetEntitiesInJumpSpace"] = (Func<bool, IEnumerable<KeyValuePair<MyEntity, float>>>) gate.GetEntitiesInJumpSpace,
+				["GetEntitiesInCollider"] = (Func<bool, IEnumerable<MyEntity>>) gate.GetEntitiesInCollider,
+				["GetEntitiesReadyForJump"] = (Func<bool, IEnumerable<KeyValuePair<MyEntity, float>>>) gate.GetEntitiesReadyForJump,
 			};
 
 			gate.EntityEnterered += entity_entered_callback;

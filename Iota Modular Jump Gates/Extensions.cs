@@ -17,6 +17,16 @@ namespace IOTA.ModularJumpGates.Extensions
 		}
 
 		/// <summary>
+		/// Squares a vector
+		/// </summary>
+		/// <param name="vector">The vector</param>
+		/// <returns>The vector squared</returns>
+		public static Vector3D Squared(this Vector3D vector)
+		{
+			return new Vector3D(vector.X * vector.X, vector.Y * vector.Y, vector.Z * vector.Z);
+		}
+
+		/// <summary>
 		/// Checks if this IEnumerable has at least "count" elements
 		/// </summary>
 		/// <typeparam name="T">The typename</typeparam>

@@ -1,6 +1,7 @@
 ﻿using IOTA.ModularJumpGates.API.AnimationAPI.Util;
 using ProtoBuf;
 using System;
+using System.Xml.Serialization;
 using VRageMath;
 
 namespace IOTA.ModularJumpGates.API.AnimationAPI.Definitions
@@ -10,7 +11,7 @@ namespace IOTA.ModularJumpGates.API.AnimationAPI.Definitions
 	/// Definition defining a particle orientation
 	/// </summary>
 	[ProtoContract(UseProtoMembersOnly = true)]
-	public class ParticleOrientationDef
+	public sealed class ParticleOrientationDef
 	{
 		#region Public Variables
 		/// <summary>
@@ -93,7 +94,7 @@ namespace IOTA.ModularJumpGates.API.AnimationAPI.Definitions
 	/// This animation will only show on controllers who's gate matches all contraints
 	/// </summary>
 	[ProtoContract(UseProtoMembersOnly = true)]
-	public class AnimationConstraintDef
+	public sealed class AnimationConstraintDef
 	{
 		#region Public Variables
 		/// <summary>
@@ -328,7 +329,7 @@ namespace IOTA.ModularJumpGates.API.AnimationAPI.Definitions
 	/// Definition defining particles
 	/// </summary>
 	[ProtoContract(UseProtoMembersOnly = true)]
-	public class ParticleDef : AnimatableDef
+	public sealed class ParticleDef : AnimatableDef
 	{
 		#region Public Variables
 		/// <summary>
@@ -379,7 +380,7 @@ namespace IOTA.ModularJumpGates.API.AnimationAPI.Definitions
 	/// Definition defining sounds
 	/// </summary>
 	[ProtoContract(UseProtoMembersOnly = true)]
-	public class SoundDef : AnimatableDef
+	public sealed class SoundDef : AnimatableDef
 	{
 		#region Public Variables
 		/// <summary>
@@ -406,7 +407,7 @@ namespace IOTA.ModularJumpGates.API.AnimationAPI.Definitions
 	/// Definition defining the beam pulse
 	/// </summary>
 	[ProtoContract(UseProtoMembersOnly = true)]
-	public class BeamPulseDef : AnimatableDef
+	public sealed class BeamPulseDef : AnimatableDef
 	{
 		#region Public Variables
 		/// <summary>
@@ -480,7 +481,7 @@ namespace IOTA.ModularJumpGates.API.AnimationAPI.Definitions
 	/// Definition defining a gate's drive emitter emissive colors
 	/// </summary>
 	[ProtoContract(UseProtoMembersOnly = true)]
-	public class DriveEmissiveColorDef : AnimatableDef
+	public sealed class DriveEmissiveColorDef : AnimatableDef
 	{
 		#region Public Variables
 		/// <summary>
@@ -501,7 +502,7 @@ namespace IOTA.ModularJumpGates.API.AnimationAPI.Definitions
 	/// Definition defining a gate's node attractor force
 	/// </summary>
 	[ProtoContract(UseProtoMembersOnly = true)]
-	public class NodePhysicsDef : AnimatableDef
+	public sealed class NodePhysicsDef : AnimatableDef
 	{
 		#region Public Variables
 		/// <summary>
@@ -543,7 +544,7 @@ namespace IOTA.ModularJumpGates.API.AnimationAPI.Definitions
 	/// Definition defining a drive's entity lock particles
 	/// </summary>
 	[ProtoContract(UseProtoMembersOnly = true)]
-	public class DriveEntityLockDef : AnimatableDef
+	public sealed class DriveEntityLockDef : AnimatableDef
 	{
 		/// <summary>
 		/// The lock delay shift<br />
@@ -610,6 +611,61 @@ namespace IOTA.ModularJumpGates.API.AnimationAPI.Definitions
 		/// </summary>
 		[ProtoMember(10)]
 		public ParticleDef[] EntityLockParticles = null;
+	}
+
+	/// <summary>
+	/// Definition defining a gate's shape collider for wormhole animations
+	/// </summary>
+	[ProtoContract(UseProtoMembersOnly = true)]
+	public sealed class ShapeColliderDef : AnimatableDef
+	{
+		#region Public Variables
+		/// <summary>
+		/// The collider shape
+		/// </summary>
+		[ProtoMember(1)]
+		public CollisionShapeEnum CollisionShape = CollisionShapeEnum.NONE;
+
+		/// <summary>
+		/// The collider effect type
+		/// </summary>
+		[ProtoMember(2)]
+		public CollisionEffectTypeEnum CollisionEffectType = CollisionEffectTypeEnum.NONE;
+
+		/// <summary>
+		/// The percentage of the collider to cut out from the center for each axis<br />
+		/// Inner area will not have effect applied
+		/// </summary>
+		[ProtoMember(3)]
+		public Vector3 InnerCutoutPercent = Vector3.Zero;
+
+		/// <summary>
+		/// The collider's position relative to the gate's jump node in meters
+		/// </summary>
+		[ProtoMember(4)]
+		public Vector3D Position = Vector3D.Zero;
+
+		/// <summary>
+		/// The collider's rotation around the jump node in degrees
+		/// </summary>
+		[ProtoMember(5)]
+		public Vector3D LockedRotation = Vector3D.Zero;
+
+		/// <summary>
+		/// The collider's rotation around itself in degrees
+		/// </summary>
+		[ProtoMember(6)]
+		public Vector3D FreeRotation = Vector3D.Zero;
+
+		/// <summary>
+		/// The collider's scale
+		/// </summary>
+		[ProtoMember(7)]
+		public Vector3D Scale = Vector3D.One;
+
+		[ProtoMember(8)]
+		public double[] EffectArguments = null;
+		#endregion
 	}
 	#endregion
 
@@ -913,6 +969,110 @@ namespace IOTA.ModularJumpGates.API.AnimationAPI.Definitions
 	}
 
 	/// <summary>
+	/// Definition defining wormhole animations
+	/// </summary>
+	[ProtoContract(UseProtoMembersOnly = true)]
+	public class JumpGateWormholeAnimationDef
+	{
+		#region Public Variables
+		/// <summary>
+		/// The duration of the animaton in game ticks
+		/// </summary>
+		[ProtoMember(1)]
+		public ushort Duration = 0;
+
+		/// <summary>
+		/// The list of particle definitions for each drive<br />
+		/// These particles will each be played for every drive in the gate
+		/// </summary>
+		[ProtoMember(2)]
+		public ParticleDef[] PerDriveParticles = null;
+
+		/// <summary>
+		/// The list of particle definitions for each anti drive<br />
+		/// These particles will each be played for every drive in the targeted gate
+		/// </summary>
+		[ProtoMember(3)]
+		public ParticleDef[] PerAntiDriveParticles = null;
+
+		/// <summary>
+		/// The list of particle definitions for each jump space entity<br />
+		/// These particles will each be played for every entity in the gate's jump space
+		/// </summary>
+		[ProtoMember(4)]
+		public ParticleDef[] PerEntityParticles = null;
+
+		/// <summary>
+		/// The list of ParticleDef definitions for the gate's jump node<br />
+		/// These particles will be played once at the gate's jump node
+		/// </summary>
+		[ProtoMember(5)]
+		public ParticleDef[] NodeParticles = null;
+
+		/// <summary>
+		/// The list of SoundDef definitions<br />
+		/// These sounds will be played once at the gate's jump node
+		/// </summary>
+		[ProtoMember(6)]
+		public SoundDef[] NodeSounds = null;
+
+		/// <summary>
+		/// The DriveEmissiveColorDef defining the color for this gate's jump drive emitter emissives
+		/// </summary>
+		[ProtoMember(7)]
+		public DriveEmissiveColorDef DriveEmissiveColor = null;
+
+		/// <summary>
+		/// The NodePhysicsDef defining the attractor forces for this gate's jump node
+		/// </summary>
+		[ProtoMember(8)]
+		public NodePhysicsDef NodePhysics = null;
+
+		/// <summary>
+		/// The list of ParticleDef definitions for the gate's anti-node<br />
+		/// These particles will be played once at the gate's anti-node<br />
+		/// <i>The anti-node is the region at the endpoint of this gate</i>
+		/// </summary>
+		[ProtoMember(9)]
+		public ParticleDef[] AntiNodeParticles = null;
+
+		/// <summary>
+		/// The list of SoundDef definitions for the gate's anti-node<br />
+		/// These sounds will be played once at the gate's anti-node<br />
+		/// <i>The anti-node is the region at the endpoint of this gate</i>
+		/// </summary>
+		[ProtoMember(10)]
+		public SoundDef[] AntiNodeSounds = null;
+
+		/// <summary>
+		/// The NodePhysicsDef defining the attractor forces for this gate's anti-node<br />
+		/// <i>The anti-node is the region at the endpoint of this gate</i>
+		/// </summary>
+		[ProtoMember(11)]
+		public NodePhysicsDef AntiNodePhysics = null;
+
+		/// <summary>
+		/// The DriveEntityLockDef defining the entity lock particles for this gate's drives
+		/// </summary>
+		[ProtoMember(12)]
+		public DriveEntityLockDef DriveEntityLock = null;
+
+		/// <summary>
+		/// The shape colliders to apply during this animation for this gate's jump node
+		/// </summary>
+		[ProtoMember(13)]
+		public ShapeColliderDef[] NodeShapeColliders = null;
+
+		/// <summary>
+		/// The shape colliders to apply during this animation for the targate gate's jump node<br />
+		/// <i>The anti-node is the region at the endpoint of this gate</i>
+		/// </summary>
+		[ProtoMember(15)]
+		public ShapeColliderDef[] AntiNodeShapeColliders = null;
+		#endregion
+	}
+
+	/// <summary>
 	/// Definition defining an entire gate animation
 	/// </summary>
 	[ProtoContract(UseProtoMembersOnly = true)]
@@ -993,9 +1153,27 @@ namespace IOTA.ModularJumpGates.API.AnimationAPI.Definitions
 		public JumpGateFailedAnimationDef FailedAnimationDef = null;
 
 		/// <summary>
-		/// The AnimationConstraintDef definition defining a jump gate constraint for this animation
+		/// The JumpGateWormholeAnimationDef definition defining the wormhole opening phase of this animation
 		/// </summary>
 		[ProtoMember(11)]
+		public JumpGateWormholeAnimationDef WormholeOpenAnimationDef = null;
+
+		/// <summary>
+		/// The JumpGateWormholeAnimationDef definition defining the wormhole loop phase of this animation
+		/// </summary>
+		[ProtoMember(12)]
+		public JumpGateWormholeAnimationDef WormholeLoopAnimationDef = null;
+
+		/// <summary>
+		/// The JumpGateWormholeAnimationDef definition defining the wormhole closing phase of this animation
+		/// </summary>
+		[ProtoMember(13)]
+		public JumpGateWormholeAnimationDef WormholeCloseAnimationDef = null;
+
+		/// <summary>
+		/// The AnimationConstraintDef definition defining a jump gate constraint for this animation
+		/// </summary>
+		[ProtoMember(14)]
 		public AnimationConstraintDef AnimationConstraint = null;
 		#endregion
 

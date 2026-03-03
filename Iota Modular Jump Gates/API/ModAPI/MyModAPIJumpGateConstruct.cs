@@ -132,9 +132,10 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		/// Marks this construct for gate reconstruction<br />
 		/// Gate drive intersections will be updated and gates reconstructed on next tick
 		/// </summary>
-		public void MarkGatesForUpdate()
+		/// <param name="update_drive_combinations">Whether to recalculate drive combinations</param>
+		public void MarkGatesForUpdate(bool update_drive_combinations = false)
 		{
-			this.GetMethod<Action>("MarkGatesForUpdate")();
+			this.GetMethod<Action<bool>>("MarkGatesForUpdate")(update_drive_combinations);
 		}
 
 		/// <summary>

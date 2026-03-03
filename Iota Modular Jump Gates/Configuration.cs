@@ -328,18 +328,18 @@ namespace IOTA.ModularJumpGates
 			/// <summary>
 			/// The maximum jump gate reachable distance (in meters) for a 50 drive large grid jump gate<br />
 			/// Cannot be NaN, Infinity, or less than 0<br />
-			/// Defaults to 100 Mm
+			/// Defaults to 1 Gm
 			/// </summary>
 			[ProtoMember(7, IsRequired = true)]
-			public double MaxLargeJumpGate50Distance = 100000000;
+			public double MaxLargeJumpGate50Distance = 1e12;
 
 			/// <summary>
 			/// The maximum jump gate reachable distance (in meters) for a 50 drive large grid jump gate<br />
 			/// Cannot be NaN, Infinity, or less than 0<br />
-			/// Defaults to 20 Mm
+			/// Defaults to 50 Mm
 			/// </summary>
 			[ProtoMember(8, IsRequired = true)]
-			public double MaxSmallJumpGate50Distance = 20000000;
+			public double MaxSmallJumpGate50Distance = 50000000;
 
 			/// <summary>
 			/// The exponent 'b' used for power factor calculations: (a * x - a) ^ b + 1<br />
@@ -382,34 +382,34 @@ namespace IOTA.ModularJumpGates
 			/// <summary>
 			/// The power (in KiloWatts) required for a large grid gate to jump one kilogram of mass<br />
 			/// Cannot be NaN, Infinite, or less than 0<br />
-			/// Defaults to 0.1 Kw/Kg
+			/// Defaults to 0.025 Kw/Kg
 			/// </summary>
 			[ProtoMember(13, IsRequired = true)]
-			public double LargeGateKilowattPerKilogram = 0.1d;
+			public double LargeGateKilowattPerKilogram = 0.025d;
 
 			/// <summary>
 			/// The power (in KiloWatts) required for a small grid gate to jump one kilogram of mass<br />
 			/// Cannot be NaN, Infinite, or less than 0<br />
-			/// Defaults to 0.25 Kw/Kg
+			/// Defaults to 0.075 Kw/Kg
 			/// </summary>
 			[ProtoMember(14, IsRequired = true)]
-			public double SmallGateKilowattPerKilogram = 0.25d;
+			public double SmallGateKilowattPerKilogram = 0.075;
 
 			/// <summary>
 			/// The maximum distance (in kilometers) per kilometer an endpoint can be offset by if untethered for large grid gates<br />
 			/// Cannot be NaN, Infinite, or less than 0<br />
-			/// Defaults to 0.01 Km
+			/// Defaults to 0.001 Km
 			/// </summary>
 			[ProtoMember(15, IsRequired = true)]
-			public double LargeGateRandomOffsetPerKilometer = 0.01d;
+			public double LargeGateRandomOffsetPerKilometer = 0.001d;
 
 			/// <summary>
 			/// The maximum distance (in kilometers) per kilometer an endpoint can be offset by if untethered for small grid gates<br />
 			/// Cannot be NaN, Infinite, or less than 0<br />
-			/// Defaults to 0.05 Km
+			/// Defaults to 0.005 Km
 			/// </summary>
 			[ProtoMember(16, IsRequired = true)]
-			public double SmallGateRandomOffsetPerKilometer = 0.05d;
+			public double SmallGateRandomOffsetPerKilometer = 0.005d;
 
 			/// <summary>
 			/// The maximum distance (in KiloMeters) per unit of gravity 'g' an endpoint will be offset by if untethered for large grid gates<br />
@@ -532,6 +532,52 @@ namespace IOTA.ModularJumpGates
 			public float MinimumControlOwnerFactionRatio = 0.25f;
 
 			/// <summary>
+			/// The power multiplier a large grid jump gate applies when opening a sustained wormhole<br />
+			/// Cannot be NaN, Infinite, or less than 0<br />
+			/// Defaults to 1.5 (150%)
+			/// </summary>
+			[ProtoMember(32, IsRequired = true)]
+			public float LargeGateWormholePowerMultiplier = 1.5f;
+
+			/// <summary>
+			/// The power multiplier a small grid jump gate applies when opening a sustained wormhole<br />
+			/// Cannot be NaN, Infinite, or less than 0<br />
+			/// Defaults to 2 (200%)
+			/// </summary>
+			[ProtoMember(33, IsRequired = true)]
+			public float SmallGateWormholePowerMultiplier = 2f;
+
+			/// <summary>
+			/// Whether to allow large grid jump gates to be activated as wormholes for sustained jumps<br />
+			/// Defaults to true
+			/// </summary>
+			[ProtoMember(34, IsRequired = true)]
+			public bool AllowLargeGateWormholeActivation = true;
+
+			/// <summary>
+			/// Whether to allow small grid jump gates to be activated as wormholes for sustained jumps<br />
+			/// Defaults to true
+			/// </summary>
+			[ProtoMember(35, IsRequired = true)]
+			public bool AllowSmallGateWormholeActivation = true;
+
+			/// <summary>
+			/// The maximum amount of time a large grid jump gate can remain open as a wormhole for sustained jumps, in seconds<br />
+			/// Cannot be NaN or less than 0<br />
+			/// Defaults to 38 minutes (2280 seconds)
+			/// </summary>
+			[ProtoMember(36, IsRequired = true)]
+			public float MaxLargeGateWormholeDurationSeconds = 2280;
+
+			/// <summary>
+			/// The maximum amount of time a small grid jump gate can remain open as a wormhole for sustained jumps, in seconds<br />
+			/// Cannot be NaN or less than 0<br />
+			/// Defaults to 38 minutes (2280 seconds)
+			/// </summary>
+			[ProtoMember(37, IsRequired = true)]
+			public float MaxSmallGateWormholeDurationSeconds = 2280;
+
+			/// <summary>
 			/// Validates all values
 			/// </summary>
 			internal void Validate()
@@ -569,6 +615,10 @@ namespace IOTA.ModularJumpGates
 				this.LargeGateRandomDisplacementRadius = ValidateFloatValue(this.LargeGateRandomDisplacementRadius, defaults.LargeGateRandomDisplacementRadius, 0);
 				this.SmallGateRandomDisplacementRadius = ValidateFloatValue(this.SmallGateRandomDisplacementRadius, defaults.SmallGateRandomDisplacementRadius, 0);
 				this.MinimumControlOwnerFactionRatio = ValidateFloatValue(this.MinimumControlOwnerFactionRatio, defaults.MinimumControlOwnerFactionRatio, 0, 1);
+				this.LargeGateWormholePowerMultiplier = ValidateFloatValue(this.LargeGateWormholePowerMultiplier, defaults.LargeGateWormholePowerMultiplier, 0);
+				this.SmallGateWormholePowerMultiplier = ValidateFloatValue(this.SmallGateWormholePowerMultiplier, defaults.SmallGateWormholePowerMultiplier, 0);
+				this.MaxLargeGateWormholeDurationSeconds = ValidateFloatValue(this.MaxLargeGateWormholeDurationSeconds, defaults.MaxLargeGateWormholeDurationSeconds, 0, allow_inf: true);
+				this.MaxSmallGateWormholeDurationSeconds = ValidateFloatValue(this.MaxSmallGateWormholeDurationSeconds, defaults.MaxSmallGateWormholeDurationSeconds, 0, allow_inf: true);
 			}
 		}
 
@@ -683,6 +733,13 @@ namespace IOTA.ModularJumpGates
 			/// </summary>
 			[ProtoMember(9, IsRequired = true)]
 			public uint MaxStoredModSpecificLogFiles = 25;
+
+			/// <summary>
+			/// Whether to allow admins to bypass the wormhole maximum duration<br />
+			/// Defaults to true
+			/// </summary>
+			[ProtoMember(10, IsRequired = true)]
+			public bool AllowAdminWormholeDurationBypass = true;
 
 			/// <summary>
 			/// Validates all values
@@ -907,24 +964,39 @@ namespace IOTA.ModularJumpGates
 			public readonly bool ConfineUntetheredSpread;
 
 			/// <summary>
-			/// The multiplier used to determine a small grid jump gate's explosion size given gate power
+			/// The multiplier used to determine this jump gate's explosion size given gate power
 			/// </summary>
 			public readonly float ExplosionDamageMultiplier;
 
 			/// <summary>
-			/// The percentage of large grid gate drives that must be disabled before the gate detonates
+			/// The percentage of gate drives that must be disabled before the gate detonates
 			/// </summary>
 			public readonly float ExplosionDamagePercent;
 
 			/// <summary>
-			/// The radius (in meters) in which a large grid jump gate can randomly displace its jumped entities when untethered
+			/// The radius (in meters) in which this jump gate can randomly displace its jumped entities when untethered
 			/// </summary>
 			public readonly float GateRandomDisplacementRadius;
 
 			/// <summary>
-			/// The minimum percentage of a jump gate's drives that must be owned by the controller owner's faction to allow binding
+			/// The minimum percentage of this jump gate's drives that must be owned by the controller owner's faction to allow binding
 			/// </summary>
 			public readonly float MinimumControlOwnerFactionRatio;
+
+			/// <summary>
+			/// The power multiplier when opening a sustained wormhole
+			/// </summary>
+			public readonly float GateWormholePowerMultiplier = 1.5f;
+
+			/// <summary>
+			/// Whether this jump gate can be activated as wormholes for sustained jumps
+			/// </summary>
+			public bool AllowWormholeActivation = true;
+
+			/// <summary>
+			/// The maximum amount of time this jump gate can remain open as a wormhole for sustained jumps, in seconds
+			/// </summary>
+			public float MaxWormholeDurationSeconds = 2280;
 
 			internal LocalJumpGateConfiguration(MyJumpGate jump_gate, JumpGateConfigurationSchema config)
 			{
@@ -945,6 +1017,9 @@ namespace IOTA.ModularJumpGates
 					this.ExplosionDamageMultiplier = config.LargeGateExplosionDamageMultiplier;
 					this.ExplosionDamagePercent = config.LargeGateExplosionDamagePercent;
 					this.GateRandomDisplacementRadius = config.LargeGateRandomDisplacementRadius;
+					this.GateWormholePowerMultiplier = config.LargeGateWormholePowerMultiplier;
+					this.AllowWormholeActivation = config.AllowLargeGateWormholeActivation;
+					this.MaxWormholeDurationSeconds = config.MaxLargeGateWormholeDurationSeconds;
 				}
 				else
 				{
@@ -962,6 +1037,9 @@ namespace IOTA.ModularJumpGates
 					this.ExplosionDamageMultiplier = config.SmallGateExplosionDamageMultiplier;
 					this.ExplosionDamagePercent = config.SmallGateExplosionDamagePercent;
 					this.GateRandomDisplacementRadius = config.SmallGateRandomDisplacementRadius;
+					this.GateWormholePowerMultiplier = config.SmallGateWormholePowerMultiplier;
+					this.AllowWormholeActivation = config.AllowSmallGateWormholeActivation;
+					this.MaxWormholeDurationSeconds = config.MaxSmallGateWormholeDurationSeconds;
 				}
 
 				this.IgnoreDockedGrids = config.IgnoreDockedGrids;
@@ -991,6 +1069,9 @@ namespace IOTA.ModularJumpGates
 					["ExplosionDamagePercent"] = this.ExplosionDamagePercent,
 					["GateRandomDisplacementRadius"] = this.GateRandomDisplacementRadius,
 					["MinimumControlOwnerFactionRatio"] = this.MinimumControlOwnerFactionRatio,
+					["GateWormholePowerMultiplier"] = this.GateWormholePowerMultiplier,
+					["AllowWormholeActivation"] = this.AllowWormholeActivation,
+					["MaxWormholeDurationSeconds"] = this.MaxWormholeDurationSeconds,
 				};
 			}
 		}

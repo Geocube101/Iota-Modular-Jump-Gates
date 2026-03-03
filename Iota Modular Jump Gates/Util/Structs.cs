@@ -345,6 +345,8 @@ namespace IOTA.ModularJumpGates.Util
 					construct = (entity is MyCubeGrid) ? MyJumpGateModSession.Instance.GetJumpGateGrid(entity.EntityId) : null;
 					if (construct != null) construct.BatchingGate = null;
 				}
+
+				this.Callback?.Invoke(this);
 			}
 
 			this.BatchedEntities.Clear();
@@ -387,24 +389,14 @@ namespace IOTA.ModularJumpGates.Util
 				parent_matrix.Translation = this.FinalPos.Translation;
 				parent.Teleport(parent_matrix);
 			}
+			else if (complete && parent is IMyCubeGrid)
+			{
+				MyJumpGateModSession.TeleportCubeGrid(parent as MyCubeGrid, ref this.FinalPos);
+			}
 			else if (complete)
 			{
 				parent.Teleport(this.FinalPos, parent.Parent);
-				MatrixD parent_matrix = MatrixD.Invert(parent.WorldMatrix);
 				parent.PositionComp.SetWorldMatrix(ref this.FinalPos, parent.Parent, true, true, true, true, true);
-
-				if (parent is MyCubeGrid)
-				{
-					List<IMyCubeGrid> children = new List<IMyCubeGrid>();
-					((MyCubeGrid) parent).GetGridGroup(GridLinkTypeEnum.Logical).GetGrids(children);
-
-					foreach (IMyCubeGrid child in children)
-					{
-						if (child == parent) continue;
-						MatrixD child_matrix = (child.WorldMatrix * parent_matrix) * parent.WorldMatrix;
-						child.PositionComp?.SetWorldMatrix(ref child_matrix, child.Parent, true, true, true, true, true);
-					}
-				}
 			}
 			else
 			{
@@ -1451,20 +1443,6 @@ namespace IOTA.ModularJumpGates.Util
 		{
 			scale = (float) (this.GateSizeM * 4);
 			return this.Position;
-			double scalar = this.GateSizeM * 4;
-			Vector3D dir = this.Position - camera_pos;
-			int sync = 50000;
-			double distance = dir.Length();
-
-			if (distance <= sync)
-			{
-				scale = (float) Math.Round(scalar, 4);
-				return this.Position;
-			}
-
-			scalar /= Math.Sqrt(distance);
-			scale = (float) Math.Round(scalar, 4);
-			return camera_pos + dir.Normalized() * sync * 0.95;
 		}
 
 		/// <summary>
