@@ -313,6 +313,7 @@ namespace IOTA.ModularJumpGates.Terminal
 
 					foreach (MyJumpGateWaypoint waypoint in controller.GetWaypointsList())
 					{
+						if (controller.BlockSettings.DoSustainedWormhole() && waypoint.WaypointType != MyWaypointType.JUMP_GATE) continue;
 						MyTerminalControlListBoxItem item;
 						Vector3D? endpoint = waypoint.GetEndpoint();
 						string name, tooltip;

@@ -14,6 +14,7 @@ using VRage.Game.ModAPI;
 using VRage.ModAPI;
 using VRage.Utils;
 using VRageMath;
+using static VRage.Game.MyObjectBuilder_ControllerSchemaDefinition;
 
 namespace IOTA.ModularJumpGates.Terminal
 {
@@ -397,7 +398,8 @@ namespace IOTA.ModularJumpGates.Terminal
 					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block1);
 					MyJumpGate jump_gate = antenna?.GetInboundControlGate(antenna.CurrentTerminalChannel);
 					if (antenna == null || !antenna.IsWorking || jump_gate == null || jump_gate.Closed) return;
-					MyJumpGateWaypoint selected_waypoint = antenna.BlockSettings.BaseControllerSettings[antenna.CurrentTerminalChannel].SelectedWaypoint();
+					MyJumpGateController.MyControllerBlockSettingsStruct settings = antenna.BlockSettings.BaseControllerSettings[antenna.CurrentTerminalChannel];
+					MyJumpGateWaypoint selected_waypoint = settings.SelectedWaypoint();
 					Vector3D jump_node = jump_gate.WorldJumpNode;
 					MyWaypointType last_waypoint_type = MyWaypointType.NONE;
 
@@ -421,6 +423,7 @@ namespace IOTA.ModularJumpGates.Terminal
 
 					foreach (MyJumpGateWaypoint waypoint in antenna.GetWaypointsList(antenna.CurrentTerminalChannel))
 					{
+						if (settings.DoSustainedWormhole() && waypoint.WaypointType != MyWaypointType.JUMP_GATE) continue;
 						MyTerminalControlListBoxItem item;
 						Vector3D? endpoint = waypoint.GetEndpoint();
 						string name, tooltip;
