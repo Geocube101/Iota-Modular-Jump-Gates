@@ -1,7 +1,6 @@
 ﻿using IOTA.ModularJumpGates.EventController.ObjectBuilders;
 using Sandbox.ModAPI;
 using Sandbox.ModAPI.Interfaces.Terminal;
-using System;
 using VRage;
 using VRage.Game.Components;
 using VRage.Utils;
@@ -50,7 +49,7 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 				radius_sdr.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateEffectiveRadiusChangedEvent_Radius_Tooltip"));
 				radius_sdr.SupportsMultipleBlocks = true;
 				radius_sdr.Visible = block => block.Components.Get<JumpGateEffectiveRadiusChangedEvent>()?.IsSelected ?? false;
-				radius_sdr.SetLimits((block) => 0, (block) => (float) Math.Round(Math.Max(MyJumpGateModSession.Configuration.DriveConfiguration.LargeDriveRaycastDistance, MyJumpGateModSession.Configuration.DriveConfiguration.SmallDriveRaycastDistance) * 1.5));
+				radius_sdr.SetLimits((block) => 0, (block) => (float) MyJumpGateModSession.Instance.Configuration.GetDriveConfigurationForBlock(block).DriveRaycastDistance * 1.25f);
 				radius_sdr.Writer = (block, string_builder) => string_builder.Append(MyJumpGateModSession.AutoconvertMetricUnits(block.Components.Get<JumpGateEffectiveRadiusChangedEvent>().TargetValue, "m", 4));
 				radius_sdr.Getter = (block) => (float) block.Components.Get<JumpGateEffectiveRadiusChangedEvent>().TargetValue;
 				radius_sdr.Setter = (block, value) => {

@@ -17,7 +17,7 @@ namespace IOTA.ModularJumpGates.Terminal
 		private static List<IMyTerminalControl> TerminalControls = new List<IMyTerminalControl>();
 
 		public static bool IsLoaded { get; private set; } = false;
-		public static string MODID_PREFIX { get; private set; } = MyJumpGateModSession.MODID + ".JumpGateRemoteLink.";
+		public static string MODID_PREFIX { get; private set; } = MyJumpGateModSession.Instance.ModID + ".JumpGateRemoteLink.";
 
 		private static void SetupJumpGateLinkTerminalControls()
 		{
@@ -87,7 +87,7 @@ namespace IOTA.ModularJumpGates.Terminal
 						remote?.SetDirty();
 						MyJumpGateModSession.Instance.RedrawAllTerminalControls();
 					}
-					else if (MyJumpGateModSession.Network.Registered)
+					else if (MyJumpGateModSession.Instance.Network.Registered)
 					{
 						MyNetworkInterface.Packet packet = new MyNetworkInterface.Packet {
 							PacketType = MyPacketTypeEnum.LINK_CONNECTION,

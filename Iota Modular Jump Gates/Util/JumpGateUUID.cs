@@ -143,7 +143,7 @@ namespace IOTA.ModularJumpGates.Util
 
 		public override string ToString()
 		{
-			return $"{this.GridID}-{this.EntityID}";
+			return $"<JumpGateUUID[{this.GridID}-{this.EntityID}]>";
 		}
 		#endregion
 

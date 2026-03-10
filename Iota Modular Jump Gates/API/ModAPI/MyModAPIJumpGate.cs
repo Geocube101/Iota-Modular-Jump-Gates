@@ -250,10 +250,11 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		/// </summary>
 		/// <param name="distance">The distance to use for power calculations</param>
 		/// <param name="controller">The controller to use for the jump or the attached controller if null</param>
-		public void JumpToVoid(double distance, MyModAPIJumpGateController controller = null)
+		/// <param name="gravity_strength">The gravity to apply to this gate's jump node</param>
+		public void JumpToVoid(double distance, MyModAPIJumpGateController controller = null, float gravity_strength = 0)
 		{
 			controller = controller ?? this.Controller;
-			this.GetMethod<Action<double, IMyTerminalBlock, Dictionary<string, object>>>("JumpToVoid")(distance, controller?.TerminalBlock, controller?.BlockSettings.ToDictionary());
+			this.GetMethod<Action<double, IMyTerminalBlock, Dictionary<string, object>, float>>("JumpToVoid")(distance, controller?.TerminalBlock, controller?.BlockSettings.ToDictionary(), gravity_strength);
 		}
 
 		/// <summary>
@@ -532,6 +533,17 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 			return this.GetMethod<Func<bool>>("IsSuspended")();
 		}
 
+		/// <summary>
+		/// Checks if the specified gate is a valid wormhole jump target for this gate based on distance and faction settings
+		/// </summary>
+		/// <param name="other">The othe gate</param>
+		/// <param name="max_distance">The maximum jump distance</param>
+		/// <returns>Validity</returns>
+		public bool IsGateValidForWormholeJump(MyModAPIJumpGate other, double max_distance)
+		{
+			return this.GetMethod<Func<long[], double, bool>>("IsGateValidForWormholeJump")(other?.ObjectID?.Packed() ?? JumpGateUUID.Empty.Packed(), max_distance);
+		}
+
 		public override bool Equals(object other)
 		{
 			return other != null && other is MyModAPIJumpGate && base.Equals(((MyModAPIJumpGate) other).Guid);
@@ -693,6 +705,15 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		}
 
 		/// <summary>
+		/// Calculates the total explosive power currently within this gate's jump space
+		/// </summary>
+		/// <returns>The total explosive power or 0 if closed</returns>
+		public double CalculateExplosivePowerWithinJumpSpace()
+		{
+			return this.GetMethod<Func<double>>("CalculateExplosivePowerWithinJumpSpace")();
+		}
+
+		/// <summary>
 		/// Calculates the minimum number of drives needed to achieve a jump of some distance such that the power factor does not exceed 1
 		/// </summary>
 		/// <param name="distance">The jump distance in meters</param>
@@ -747,6 +768,12 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		public MyCubeSize CubeGridSize()
 		{
 			return this.GetMethod<Func<MyCubeSize>>("CubeGridSize")();
+		}
+
+		/// <returns>The world matrix of this gate's physical collider or null if no collider assigned</returns>
+		public MatrixD? GetColliderMatrix()
+		{
+			return this.GetMethod<Func<MatrixD?>>("GetColliderMatrix")();
 		}
 
 		/// <summary>

@@ -1077,16 +1077,11 @@ namespace IOTA.ModularJumpGates
 		}
 		#endregion
 
-		#region Private Static Variables
+		#region Public Static Variables
 		/// <summary>
 		/// The name of the local configuration file
 		/// </summary>
-		private static string ConfigFileName => "Config.xml";
-
-		/// <summary>
-		/// The variable name used for MyAPIGateway.Utilities.GetVariable and MyAPIGateway.Utilities.SetVariable
-		/// </summary>
-		private static string ConfigVariableName => $"{MyJumpGateModSession.MODID}.ServerConfig";
+		public static string ConfigFileName => "Config.xml";
 		#endregion
 
 		#region Public Variables
@@ -1161,22 +1156,6 @@ namespace IOTA.ModularJumpGates
 
 		#region Internal Static Methods
 		/// <summary>
-		/// </summary>
-		/// <returns>The default configuration data</returns>
-		internal static Configuration Defaults()
-		{
-			Configuration defaults = new Configuration {
-				CapacitorConfiguration = new CapacitorConfigurationSchema(),
-				DriveConfiguration = new DriveConfigurationSchema(),
-				JumpGateConfiguration = new JumpGateConfigurationSchema(),
-				ConstructConfiguration = new ConstructConfigurationSchema(),
-				GeneralConfiguration = new GeneralConfigurationSchema(),
-			};
-			defaults.Validate();
-			return defaults;
-		}
-
-		/// <summary>
 		/// Loads configuration from file or server<br />
 		/// If Server or Singleplayer: Loads configuration from file<br />
 		/// If Client: Loads configuration from Sandbox file, sent from server on session load
@@ -1184,56 +1163,28 @@ namespace IOTA.ModularJumpGates
 		/// <returns>The loaded configuration data</returns>
 		internal static Configuration Load()
 		{
-			if (MyNetworkInterface.IsStandaloneMultiplayerClient)
-			{
-				string encoded;
+			if (MyNetworkInterface.IsStandaloneMultiplayerClient) return null;
 
-				if (!MyAPIGateway.Utilities.GetVariable(ConfigVariableName, out encoded))
-				{
-					Logger.Error($"Failed to locate server config variable");
-					return Defaults();
-				}
+			if (!MyAPIGateway.Utilities.FileExistsInWorldStorage(ConfigFileName, MyJumpGateModSession.Instance.GetType())) return null;
+			else
+			{
+				TextReader reader = MyAPIGateway.Utilities.ReadFileInWorldStorage(ConfigFileName, MyJumpGateModSession.Instance.GetType());
 
 				try
 				{
-					Configuration config = MyAPIGateway.Utilities.SerializeFromBinary<Configuration>(Convert.FromBase64String(encoded));
-					config.Validate();
-					Logger.Log("Mod-local server config loaded");
-					return config;
+					Configuration configuration = MyAPIGateway.Utilities.SerializeFromXML<Configuration>(reader.ReadToEnd());
+					configuration.Validate();
+					return configuration;
 				}
 				catch (Exception e)
 				{
 					Logger.Error($"Failed to load mod-local config file\n\t...\n{e}");
-					return Defaults();
+					return null;
 				}
-			}
-			else
-			{
-				Configuration configuration = Defaults();
-
-				if (!MyAPIGateway.Utilities.FileExistsInWorldStorage(ConfigFileName, MyJumpGateModSession.Instance.GetType())) Logger.Error($"Failed to locate local config file");
-				else
+				finally
 				{
-					TextReader reader = MyAPIGateway.Utilities.ReadFileInWorldStorage(ConfigFileName, MyJumpGateModSession.Instance.GetType());
-
-					try
-					{
-						configuration = MyAPIGateway.Utilities.SerializeFromXML<Configuration>(reader.ReadToEnd());
-						configuration.Validate();
-						Logger.Log("Mod-local config loaded");
-					}
-					catch (Exception e)
-					{
-						Logger.Error($"Failed to load mod-local config file\n\t...\n{e}");
-					}
-					finally
-					{
-						reader.Close();
-					}
+					reader.Close();
 				}
-
-				MyAPIGateway.Utilities.SetVariable(ConfigVariableName, Convert.ToBase64String(MyAPIGateway.Utilities.SerializeToBinary(configuration)));
-				return configuration;
 			}
 		}
 		#endregion
@@ -1253,30 +1204,6 @@ namespace IOTA.ModularJumpGates
 			this.JumpGateConfiguration.Validate();
 			this.ConstructConfiguration.Validate();
 			this.GeneralConfiguration.Validate();
-		}
-
-		/// <summary>
-		/// Saves the data to file<br />
-		/// Does nothing if not server or not singleplayer
-		/// </summary>
-		internal void Save()
-		{
-			if (MyNetworkInterface.IsStandaloneMultiplayerClient) return;
-			TextWriter writer = MyAPIGateway.Utilities.WriteFileInWorldStorage(ConfigFileName, MyJumpGateModSession.Instance.GetType());
-
-			try
-			{
-				writer.Write(MyAPIGateway.Utilities.SerializeToXML(this));
-				Logger.Log("Mod-local config saved");
-			}
-			catch (Exception e)
-			{
-				Logger.Error($"Failed to save mod-local config file\n\t...\n{e}");
-			}
-			finally
-			{
-				writer.Close();
-			}
 		}
 		#endregion
 	}

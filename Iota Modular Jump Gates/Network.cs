@@ -13,7 +13,7 @@ namespace IOTA.ModularJumpGates
 		UPDATE_JUMP_GATE, UPDATE_DRIVE, UPDATE_CAPACITOR, UPDATE_CONTROLLER, UPDATE_REMOTE_ANTENNA, UPDATE_REMOTE_LINK,
 		UPDATE_JUMP_ENDPOINT, UPDATE_EVENT_CONTROLLER_EVENT, UPDATE_CONFIG, UPDATE_COCKPIT,
 		CLOSE_BLOCK, CLOSE_GRID,
-		JUMP_GATE_JUMP, JUMP_GATE_VOID_IN, JUMP_GATE_VOID_OUT, JUMP_GATE_JUMP_POLL,
+		JUMP_GATE_JUMP, JUMP_GATE_VOID_IN, JUMP_GATE_VOID_OUT, JUMP_GATE_JUMP_POLL, JUMP_GATE_WORMHOLE_JUMP,
 		STATICIFY_CONSTRUCT, MARK_GATES_DIRTY, COMM_LINKED, BEACON_LINKED, AUTOACTIVATE, SHEARWARNING, GATE_DEBUG, LINK_CONNECTION, CONSTRUCT_UPDATE_NOTICE,
 		GATE_DETONATE, GATE_DETONATION,
 		GENERAL
@@ -113,18 +113,18 @@ namespace IOTA.ModularJumpGates
 			/// <exception cref="InvalidOperationException"></exception>
 			public void Send()
 			{
-				if (!MyJumpGateModSession.Network.Registered) throw new InvalidOperationException("Cannot send packet on unregistered network handler");
+				if (!MyJumpGateModSession.Instance.Network.Registered) throw new InvalidOperationException("Cannot send packet on unregistered network handler");
 				ulong server = MyAPIGateway.Multiplayer.ServerId;
 				this.EpochTime = (ulong) (DateTime.UtcNow - DateTime.MinValue).Ticks;
 				this.SenderID = MyAPIGateway.Multiplayer.MyId;
 				this.TargetID = this.Broadcast || this.TargetID == 0 ? server : this.TargetID;
-				this.ModID = MyJumpGateModSession.Network.ModID;
+				this.ModID = MyJumpGateModSession.Instance.Network.ModID;
 				++this.PhaseFrame;
 				byte[] data = MyAPIGateway.Utilities.SerializeToBinary(this);
 
-				if (MyNetworkInterface.IsMultiplayerServer && this.Broadcast) MyAPIGateway.Multiplayer.SendMessageToOthers(MyJumpGateModSession.Network.ChannelID, data);
-				else if (MyNetworkInterface.IsMultiplayerServer) MyAPIGateway.Multiplayer.SendMessageTo(MyJumpGateModSession.Network.ChannelID, data, this.TargetID);
-				else MyAPIGateway.Multiplayer.SendMessageToServer(MyJumpGateModSession.Network.ChannelID, data);
+				if (MyNetworkInterface.IsMultiplayerServer && this.Broadcast) MyAPIGateway.Multiplayer.SendMessageToOthers(MyJumpGateModSession.Instance.Network.ChannelID, data);
+				else if (MyNetworkInterface.IsMultiplayerServer) MyAPIGateway.Multiplayer.SendMessageTo(MyJumpGateModSession.Instance.Network.ChannelID, data, this.TargetID);
+				else MyAPIGateway.Multiplayer.SendMessageToServer(MyJumpGateModSession.Instance.Network.ChannelID, data);
 			}
 
 			/// <summary>

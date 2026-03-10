@@ -73,22 +73,22 @@ namespace IOTA.ModularJumpGates.ChatCommands
 			{
 				string response;
 				packet.GeneralPayload(out response);
-				MyAPIGateway.Utilities.ShowMessage(MyJumpGateModSession.DISPLAYNAME, response);
+				MyAPIGateway.Utilities.ShowMessage(MyJumpGateModSession.Instance.DisplayName, response);
 			}
 		}
 
 		public override void Deinit()
 		{
 			base.Deinit();
-			if (!(MyJumpGateModSession.Network?.Registered ?? false)) return;
-			MyJumpGateModSession.Network.Off(MyPacketTypeEnum.GENERAL, this.OnGridInfoPacket);
+			if (!(MyJumpGateModSession.Instance.Network?.Registered ?? false)) return;
+			MyJumpGateModSession.Instance.Network.Off(MyPacketTypeEnum.GENERAL, this.OnGridInfoPacket);
 		}
 
 		public override bool Init()
 		{
 			base.Init();
-			if (!(MyJumpGateModSession.Network?.Registered ?? false)) return true;
-			MyJumpGateModSession.Network.On(MyPacketTypeEnum.GENERAL, this.OnGridInfoPacket);
+			if (!(MyJumpGateModSession.Instance.Network?.Registered ?? false)) return true;
+			MyJumpGateModSession.Instance.Network.On(MyPacketTypeEnum.GENERAL, this.OnGridInfoPacket);
 			return true;
 		}
 
@@ -144,12 +144,12 @@ namespace IOTA.ModularJumpGates.ChatCommands
 
 			if (MyNetworkInterface.IsServerLike)
 			{
-				MyAPIGateway.Utilities.ShowMessage(MyJumpGateModSession.DISPLAYNAME, this.GenerateConstructInfo(MyAPIGateway.Multiplayer.MyId, closest));
+				MyAPIGateway.Utilities.ShowMessage(MyJumpGateModSession.Instance.DisplayName, this.GenerateConstructInfo(MyAPIGateway.Multiplayer.MyId, closest));
 				return MyCommandResult.Success(this);
 			}
 			else
 			{
-				MyNetworkInterface.Packet packet = MyJumpGateModSession.Network.CreateGeneralPacket("gridinfo_request", closest.CubeGridID);
+				MyNetworkInterface.Packet packet = MyJumpGateModSession.Instance.Network.CreateGeneralPacket("gridinfo_request", closest.CubeGridID);
 				packet.Send();
 				return MyCommandResult.Success(this, MyTexts.GetString("ChatCommandHandler_GridInfoCommand_OnMPSuccess"));
 			}
@@ -270,22 +270,22 @@ namespace IOTA.ModularJumpGates.ChatCommands
 			{
 				string response;
 				packet.GeneralPayload(out response);
-				MyAPIGateway.Utilities.ShowMessage(MyJumpGateModSession.DISPLAYNAME, response);
+				MyAPIGateway.Utilities.ShowMessage(MyJumpGateModSession.Instance.DisplayName, response);
 			}
 		}
 
 		public override void Deinit()
 		{
 			base.Deinit();
-			if (!(MyJumpGateModSession.Network?.Registered ?? false)) return;
-			MyJumpGateModSession.Network.Off(MyPacketTypeEnum.GENERAL, this.OnTickFailPacket);
+			if (!(MyJumpGateModSession.Instance.Network?.Registered ?? false)) return;
+			MyJumpGateModSession.Instance.Network.Off(MyPacketTypeEnum.GENERAL, this.OnTickFailPacket);
 		}
 
 		public override bool Init()
 		{
 			base.Init();
-			if (!(MyJumpGateModSession.Network?.Registered ?? false)) return true;
-			MyJumpGateModSession.Network.On(MyPacketTypeEnum.GENERAL, this.OnTickFailPacket);
+			if (!(MyJumpGateModSession.Instance.Network?.Registered ?? false)) return true;
+			MyJumpGateModSession.Instance.Network.On(MyPacketTypeEnum.GENERAL, this.OnTickFailPacket);
 			return true;
 		}
 
@@ -302,7 +302,7 @@ namespace IOTA.ModularJumpGates.ChatCommands
 
 			if (MyNetworkInterface.IsStandaloneMultiplayerClient)
 			{
-				MyNetworkInterface.Packet packet = MyJumpGateModSession.Network.CreateGeneralPacket("tickfail_request", new KeyValuePair<long, byte>(closest.CubeGridID, count));
+				MyNetworkInterface.Packet packet = MyJumpGateModSession.Instance.Network.CreateGeneralPacket("tickfail_request", new KeyValuePair<long, byte>(closest.CubeGridID, count));
 				packet.Send();
 				return MyCommandResult.Success(this, MyTexts.GetString("ChatCommandHandler_GridTickFailCommand_OnMPSuccess"));
 			}
@@ -353,22 +353,22 @@ namespace IOTA.ModularJumpGates.ChatCommands
 			}
 			else if (eid == "gridforcestation_response" && packet.PhaseFrame == 2)
 			{
-				MyAPIGateway.Utilities.ShowMessage(MyJumpGateModSession.DISPLAYNAME, MyTexts.GetString("ChatCommandHandler_GridForceStationCommand_OnSuccess"));
+				MyAPIGateway.Utilities.ShowMessage(MyJumpGateModSession.Instance.DisplayName, MyTexts.GetString("ChatCommandHandler_GridForceStationCommand_OnSuccess"));
 			}
 		}
 
 		public override void Deinit()
 		{
 			base.Deinit();
-			if (!(MyJumpGateModSession.Network?.Registered ?? false)) return;
-			MyJumpGateModSession.Network.Off(MyPacketTypeEnum.GENERAL, this.OnGridForceConstructPacket);
+			if (!(MyJumpGateModSession.Instance.Network?.Registered ?? false)) return;
+			MyJumpGateModSession.Instance.Network.Off(MyPacketTypeEnum.GENERAL, this.OnGridForceConstructPacket);
 		}
 
 		public override bool Init()
 		{
 			base.Init();
-			if (!(MyJumpGateModSession.Network?.Registered ?? false)) return true;
-			MyJumpGateModSession.Network.On(MyPacketTypeEnum.GENERAL, this.OnGridForceConstructPacket);
+			if (!(MyJumpGateModSession.Instance.Network?.Registered ?? false)) return true;
+			MyJumpGateModSession.Instance.Network.On(MyPacketTypeEnum.GENERAL, this.OnGridForceConstructPacket);
 			return true;
 		}
 
@@ -383,12 +383,12 @@ namespace IOTA.ModularJumpGates.ChatCommands
 			if (MyNetworkInterface.IsServerLike)
 			{
 				closest.SetConstructStaticness(true);
-				MyAPIGateway.Utilities.ShowMessage(MyJumpGateModSession.DISPLAYNAME, MyTexts.GetString("ChatCommandHandler_GridForceStationCommand_OnSuccess"));
+				MyAPIGateway.Utilities.ShowMessage(MyJumpGateModSession.Instance.DisplayName, MyTexts.GetString("ChatCommandHandler_GridForceStationCommand_OnSuccess"));
 				return MyCommandResult.Success(this);
 			}
 			else
 			{
-				MyNetworkInterface.Packet packet = MyJumpGateModSession.Network.CreateGeneralPacket("gridforcestation_request", closest.CubeGridID);
+				MyNetworkInterface.Packet packet = MyJumpGateModSession.Instance.Network.CreateGeneralPacket("gridforcestation_request", closest.CubeGridID);
 				packet.Send();
 				return MyCommandResult.Success(this, MyTexts.GetString("ChatCommandHandler_GridInfoCommand_OnMPSuccess"));
 			}

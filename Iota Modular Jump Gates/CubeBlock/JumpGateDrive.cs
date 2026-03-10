@@ -1,4 +1,5 @@
-﻿using IOTA.ModularJumpGates.Terminal;
+﻿using IOTA.ModularJumpGates.ModConfiguration;
+using IOTA.ModularJumpGates.Terminal;
 using IOTA.ModularJumpGates.Util;
 using ProtoBuf;
 using Sandbox.Common.ObjectBuilders;
@@ -33,6 +34,11 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// The number of ticks this drive should ignore power checks
 		/// </summary>
 		private byte IsPowerInvalid = 0;
+
+		/// <summary>
+		/// The last calculated gate overrun multiplier for this drive's attached jump gate
+		/// </summary>
+		private float LastGateOverrunMultiplier = 1;
 
 		/// <summary>
 		/// Sets a wattage override when greater than 0<br />
@@ -107,9 +113,17 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			get
 			{
 				MyJumpGate jump_gate = this.JumpGateGrid?.GetJumpGate(this.JumpGateID);
-				if (jump_gate == null || jump_gate.Phase == MyJumpGatePhase.NONE || jump_gate.Phase == MyJumpGatePhase.IDLE || jump_gate.Status == MyJumpGateStatus.INBOUND) return this.DriveConfiguration.BaseIdleInputWattageMW;
-				double power_draw = this.DriveConfiguration.BaseActiveInputWattageMW;
-				return (jump_gate.IsWormholeActive) ? power_draw * jump_gate.JumpGateConfiguration.GateWormholePowerMultiplier : power_draw;
+				if (jump_gate == null || jump_gate.Phase == MyJumpGatePhase.NONE || jump_gate.Phase == MyJumpGatePhase.IDLE || jump_gate.Status == MyJumpGateStatus.INBOUND) return this.Configuration.BaseIdleInputWattageMW;
+				double power_draw = this.Configuration.BaseActiveInputWattageMW;
+				float multiplier = jump_gate.CalculateSteppedPowerOverrunMultiplier(0);
+
+				if (Math.Abs(multiplier - this.LastGateOverrunMultiplier) > 1e-3)
+				{
+					this.LastGateOverrunMultiplier = multiplier;
+					this.InvalidatePowerCheck(5);
+				}
+
+				return (jump_gate.IsWormholeActive) ? power_draw * jump_gate.JumpGateConfiguration.GateWormholePowerMultiplier * multiplier : power_draw;
 			}
 		}
 
@@ -124,9 +138,9 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		public Color DriveEmitterColor { get; private set; } = Color.Black;
 
 		/// <summary>
-		/// The drive configuration variables for this block
+		/// The local block configuration for this block
 		/// </summary>
-		public Configuration.LocalDriveConfiguration DriveConfiguration { get; private set; }
+		public MyModConfigurationV1.MyLocalDriveConfiguration Configuration => MyJumpGateModSession.Instance.Configuration.GetDriveConfigurationForBlock(this);
 		#endregion
 
 		#region Constructors
@@ -170,8 +184,8 @@ namespace IOTA.ModularJumpGates.CubeBlock
 
 				double input_wattage = this.ResourceSink.CurrentInputByType(MyResourceDistributorComponent.ElectricityId);
 				double required_input = this.ResourceSink.RequiredInputByType(MyResourceDistributorComponent.ElectricityId);
-				double charge_ratio = this.StoredChargeMW / this.DriveConfiguration.MaxDriveChargeMW;
-				double charge_time = Math.Log((1 - charge_ratio) / 0.0005) * (this.DriveConfiguration.MaxDriveChargeMW / this.DriveConfiguration.MaxDriveChargeRateMW);
+				double charge_ratio = this.StoredChargeMW / this.Configuration.MaxDriveChargeMW;
+				double charge_time = Math.Log((1 - charge_ratio) / 0.0005) * (this.Configuration.MaxDriveChargeMW / this.Configuration.MaxDriveChargeRateMW);
 
 				string stored_power = Math.Round(this.StoredChargeMW, 4).ToString("#.0000");
 				info.Append($"\n-=-=-=( {MyTexts.GetString("DisplayName_CubeBlock_JumpGateDrive")} )=-=-=-\n");
@@ -180,8 +194,8 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				info.Append($" {MyTexts.GetString("DetailedInfo_BlockBase_InputRatio")}: {Math.Round(MathHelperD.Clamp(input_wattage / required_input, 0, 1) * 100, 2):#.00}%\n");
 				info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateCapacitor_StoredPower")}: {stored_power} MW\n");
 				info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateCapacitor_Charge")}: {Math.Round(charge_ratio * 100, 1)}%\n");
-				info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateCapacitor_BufferSize")}: {MyJumpGateModSession.AutoconvertMetricUnits(this.DriveConfiguration.MaxDriveChargeMW * 1e6, "w", 4)}\n");
-				info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateCapacitor_ChargeEfficiency")}: {Math.Round(this.DriveConfiguration.DriveChargeEfficiency * 100, 2)}%\n");
+				info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateCapacitor_BufferSize")}: {MyJumpGateModSession.AutoconvertMetricUnits(this.Configuration.MaxDriveChargeMW * 1e6, "w", 4)}\n");
+				info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateCapacitor_ChargeEfficiency")}: {Math.Round(this.Configuration.DriveChargeEfficiency * 100, 2)}%\n");
 				if (double.IsInfinity(charge_time)) info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateCapacitor_ChargeTime")} --:--:--\n");
 				else if (double.IsNaN(charge_time)) info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateCapacitor_ChargeTime")} 00:00:00\n");
 				else info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateCapacitor_ChargeTime")} {(int) Math.Floor(charge_time / 3600):00}:{(int) Math.Floor(charge_time % 3600 / 60d):00}:{(int) Math.Floor(charge_time % 60d):00}\n\n");
@@ -189,12 +203,6 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateDrive_JumpGateId")}: {jump_gate?.JumpGateID.ToString() ?? "N/A"}\n");
 				info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateDrive_CurrentConstruct")}: {(this.JumpGateGrid?.CubeGridID.ToString() ?? "N/A")}");
 			}
-		}
-
-		protected override void Clean()
-		{
-			base.Clean();
-			this.DriveConfiguration = null;
 		}
 
 		/// <summary>
@@ -207,23 +215,22 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				if (this.TerminalBlock.IsWorking && this.SinkOverrideMW > 0) return (float) this.SinkOverrideMW;
 				else if (this.TerminalBlock.IsWorking)
 				{
-					double capacity_ratio = MathHelperD.Clamp(this.StoredChargeMW / this.DriveConfiguration.MaxDriveChargeMW, 0, 1);
-					return (float) (this.DriveConfiguration.MaxDriveChargeRateMW * (1 - capacity_ratio) + this.BasePowerDrawMW);
+					double capacity_ratio = MathHelperD.Clamp(this.StoredChargeMW / this.Configuration.MaxDriveChargeMW, 0, 1);
+					return (float) (this.Configuration.MaxDriveChargeRateMW * (1 - capacity_ratio) + this.BasePowerDrawMW);
 				}
 				else return 0f;
-			}, MyJumpGateModSession.BlockComponentDataGUID);
+			}, MyJumpGateModSession.Instance.BlockComponentDataGUID);
 
-			this.DriveConfiguration = new Configuration.LocalDriveConfiguration(this, MyJumpGateModSession.Configuration.DriveConfiguration);
 			this.TerminalBlock.Synchronized = true;
-			if (MyJumpGateModSession.Network.Registered) MyJumpGateModSession.Network.On(MyPacketTypeEnum.UPDATE_DRIVE, this.OnNetworkBlockUpdate);
+			if (MyJumpGateModSession.Instance.Network.Registered) MyJumpGateModSession.Instance.Network.On(MyPacketTypeEnum.UPDATE_DRIVE, this.OnNetworkBlockUpdate);
 			string blockdata;
 
-			if (this.ModStorageComponent.TryGetValue(MyJumpGateModSession.BlockComponentDataGUID, out blockdata) && blockdata.Length > 0)
+			if (this.ModStorageComponent.TryGetValue(MyJumpGateModSession.Instance.BlockComponentDataGUID, out blockdata) && blockdata.Length > 0)
 			{
 				try
 				{
 					byte[] bytes = Convert.FromBase64String(blockdata);
-					this.StoredChargeMW = MathHelper.Clamp(BitConverter.ToDouble(bytes, 0), 0, this.DriveConfiguration.MaxDriveChargeMW);
+					this.StoredChargeMW = MathHelper.Clamp(BitConverter.ToDouble(bytes, 0), 0, this.Configuration.MaxDriveChargeMW);
 					this.JumpGateID = BitConverter.ToInt64(bytes, sizeof(double));
 				}
 				catch (Exception e)
@@ -231,19 +238,18 @@ namespace IOTA.ModularJumpGates.CubeBlock
 					Logger.Error($"Failed to load block data: {this.GetType().Name}-{this.TerminalBlock.CustomName}\n{e}");
 				}
 			}
-			else this.ModStorageComponent.Add(MyJumpGateModSession.BlockComponentDataGUID, "");
+			else this.ModStorageComponent.Add(MyJumpGateModSession.Instance.BlockComponentDataGUID, "");
 
-			this.MaxRaycastDistance = this.DriveConfiguration.DriveRaycastDistance;
-			this.ResourceSink.SetMaxRequiredInputByType(MyResourceDistributorComponent.ElectricityId, (float) this.DriveConfiguration.MaxDriveChargeRateMW);
+			this.MaxRaycastDistance = this.Configuration.DriveRaycastDistance;
+			this.ResourceSink.SetMaxRequiredInputByType(MyResourceDistributorComponent.ElectricityId, (float) this.Configuration.MaxDriveChargeRateMW);
 
 			Dictionary<string, IMyModelDummy> dummies = new Dictionary<string, IMyModelDummy>();
 			this.TerminalBlock.Model.GetDummies(dummies);
 			this.RaycastDummy = dummies.GetValueOrDefault("camera", null);
 
-			if (MyJumpGateModSession.Network.Registered && MyNetworkInterface.IsStandaloneMultiplayerClient)
+			if (MyJumpGateModSession.Instance.Network.Registered && MyNetworkInterface.IsStandaloneMultiplayerClient)
 			{
-				MyNetworkInterface.Packet request = new MyNetworkInterface.Packet
-				{
+				MyNetworkInterface.Packet request = new MyNetworkInterface.Packet {
 					TargetID = 0,
 					Broadcast = false,
 					PacketType = MyPacketTypeEnum.UPDATE_DRIVE,
@@ -303,10 +309,10 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			}
 
 			// Update stored power charge
-			if (working && this.ResourceSink != null && this.SinkOverrideMW == -1 && this.StoredChargeMW < this.DriveConfiguration.MaxDriveChargeMW)
+			if (working && this.ResourceSink != null && this.SinkOverrideMW == -1 && this.StoredChargeMW < this.Configuration.MaxDriveChargeMW)
 			{
 				double power_draw_mw = (double) this.ResourceSink.CurrentInputByType(MyResourceDistributorComponent.ElectricityId) / 60d;
-				this.StoredChargeMW = MathHelperD.Clamp(this.StoredChargeMW + power_draw_mw * this.DriveConfiguration.DriveChargeEfficiency, 0, this.DriveConfiguration.MaxDriveChargeMW);
+				this.StoredChargeMW = MathHelperD.Clamp(this.StoredChargeMW + power_draw_mw * this.Configuration.DriveChargeEfficiency, 0, this.Configuration.MaxDriveChargeMW);
 			}
 
 			// Update emissives further (based on jump gate status)
@@ -376,7 +382,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		public override void MarkForClose()
 		{
 			base.MarkForClose();
-			if (MyJumpGateModSession.Network.Registered) MyJumpGateModSession.Network.Off(MyPacketTypeEnum.UPDATE_CAPACITOR, this.OnNetworkBlockUpdate);
+			if (MyJumpGateModSession.Instance.Network.Registered) MyJumpGateModSession.Instance.Network.Off(MyPacketTypeEnum.UPDATE_CAPACITOR, this.OnNetworkBlockUpdate);
 		}
 
 		/// <summary>
@@ -389,7 +395,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			byte[] bytes = new byte[sizeof(double) + sizeof(long)];
 			Buffer.BlockCopy(BitConverter.GetBytes(this.StoredChargeMW), 0, bytes, 0, 8);
 			Buffer.BlockCopy(BitConverter.GetBytes(this.JumpGateID), 0, bytes, 8, 8);
-			this.ModStorageComponent[MyJumpGateModSession.BlockComponentDataGUID] = Convert.ToBase64String(bytes);
+			this.ModStorageComponent[MyJumpGateModSession.Instance.BlockComponentDataGUID] = Convert.ToBase64String(bytes);
 			return res;
 		}
 		#endregion
@@ -433,7 +439,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// </summary>
 		private void CheckSendGlobalUpdate()
 		{
-			if (MyJumpGateModSession.Network.Registered && ((MyNetworkInterface.IsMultiplayerServer && MyJumpGateModSession.Instance.GameTick % MyCubeBlockBase.ForceUpdateDelay == 0) || this.IsDirty))
+			if (MyJumpGateModSession.Instance.Network.Registered && ((MyNetworkInterface.IsMultiplayerServer && MyJumpGateModSession.Instance.GameTick % MyCubeBlockBase.ForceUpdateDelay == 0) || this.IsDirty))
 			{
 				MyNetworkInterface.Packet update_packet = new MyNetworkInterface.Packet
 				{
@@ -477,7 +483,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			if (this.IsNullWrapper) return;
 			else if (override_mw <= 0)
 			{
-				this.ResourceSink.SetMaxRequiredInputByType(MyResourceDistributorComponent.ElectricityId, (float) (this.BasePowerDrawMW + this.DriveConfiguration.MaxDriveChargeRateMW));
+				this.ResourceSink.SetMaxRequiredInputByType(MyResourceDistributorComponent.ElectricityId, (float) (this.BasePowerDrawMW + this.Configuration.MaxDriveChargeRateMW));
 				this.SinkOverrideMW = -1;
 			}
 			else
@@ -533,14 +539,9 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// <summary>
 		/// Invalidates this drive's power check for the next tick
 		/// </summary>
-		public void PrepareDriveForGateJump()
+		public void InvalidatePowerCheck(byte ticks = 5)
 		{
-			this.IsPowerInvalid = 5;
-		}
-
-		public override void ReloadConfigurations()
-		{
-			this.DriveConfiguration = new Configuration.LocalDriveConfiguration(this, MyJumpGateModSession.Configuration.DriveConfiguration);
+			this.IsPowerInvalid = ticks;
 		}
 
 		/// <summary>
@@ -578,7 +579,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		public double DrainStoredCharge(double power_mw)
 		{
 			if (power_mw <= 0) return 0;
-			double new_charge = MathHelperD.Clamp(this.StoredChargeMW - power_mw, 0, this.DriveConfiguration.MaxDriveChargeMW);
+			double new_charge = MathHelperD.Clamp(this.StoredChargeMW - power_mw, 0, this.Configuration.MaxDriveChargeMW);
 			power_mw -= this.StoredChargeMW - new_charge;
 			this.StoredChargeMW = new_charge;
 			return power_mw;

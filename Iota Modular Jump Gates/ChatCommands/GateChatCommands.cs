@@ -74,22 +74,22 @@ namespace IOTA.ModularJumpGates.ChatCommands
 			{
 				string response;
 				packet.GeneralPayload<string>(out response);
-				MyAPIGateway.Utilities.ShowMessage(MyJumpGateModSession.DISPLAYNAME, response);
+				MyAPIGateway.Utilities.ShowMessage(MyJumpGateModSession.Instance.DisplayName, response);
 			}
 		}
 
 		public override void Deinit()
 		{
 			base.Deinit();
-			if (!(MyJumpGateModSession.Network?.Registered ?? false)) return;
-			MyJumpGateModSession.Network.Off(MyPacketTypeEnum.GENERAL, this.OnGateInfoPacket);
+			if (!(MyJumpGateModSession.Instance.Network?.Registered ?? false)) return;
+			MyJumpGateModSession.Instance.Network.Off(MyPacketTypeEnum.GENERAL, this.OnGateInfoPacket);
 		}
 
 		public override bool Init()
 		{
 			base.Init();
-			if (!(MyJumpGateModSession.Network?.Registered ?? false)) return true;
-			MyJumpGateModSession.Network.On(MyPacketTypeEnum.GENERAL, this.OnGateInfoPacket);
+			if (!(MyJumpGateModSession.Instance.Network?.Registered ?? false)) return true;
+			MyJumpGateModSession.Instance.Network.On(MyPacketTypeEnum.GENERAL, this.OnGateInfoPacket);
 			return true;
 		}
 
@@ -98,7 +98,7 @@ namespace IOTA.ModularJumpGates.ChatCommands
 			if (gate == null) return "";
 			bool admin = MyAPIGateway.Session.IsUserAdmin(caller);
 			MyJumpGateControlObject control = gate.ControlObject;
-			Vector3D? collider_position = gate.GetColliderPosition();
+			MatrixD? collider_position = gate.GetColliderMatrix();
 			return MyTexts.GetString("ChatCommandHandler_GateInfoCommand_GateInfo")
 				.Replace("{%0}", gate.JumpGateGrid?.CubeGridID.ToString() ?? "N/A")
 				.Replace("{%1}", gate.JumpGateGrid?.PrimaryCubeGridCustomName.ToString() ?? "N/A")
@@ -114,7 +114,7 @@ namespace IOTA.ModularJumpGates.ChatCommands
 				.Replace("{%11}", gate.GetWorkingJumpGateDrives().Count().ToString())
 				.Replace("{%12}", gate.GetJumpGateDrives().Count().ToString())
 				.Replace("{%13}", gate.JumpSpaceColliderStatus().ToString())
-				.Replace("{%14}", (admin) ? ((collider_position == null) ? "N/A" : Vector3D.Round(collider_position.Value, 2).ToString()) : "//////")
+				.Replace("{%14}", (admin) ? ((collider_position == null) ? "N/A" : Vector3D.Round(collider_position.Value.Translation, 2).ToString()) : "//////")
 				.Replace("{%15}", control?.BlockID.ToString() ?? "N/A")
 				.Replace("{%16}", (control == null) ? "N/A" : (!control.IsController).ToString())
 				.Replace("{%17}", (control == null) ? "N/A" : (control.JumpGateGrid != gate.JumpGateGrid).ToString());
@@ -130,12 +130,12 @@ namespace IOTA.ModularJumpGates.ChatCommands
 
 			if (MyNetworkInterface.IsServerLike)
 			{
-				MyAPIGateway.Utilities.ShowMessage(MyJumpGateModSession.DISPLAYNAME, this.GenerateGateInfo(MyAPIGateway.Multiplayer.MyId, closest));
+				MyAPIGateway.Utilities.ShowMessage(MyJumpGateModSession.Instance.DisplayName, this.GenerateGateInfo(MyAPIGateway.Multiplayer.MyId, closest));
 				return MyCommandResult.Success(this);
 			}
 			else
 			{
-				MyNetworkInterface.Packet packet = MyJumpGateModSession.Network.CreateGeneralPacket("gateinfo_request", JumpGateUUID.FromJumpGate(closest));
+				MyNetworkInterface.Packet packet = MyJumpGateModSession.Instance.Network.CreateGeneralPacket("gateinfo_request", JumpGateUUID.FromJumpGate(closest));
 				packet.Send();
 				return MyCommandResult.Success(this, MyTexts.GetString("ChatCommandHandler_GateInfoCommand_OnMPSuccess"));
 			}

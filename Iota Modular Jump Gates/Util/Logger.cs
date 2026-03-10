@@ -1,5 +1,4 @@
-﻿using Sandbox.ModAPI;
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -32,7 +31,7 @@ namespace IOTA.ModularJumpGates.Util
 		/// <param name="message">The message</param>
 		private static void WriteInternal(string category, string message)
 		{
-            if (Logger.ModLogWriter == null) return;
+            if (Logger.ModLogWriter == null || message == null || category == null) return;
 			string timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
 			lock (Logger.LogMutex) Logger.ModLogWriter.WriteLine($"[{timestamp}] -> {category}: {message}");
 		}
@@ -94,9 +93,9 @@ namespace IOTA.ModularJumpGates.Util
 		/// <param name="verbosity">The message verbosity</param>
 		public static void Debug(string message, byte verbosity = 0)
         {
-            if (!MyJumpGateModSession.Instance.DebugMode && (MyJumpGateModSession.Configuration != null && verbosity > MyJumpGateModSession.Configuration.GeneralConfiguration.DebugLogVerbosity)) return;
+            if (message == null || !MyJumpGateModSession.Instance.DebugMode && (MyJumpGateModSession.Instance.Configuration != null && verbosity > MyJumpGateModSession.Instance.Configuration.GeneralConfiguration.DebugLogVerbosity.Value)) return;
             message = string.Join("\n  ...  ", message.Split('\n').Where((s) => s.Trim().Length > 0));
-            message = $"[ {MyJumpGateModSession.MODID} ] [ DEBUG -> {verbosity} ]: {message}";
+            message = $"[ {MyJumpGateModSession.Instance.ModID} ] [ DEBUG -> {verbosity} ]: {message}";
 			MyLog.Default.WriteLine(message);
             Logger.WriteInternal("DEBUG", message);
 			if (verbosity < 3) MyLog.Default.WriteLineToConsole(message);
@@ -108,8 +107,9 @@ namespace IOTA.ModularJumpGates.Util
         /// <param name="message">The message to write</param>
         public static void Log(string message)
         {
+			if (message == null) return;
             message = string.Join("\n  ...  ", message.Split('\n').Where((s) => s.Trim().Length > 0));
-            MyLog.Default.WriteLineAndConsole($"[ {MyJumpGateModSession.MODID} ] [ INFO ]: {message}");
+            MyLog.Default.WriteLineAndConsole($"[ {MyJumpGateModSession.Instance.ModID} ] [ INFO ]: {message}");
 			Logger.WriteInternal("INFO", message);
 		}
 
@@ -118,9 +118,10 @@ namespace IOTA.ModularJumpGates.Util
 		/// </summary>
 		/// <param name="message">The message to write</param>
 		public static void Warn(string message)
-        {
-            message = string.Join("\n  ...  ", message.Split('\n').Where((s) => s.Trim().Length > 0));
-            MyLog.Default.WriteLineAndConsole($"[ {MyJumpGateModSession.MODID} ] [ WARN ]:  {message}");
+		{
+			if (message == null) return;
+			message = string.Join("\n  ...  ", message.Split('\n').Where((s) => s.Trim().Length > 0));
+            MyLog.Default.WriteLineAndConsole($"[ {MyJumpGateModSession.Instance.ModID} ] [ WARN ]:  {message}");
 			Logger.WriteInternal("WARN", message);
 		}
 
@@ -129,9 +130,10 @@ namespace IOTA.ModularJumpGates.Util
 		/// </summary>
 		/// <param name="message">The message to write</param>
 		public static void Error(string message)
-        {
-            message = string.Join("\n  ...  ", message.Split('\n').Where((s) => s.Trim().Length > 0));
-            MyLog.Default.WriteLineAndConsole($"[ {MyJumpGateModSession.MODID} ] [ ERROR ]:  {message}");
+		{
+			if (message == null) return;
+			message = string.Join("\n  ...  ", message.Split('\n').Where((s) => s.Trim().Length > 0));
+            MyLog.Default.WriteLineAndConsole($"[ {MyJumpGateModSession.Instance.ModID} ] [ ERROR ]:  {message}");
 			Logger.WriteInternal("ERROR", message);
 		}
 
@@ -140,9 +142,10 @@ namespace IOTA.ModularJumpGates.Util
 		/// </summary>
 		/// <param name="message">The message to write</param>
 		public static void Critical(string message)
-        {
-            message = string.Join("\n  ...  ", message.Split('\n').Where((s) => s.Trim().Length > 0));
-            MyLog.Default.WriteLineAndConsole($"[ {MyJumpGateModSession.MODID} ] [ CRITICAL ]:  {message}");
+		{
+			if (message == null) return;
+			message = string.Join("\n  ...  ", message.Split('\n').Where((s) => s.Trim().Length > 0));
+            MyLog.Default.WriteLineAndConsole($"[ {MyJumpGateModSession.Instance.ModID} ] [ CRITICAL ]:  {message}");
 			Logger.WriteInternal("CRITICAL", message);
 		}
 

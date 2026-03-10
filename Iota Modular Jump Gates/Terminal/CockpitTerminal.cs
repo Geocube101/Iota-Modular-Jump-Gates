@@ -1,5 +1,4 @@
-﻿using IOTA.ModularJumpGates.CubeBlock;
-using Sandbox.ModAPI;
+﻿using Sandbox.ModAPI;
 using Sandbox.ModAPI.Interfaces.Terminal;
 using System.Collections.Generic;
 using System.Text;
@@ -14,7 +13,7 @@ namespace IOTA.ModularJumpGates.Terminal
 		private static List<IMyTerminalControl> TerminalControls = new List<IMyTerminalControl>();
 
 		public static bool IsLoaded { get; private set; } = false;
-		public static string MODID_PREFIX { get; private set; } = MyJumpGateModSession.MODID + ".ShipCockpit.";
+		public static string MODID_PREFIX { get; private set; } = MyJumpGateModSession.Instance.ModID + ".ShipCockpit.";
 
 		private static void SetupJumpGateBlockTerminalControls()
 		{

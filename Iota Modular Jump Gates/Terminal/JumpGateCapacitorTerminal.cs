@@ -5,7 +5,6 @@ using System.Collections.Generic;
 using System.Text;
 using VRage;
 using VRage.Game;
-using VRage.Game.ModAPI;
 using VRage.Utils;
 using VRageMath;
 
@@ -16,7 +15,7 @@ namespace IOTA.ModularJumpGates.Terminal
 		private static List<IMyTerminalControl> TerminalControls = new List<IMyTerminalControl>();
 
 		public static bool IsLoaded { get; private set; } = false;
-		public static string MODID_PREFIX { get; private set; } = MyJumpGateModSession.MODID + ".JumpGateCapacitor.";
+		public static string MODID_PREFIX { get; private set; } = MyJumpGateModSession.Instance.ModID + ".JumpGateCapacitor.";
 
 		private static void SetupJumpGateCapacitorTerminalControls()
 		{

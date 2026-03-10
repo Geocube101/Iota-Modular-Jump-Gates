@@ -16,7 +16,7 @@ namespace IOTA.ModularJumpGates.API
 {
 	internal class MyAPIInterface
 	{
-		public static int[] ModAPIVersion { get; private set; } = new int[2] { 2, 0 };
+		public static int[] ModAPIVersion { get; private set; } = new int[2] { 2, 1 };
 		public static int[] AnimationAPIVersion { get; private set; } = new int[2] { 2, 0 };
 
 		private bool Registered = false;
@@ -179,7 +179,6 @@ namespace IOTA.ModularJumpGates.API
 				["GameTick"] = new object[2] { (Func<ulong>) (() => MyJumpGateModSession.Instance.GameTick), null },
 				["DebugMode"] = new object[2] { (Func<bool>) (() => MyJumpGateModSession.Instance.DebugMode), (Action<bool>) ((value) => MyJumpGateModSession.Instance.DebugMode = value) },
 				["SessionStatus"] = new object[2] { (Func<byte>) (() => (byte) MyJumpGateModSession.Instance.SessionStatus), null },
-				["WorldMatrix"] = new object[2] { (Func<MatrixD>) (() => MyJumpGateModSession.WorldMatrix), null },
 				["AllSessionEntitiesLoaded"] = new object[2] { (Func<bool>) (() => MyJumpGateModSession.Instance.AllSessionEntitiesLoaded), null },
 				["InitializationComplete"] = new object[2] { (Func<bool>) (() => MyJumpGateModSession.Instance.InitializationComplete), null },
 				["IsBlockCubeBlockBase"] = (Func<IMyTerminalBlock, bool>) MyJumpGateModSession.IsBlockCubeBlockBase,
@@ -282,7 +281,11 @@ namespace IOTA.ModularJumpGates.API
 				["IsPlayerFactionRelationValid"] = (Func<long, bool>) block.IsFactionRelationValid,
 				["IsSteamFactionRelationValid"] = (Func<ulong, bool>) block.IsFactionRelationValid,
 				["GetAttachedJumpGate"] = (Func<Dictionary<string, object>>) (() => this.ReturnJumpGateWrapper(block.AttachedJumpGate())),
-				["GetWaypointsList"] = (Func<IEnumerable<byte[]>>) (() => block.GetWaypointsList().Select(MyAPIGateway.Utilities.SerializeToBinary)),
+				["GetWaypointsList"] = (Func<IEnumerable<byte[]>>) (() => {
+					List<MyJumpGateWaypoint> waypoints = new List<MyJumpGateWaypoint>();
+					block.GetWaypointsList(waypoints);
+					return waypoints.Select(MyAPIGateway.Utilities.SerializeToBinary);
+				}),
 			};
 			this.ControllerWrappers[block.BlockID] = attributes;
 			return attributes;
@@ -302,7 +305,7 @@ namespace IOTA.ModularJumpGates.API
 				["BasePowerDrawMW"] = new object[2] { (Func<double>) (() => block.BasePowerDrawMW), null },
 				["JumpGateID"] = new object[2] { (Func<long>) (() => block.JumpGateID), null },
 				["DriveEmitterColor"] = new object[2] { (Func<Color>) (() => block.DriveEmitterColor), null },
-				["Configuration"] = new object[2] { (Func<Dictionary<string, object>>) (() => block.DriveConfiguration.ToDictionary()), null },
+				["Configuration"] = new object[2] { (Func<Dictionary<string, object>>) (() => MyJumpGateModSession.Instance.Configuration.GetDriveConfigurationForBlock(block).ToDictionary()), null },
 				["SetWattageSinkOverride"] = (Action<double>) block.SetWattageSinkOverride,
 				["CycleDriveEmitter"] = (Action<Color, Color, ushort>) block.CycleDriveEmitter,
 				["SetDriveEmitterColor"] = (Action<Color>) block.SetDriveEmitterColor,
@@ -327,7 +330,7 @@ namespace IOTA.ModularJumpGates.API
 				["BlockBase"] = this.ReturnCubeBlockBaseWrapper(block),
 				["StoredChargeMW"] = new object[2] { (Func<double>) (() => block.StoredChargeMW), null },
 				["BlockSettings"] = new object[2] { (Func<Dictionary<string, object>>) (() => block.BlockSettings.ToDictionary()), null },
-				["Configuration"] = new object[2] { (Func<Dictionary<string, object>>) (() => block.CapacitorConfiguration.ToDictionary()), null },
+				["Configuration"] = new object[2] { (Func<Dictionary<string, object>>) (() => MyJumpGateModSession.Instance.Configuration.GetCapacitorConfigurationForBlock(block).ToDictionary()), null },
 				["DrainStoredCharge"] = (Func<double, double>) block.DrainStoredCharge,
 			};
 			this.CapacitorWrappers[block.BlockID] = attributes;
@@ -367,7 +370,11 @@ namespace IOTA.ModularJumpGates.API
 				["GetNearbyAntennas"] = (Func<IEnumerable<Dictionary<string, object>>>) (() => block.GetNearbyAntennas().Select(this.ReturnCubeBlockRemoteAntennaWrapper)),
 				["IsPlayerFactionRelationValid"] = (Func<byte, long, bool>) block.IsFactionRelationValid,
 				["IsSteamFactionRelationValid"] = (Func<byte, ulong, bool>) block.IsFactionRelationValid,
-				["GetWaypointsList"] = (Func<byte, IEnumerable<byte[]>>) ((channel) => block.GetWaypointsList(channel).Select(MyAPIGateway.Utilities.SerializeToBinary)),
+				["GetWaypointsList"] = (Func<byte, IEnumerable<byte[]>>) ((channel) => {
+					List<MyJumpGateWaypoint> waypoints = new List<MyJumpGateWaypoint>();
+					block.GetWaypointsList(waypoints, channel);
+					return waypoints.Select(MyAPIGateway.Utilities.SerializeToBinary);
+				}),
 				["GetJumpGateName"] = (Func<byte, string>) block.GetJumpGateName,
 			};
 			this.RemoteAntennaWrappers[block.BlockID] = attributes;
@@ -567,10 +574,10 @@ namespace IOTA.ModularJumpGates.API
 					MyJumpGateController.MyControllerBlockSettingsStruct controller_settings = (controller == null || settings == null) ? gate.Controller?.BlockSettings : new MyJumpGateController.MyControllerBlockSettingsStruct(controller, settings);
 					gate.Jump(controller_settings);
 				}),
-				["JumpToVoid"] = (Action<double, IMyTerminalBlock, Dictionary<string, object>>) ((distance, block, settings) => {
+				["JumpToVoid"] = (Action<double, IMyTerminalBlock, Dictionary<string, object>, float>) ((distance, block, settings, gravity_strength) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					MyJumpGateController.MyControllerBlockSettingsStruct controller_settings = (controller == null || settings == null) ? gate.Controller?.BlockSettings : new MyJumpGateController.MyControllerBlockSettingsStruct(controller, settings);
-					gate.JumpToVoid(controller_settings, distance);
+					gate.JumpToVoid(controller_settings, distance, gravity_strength);
 				}),
 				["JumpFromVoid"] = (Action<List<Dictionary<string, object>>, List<List<IMyCubeGrid>>, IMyTerminalBlock, Dictionary<string, object>>) ((prefabs, spawned_grids, block, settings) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
@@ -603,6 +610,7 @@ namespace IOTA.ModularJumpGates.API
 				["IsLargeGrid"] = (Func<bool>) gate.IsLargeGrid,
 				["IsSmallGrid"] = (Func<bool>) gate.IsSmallGrid,
 				["IsSuspended"] = (Func<bool>) gate.IsSuspended,
+				["IsGateValidForWormholeJump"] = (Func<long[], double, bool>) ((id, distance) => gate.IsGateValidForWormholeJump(MyJumpGateModSession.Instance.GetJumpGate(new JumpGateUUID(id)), distance)),
 				["JumpSpaceColliderStatus"] = (Func<byte>) (() => (byte) gate.JumpSpaceColliderStatus()),
 				["GetInvalidationReason"] = (Func<byte>) (() => (byte) gate.GetInvalidationReason()),
 				["GetJumpSpaceEntityCount"] = (Func<bool, Func<MyEntity, bool>, int>) gate.GetJumpSpaceEntityCount,
@@ -619,11 +627,13 @@ namespace IOTA.ModularJumpGates.API
 				["CalculateTotalPossibleInstantPower"] = (Func<double>) gate.CalculateTotalPossibleInstantPower,
 				["CalculateTotalMaxPossibleInstantPower"] = (Func<double>) gate.CalculateTotalMaxPossibleInstantPower,
 				["CalculateDrivesRequiredForDistance"] = (Func<double, int>) gate.CalculateDrivesRequiredForDistance,
+				["CalculateExplosivePowerWithinJumpSpace"] = (Func<double>) gate.CalculateExplosivePowerWithinJumpSpace,
 				["JumpNodeRadius"] = (Func<double>) gate.JumpNodeRadius,
 				["GetPrimaryOwnerID"] = (Func<long>) gate.GetPrimaryOwnerID,
 				["GetPrimaryOwnerSteamID"] = (Func<ulong>) gate.GetPrimaryOwnerSteamID,
 				["GetPrimaryOwner"] = (Func<IMyPlayer>) gate.GetPrimaryOwner,
 				["CubeGridSize"] = (Func<MyCubeSize>) gate.CubeGridSize,
+				["GetColliderMatrix"] = (Func<MatrixD?>) gate.GetColliderMatrix,
 				["GetEffectiveJumpEllipse"] = (Func<byte[]>) (() => gate.GetEffectiveJumpEllipse().ToSerialized()),
 				["GetWorldMatrix"] = (Func<bool, bool, bool, MatrixD>) gate.GetWorldMatrix,
 				["GetName"] = (Func<string>) gate.GetName,

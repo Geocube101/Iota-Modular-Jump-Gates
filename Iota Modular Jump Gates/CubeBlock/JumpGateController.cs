@@ -108,6 +108,8 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			private Vector3 HoloDisplayTranslation_V = Vector3.Zero;
 			[ProtoMember(34)]
 			private float HoloDisplayScale_V = 1;
+			[ProtoMember(35)]
+			private float GateWormholeAutoCloseTime_V = 0;
 
 			private readonly object WriterLock = new object();
 
@@ -152,6 +154,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 					this.HoloDisplayRotation_V = (Vector3) mapping.GetValueOrDefault("HoloDisplayRotation", this.HoloDisplayRotation_V);
 					this.HoloDisplayTranslation_V = (Vector3) mapping.GetValueOrDefault("HoloDisplayTranslation", this.HoloDisplayTranslation_V);
 					this.HoloDisplayScale_V = (float) mapping.GetValueOrDefault("HoloDisplayScale", this.HoloDisplayScale_V);
+					this.GateWormholeAutoCloseTime_V = (float) mapping.GetValueOrDefault("GateWormholeAutoCloseTime", this.GateWormholeAutoCloseTime_V);
 
 					{
 						object selected_waypoint = mapping.GetValueOrDefault("SelectedWaypoint", null);
@@ -259,6 +262,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 						["HoloDisplayRotation"] = this.HoloDisplayRotation_V,
 						["HoloDisplayTranslation"] = this.HoloDisplayTranslation_V,
 						["HoloDisplayScale"] = this.HoloDisplayScale_V,
+						["GateWormholeAutoCloseTime"] = this.GateWormholeAutoCloseTime_V,
 					};
 				}
 			}
@@ -506,6 +510,10 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			{
 				lock (this.WriterLock) this.HoloDisplayScale_V = scale;
 			}
+			public void GateWormholeAutoCloseTime(float time_seconds)
+			{
+				lock (this.WriterLock) this.GateWormholeAutoCloseTime_V = MathHelper.Clamp(time_seconds, 0, 3600);
+			}
 
 			public bool CanAutoActivate()
 			{
@@ -638,7 +646,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			}
 			public bool DoAdminWormholeBypass()
 			{
-				return this.DoAdminWormholeBypass_V;
+				return this.DoAdminWormholeBypass_V && MyJumpGateModSession.Instance.Configuration.GeneralConfiguration.AllowAdminWormholeDurationBypass.Value;
 			}
 			public Vector3 HoloDisplayRotation()
 			{
@@ -651,6 +659,10 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			public float HoloDisplayScale()
 			{
 				return this.HoloDisplayScale_V;
+			}
+			public float GateWormholeAutoCloseTime()
+			{
+				return this.GateWormholeAutoCloseTime_V;
 			}
 		}
 
@@ -759,6 +771,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				this.OverlayedBlockSettings.HasVectorNormalOverride(((allowed & MyAllowedRemoteSettings.VECTOR_OVERRIDE) != 0) ? this.BaseBlockSettings.HasVectorNormalOverride() : remote.HasVectorNormalOverride());
 				this.OverlayedBlockSettings.GateDetonatorArmed(((allowed & MyAllowedRemoteSettings.DETONATION_CONTROL) != 0) ? this.BaseBlockSettings.GateDetonatorArmed() : remote.GateDetonatorArmed());
 				this.OverlayedBlockSettings.GateDetonationTime(((allowed & MyAllowedRemoteSettings.DETONATION_CONTROL) != 0) ? this.BaseBlockSettings.GateDetonationTime() : remote.GateDetonationTime());
+				this.OverlayedBlockSettings.GateWormholeAutoCloseTime(((allowed & MyAllowedRemoteSettings.WORMHOLE) != 0) ? this.BaseBlockSettings.GateWormholeAutoCloseTime() : remote.GateWormholeAutoCloseTime());
 
 				return this.OverlayedBlockSettings;
 			}
@@ -819,8 +832,8 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// <returns>True if valid</returns>
 		public static bool IsGPSValid(IMyGps gps)
 		{
-			bool has_rss = MyJumpGateModSession.MODSLIST.RealSolarSystemsEnabled;
-			bool show_hidden = MyJumpGateModSession.Configuration.GeneralConfiguration.ShowHiddenGPSMarkers && !has_rss;
+			bool has_rss = MyJumpGateModSession.Instance.ModsList.RealSolarSystemsEnabled;
+			bool show_hidden = MyJumpGateModSession.Instance.Configuration.GeneralConfiguration.ShowHiddenGPSMarkers.Value && !has_rss;
 			return gps != null && gps.Coords.IsValid() && (show_hidden || gps.ShowOnHud);
 		}
 		#endregion
@@ -898,7 +911,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 
 				double total_required_power_mw = jump_gate?.CalculateTotalRequiredPower(endpoint, null, total_mass_kg) ?? double.NaN;
 				double total_available_power_mw = jump_gate?.CalculateTotalAvailableInstantPower() ?? double.NaN;
-				int reachable_grids = (MyJumpGateModSession.Configuration.ConstructConfiguration.RequireGridCommLink) ? (this_grid?.GetCommLinkedJumpGateGrids().Count() ?? 0) : MyJumpGateModSession.Instance.GetAllJumpGateGrids().Count();
+				int reachable_grids = (MyJumpGateModSession.Instance.Configuration.ConstructConfiguration.RequireGridCommLink.Value) ? (this_grid?.GetCommLinkedJumpGateGrids().Count() ?? 0) : MyJumpGateModSession.Instance.GetAllJumpGateGrids().Count();
 
 				sb.Append($"\n-=-=-=( {MyTexts.GetString("DisplayName_CubeBlock_JumpGateController")} )=-=-=-\n");
 				sb.Append($" {MyTexts.GetString("DetailedInfo_BlockBase_Input")}: {input_wattage} MW\n");
@@ -909,10 +922,13 @@ namespace IOTA.ModularJumpGates.CubeBlock
 
 				if (jump_gate != null && jump_gate.IsWormholeActive)
 				{
+					float max_duration = this.BlockSettings.GateWormholeAutoCloseTime();
+					max_duration = (max_duration == 0) ? jump_gate.JumpGateConfiguration.MaxWormholeDurationSeconds : Math.Min(max_duration, jump_gate.JumpGateConfiguration.MaxWormholeDurationSeconds);
 					sb.Append($"\n[color=#FFFF78FF]--- {MyTexts.GetString("DetailedInfo_JumpGateController_HeaderJumpGateWormholeInfo")} ---[/color][color=#FFBF5ABF]\n");
-					sb.Append($" - {MyTexts.GetString("DetailedInfo_WormholeTimeRemaining")}: {((this.BlockSettings.DoAdminWormholeBypass()) ? "N/A" : MyJumpGateModSession.AutoconvertTimeHHMMSS(Math.Max(0, jump_gate.JumpGateConfiguration.MaxWormholeDurationSeconds - (DateTime.UtcNow - jump_gate.WormholeStartTime.Value).TotalSeconds)))}\n");
-					sb.Append($" - {MyTexts.GetString("DetailedInfo_WormholeStartTime")}: {jump_gate.WormholeStartTime.Value.ToString("HH:mm:ss:fff MM/dd/yyyy")}\n");
-					sb.Append($" - {MyTexts.GetString("DetailedInfo_WormholeMaxDuration")}: {MyJumpGateModSession.AutoconvertTimeUnits(jump_gate.JumpGateConfiguration.MaxWormholeDurationSeconds, 2)}[/color]\n");
+					sb.Append($" - {MyTexts.GetString("DetailedInfo_JumpGateController_WormholeTimeRemaining")}: {((this.BlockSettings.DoAdminWormholeBypass()) ? "N/A" : MyJumpGateModSession.AutoconvertTimeHHMMSS(Math.Max(0, max_duration - (DateTime.UtcNow - jump_gate.WormholeStartTime.Value).TotalSeconds)))}\n");
+					sb.Append($" - {MyTexts.GetString("DetailedInfo_JumpGateController_WormholeOverrunMultiplier")}: {MyJumpGateModSession.AutoconvertSciNotUnits(jump_gate.CalculatePowerOverrunMultiplier(), 4)}\n");
+					sb.Append($" - {MyTexts.GetString("DetailedInfo_JumpGateController_WormholeStartTime")}: {jump_gate.WormholeStartTime.Value.ToString("HH:mm:ss:fff MM/dd/yyyy")}\n");
+					sb.Append($" - {MyTexts.GetString("DetailedInfo_JumpGateController_WormholeMaxDuration")}: {MyJumpGateModSession.AutoconvertTimeUnits(max_duration, 2)}[/color]\n");
 				}
 
 				sb.Append($"\n[color=#FF78FFFB]--- {MyTexts.GetString("DetailedInfo_JumpGateController_HeaderJumpGateInfo")} ---[/color][color=#FF5ABFBC]\n");
@@ -921,13 +937,13 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				sb.Append($" - {MyTexts.GetString("DetailedInfo_JumpGateController_DriveCount")}: {jump_gate?.GetJumpGateDrives().Count().ToString() ?? "N/A"}\n");
 				sb.Append($" - {MyTexts.GetString("DetailedInfo_JumpGateController_WorkingDriveCount")}: {jump_gate?.GetWorkingJumpGateDrives().Count().ToString() ?? "N/A"}\n");
 
-				if (MyJumpGateModSession.Configuration.JumpGateConfiguration.EnableGateExplosions)
+				if (MyJumpGateModSession.Instance.Configuration.JumpGateConfiguration.JumpGateExplosionConfiguration.EnableGateExplosions.Value)
 				{
 					string crit_count = (jump_gate == null) ? "N/A" : Math.Ceiling(jump_gate.GetJumpGateDrives().Count() * jump_gate.JumpGateConfiguration.ExplosionDamagePercent).ToString();
 					sb.Append($" - {MyTexts.GetString("DetailedInfo_JumpGateController_CriticalDriveCount")}: {crit_count}\n");
 				}
 
-				sb.Append($" - {MyTexts.GetString("DetailedInfo_JumpGateController_FactionControlRatio")}: {faction_control_ratio} / {Math.Round(MyJumpGateModSession.Configuration.JumpGateConfiguration.MinimumControlOwnerFactionRatio * 100)}%\n");
+				sb.Append($" - {MyTexts.GetString("DetailedInfo_JumpGateController_FactionControlRatio")}: {faction_control_ratio} / {Math.Round(MyJumpGateModSession.Instance.Configuration.JumpGateConfiguration.MinimumControlOwnerFactionRatio.Value * 100)}%\n");
 				sb.Append($" - {MyTexts.GetString("DetailedInfo_JumpGateController_GridSize")}: {jump_gate?.CubeGridSize().ToString() ?? "N/A"}\n");
 				sb.Append($" - {MyTexts.GetString("DetailedInfo_JumpGateController_Radius")}: {((jump_gate == null) ? "N/A" : MyJumpGateModSession.AutoconvertMetricUnits(jump_ellipse.Value.Radii.X, "m", 4))}\n");
 				sb.Append($" - {MyTexts.GetString("DetailedInfo_JumpGateController_EffectiveRadius")}: {((jump_gate == null) ? "N/A" : MyJumpGateModSession.AutoconvertMetricUnits(jump_ellipse.Value.Radii.X, "m", 4))}\n");
@@ -997,7 +1013,6 @@ namespace IOTA.ModularJumpGates.CubeBlock
 
 		protected override void Clean()
 		{
-			base.Clean();
 			lock (this.WaypointsListMutex) this.WaypointsList.Clear();
 			this.AttachedJumpGateDrives.Clear();
 
@@ -1013,6 +1028,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			this.TEMP_DriveHoloBoxes = null;
 			this.TEMP_WaypointGPS = null;
 			this.BaseBlockSettings = null;
+			base.Clean();
 		}
 
 		protected override void UpdateOnceAfterInit()
@@ -1046,12 +1062,12 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			renderer.TextureChanges = old_renderer.TextureChanges;
 			renderer.MetalnessColorable = old_renderer.MetalnessColorable;
 			renderer.PersistentFlags = old_renderer.PersistentFlags;
-			this.Init(block_entity.GetObjectBuilder(), MyEntityUpdateEnum.EACH_FRAME, 0.3f, MyJumpGateModSession.BlockComponentDataGUID);
+			this.Init(block_entity.GetObjectBuilder(), MyEntityUpdateEnum.EACH_FRAME, 0.3f, MyJumpGateModSession.Instance.BlockComponentDataGUID);
 			this.TerminalBlock.Synchronized = true;
-			if (MyJumpGateModSession.Network.Registered) MyJumpGateModSession.Network.On(MyPacketTypeEnum.UPDATE_CONTROLLER, this.OnNetworkBlockUpdate);
+			if (MyJumpGateModSession.Instance.Network.Registered) MyJumpGateModSession.Instance.Network.On(MyPacketTypeEnum.UPDATE_CONTROLLER, this.OnNetworkBlockUpdate);
 			string blockdata;
 
-			if (this.ModStorageComponent.TryGetValue(MyJumpGateModSession.BlockComponentDataGUID, out blockdata) && blockdata.Length > 0)
+			if (this.ModStorageComponent.TryGetValue(MyJumpGateModSession.Instance.BlockComponentDataGUID, out blockdata) && blockdata.Length > 0)
 			{
 				try
 				{
@@ -1066,10 +1082,10 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			else
 			{
 				this.BaseBlockSettings = new MyControllerBlockSettingsStruct();
-				this.ModStorageComponent.Add(MyJumpGateModSession.BlockComponentDataGUID, "");
+				this.ModStorageComponent.Add(MyJumpGateModSession.Instance.BlockComponentDataGUID, "");
 			}
 
-			if (MyJumpGateModSession.Network.Registered && MyNetworkInterface.IsStandaloneMultiplayerClient)
+			if (MyJumpGateModSession.Instance.Network.Registered && MyNetworkInterface.IsStandaloneMultiplayerClient)
 			{
 				MyNetworkInterface.Packet request = new MyNetworkInterface.Packet {
 					TargetID = 0,
@@ -1102,7 +1118,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				if (jump_gate != null) jump_gate.Controller = null;
 			}
 
-			if (MyJumpGateModSession.Network.Registered) MyJumpGateModSession.Network.Off(MyPacketTypeEnum.UPDATE_CAPACITOR, this.OnNetworkBlockUpdate);
+			if (MyJumpGateModSession.Instance.Network.Registered) MyJumpGateModSession.Instance.Network.Off(MyPacketTypeEnum.UPDATE_CAPACITOR, this.OnNetworkBlockUpdate);
 			this.BaseBlockSettings.JumpGateID(-1);
 			this.BaseBlockSettings.SelectedWaypoint(null);
 		}
@@ -1150,11 +1166,11 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			}
 			
 			// Update waypoints
-			if (jump_gate_valid && !MyNetworkInterface.IsDedicatedMultiplayerServer && MyAPIGateway.Gui.GetCurrentScreen == MyTerminalPageEnum.ControlPanel && MyJumpGateModSession.Instance.GameTick % 60 == 0)
+			if (jump_gate_valid && !MyNetworkInterface.IsDedicatedMultiplayerServer && MyAPIGateway.Gui.GetCurrentScreen == MyTerminalPageEnum.ControlPanel && this.LocalGameTick % 60 == 0)
 			{
 				long player_identity = MyAPIGateway.Players.TryGetIdentityId(MyAPIGateway.Multiplayer.MyId);
 				double distance;
-				IEnumerable<MyJumpGateConstruct> reachable_grids = (MyJumpGateModSession.Configuration.ConstructConfiguration.RequireGridCommLink) ? this.JumpGateGrid.GetCommLinkedJumpGateGrids() : MyJumpGateModSession.Instance.GetAllJumpGateGrids();
+				IEnumerable<MyJumpGateConstruct> reachable_grids = (MyJumpGateModSession.Instance.Configuration.ConstructConfiguration.RequireGridCommLink.Value) ? this.JumpGateGrid.GetCommLinkedJumpGateGrids() : MyJumpGateModSession.Instance.GetAllJumpGateGrids();
 				Vector3D jump_node = jump_gate.WorldJumpNode;
 				lock (this.WaypointsListMutex) this.WaypointsList.Clear();
 
@@ -1218,7 +1234,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 					}
 				}
 
-				if (!waypoint_cleared && selected_waypoint != null && selected_waypoint.WaypointType == MyWaypointType.GPS && MyJumpGateModSession.MODSLIST.RealSolarSystemsEnabled)
+				if (!waypoint_cleared && selected_waypoint != null && selected_waypoint.WaypointType == MyWaypointType.GPS && MyJumpGateModSession.Instance.ModsList.RealSolarSystemsEnabled)
 				{
 					MyGpsWrapper gps = selected_waypoint.GPS;
 					MyGpsWrapper src = gps.GetProxiedRSSGPS();
@@ -1248,7 +1264,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		{
 			bool res = base.IsSerialized();
 			this.BaseBlockSettings.AcquireLock();
-			this.ModStorageComponent[MyJumpGateModSession.BlockComponentDataGUID] = Convert.ToBase64String(MyAPIGateway.Utilities.SerializeToBinary(this.BaseBlockSettings));
+			this.ModStorageComponent[MyJumpGateModSession.Instance.BlockComponentDataGUID] = Convert.ToBase64String(MyAPIGateway.Utilities.SerializeToBinary(this.BaseBlockSettings));
 			this.BaseBlockSettings.ReleaseLock();
 			return res;
 		}
@@ -1348,7 +1364,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				Vector3D local_forward = local_jump_ellipse.WorldMatrix.Forward;
 				local_jump_ellipse.WorldMatrix.Forward = local_jump_ellipse.WorldMatrix.Up;
 				local_jump_ellipse.WorldMatrix.Up = local_forward;
-				local_jump_ellipse.Draw2(aqua, 20, 16, 0.00125f * scale, MyJumpGateModSession.MATERIALS.WeaponLaser, 10);
+				local_jump_ellipse.Draw2(aqua, 20, 16, 0.00125f * scale, MyJumpGateModSession.Instance.Materials.WeaponLaser, 10);
 				
 				Vector3D player_facing = table_holo_center - MyAPIGateway.Session.Camera.Position;
 				Vector3D up = Vector3D.Cross(player_facing, MyAPIGateway.Session.Camera.WorldMatrix.Left);
@@ -1363,7 +1379,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 					Color color = (owned || tick) ? ((drive.IsWorking) ? aqua : red) : Color.OrangeRed;
 					MatrixD drive_matrix = (drive.WorldMatrix * jump_ellipse.WorldMatrixInv) * holo_matrix;
 					BoundingBoxD drive_box = drive.TerminalBlock.LocalAABB;
-					MySimpleObjectDraw.DrawTransparentBox(ref drive_matrix, ref drive_box, ref color, MySimpleObjectRasterizer.Wireframe, 1, 0.00025f * scale, null, MyJumpGateModSession.MATERIALS.WeaponLaser, intensity: 10);
+					MySimpleObjectDraw.DrawTransparentBox(ref drive_matrix, ref drive_box, ref color, MySimpleObjectRasterizer.Wireframe, 1, 0.00025f * scale, null, MyJumpGateModSession.Instance.Materials.WeaponLaser, intensity: 10);
 				}
 				
 				foreach (KeyValuePair<MyEntity, float> pair in jump_gate.GetEntitiesInJumpSpace())
@@ -1375,7 +1391,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 					{
 						Vector3D pos = MyJumpGateModSession.WorldVectorToLocalVectorP(ref jump_ellipse.WorldMatrix, entity.WorldMatrix.Translation);
 						Vector3D.Transform(ref pos, ref holo_matrix, out pos);
-						MyStringId marker = (jump_gate.IsEntityValidForJumpSpace(entity)) ? MyJumpGateModSession.MATERIALS.EnabledEntityMarker : MyJumpGateModSession.MATERIALS.DisabledEntityMarker;
+						MyStringId marker = (jump_gate.IsEntityValidForJumpSpace(entity)) ? MyJumpGateModSession.Instance.Materials.EnabledEntityMarker : MyJumpGateModSession.Instance.Materials.DisabledEntityMarker;
 						MyTransparentGeometry.AddBillboardOriented(marker, intense_red, pos, player_holo_matrix.Right, player_holo_matrix.Down, 0.05f * scale);
 					}
 					else
@@ -1384,7 +1400,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 						{
 							MatrixD subgrid_matrix = (subgrid.WorldMatrix * jump_ellipse.WorldMatrixInv) * holo_matrix;
 							BoundingBoxD grid_box = subgrid.LocalAABB;
-							MySimpleObjectDraw.DrawTransparentBox(ref subgrid_matrix, ref grid_box, ref red, MySimpleObjectRasterizer.Wireframe, 1, 0.00025f * scale, null, MyJumpGateModSession.MATERIALS.WeaponLaser, intensity: 10);
+							MySimpleObjectDraw.DrawTransparentBox(ref subgrid_matrix, ref grid_box, ref red, MySimpleObjectRasterizer.Wireframe, 1, 0.00025f * scale, null, MyJumpGateModSession.Instance.Materials.WeaponLaser, intensity: 10);
 						}
 					}
 				}
@@ -1396,7 +1412,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				player_facing = Vector3D.ProjectOnPlane(ref player_facing, ref normal);
 				MatrixD billboard_matrix;
 				MatrixD.CreateWorld(ref table_holo_center, ref player_facing, ref normal, out billboard_matrix);
-				MyTransparentGeometry.AddBillboardOriented(MyJumpGateModSession.MATERIALS.GateOfflineControllerIcon, intense_aqua, billboard_matrix.Translation, billboard_matrix.Left, billboard_matrix.Up, 0.75f, 0.75f);
+				MyTransparentGeometry.AddBillboardOriented(MyJumpGateModSession.Instance.Materials.GateOfflineControllerIcon, intense_aqua, billboard_matrix.Translation, billboard_matrix.Left, billboard_matrix.Up, 0.75f, 0.75f);
 			}
 			else if (this.RemoteAntenna != null)
 			{
@@ -1405,7 +1421,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				player_facing = Vector3D.ProjectOnPlane(ref player_facing, ref normal);
 				MatrixD billboard_matrix;
 				MatrixD.CreateWorld(ref table_holo_center, ref player_facing, ref normal, out billboard_matrix);
-				MyTransparentGeometry.AddBillboardOriented(MyJumpGateModSession.MATERIALS.GateAntennaDisconnectedControllerIcon, intense_red, billboard_matrix.Translation, billboard_matrix.Left, billboard_matrix.Up, 0.75f, 0.75f);
+				MyTransparentGeometry.AddBillboardOriented(MyJumpGateModSession.Instance.Materials.GateAntennaDisconnectedControllerIcon, intense_red, billboard_matrix.Translation, billboard_matrix.Left, billboard_matrix.Up, 0.75f, 0.75f);
 			}
 			else
 			{
@@ -1414,7 +1430,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				player_facing = Vector3D.ProjectOnPlane(ref player_facing, ref normal);
 				MatrixD billboard_matrix;
 				MatrixD.CreateWorld(ref table_holo_center, ref player_facing, ref normal, out billboard_matrix);
-				MyTransparentGeometry.AddBillboardOriented(MyJumpGateModSession.MATERIALS.GateDisconnectedControllerIcon, intense_red, billboard_matrix.Translation, billboard_matrix.Left, billboard_matrix.Up, 0.75f, 0.75f);
+				MyTransparentGeometry.AddBillboardOriented(MyJumpGateModSession.Instance.Materials.GateDisconnectedControllerIcon, intense_red, billboard_matrix.Translation, billboard_matrix.Left, billboard_matrix.Up, 0.75f, 0.75f);
 			}
 		}
 
@@ -1425,7 +1441,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// </summary>
 		private void CheckSendGlobalUpdate()
 		{
-			if (MyJumpGateModSession.Network.Registered && ((MyNetworkInterface.IsMultiplayerServer && MyJumpGateModSession.Instance.GameTick % MyCubeBlockBase.ForceUpdateDelay == 0) || this.IsDirty))
+			if (MyJumpGateModSession.Instance.Network.Registered && ((MyNetworkInterface.IsMultiplayerServer && MyJumpGateModSession.Instance.GameTick % MyCubeBlockBase.ForceUpdateDelay == 0) || this.IsDirty))
 			{
 				MyNetworkInterface.Packet packet = new MyNetworkInterface.Packet {
 					PacketType = MyPacketTypeEnum.UPDATE_CONTROLLER,
@@ -1481,6 +1497,17 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		}
 
 		/// <summary>
+		/// Gets the list of waypoints this controller has<br />
+		/// This is client dependent
+		/// </summary>
+		/// <param name="waypoints">An enumerable to be populated this controller's waypoints</param>
+		public void GetWaypointsList(List<MyJumpGateWaypoint> waypoints)
+		{
+			if (waypoints == null || this.WaypointsList == null) return;
+			lock (this.WaypointsListMutex) waypoints.AddRange(this.WaypointsList.Distinct());
+		}
+
+		/// <summary>
 		/// </summary>
 		/// <returns>True if the attached jump gate is remote</returns>
 		public bool IsAttachedJumpGateRemote()
@@ -1525,6 +1552,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			this.BaseBlockSettings.HoloDisplayRotation(new_settings.HoloDisplayRotation());
 			this.BaseBlockSettings.HoloDisplayScale(new_settings.HoloDisplayScale());
 			this.BaseBlockSettings.HoloDisplayTranslation(new_settings.HoloDisplayTranslation());
+			this.BlockSettings.GateWormholeAutoCloseTime(new_settings.GateWormholeAutoCloseTime());
 
 			if (jump_gate == null || jump_gate.ManualDetonationTimeout == -1)
 			{
@@ -1665,16 +1693,6 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			if (gate_id >= 0 && antenna.Value != 0xFF && antenna.Key != null) return antenna.Key?.GetConnectedControlledJumpGate(antenna.Value);
 			else if (gate_id >= 0 && this.JumpGateGrid != null && !this.JumpGateGrid.Closed) return this.JumpGateGrid.GetJumpGate(gate_id);
 			else return null;
-		}
-
-		/// <summary>
-		/// Gets the list of waypoints this controller has<br />
-		/// This is client dependent
-		/// </summary>
-		/// <returns>An enumerable containing this controller's waypoints</returns>
-		public IEnumerable<MyJumpGateWaypoint> GetWaypointsList()
-		{
-			lock (this.WaypointsListMutex) return this.WaypointsList?.Distinct() ?? Enumerable.Empty<MyJumpGateWaypoint>();
 		}
 
 		/// <summary>

@@ -110,6 +110,40 @@ namespace IOTA.ModularJumpGates.Util.ConcurrentCollections
 			finally { this.RWLock.ReleaseWriter(); }
 		}
 
+		private bool RemoveNode(LinkedNode node)
+		{
+			if (node == null) return false;
+			else if (node == this.FirstEntry && node == this.LastEntry)
+			{
+				this.FirstEntry = null;
+				this.LastEntry = null;
+			}
+			else if (node == this.FirstEntry && node.Next != null)
+			{
+				this.FirstEntry = node.Next;
+				node.Next.Prev = null;
+			}
+			else if (node == this.FirstEntry) this.FirstEntry = node.Next;
+			else if (node == this.LastEntry && node.Prev != null)
+			{
+				this.LastEntry = node.Prev;
+				node.Prev.Next = null;
+			}
+			else if (node == this.LastEntry) this.LastEntry = node.Prev;
+			else
+			{
+				node.Prev.Next = node.Next;
+				node.Next.Prev = node.Prev;
+			}
+
+			--this.Count;
+			LinkedNode bucket_root = this.Buckets[node.Bucket];
+			LinkedNode bucket_next;
+			if (node == bucket_root && (bucket_next = node.NextNode) != null) this.Buckets[node.Bucket] = bucket_next;
+			else if (node == bucket_root) this.Buckets.Remove(node.Bucket);
+			return true;
+		}
+
 		public void Add(T item)
 		{
 			if (item == null) return;
@@ -122,12 +156,13 @@ namespace IOTA.ModularJumpGates.Util.ConcurrentCollections
 
 				if (bucket_root == null && this.LastEntry == null)
 				{
-					this.Buckets.Add(bucket, node);
+					this.Buckets[bucket] = node;
 					this.LastEntry = node;
+					this.FirstEntry = node;
 				}
 				else if (bucket_root == null)
 				{
-					this.Buckets.Add(bucket, node);
+					this.Buckets[bucket] = node;
 					this.LastEntry.Next = node;
 					this.LastEntry = node;
 				}
@@ -143,7 +178,6 @@ namespace IOTA.ModularJumpGates.Util.ConcurrentCollections
 					bucket_root.Next = node;
 				}
 
-				this.FirstEntry = this.FirstEntry ?? node;
 				++this.Count;
 			}
 		}
@@ -176,39 +210,7 @@ namespace IOTA.ModularJumpGates.Util.ConcurrentCollections
 		{
 			using (this.RWLock.WithWriter())
 			{
-				foreach (T item in collection)
-				{
-					if (item == null) continue;
-					int bucket = item.GetHashCode();
-					LinkedNode bucket_root = this.Buckets.GetValueOrDefault(bucket, null);
-					LinkedNode node = new LinkedNode(item, bucket, bucket_root?.Next, bucket_root ?? this.LastEntry);
-
-					if (bucket_root == null && this.LastEntry == null)
-					{
-						this.Buckets.Add(bucket, node);
-						this.LastEntry = node;
-					}
-					else if (bucket_root == null)
-					{
-						this.Buckets.Add(bucket, node);
-						this.LastEntry.Next = node;
-						this.LastEntry = node;
-					}
-					else if (bucket_root.InStack(item)) continue;
-					else if (bucket_root.Next == null)
-					{
-						bucket_root.Next = node;
-						this.LastEntry = node;
-					}
-					else
-					{
-						bucket_root.Next.Prev = node;
-						bucket_root.Next = node;
-					}
-
-					this.FirstEntry = this.FirstEntry ?? node;
-					++this.Count;
-				}
+				foreach (T item in collection) this.Add(item);
 			}
 		}
 
@@ -244,31 +246,34 @@ namespace IOTA.ModularJumpGates.Util.ConcurrentCollections
 				
 				while (curr != null)
 				{
-					if (!object.Equals(curr.Value, item)) break;
+					if (object.Equals(curr.Value, item)) break;
 					curr = curr.NextNode;
 				}
 
-				if (curr == null) return false;
-				else if (curr == this.FirstEntry && curr.Next != null)
-				{
-					this.FirstEntry = curr.Next;
-					curr.Next.Prev = null;
-				}
-				else if (curr == this.FirstEntry) this.FirstEntry = curr.Next;
-				else if (curr == this.LastEntry && curr.Prev != null)
-				{
-					this.LastEntry = curr.Prev;
-					curr.Prev.Next = null;
-				}
-				else if (curr == this.LastEntry) this.LastEntry = curr.Prev;
-				else
-				{
-					curr.Prev.Next = curr.Next;
-					curr.Next.Prev = curr.Prev;
-				}
-
-				return true;
+				return this.RemoveNode(curr);
 			}
+		}
+
+		public int RemoveAll(Func<T, bool> predicate)
+		{
+			if (predicate == null) return 0;
+			int removed = 0;
+
+			using (this.RWLock.WithWriter())
+			{
+				LinkedNode node = this.FirstEntry;
+				while (node != null)
+				{
+					if (predicate(node.Value))
+					{
+						this.RemoveNode(node);
+						++removed;
+					}
+					node = node.Next;
+				}
+			}
+
+			return removed;
 		}
 
 		public IEnumerator<T> GetEnumerator()

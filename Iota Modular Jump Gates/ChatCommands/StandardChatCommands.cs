@@ -1,5 +1,9 @@
 ﻿using IOTA.ModularJumpGates.Commands;
+using IOTA.ModularJumpGates.ModConfiguration;
+using IOTA.ModularJumpGates.Util;
+using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using VRage;
@@ -24,8 +28,17 @@ namespace IOTA.ModularJumpGates.ChatCommands
 			if (arguments.Count != 0) return MyCommandResult.InvalidNumberArguments(this, 0, 0, arguments.Count);
 			else if (MyNetworkInterface.IsServerLike)
 			{
-				Configuration config = Configuration.Load();
-				MyJumpGateModSession.Instance.ReloadConfigurations(config);
+				bool local_config_exists, global_config_exists;
+				Exception local_load_err, global_load_err;
+				MyModConfigurationV1 configuration = MyModConfigurationV1.Load(MyJumpGateModSession.Instance, out global_config_exists, out local_config_exists, out global_load_err, out local_load_err);
+				if (global_config_exists) Logger.Log("Found global mod config file");
+				else Logger.Warn($"Failed to locate global mod config file; SKIPPED");
+				if (local_config_exists) Logger.Log("Found local mod config file");
+				else Logger.Warn($"Failed to locate local mod config file; SKIPPED");
+				if (global_load_err != null) Logger.Error($"Error loading global config file:\n  ...\n[ {global_load_err.GetType().Name} ]: {global_load_err.Message}\n{global_load_err.StackTrace}\n{global_load_err.InnerException}");
+				if (local_load_err != null) Logger.Error($"Error loading local config file:\n  ...\n[ {local_load_err.GetType().Name} ]: {local_load_err.Message}\n{local_load_err.StackTrace}\n{local_load_err.InnerException}");
+				if (!local_config_exists || !global_config_exists || local_load_err != null || global_load_err != null) return MyCommandResult.Error(this, local_load_err ?? global_load_err ?? new FileNotFoundException("One or more config files do not exist"));
+				MyJumpGateModSession.Instance.UpdateConfiguration(configuration);
 				return MyCommandResult.Success(this, MyTexts.GetString("ChatCommandHandler_ReloadCommand_OnSuccess"));
 			}
 			else

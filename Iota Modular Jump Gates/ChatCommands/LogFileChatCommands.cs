@@ -64,22 +64,22 @@ namespace IOTA.ModularJumpGates.ChatCommands
 			{
 				int response;
 				packet.GeneralPayload(out response);
-				MyAPIGateway.Utilities.ShowMessage(MyJumpGateModSession.DISPLAYNAME, MyTexts.GetString("ChatCommandHandler_LogFileCountCommand_OnSuccess").Replace("{%0}", response.ToString()));
+				MyAPIGateway.Utilities.ShowMessage(MyJumpGateModSession.Instance.DisplayName, MyTexts.GetString("ChatCommandHandler_LogFileCountCommand_OnSuccess").Replace("{%0}", response.ToString()));
 			}
 		}
 
 		public override void Deinit()
 		{
 			base.Deinit();
-			if (!(MyJumpGateModSession.Network?.Registered ?? false)) return;
-			MyJumpGateModSession.Network.Off(MyPacketTypeEnum.GENERAL, this.OnLogFileCountPacket);
+			if (!(MyJumpGateModSession.Instance.Network?.Registered ?? false)) return;
+			MyJumpGateModSession.Instance.Network.Off(MyPacketTypeEnum.GENERAL, this.OnLogFileCountPacket);
 		}
 
 		public override bool Init()
 		{
 			base.Init();
-			if (!(MyJumpGateModSession.Network?.Registered ?? false)) return true;
-			MyJumpGateModSession.Network.On(MyPacketTypeEnum.GENERAL, this.OnLogFileCountPacket);
+			if (!(MyJumpGateModSession.Instance.Network?.Registered ?? false)) return true;
+			MyJumpGateModSession.Instance.Network.On(MyPacketTypeEnum.GENERAL, this.OnLogFileCountPacket);
 			return true;
 		}
 
@@ -90,13 +90,13 @@ namespace IOTA.ModularJumpGates.ChatCommands
 			bool do_server = false;
 			if (arguments.Count > 0 && !bool.TryParse(arguments[0], out do_server)) return MyCommandResult.InvalidCommandArgument(this, 0, arguments[0], "true", "false");
 
-			if (do_server && is_admin && MyJumpGateModSession.Network.Registered)
+			if (do_server && is_admin && MyJumpGateModSession.Instance.Network.Registered)
 			{
-				MyNetworkInterface.Packet packet = MyJumpGateModSession.Network.CreateGeneralPacket("logfilecount_request");
+				MyNetworkInterface.Packet packet = MyJumpGateModSession.Instance.Network.CreateGeneralPacket("logfilecount_request");
 				packet.Send();
 				return MyCommandResult.Success(this, MyTexts.GetString("ChatCommandHandler_LogFileCountCommand_OnMPSuccess"));
 			}
-			else if (do_server && MyJumpGateModSession.Network.Registered)
+			else if (do_server && MyJumpGateModSession.Instance.Network.Registered)
 			{
 				return MyCommandResult.InsufficientPermissions(this);
 			}
@@ -137,22 +137,22 @@ namespace IOTA.ModularJumpGates.ChatCommands
 			{
 				int response;
 				packet.GeneralPayload(out response);
-				MyAPIGateway.Utilities.ShowMessage(MyJumpGateModSession.DISPLAYNAME, MyTexts.GetString("ChatCommandHandler_LogFileDeleteCommand_OnSuccess"));
+				MyAPIGateway.Utilities.ShowMessage(MyJumpGateModSession.Instance.DisplayName, MyTexts.GetString("ChatCommandHandler_LogFileDeleteCommand_OnSuccess"));
 			}
 		}
 
 		public override void Deinit()
 		{
 			base.Deinit();
-			if (!(MyJumpGateModSession.Network?.Registered ?? false)) return;
-			MyJumpGateModSession.Network.Off(MyPacketTypeEnum.GENERAL, this.OnLogFileDeletePacket);
+			if (!(MyJumpGateModSession.Instance.Network?.Registered ?? false)) return;
+			MyJumpGateModSession.Instance.Network.Off(MyPacketTypeEnum.GENERAL, this.OnLogFileDeletePacket);
 		}
 
 		public override bool Init()
 		{
 			base.Init();
-			if (!(MyJumpGateModSession.Network?.Registered ?? false)) return true;
-			MyJumpGateModSession.Network.On(MyPacketTypeEnum.GENERAL, this.OnLogFileDeletePacket);
+			if (!(MyJumpGateModSession.Instance.Network?.Registered ?? false)) return true;
+			MyJumpGateModSession.Instance.Network.On(MyPacketTypeEnum.GENERAL, this.OnLogFileDeletePacket);
 			return true;
 		}
 
@@ -165,13 +165,13 @@ namespace IOTA.ModularJumpGates.ChatCommands
 			if (arguments.Count > 0 && !bool.TryParse(arguments[0], out do_server)) return MyCommandResult.InvalidCommandArgument(this, 0, arguments[0], "true", "false");
 			if (arguments.Count > 1 && !uint.TryParse(arguments[1], out count)) return MyCommandResult.InvalidCommandArgument(this, 0, arguments[0], "*UINT32");
 
-			if (do_server && is_admin && MyJumpGateModSession.Network.Registered)
+			if (do_server && is_admin && MyJumpGateModSession.Instance.Network.Registered)
 			{
-				MyNetworkInterface.Packet packet = MyJumpGateModSession.Network.CreateGeneralPacket("logfiledelete_request", count);
+				MyNetworkInterface.Packet packet = MyJumpGateModSession.Instance.Network.CreateGeneralPacket("logfiledelete_request", count);
 				packet.Send();
 				return MyCommandResult.Success(this, MyTexts.GetString("ChatCommandHandler_LogFileDeleteCommand_OnMPSuccess"));
 			}
-			else if (do_server && MyJumpGateModSession.Network.Registered)
+			else if (do_server && MyJumpGateModSession.Instance.Network.Registered)
 			{
 				return MyCommandResult.InsufficientPermissions(this);
 			}

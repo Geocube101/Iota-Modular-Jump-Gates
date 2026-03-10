@@ -3,10 +3,12 @@ using IOTA.ModularJumpGates.Commands;
 using IOTA.ModularJumpGates.CubeBlock;
 using IOTA.ModularJumpGates.EventController.EventComponents;
 using IOTA.ModularJumpGates.ISC;
+using IOTA.ModularJumpGates.ModConfiguration;
 using IOTA.ModularJumpGates.Terminal;
 using IOTA.ModularJumpGates.Util;
 using IOTA.ModularJumpGates.Util.ConcurrentCollections;
 using ProtoBuf;
+using Sandbox.Engine.Platform;
 using Sandbox.Engine.Utils;
 using Sandbox.Game;
 using Sandbox.Game.Entities;
@@ -36,6 +38,7 @@ namespace IOTA.ModularJumpGates
 	[MySessionComponentDescriptor(MyUpdateOrder.AfterSimulation | MyUpdateOrder.BeforeSimulation)]
 	internal class MyJumpGateModSession : MySessionComponentBase
 	{
+		#region Session Classes
 		public sealed class MyMaterialsHolder
 		{
 			public readonly MyStringId WeaponLaser = MyStringId.GetOrCompute("WeaponLaser");
@@ -229,69 +232,13 @@ namespace IOTA.ModularJumpGates
 				return this.CockpitId.GetHashCode();
 			}
 		}
+		#endregion
 
 		#region Public Static Variables
-		/// <summary>
-		/// The maximum jump gate collider radius allowed based on config values
-		/// </summary>
-		public static double MaxJumpGateColliderRadius => 2 * Math.Max(MyJumpGateModSession.Configuration.DriveConfiguration.LargeDriveRaycastDistance, MyJumpGateModSession.Configuration.DriveConfiguration.SmallDriveRaycastDistance);
-
-		/// <summary>
-		/// The current mod version (major, minor, patch)
-		/// </summary>
-		public static Vector3I ModVersion => new Vector3I(1, 3, 1);
-
-		/// <summary>
-		/// The Guid used to store information in mod storage components
-		/// </summary>
-		public static Guid BlockComponentDataGUID => new Guid("FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF");
-
-		/// <summary>
-		/// The world's world matrix
-		/// </summary>
-		public static MatrixD WorldMatrix => MatrixD.CreateWorld(Vector3D.Zero, new Vector3D(0, 0, -1), new Vector3D(0, 1, 0));
-
-		/// <summary>
-		/// The Mod ID string used for terminal controls
-		/// </summary>
-		public static string MODID { get; private set; } = "IOTA.ModularJumpGatesMod";
-
-		/// <summary>
-		/// The display name used for chat messages
-		/// </summary>
-		public static string DISPLAYNAME { get; private set; } = "[ IMJG ]";
-
-		/// <summary>
-		/// The materials holder for common materials
-		/// </summary>
-		public static MyMaterialsHolder MATERIALS { get; private set; } = new MyMaterialsHolder();
-
-		/// <summary>
-		/// External mod information
-		/// </summary>
-		public static MyExternalModInfo MODSLIST { get; private set; } = null;
-
-		/// <summary>
-		/// Configuration variables as loaded from file or recieved from server
-		/// </summary>
-		public static Configuration Configuration { get; private set; } = null;
-
 		/// <summary>
 		/// Reference to the instance of this session component
 		/// </summary>
 		public static MyJumpGateModSession Instance { get; private set; } = null;
-
-		/// <summary>
-		/// Reference to the instane of this session's network interface
-		/// </summary>
-		public static MyNetworkInterface Network { get; private set; } = null;
-		#endregion
-
-		#region Private Static Variables
-		/// <summary>
-		/// The time in game ticks used to detect entity load completed
-		/// </summary>
-		private static ushort InitialEntityLoadedDelayTicks => 300;
 		#endregion
 
 		#region Private Variables
@@ -314,11 +261,6 @@ namespace IOTA.ModularJumpGates
 		/// The gameplay frame counter's value 1 tick ago
 		/// </summary>
 		private int LastGameplayFrameCounter = 0;
-
-		/// <summary>
-		/// The fallback maximum number of mod-specific log files that can be stored
-		/// </summary>
-		private uint FallbackMaxModSpecificLogFiles = 0;
 
 		/// <summary>
 		/// Stores the next index for queued animations
@@ -373,12 +315,12 @@ namespace IOTA.ModularJumpGates
 		/// <summary>
 		/// Used to store all grids requesting closure
 		/// </summary>
-		private ConcurrentQueue<KeyValuePair<MyJumpGateConstruct, bool>> GridCloseRequests = new ConcurrentQueue<KeyValuePair<MyJumpGateConstruct, bool>>();
+		private ConcurrentQueue<MyTuple<MyJumpGateConstruct, bool, Action>> GridCloseRequests = new ConcurrentQueue<MyTuple<MyJumpGateConstruct, bool, Action>>();
 
 		/// <summary>
 		/// Used to store all jump gates requesting closure
 		/// </summary>
-		private ConcurrentQueue<MyJumpGate> GateCloseRequests = new ConcurrentQueue<MyJumpGate>();
+		private ConcurrentQueue<MyTuple<MyJumpGate, Action>> GateCloseRequests = new ConcurrentQueue<MyTuple<MyJumpGate, Action>>();
 
 		/// <summary>
 		/// Used to store all constructs awaiting session add
@@ -425,7 +367,7 @@ namespace IOTA.ModularJumpGates
 		/// <summary>
 		/// The time in game ticks used to detect entity load completed
 		/// </summary>
-		internal ushort EntityLoadedDelayTicks { get; private set; } = MyJumpGateModSession.InitialEntityLoadedDelayTicks;
+		internal ushort EntityLoadedDelayTicks { get; private set; } = 300;
 
 		/// <summary>
 		/// The number of currently outbound jump gates
@@ -457,7 +399,7 @@ namespace IOTA.ModularJumpGates
 		/// <summary>
 		/// The maximum number of mod-specific log files that can be stored
 		/// </summary>
-		public uint MaxModSpecificLogFiles => MyJumpGateModSession.Configuration?.GeneralConfiguration?.MaxStoredModSpecificLogFiles ?? this.FallbackMaxModSpecificLogFiles;
+		public uint MaxModSpecificLogFiles => this.Configuration?.ModSettings.MaxStoredModSpecificLogFiles ?? MyModConfigurationV1.MyModSettings.Defaults().MaxStoredModSpecificLogFiles;
 
 		/// <summary>
 		/// The current number of mod-specific log files
@@ -470,14 +412,70 @@ namespace IOTA.ModularJumpGates
 		public MySessionStatusEnum SessionStatus { get; private set; } = MySessionStatusEnum.OFFLINE;
 
 		/// <summary>
-		/// Interface for handling API requests
+		/// The maximum jump gate collider radius allowed based on config values
 		/// </summary>
-		public MyAPIInterface ModAPIInterface { get; private set; } = new MyAPIInterface();
+		public double MaxJumpGateColliderRadius => 2 * Math.Max(this.Configuration.DriveConfiguration.LargeDriveRaycastDistance.Value, this.Configuration.DriveConfiguration.SmallDriveRaycastDistance.Value);
+
+		/// <summary>
+		/// The current mod version (major, minor, patch)
+		/// </summary>
+		public Vector3I ModVersion => new Vector3I(1, 3, 2);
+
+		/// <summary>
+		/// The Guid used to store information in mod storage components
+		/// </summary>
+		public Guid BlockComponentDataGUID => new Guid("FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF");
+
+		/// <summary>
+		/// The instance GUID<br />
+		/// Changes every time the world is loaded
+		/// </summary>
+		public readonly Guid InstanceID = Guid.NewGuid();
 
 		/// <summary>
 		/// The currently active mod-specific log file name
 		/// </summary>
 		public string ActiveModLogFile { get; private set; }
+
+		/// <summary>
+		/// The Mod ID string used for terminal controls
+		/// </summary>
+		public string ModID { get; private set; } = "IOTA.ModularJumpGatesMod";
+
+		/// <summary>
+		/// The display name used for chat messages
+		/// </summary>
+		public string DisplayName { get; private set; } = "[ IMJG ]";
+
+		/// <summary>
+		/// Callback called when session begins unloading
+		/// </summary>
+		public event Action OnSessionUnload;
+
+		/// <summary>
+		/// Interface for handling API requests
+		/// </summary>
+		public MyAPIInterface ModAPIInterface { get; private set; } = new MyAPIInterface();
+
+		/// <summary>
+		/// Reference to the instane of this session's network interface
+		/// </summary>
+		public MyNetworkInterface Network { get; private set; } = null;
+
+		/// <summary>
+		/// The materials holder for common materials
+		/// </summary>
+		public MyMaterialsHolder Materials { get; private set; } = new MyMaterialsHolder();
+
+		/// <summary>
+		/// External mod information
+		/// </summary>
+		public MyExternalModInfo ModsList { get; private set; } = null;
+
+		/// <summary>
+		/// Configuration variables as loaded from file or recieved from server
+		/// </summary>
+		public MyModConfigurationV1 Configuration { get; private set; } = null;
 		#endregion
 
 		#region Public Static Methods
@@ -485,7 +483,7 @@ namespace IOTA.ModularJumpGates
 		{
 			Vector3D dir = end - start;
 			float len = (float) dir.Length();
-			MyTransparentGeometry.AddLineBillboard(material ?? MyJumpGateModSession.MATERIALS.GizmoDrawLine, color, start, dir.Normalized(), len, thickness, blendtype);
+			MyTransparentGeometry.AddLineBillboard(material ?? MyJumpGateModSession.Instance.Materials.GizmoDrawLine, color, start, dir.Normalized(), len, thickness, blendtype);
 		}
 
 		/// <summary>
@@ -900,42 +898,50 @@ namespace IOTA.ModularJumpGates
 		/// </summary>
 		protected override void UnloadData()
 		{
-			this.SessionStatus = MySessionStatusEnum.UNLOADING;
 			Logger.Log("Closing...");
+			this.SessionStatus = MySessionStatusEnum.UNLOADING;
+			this.OnSessionUnload?.Invoke();
 			base.UnloadData();
 			this.ModAPIInterface.Close();
 			this.UpdateSaveModDataFile();
 			MyAnimationHandler.Unload();
 			MyChatCommandHandler.Close();
 
-			if (MyJumpGateModSession.Network != null && MyJumpGateModSession.Network.Registered)
+			if (this.Network != null && this.Network.Registered)
 			{
-				MyJumpGateModSession.Network.Off(MyPacketTypeEnum.UPDATE_GRIDS, this.OnNetworkGridsUpdate);
-				MyJumpGateModSession.Network.Off(MyPacketTypeEnum.CLOSE_GRID, this.OnNetworkGridClose);
-				MyJumpGateModSession.Network.Off(MyPacketTypeEnum.DOWNLOAD_GRID, this.OnNetworkGridDownload);
-				MyJumpGateModSession.Network.Off(MyPacketTypeEnum.COMM_LINKED, this.OnNetworkCommLinkedUpdate);
-				MyJumpGateModSession.Network.Off(MyPacketTypeEnum.BEACON_LINKED, this.OnNetworkBeaconLinkedUpdate);
-				MyJumpGateModSession.Network.Off(MyPacketTypeEnum.UPDATE_CONFIG, this.OnConfigurationUpdate);
-				MyJumpGateModSession.Network.Off(MyPacketTypeEnum.MARK_GATES_DIRTY, this.OnNetworkGridGateReconstruct);
-				MyJumpGateModSession.Network.Off(MyPacketTypeEnum.CONSTRUCT_UPDATE_NOTICE, this.OnNetworkConstructUpdateNotice);
-				MyJumpGateModSession.Network.Off(MyPacketTypeEnum.GATE_DETONATION, this.OnNetworkJumpGateDetonation);
-				MyJumpGateModSession.Network.Off(MyPacketTypeEnum.VERSION_CHECK, this.OnNetworkVersionCheck);
-				MyJumpGateModSession.Network.Off(MyPacketTypeEnum.UPDATE_COCKPIT, this.OnNetworkCockpitSettingsUpdate);
-				MyJumpGateModSession.Network.Unregister();
+				this.Network.Off(MyPacketTypeEnum.UPDATE_GRIDS, this.OnNetworkGridsUpdate);
+				this.Network.Off(MyPacketTypeEnum.CLOSE_GRID, this.OnNetworkGridClose);
+				this.Network.Off(MyPacketTypeEnum.DOWNLOAD_GRID, this.OnNetworkGridDownload);
+				this.Network.Off(MyPacketTypeEnum.COMM_LINKED, this.OnNetworkCommLinkedUpdate);
+				this.Network.Off(MyPacketTypeEnum.BEACON_LINKED, this.OnNetworkBeaconLinkedUpdate);
+				this.Network.Off(MyPacketTypeEnum.UPDATE_CONFIG, this.OnConfigurationUpdate);
+				this.Network.Off(MyPacketTypeEnum.MARK_GATES_DIRTY, this.OnNetworkGridGateReconstruct);
+				this.Network.Off(MyPacketTypeEnum.CONSTRUCT_UPDATE_NOTICE, this.OnNetworkConstructUpdateNotice);
+				this.Network.Off(MyPacketTypeEnum.GATE_DETONATION, this.OnNetworkJumpGateDetonation);
+				this.Network.Off(MyPacketTypeEnum.VERSION_CHECK, this.OnNetworkVersionCheck);
+				this.Network.Off(MyPacketTypeEnum.UPDATE_COCKPIT, this.OnNetworkCockpitSettingsUpdate);
+				this.Network.Unregister();
 			}
 
 			int closed_grids_count = 0;
+			this.GateDetonations.Clear();
 
 			foreach (KeyValuePair<long, MyJumpGateConstruct> pair in this.GridMap)
 			{
 				if (!pair.Value.Closed)
 				{
 					pair.Value.Dispose();
+					this.CloseGrid(pair.Value, true);
 					++closed_grids_count;
 				}
 			}
 
-			this.FlushClosureQueues();
+			Logger.Log("Flushing closure queues...");
+			Stopwatch sw = Stopwatch.StartNew();
+			while (this.GridCloseRequests.Count > 0 || this.GateCloseRequests.Count > 0) this.FlushClosureQueues();
+			sw.Stop();
+			Logger.Log($"Closure queues flushed; took {MyJumpGateModSession.AutoconvertTimeUnits(sw.Elapsed.TotalSeconds, 2)}");
+
 			Logger.Log($"Closed {closed_grids_count} Grids");
 			foreach (KeyValuePair<ulong, AnimationInfo> pair in this.JumpGateAnimations) pair.Value.Animation.Clean();
 			foreach (KeyValuePair<long, EntityWarpInfo> pair in this.EntityWarps) pair.Value.Close();
@@ -947,7 +953,6 @@ namespace IOTA.ModularJumpGates
 			this.GridReinitCounts.Clear();
 			this.JumpGateAnimations.Clear();
 			this.EntityWarps.Clear();
-			this.GateDetonations.Clear();
 			this.PartialSuspendedGridsQueue.Clear();
 			this.GridAddRequests.Clear();
 			this.GridUpdateThreads.Clear();
@@ -985,12 +990,12 @@ namespace IOTA.ModularJumpGates
 			JumpGateStatusChangedEvent.Dispose();
 			MyCubeBlockBase.DisposeAll();
 			Particle.Dispose();
+			MyModConfigurationV1.Dispose();
 
-			MyJumpGateModSession.Configuration.Save();
-			MyJumpGateModSession.Configuration = null;
-			MyJumpGateModSession.Network = null;
-			MyJumpGateModSession.MATERIALS = null;
-			MyJumpGateModSession.MODSLIST = null;
+			this.Configuration = null;
+			this.Network = null;
+			this.Materials = null;
+			this.ModsList = null;
 
 			this.SessionStatus = MySessionStatusEnum.OFFLINE;
 
@@ -998,8 +1003,8 @@ namespace IOTA.ModularJumpGates
 			Logger.Flush();
 			Logger.Close();
 
-			MyJumpGateModSession.MODID = null;
-			MyJumpGateModSession.DISPLAYNAME = null;
+			this.ModID = null;
+			this.DisplayName = null;
 			MyJumpGateModSession.Instance = null;
 		}
 
@@ -1022,6 +1027,24 @@ namespace IOTA.ModularJumpGates
 			// ...and many more things, ask in #programming-modding in keen's discord for what you want to do to be pointed at the available things to use.
 
 			MyJumpGateModSession.Instance = this;
+
+			// Load configuration
+			bool local_config_exists, global_config_exists;
+			Exception local_load_err, global_load_err;
+			this.Configuration = MyModConfigurationV1.Load(this, out global_config_exists, out local_config_exists, out global_load_err, out local_load_err);
+
+			if (MyNetworkInterface.IsServerLike && !local_config_exists && MyAPIGateway.Utilities.FileExistsInWorldStorage(ModularJumpGates.Configuration.ConfigFileName, this.GetType()))
+			{
+				Configuration old_configuration = ModularJumpGates.Configuration.Load();
+
+				if (old_configuration != null)
+				{
+					this.Configuration = MyModConfigurationV1.FromConfigurationV0(old_configuration);
+					Logger.Log($"Found old mod configuration file -> UPDATED");
+				}
+			}
+
+			// Load mod data
 			bool log_decode_success;
 			bool is_old;
 
@@ -1036,42 +1059,62 @@ namespace IOTA.ModularJumpGates
 				log_decode_success = this.UpdateLoadModDataFile();
 			}
 
+			// Initialize log and session
 			int log_file_count = this.ModData.ModLogFiles.Count;
 			Logger.Init();
-			Vector3I version = MyJumpGateModSession.ModVersion;
-			Logger.Log($"Mod Version: {version.X}.{version.Y}.{version.Z}");
+
+			Logger.Log($"Mod Version: {this.ModVersion.X}.{this.ModVersion.Y}.{this.ModVersion.Z}");
 			Logger.Log("PREINIT - Loading Data...");
+			Logger.Log($"PREINIT - Mod Session Instance ID: {this.InstanceID}");
+
 			this.SessionStatus = MySessionStatusEnum.LOADING;
-			MyJumpGateModSession.Configuration = Configuration.Load();
-			MyJumpGateModSession.Network = new MyNetworkInterface(0xFFFF, this.ModContext.ModId);
-			if (MyNetworkInterface.IsServerLike && !MyAPIGateway.Utilities.GetVariable($"{MyJumpGateModSession.MODID}.DebugMode", out this.DebugMode)) this.DebugMode = false;
+			this.Network = new MyNetworkInterface(0xFFFF, this.ModContext.ModId);
+			if (MyNetworkInterface.IsServerLike && !MyAPIGateway.Utilities.GetVariable($"{this.ModID}.DebugMode", out this.DebugMode)) this.DebugMode = false;
 			this.UpdateOnPause = true;
 			this.PurgeStoredLogFiles(this.MaxModSpecificLogFiles);
 			if (is_old) Logger.Log("Upgraded old mod-specific log file data to newer mod data file");
 			if (log_decode_success) Logger.Log($"Mod data loaded from local storage; Version={this.ModData.ModVersion.X}.{this.ModData.ModVersion.Y}.{this.ModData.ModVersion.Z}, Log Capacity={log_file_count}/{this.MaxModSpecificLogFiles}");
 			else Logger.Warn("Failed to load mod-specific log file list. System cannot auto-delete extra log files");
 
+			if (global_config_exists) Logger.Log("Found global mod config file");
+			else Logger.Warn($"Failed to locate global mod config file; DEFAULTS_LOADED");
+			if (local_config_exists) Logger.Log("Found local mod config file");
+			else Logger.Warn($"Failed to locate local mod config file; DEFAULTS_LOADED");
+			if (global_load_err != null) Logger.Error($"Error loading global config file:\n  ...\n[ {global_load_err.GetType().Name} ]: {global_load_err.Message}\n{global_load_err.StackTrace}\n{global_load_err.InnerException}");
+			if (local_load_err != null) Logger.Error($"Error loading local config file:\n  ...\n[ {local_load_err.GetType().Name} ]: {local_load_err.Message}\n{local_load_err.StackTrace}\n{local_load_err.InnerException}");
+
+			if (!global_config_exists || !local_config_exists)
+			{
+				Exception global_save_err, local_save_err;
+				this.Configuration.Save(this, out global_save_err, out local_save_err);
+				if (global_save_err != null) Logger.Error($"Error saving global config file:\n  ...\n[ {global_save_err.GetType().Name} ]: {global_save_err.Message}\n{global_save_err.StackTrace}\n{global_save_err.InnerException}");
+				if (local_save_err != null) Logger.Error($"Error saving local config file:\n  ...\n[ {local_save_err.GetType().Name} ]: {local_save_err.Message}\n{local_save_err.StackTrace}\n{local_save_err.InnerException}");
+			}
+
+			// Networking
 			if (!MyNetworkInterface.IsSingleplayer)
 			{
-				MyJumpGateModSession.Network.Register();
-				MyJumpGateModSession.Network.On(MyPacketTypeEnum.UPDATE_GRIDS, this.OnNetworkGridsUpdate);
-				MyJumpGateModSession.Network.On(MyPacketTypeEnum.CLOSE_GRID, this.OnNetworkGridClose);
-				MyJumpGateModSession.Network.On(MyPacketTypeEnum.DOWNLOAD_GRID, this.OnNetworkGridDownload);
-				MyJumpGateModSession.Network.On(MyPacketTypeEnum.UPDATE_CONFIG, this.OnConfigurationUpdate);
-				MyJumpGateModSession.Network.On(MyPacketTypeEnum.CONSTRUCT_UPDATE_NOTICE, this.OnNetworkConstructUpdateNotice);
-				MyJumpGateModSession.Network.On(MyPacketTypeEnum.GATE_DETONATION, this.OnNetworkJumpGateDetonation);
-				MyJumpGateModSession.Network.On(MyPacketTypeEnum.VERSION_CHECK, this.OnNetworkVersionCheck);
-				MyJumpGateModSession.Network.On(MyPacketTypeEnum.UPDATE_COCKPIT, this.OnNetworkCockpitSettingsUpdate);
+				this.Network.Register();
+				this.Network.On(MyPacketTypeEnum.UPDATE_GRIDS, this.OnNetworkGridsUpdate);
+				this.Network.On(MyPacketTypeEnum.CLOSE_GRID, this.OnNetworkGridClose);
+				this.Network.On(MyPacketTypeEnum.DOWNLOAD_GRID, this.OnNetworkGridDownload);
+				this.Network.On(MyPacketTypeEnum.UPDATE_CONFIG, this.OnConfigurationUpdate);
+				this.Network.On(MyPacketTypeEnum.CONSTRUCT_UPDATE_NOTICE, this.OnNetworkConstructUpdateNotice);
+				this.Network.On(MyPacketTypeEnum.GATE_DETONATION, this.OnNetworkJumpGateDetonation);
+				this.Network.On(MyPacketTypeEnum.VERSION_CHECK, this.OnNetworkVersionCheck);
+				this.Network.On(MyPacketTypeEnum.UPDATE_COCKPIT, this.OnNetworkCockpitSettingsUpdate);
 			}
 
 			if (MyNetworkInterface.IsMultiplayerServer)
 			{
-				MyJumpGateModSession.Network.On(MyPacketTypeEnum.COMM_LINKED, this.OnNetworkCommLinkedUpdate);
-				MyJumpGateModSession.Network.On(MyPacketTypeEnum.BEACON_LINKED, this.OnNetworkBeaconLinkedUpdate);
-				MyJumpGateModSession.Network.On(MyPacketTypeEnum.MARK_GATES_DIRTY, this.OnNetworkGridGateReconstruct);
+				this.Network.On(MyPacketTypeEnum.COMM_LINKED, this.OnNetworkCommLinkedUpdate);
+				this.Network.On(MyPacketTypeEnum.BEACON_LINKED, this.OnNetworkBeaconLinkedUpdate);
+				this.Network.On(MyPacketTypeEnum.MARK_GATES_DIRTY, this.OnNetworkGridGateReconstruct);
 			}
 
 			if (MyNetworkInterface.IsDedicatedMultiplayerServer) MyInterServerCommunication.Register(0, 0, null);
+			
+			// Finalize
 			MyAPIGateway.Entities.OnEntityAdd += this.OnEntityAdd;
 			MyAPIGateway.Entities.OnEntityRemove += this.OnEntityRemove;
 			this.ModAPIInterface.Init();
@@ -1088,49 +1131,58 @@ namespace IOTA.ModularJumpGates
 			base.BeforeStart();
 			Logger.Log("INIT - Loading Data...");
 			MyAnimationHandler.Load();
-			MyJumpGateModSession.MODSLIST = new MyExternalModInfo(this.ModContext);
-			if (MyJumpGateModSession.Network.Registered && MyNetworkInterface.IsStandaloneMultiplayerClient) this.RequestGridsDownload();
-			if (!MyNetworkInterface.IsDedicatedMultiplayerServer) MyAPIGateway.Utilities.ShowMessage(MyJumpGateModSession.DISPLAYNAME, "Initializing Constructs...");
+			this.ModsList = new MyExternalModInfo(this.ModContext);
+			if (this.Network.Registered && MyNetworkInterface.IsStandaloneMultiplayerClient) this.RequestGridsDownload();
+			if (!MyNetworkInterface.IsDedicatedMultiplayerServer) MyAPIGateway.Utilities.ShowMessage(this.DisplayName, "Initializing Constructs...");
 			MyAPIGateway.TerminalControls.CustomControlGetter += this.OnTerminalSelector;
 			MyChatCommandHandler.Init();
 			Logger.Log("INIT - Loaded.");
 
 			// Display startup messages
+			bool is_admin = MyAPIGateway.Session.IsUserAdmin(MyAPIGateway.Multiplayer.MyId);
 			TextReader file_reader;
 			string filename;
 			string content;
 			MyObjectBuilder_Checkpoint.ModItem moditem = this.ModContext.ModItem;
-			Vector3I current_version = MyJumpGateModSession.ModVersion;
 
-			if (MyAPIGateway.Session.IsUserAdmin(MyAPIGateway.Multiplayer.MyId))
+			if (is_admin)
 			{
 				filename = "Data/StartupMessage/Admin.txt";
 				file_reader = (MyAPIGateway.Utilities.FileExistsInModLocation(filename, moditem)) ? MyAPIGateway.Utilities.ReadFileInModLocation(filename, moditem) : null;
 				content = file_reader?.ReadToEnd();
-				if (!string.IsNullOrEmpty(content)) MyAPIGateway.Utilities.ShowMessage(MyJumpGateModSession.DISPLAYNAME, content);
+				if (!string.IsNullOrEmpty(content)) MyAPIGateway.Utilities.ShowMessage(this.DisplayName, content);
 			}
 
 			filename = "Data/StartupMessage/General.txt";
 			file_reader = (MyAPIGateway.Utilities.FileExistsInModLocation(filename, moditem)) ? MyAPIGateway.Utilities.ReadFileInModLocation(filename, moditem) : null;
 			content = file_reader?.ReadToEnd();
-			if (!string.IsNullOrEmpty(content)) MyAPIGateway.Utilities.ShowMessage(MyJumpGateModSession.DISPLAYNAME, content);
+			if (!string.IsNullOrEmpty(content)) MyAPIGateway.Utilities.ShowMessage(this.DisplayName, content);
 
-			if (current_version.X > this.ModData.ModVersion.X
-				|| (current_version.X == this.ModData.ModVersion.X && current_version.Y > this.ModData.ModVersion.Y)
-				|| (current_version.X == this.ModData.ModVersion.X && current_version.Y == this.ModData.ModVersion.Y && current_version.Z > this.ModData.ModVersion.Z))
+			if (this.ModVersion.X > this.ModData.ModVersion.X
+				|| (this.ModVersion.X == this.ModData.ModVersion.X && this.ModVersion.Y > this.ModData.ModVersion.Y)
+				|| (this.ModVersion.X == this.ModData.ModVersion.X && this.ModVersion.Y == this.ModData.ModVersion.Y && this.ModVersion.Z > this.ModData.ModVersion.Z))
 			{
-				this.ModData.ModVersion = current_version;
-				MyAPIGateway.Utilities.ShowMessage(MyJumpGateModSession.DISPLAYNAME, $"Mod updated to version {current_version.X}.{current_version.Y}.{current_version.Z}");
+				this.ModData.ModVersion = this.ModVersion;
+				MyAPIGateway.Utilities.ShowMessage(this.DisplayName, $"Mod updated to version {this.ModVersion.X}.{this.ModVersion.Y}.{this.ModVersion.Z}");
+
 				filename = "Data/StartupMessage/Update.txt";
 				file_reader = (MyAPIGateway.Utilities.FileExistsInModLocation(filename, moditem)) ? MyAPIGateway.Utilities.ReadFileInModLocation(filename, moditem) : null;
 				content = file_reader?.ReadToEnd();
-				if (!string.IsNullOrEmpty(content)) MyAPIGateway.Utilities.ShowMessage(MyJumpGateModSession.DISPLAYNAME, content);
+				if (!string.IsNullOrEmpty(content)) MyAPIGateway.Utilities.ShowMessage(this.DisplayName, content);
+
+				if (is_admin)
+				{
+					filename = "Data/StartupMessage/UpdateAdmin.txt";
+					file_reader = (MyAPIGateway.Utilities.FileExistsInModLocation(filename, moditem)) ? MyAPIGateway.Utilities.ReadFileInModLocation(filename, moditem) : null;
+					content = file_reader?.ReadToEnd();
+					if (!string.IsNullOrEmpty(content)) MyAPIGateway.Utilities.ShowMessage(this.DisplayName, content);
+				}
 			}
 
 			if (this.ModDataLoadError != null)
 			{
 				Logger.Error($"Error whilst reading mod-log file list\n  ...\n[ {this.ModDataLoadError.GetType().Name} ]: {this.ModDataLoadError.Message}\n{this.ModDataLoadError.StackTrace}\n{this.ModDataLoadError.InnerException}");
-				MyAPIGateway.Utilities.ShowMessage(MyJumpGateModSession.DISPLAYNAME, "An error occured loading the mod-log list.\nExisting mod log files may not be deleted automatically.\nCheck the log for more details");
+				MyAPIGateway.Utilities.ShowMessage(this.DisplayName, "An error occured loading the mod-log list.\nExisting mod log files may not be deleted automatically.\nCheck the log for more details");
 				this.ModDataLoadError = null;
 			}
 
@@ -1220,12 +1272,12 @@ namespace IOTA.ModularJumpGates
 					}
 
 					this.InitializationComplete = true;
-					MyAPIGateway.Utilities.ShowMessage(MyJumpGateModSession.DISPLAYNAME, "Initialization Complete!");
+					MyAPIGateway.Utilities.ShowMessage(this.DisplayName, "Initialization Complete!");
 				}
 				
 				// Tick grids
 				{
-					byte concurrency = (MyNetworkInterface.IsStandaloneMultiplayerClient) ? (byte) 1 : MyJumpGateModSession.Configuration.GeneralConfiguration.ConcurrentGridUpdateThreads;
+					byte concurrency = (MyNetworkInterface.IsStandaloneMultiplayerClient) ? (byte) 1 : this.Configuration.GeneralConfiguration.ConcurrentGridUpdateThreads.Value;
 					int grids_per_thread = (int) Math.Ceiling(this.GridMap.Count / (float) concurrency);
 					while (this.GridUpdateThreads.Count < concurrency) this.GridUpdateThreads.Add(new MyThreadedUpdateInfo());
 					while (this.GridUpdateThreads.Count > concurrency) this.GridUpdateThreads.Pop();
@@ -1270,7 +1322,7 @@ namespace IOTA.ModularJumpGates
 				{
 					MyJumpGateConstruct grid = pair.Value;
 
-					if (!grid.MarkClosed && !grid.IsSuspended && grid.FullyInitialized)
+					if (!grid.MarkClosed && !grid.Closed && grid.AtLeastOneUpdate() && !this.IsConstructQueuedForPartialReload(grid.CubeGridID))
 					{
 						try
 						{
@@ -1281,6 +1333,7 @@ namespace IOTA.ModularJumpGates
 							Logger.Error($"Error during construct no-thread tick - {grid.CubeGrid?.EntityId.ToString() ?? "N/A"} ({pair.Key})\n  ...\n[ {e} ]: {e.Message}\n{e.StackTrace}\n{e.InnerException}");
 						}
 					}
+					else if (grid.MarkClosed && !grid.QueuedForClose) this.CloseGrid(grid);
 				}
 				
 				bool paused = MyNetworkInterface.IsSingleplayer && MyAPIGateway.Session.GameplayFrameCounter == this.LastGameplayFrameCounter;
@@ -1303,8 +1356,8 @@ namespace IOTA.ModularJumpGates
 					foreach (KeyValuePair<ulong, AnimationInfo> pair in this.JumpGateAnimations)
 					{
 						AnimationInfo animation_info = pair.Value;
-						string animation_name = animation_info.Animation.FullAnimationName;
 						MyJumpGateAnimation animation = animation_info.Animation;
+						if (animation.Paused) continue;
 						animation.Tick(animation_info.AnimationIndex);
 
 						if (animation.Stopped(animation_info.AnimationIndex))
@@ -1312,7 +1365,7 @@ namespace IOTA.ModularJumpGates
 							animation_info.CompletionCallback?.Invoke(animation_info.IterCallbackException);
 							this.JumpGateAnimations.Remove(pair.Key);
 						}
-						else if (animation_info.IterCallback != null)
+						else if (animation_info.IterCallback != null && !animation.Paused)
 						{
 							bool stop = true;
 
@@ -1324,13 +1377,14 @@ namespace IOTA.ModularJumpGates
 							{
 								stop = true;
 								animation_info.IterCallbackException = e;
-								Logger.Error($"Error during animation iteration callback - {animation_name}\n  ...\n[ {e} ]: {e.Message}\n{e.StackTrace}\n{e.InnerException}");
+								Logger.Error($"Error during animation iteration callback - {animation_info.Animation.FullAnimationName}/{(MyJumpGateAnimation.AnimationTypeEnum) animation.ActiveAnimationIndex} (SOURCE={animation.JumpGate?.GetPrintableName()})\n  ...\n[ {e} ]: {e.Message}\n{e.StackTrace}\n{e.InnerException}");
 							}
 							finally
 							{
 								if (stop)
 								{
 									animation.Stop();
+									animation_info.CompletionCallback?.Invoke(animation_info.IterCallbackException);
 									this.JumpGateAnimations.Remove(pair.Key);
 								}
 							}
@@ -1338,6 +1392,7 @@ namespace IOTA.ModularJumpGates
 						else if (animation.JumpGate.Closed)
 						{
 							animation.Stop();
+							animation_info.CompletionCallback?.Invoke(animation_info.IterCallbackException);
 							this.JumpGateAnimations.Remove(pair.Key);
 						}
 					}
@@ -1400,7 +1455,7 @@ namespace IOTA.ModularJumpGates
 				Vector4 color4;
 				Color color;
 				Vector3D this_position = MyAPIGateway.Session.Camera.Position;
-				MyStringId line_material = MyJumpGateModSession.MATERIALS.WeaponLaser;
+				MyStringId line_material = this.Materials.WeaponLaser;
 				List<MyJumpGate> jump_gates = new List<MyJumpGate>();
 				List<MyJumpGateDrive> jump_drives = new List<MyJumpGateDrive>();
 
@@ -1421,7 +1476,7 @@ namespace IOTA.ModularJumpGates
 
 					try
 					{
-						if (Vector3D.Distance(this_position, jump_grid.CubeGrid.WorldMatrix.Translation) > MyJumpGateModSession.Configuration.GeneralConfiguration.DrawSyncDistance) continue;
+						if (Vector3D.Distance(this_position, jump_grid.CubeGrid.WorldMatrix.Translation) > this.Configuration.GeneralConfiguration.DrawSyncDistance) continue;
 						MatrixD grid_matrix = jump_grid.CubeGrid.WorldMatrix;
 						color4 = Color.Gold.ToVector4();
 
@@ -1457,7 +1512,7 @@ namespace IOTA.ModularJumpGates
 							jump_ellipse.Draw((complete) ? Color.Lime : Color.Red, 90, 0.1f, line_material);
 							BoundingEllipsoidD effective_ellipse = gate.GetEffectiveJumpEllipse();
 							if (complete && effective_ellipse != jump_ellipse) effective_ellipse.Draw(Color.BlueViolet, 90, 0.1f, line_material);
-							if (complete && !MyJumpGateModSession.Configuration.GeneralConfiguration.LenientJumps) gate.ShearEllipse.Draw(Color.Red, 90, 0.1f, line_material);
+							if (complete && !this.Configuration.GeneralConfiguration.LenientJumps.Value) gate.ShearEllipse.Draw(Color.Red, 90, 0.1f, line_material);
 							new BoundingEllipsoidD(jump_ellipse.Radii.Max() * 2, ref jump_ellipse.WorldMatrix).Draw(Color.LightSkyBlue, 90, 0.1f, line_material);
 							new BoundingEllipsoidD(jump_ellipse.Radii.Max(), ref jump_ellipse.WorldMatrix).Draw(Color.GhostWhite, 90, 0.1f, line_material);
 
@@ -1468,7 +1523,8 @@ namespace IOTA.ModularJumpGates
 							MySimpleObjectDraw.DrawTransparentBox(ref jump_ellipse.WorldMatrix, ref ellipse_aabb, ref color, MySimpleObjectRasterizer.Wireframe, 1, 0.1f, null, line_material);
 
 							// Display collider sphere
-							new BoundingEllipsoidD(MyJumpGateModSession.MaxJumpGateColliderRadius, ref jump_ellipse.WorldMatrix).Draw(Color.Chartreuse, 90, 0.1f, line_material);
+							MatrixD? collider_position = gate.GetColliderMatrix();
+							if (collider_position != null) new BoundingEllipsoidD(this.MaxJumpGateColliderRadius, collider_position.Value).Draw(Color.Chartreuse, 90, 0.1f, line_material);
 
 							// Display gate normal override
 							MyJumpGateControlObject control_object = gate.ControlObject;
@@ -1541,7 +1597,7 @@ namespace IOTA.ModularJumpGates
 						float ratio = (float) (pair.Item2 / vertex_distance_squared);
 						float radius = MathHelper.Lerp(0.75f, 0, ratio);
 						Vector4 dot_color = Vector4.Lerp(Color.Aqua, Color.Red, ratio);
-						MyTransparentGeometry.AddPointBillboard(MyJumpGateModSession.MATERIALS.WhiteDot, dot_color, pair.Item1, radius, 0);
+						MyTransparentGeometry.AddPointBillboard(this.Materials.WhiteDot, dot_color, pair.Item1, radius, 0);
 					}
 					
 					foreach (MyJumpGateAnimation animation in this.GetGateAnimationsPlaying(target))
@@ -1560,19 +1616,19 @@ namespace IOTA.ModularJumpGates
 							switch (collider.ShapeColliderDefinition.CollisionEffectType)
 							{
 								case CollisionEffectTypeEnum.DAMAGE:
-									MyTransparentGeometry.AddBillboardOriented(MyJumpGateModSession.MATERIALS.SpacialMarkerDamagePoint, Color.Orange, collider_matrix.Translation, camera.Left, camera.Up, size, size);
+									MyTransparentGeometry.AddBillboardOriented(this.Materials.SpacialMarkerDamagePoint, Color.Orange, collider_matrix.Translation, camera.Left, camera.Up, size, size);
 									break;
 								case CollisionEffectTypeEnum.JUMP:
-									MyTransparentGeometry.AddBillboardOriented(MyJumpGateModSession.MATERIALS.SpacialMarkerJumpPoint, Color.Aqua, collider_matrix.Translation, camera.Left, camera.Up, size, size);
+									MyTransparentGeometry.AddBillboardOriented(this.Materials.SpacialMarkerJumpPoint, Color.Aqua, collider_matrix.Translation, camera.Left, camera.Up, size, size);
 									break;
 								case CollisionEffectTypeEnum.DELETE:
-									MyTransparentGeometry.AddBillboardOriented(MyJumpGateModSession.MATERIALS.SpacialMarkerDeletePoint, Color.Red, collider_matrix.Translation, camera.Left, camera.Up, size, size);
+									MyTransparentGeometry.AddBillboardOriented(this.Materials.SpacialMarkerDeletePoint, Color.Red, collider_matrix.Translation, camera.Left, camera.Up, size, size);
 									break;
 							}
 						}
 					}
 
-					MyTransparentGeometry.AddBillboardOriented(MyJumpGateModSession.MATERIALS.SpacialMarkerJumpNode, Color.Aqua, target.WorldJumpNode, camera.Left, camera.Up, size, size);
+					MyTransparentGeometry.AddBillboardOriented(this.Materials.SpacialMarkerJumpNode, Color.Aqua, target.WorldJumpNode, camera.Left, camera.Up, size, size);
 				}
 			}
 		}
@@ -1586,8 +1642,13 @@ namespace IOTA.ModularJumpGates
 		{
 			base.SaveData();
 			if (MyNetworkInterface.IsStandaloneMultiplayerClient) return;
-			MyJumpGateModSession.Configuration?.Save();
-			MyAPIGateway.Utilities.SetVariable($"{MyJumpGateModSession.MODID}.DebugMode", this.DebugMode);
+
+			Exception global_save_err, local_save_err;
+			this.Configuration.Save(this, out global_save_err, out local_save_err);
+			if (global_save_err != null) Logger.Error($"Error saving global config file:\n  ...\n[ {global_save_err.GetType().Name} ]: {global_save_err.Message}\n{global_save_err.StackTrace}\n{global_save_err.InnerException}");
+			if (local_save_err != null) Logger.Error($"Error saving local config file:\n  ...\n[ {local_save_err.GetType().Name} ]: {local_save_err.Message}\n{local_save_err.StackTrace}\n{local_save_err.InnerException}");
+
+			MyAPIGateway.Utilities.SetVariable($"{this.ModID}.DebugMode", this.DebugMode);
 			this.UpdateSaveModDataFile();
 			List<MyCockpitInfo> cockpit_terminal_settings = new List<MyCockpitInfo>(this.CockpitBlockSettings.Count);
 
@@ -1623,11 +1684,19 @@ namespace IOTA.ModularJumpGates
 		{
 			IMyCubeGrid cube_grid = entity as IMyCubeGrid;
 			if (cube_grid?.Physics == null) return;
-			Logger.Debug($"Entity \"{entity.DisplayName}\" removed from session @ {entity.EntityId} >> {(entity.Closed ? "CLOSED" : "SESSION_REMOVE")}", 5);
 			MyJumpGateConstruct parent_grid = this.GridMap.GetValueOrDefault(cube_grid.EntityId, null);
+
 			if (parent_grid?.Closed ?? true) return;
-			if (MyNetworkInterface.IsStandaloneMultiplayerClient) parent_grid.Suspend(cube_grid.EntityId);
-			else parent_grid.Dispose();
+			else if (MyNetworkInterface.IsStandaloneMultiplayerClient && cube_grid.EntityId == parent_grid.CubeGridID)
+			{
+				parent_grid.Suspend(cube_grid.EntityId, true);
+				Logger.Debug($"Entity \"{entity.DisplayName}\" suspended @ {entity.EntityId} >> {(entity.Closed ? "CLOSED" : "SESSION_RELOAD")}", 5);
+			}
+			else if (MyNetworkInterface.IsServerLike)
+			{
+				parent_grid.Dispose();
+				Logger.Debug($"Entity \"{entity.DisplayName}\" removed from session @ {entity.EntityId} >> {(entity.Closed ? "CLOSED" : "SESSION_REMOVE")}", 5);
+			}
 		}
 
 		/// <summary>
@@ -1821,16 +1890,16 @@ namespace IOTA.ModularJumpGates
 			else if (packet.PhaseFrame == 1 && MyNetworkInterface.IsMultiplayerServer)
 			{
 				packet = packet.Forward(packet.SenderID, false);
-				packet.Payload(MyJumpGateModSession.ModVersion);
+				packet.Payload(this.ModVersion);
 				packet.Send();
 			}
 			else if (packet.PhaseFrame == 2 && MyNetworkInterface.IsStandaloneMultiplayerClient)
 			{
 				Vector3I server_version = packet.Payload<Vector3I>();
-				Vector3I client_version = MyJumpGateModSession.ModVersion;
+				Vector3I client_version = this.ModVersion;
 				if (server_version == client_version) return;
 				Logger.Warn($"Version mismatch with server - Client version: {client_version}, Server version: {server_version}");
-				MyAPIGateway.Utilities.ShowMessage(MyJumpGateModSession.DISPLAYNAME, MyTexts.GetString("ModNotif_Error_ServerClientVersionMismatch")
+				MyAPIGateway.Utilities.ShowMessage(this.DisplayName, MyTexts.GetString("ModNotif_Error_ServerClientVersionMismatch")
 					.Replace("{%0}", $"{client_version.X}.{client_version.Y}.{client_version.Z}")
 					.Replace("{%1}", $"{server_version.X}.{server_version.Y}.{server_version.Z}"));
 			}
@@ -1870,22 +1939,29 @@ namespace IOTA.ModularJumpGates
 		private void OnConfigurationUpdate(MyNetworkInterface.Packet packet)
 		{
 			if (packet == null || packet.PhaseFrame != 1) return;
-			else if (MyNetworkInterface.IsServerLike) this.ReloadConfigurations(Configuration.Load());
+			else if (MyNetworkInterface.IsServerLike)
+			{
+				bool local_config_exists, global_config_exists;
+				Exception local_load_err, global_load_err;
+				MyModConfigurationV1 configuration = MyModConfigurationV1.Load(MyJumpGateModSession.Instance, out global_config_exists, out local_config_exists, out global_load_err, out local_load_err);
+				if (global_config_exists) Logger.Log("Found global mod config file");
+				else Logger.Warn($"Failed to locate global mod config file; SKIPPED");
+				if (local_config_exists) Logger.Log("Found local mod config file");
+				else Logger.Warn($"Failed to locate local mod config file; SKIPPED");
+				if (global_load_err != null) Logger.Error($"Error loading global config file:\n  ...\n[ {global_load_err.GetType().Name} ]: {global_load_err.Message}\n{global_load_err.StackTrace}\n{global_load_err.InnerException}");
+				if (local_load_err != null) Logger.Error($"Error loading local config file:\n  ...\n[ {local_load_err.GetType().Name} ]: {local_load_err.Message}\n{local_load_err.StackTrace}\n{local_load_err.InnerException}");
+				if (!local_config_exists || !global_config_exists || local_load_err != null || global_load_err != null) return;
+				this.UpdateConfiguration(configuration);
+			}
 			else
 			{
-				Configuration config = packet.Payload<Configuration>();
-				if (config == null) return;
-				MyJumpGateModSession.Configuration = config;
-				foreach (KeyValuePair<long, MyJumpGateConstruct> pair in this.GridMap) pair.Value.ReloadConfigurations();
-
-				if (MyNetworkInterface.IsClientLike)
-				{
-					if (!config.JumpGateConfiguration.EnableGateExplosions && MyJumpGateControllerTerminal.TerminalSection == MyJumpGateControllerTerminal.MyTerminalSection.DETONATION) MyJumpGateControllerTerminal.TerminalSection = MyJumpGateControllerTerminal.MyTerminalSection.JUMP_GATE;
-					if (!config.JumpGateConfiguration.EnableGateExplosions && MyJumpGateRemoteAntennaTerminal.TerminalSection == MyJumpGateRemoteAntennaTerminal.MyTerminalSection.DETONATION) MyJumpGateRemoteAntennaTerminal.TerminalSection = MyJumpGateRemoteAntennaTerminal.MyTerminalSection.JUMP_GATE;
-					this.RedrawAllTerminalControls();
-				}
-
-				MyAPIGateway.Utilities.ShowMessage(MyJumpGateModSession.DISPLAYNAME, MyTexts.GetString("Session_OnConfigReload"));
+				MyModConfigurationV1.MyGlobalModConfiguration packed_config = packet.Payload<MyModConfigurationV1.MyGlobalModConfiguration>();
+				if (packed_config == null) return;
+				this.Configuration.Update(packed_config.LocalModConfiguration, packed_config.ModSettings);
+				if (!packed_config.LocalModConfiguration.JumpGateConfiguration.JumpGateExplosionConfiguration.EnableGateExplosions.Value && MyJumpGateControllerTerminal.TerminalSection == MyJumpGateControllerTerminal.MyTerminalSection.DETONATION) MyJumpGateControllerTerminal.TerminalSection = MyJumpGateControllerTerminal.MyTerminalSection.JUMP_GATE;
+				if (!packed_config.LocalModConfiguration.JumpGateConfiguration.JumpGateExplosionConfiguration.EnableGateExplosions.Value && MyJumpGateRemoteAntennaTerminal.TerminalSection == MyJumpGateRemoteAntennaTerminal.MyTerminalSection.DETONATION) MyJumpGateRemoteAntennaTerminal.TerminalSection = MyJumpGateRemoteAntennaTerminal.MyTerminalSection.JUMP_GATE;
+				this.RedrawAllTerminalControls();
+				MyAPIGateway.Utilities.ShowMessage(this.DisplayName, MyTexts.GetString("Session_OnConfigReload"));
 			}
 		}
 
@@ -1906,7 +1982,7 @@ namespace IOTA.ModularJumpGates
 				{
 					MyJumpGateConstruct grid = this.GridMap.GetValueOrDefault(gridid, null);
 
-					if (grid == null) continue;
+					if (grid == null || this.IsConstructQueuedForPartialReload(gridid)) continue;
 					else if (grid.Closed)
 					{
 						this.GridMap.Remove(gridid);
@@ -1917,7 +1993,7 @@ namespace IOTA.ModularJumpGates
 					try
 					{
 						bool true_update;
-						if (MyJumpGateModSession.Network.Registered && MyNetworkInterface.IsMultiplayerServer && this.GameTick % this.GridNetworkUpdateDelay == 0) grid.SetDirty();
+						if (this.Network.Registered && MyNetworkInterface.IsMultiplayerServer && this.GameTick % this.GridNetworkUpdateDelay == 0) grid.SetDirty();
 						grid.Update(out true_update);
 
 						if (true_update)
@@ -1954,7 +2030,7 @@ namespace IOTA.ModularJumpGates
 								this.AddCubeGridToSession(main_grid, true, (construct) => {
 									this.GridReinitCounts[construct.CubeGridID] = reinit_count;
 
-									if (MyJumpGateModSession.Network.Registered)
+									if (this.Network.Registered)
 									{
 										MyNetworkInterface.Packet packet = new MyNetworkInterface.Packet {
 											PacketType = MyPacketTypeEnum.UPDATE_GRIDS,
@@ -1993,22 +2069,26 @@ namespace IOTA.ModularJumpGates
 
 			for (int i = 0; i < count; ++i)
 			{
-				KeyValuePair<MyJumpGateConstruct, bool> pair;
-				if (!this.GridCloseRequests.TryDequeue(out pair)) break;
-				pair.Key.IsClosing = true;
-				if (!pair.Key.CanFinalizeClosure()) this.GridCloseRequests.Enqueue(pair);
-				else if (!pair.Key.Closed) pair.Key.Close(pair.Value);
+				MyTuple<MyJumpGateConstruct, bool, Action> data;
+				if (!this.GridCloseRequests.TryDequeue(out data)) break;
+				data.Item1.IsClosing = true;
+				if (!data.Item1.CanFinalizeClosure()) this.GridCloseRequests.Enqueue(data);
+				else if (data.Item1.Closed) continue;
+				data.Item1.Close(data.Item2);
+				data.Item3?.Invoke();
 			}
 
 			count = this.GateCloseRequests.Count;
 
 			for (int i = 0; i < count; ++i)
 			{
-				MyJumpGate gate;
-				if (!this.GateCloseRequests.TryDequeue(out gate)) break;
-				gate.IsClosing = true;
-				if (!gate.CanFinalizeClosure()) this.GateCloseRequests.Enqueue(gate);
-				else if (!gate.Closed) gate.Close();
+				MyTuple<MyJumpGate, Action> data;
+				if (!this.GateCloseRequests.TryDequeue(out data)) break;
+				data.Item1.IsClosing = true;
+				if (!data.Item1.CanFinalizeClosure()) this.GateCloseRequests.Enqueue(data);
+				else if (data.Item1.Closed) continue;
+				data.Item1.Close();
+				data.Item2?.Invoke();
 			}
 		}
 
@@ -2036,7 +2116,7 @@ namespace IOTA.ModularJumpGates
 		/// <param name="construct_name">The failed construct's fallback name</param>
 		private void DisplayConstructFullFailureNotice(MyJumpGateConstruct construct, long? construct_id = null, string construct_name = null)
 		{
-			if (MyJumpGateModSession.Network.Registered && MyNetworkInterface.IsServerLike && construct != null)
+			if (this.Network.Registered && MyNetworkInterface.IsServerLike && construct != null)
 			{
 				MyNetworkInterface.Packet packet = new MyNetworkInterface.Packet {
 					PacketType = MyPacketTypeEnum.CONSTRUCT_UPDATE_NOTICE,
@@ -2053,7 +2133,7 @@ namespace IOTA.ModularJumpGates
 
 			string gridid = construct?.CubeGridID.ToString() ?? construct_id.ToString() ?? "N/A";
 			string gridname = construct?.PrimaryCubeGridCustomName ?? construct_name ?? "N/A";
-			MyVisualScriptLogicProvider.SendChatMessageColored($"A construct has failed 3 consecutive ticks across 3 consecutive reload attempts!\nThis construct is closed and may not interact further with this mod!\n- Repaste grid to reattempt-\nCONSTRUCT_ID={gridid}\nCONSTRUCT_NAME={gridname}", Color.Red, MyJumpGateModSession.DISPLAYNAME, font: "Red");
+			MyVisualScriptLogicProvider.SendChatMessageColored($"A construct has failed 3 consecutive ticks across 3 consecutive reload attempts!\nThis construct is closed and may not interact further with this mod!\n- Repaste grid to reattempt-\nCONSTRUCT_ID={gridid}\nCONSTRUCT_NAME={gridname}", Color.Red, this.DisplayName, font: "Red");
 			MyAPIGateway.Utilities.ShowNotification($"Critical failure whilst updating construct - \"{gridname}\"", 3000, "Red");
 		}
 
@@ -2066,7 +2146,7 @@ namespace IOTA.ModularJumpGates
 		/// <param name="construct_name">The failed construct's fallback name</param>
 		private void DisplayConstructPartialFailureNotice(MyJumpGateConstruct construct, long? construct_id = null, string construct_name = null)
 		{
-			if (MyJumpGateModSession.Network.Registered && MyNetworkInterface.IsServerLike && construct != null)
+			if (this.Network.Registered && MyNetworkInterface.IsServerLike && construct != null)
 			{
 				MyNetworkInterface.Packet packet = new MyNetworkInterface.Packet
 				{
@@ -2085,7 +2165,7 @@ namespace IOTA.ModularJumpGates
 
 			string gridid = construct?.CubeGridID.ToString() ?? construct_id.ToString() ?? "N/A";
 			string gridname = construct?.PrimaryCubeGridCustomName ?? construct_name ?? "N/A";
-			MyVisualScriptLogicProvider.SendChatMessageColored($"A construct has failed 3 consecutive ticks and will reinitialize!\nCONSTRUCT_ID={gridid}\nCONSTRUCT_NAME={gridname}", Color.Red, MyJumpGateModSession.DISPLAYNAME, font: "Red");
+			MyVisualScriptLogicProvider.SendChatMessageColored($"A construct has failed 3 consecutive ticks and will reinitialize!\nCONSTRUCT_ID={gridid}\nCONSTRUCT_NAME={gridname}", Color.Red, this.DisplayName, font: "Red");
 		}
 
 		/// <summary>
@@ -2108,7 +2188,7 @@ namespace IOTA.ModularJumpGates
 			catch (Exception e)
 			{
 				Logger.Error($"Failed to serialize mod data\n  ...\n[ {e.GetType().Name} ]: {e.Message}\n{e.StackTrace}\n{e.InnerException}");
-				MyAPIGateway.Utilities.ShowMessage(MyJumpGateModSession.DISPLAYNAME, "Failed to save mod data; See log for details");
+				MyAPIGateway.Utilities.ShowMessage(this.DisplayName, "Failed to save mod data; See log for details");
 			}
 			finally
 			{
@@ -2126,7 +2206,7 @@ namespace IOTA.ModularJumpGates
 			{
 				this.ModData = new MyModDataInfo {
 					ModVersion = new Vector3I(0, 0, 9),
-					MaxModSpecificLogFiles = MyJumpGateModSession.Configuration.GeneralConfiguration.MaxStoredModSpecificLogFiles,
+					MaxModSpecificLogFiles = this.MaxModSpecificLogFiles,
 					ModLogFiles = new List<MyModLogFileInfo>(),
 				};
 				return false;
@@ -2137,14 +2217,14 @@ namespace IOTA.ModularJumpGates
 			try
 			{
 				reader = MyAPIGateway.Utilities.ReadBinaryFileInLocalStorage(this.ModLogSettingsFile, this.GetType());
-				this.FallbackMaxModSpecificLogFiles = reader.ReadUInt32();
+				reader.ReadUInt32();
 				byte[] buffer = new byte[reader.BaseStream.Length - reader.BaseStream.Position];
 				reader.Read(buffer, 0, buffer.Length);
 				List<MyModLogFileInfo> log_files = MyAPIGateway.Utilities.SerializeFromBinary<List<MyModLogFileInfo>>(buffer) ?? new List<MyModLogFileInfo>();
 				log_files.RemoveAll((file) => file.Filename != this.ActiveModLogFile && !MyAPIGateway.Utilities.FileExistsInLocalStorage(file.Filename, this.GetType()));
 				this.ModData = new MyModDataInfo {
 					ModVersion = new Vector3I(0, 0, 9),
-					MaxModSpecificLogFiles = this.FallbackMaxModSpecificLogFiles,
+					MaxModSpecificLogFiles = this.MaxModSpecificLogFiles,
 					ModLogFiles = log_files,
 				};
 			}
@@ -2169,8 +2249,8 @@ namespace IOTA.ModularJumpGates
 			if (!MyAPIGateway.Utilities.FileExistsInLocalStorage(this.ModDataFile, this.GetType()))
 			{
 				this.ModData = new MyModDataInfo {
-					ModVersion = MyJumpGateModSession.ModVersion,
-					MaxModSpecificLogFiles = MyJumpGateModSession.Configuration.GeneralConfiguration.MaxStoredModSpecificLogFiles,
+					ModVersion = this.ModVersion,
+					MaxModSpecificLogFiles = this.MaxModSpecificLogFiles,
 					ModLogFiles = new List<MyModLogFileInfo>(),
 				};
 				return false;
@@ -2188,6 +2268,11 @@ namespace IOTA.ModularJumpGates
 			catch (Exception e)
 			{
 				this.ModDataLoadError = new ModFileLoadingException("Failed to deserialize mod data", e);
+				this.ModData = new MyModDataInfo {
+					ModVersion = this.ModVersion,
+					MaxModSpecificLogFiles = this.MaxModSpecificLogFiles,
+					ModLogFiles = new List<MyModLogFileInfo>(),
+				};
 			}
 			finally
 			{
@@ -2207,50 +2292,52 @@ namespace IOTA.ModularJumpGates
 			if (serialized == null) return null;
 			long gridid = serialized.UUID.GetJumpGateGrid();
 			IMyCubeGrid cube_grid = MyAPIGateway.Entities.GetEntityById(gridid) as IMyCubeGrid;
-			MyJumpGateConstruct grid = new MyJumpGateConstruct(cube_grid, gridid);
-			grid = this.GridMap.AddOrUpdate(gridid, grid, (_, old_grid) => {
-				if (old_grid.Closed) return grid;
-				grid.Release();
-				return old_grid;
-			});
-			bool deserialized = (grid.IsSuspended && cube_grid != null) ? grid.Persist(serialized) : grid.FromSerialized(serialized);
-			return (deserialized) ? grid : null;
+			MyJumpGateConstruct construct;
+			if (!this.GridMap.TryGetValue(gridid, out construct)) this.GridMap[gridid] = construct = new MyJumpGateConstruct(cube_grid, gridid);
+			bool deserialized = (construct.IsSuspended && cube_grid != null) ? construct.Persist(serialized) : construct.FromSerialized(serialized);
+			return (deserialized) ? construct : null;
 		}
 		#endregion
 
 		#region Public Methods
 		/// <summary>
-		/// Reloads the configurations of all constructs in this session<br />
-		/// New config will be sent to all clients<br />
-		/// Does nothing if standalone multiplayer client
+		/// Updates the configuration
 		/// </summary>
-		public void ReloadConfigurations(Configuration config)
+		/// <param name="configuration">The new mod configuration</param>
+		public void UpdateConfiguration(MyModConfigurationV1 configuration)
 		{
-			if (MyNetworkInterface.IsStandaloneMultiplayerClient) return;
-			config.Validate();
-			MyJumpGateModSession.Configuration = config;
-			foreach (KeyValuePair<long, MyJumpGateConstruct> pair in this.GridMap) pair.Value.ReloadConfigurations();
-			
-			if (MyNetworkInterface.IsClientLike)
-			{
-				if (!config.JumpGateConfiguration.EnableGateExplosions && MyJumpGateControllerTerminal.TerminalSection == MyJumpGateControllerTerminal.MyTerminalSection.DETONATION) MyJumpGateControllerTerminal.TerminalSection = MyJumpGateControllerTerminal.MyTerminalSection.JUMP_GATE;
-				if (!config.JumpGateConfiguration.EnableGateExplosions && MyJumpGateRemoteAntennaTerminal.TerminalSection == MyJumpGateRemoteAntennaTerminal.MyTerminalSection.DETONATION) MyJumpGateRemoteAntennaTerminal.TerminalSection = MyJumpGateRemoteAntennaTerminal.MyTerminalSection.JUMP_GATE;
-				this.RedrawAllTerminalControls();
-			}
+			if (configuration == null || MyNetworkInterface.IsStandaloneMultiplayerClient) return;
+			this.Configuration.Update(new MyModConfigurationV1.MyLocalModConfiguration {
+				CapacitorConfiguration = configuration.CapacitorConfiguration,
+				DriveConfiguration = configuration.DriveConfiguration,
+				JumpGateConfiguration = configuration.JumpGateConfiguration,
+				ConstructConfiguration = configuration.ConstructConfiguration,
+				GeneralConfiguration = configuration.GeneralConfiguration,
+			}, configuration.ModSettings);
 
-			if (MyJumpGateModSession.Network.Registered)
+			if (!this.Configuration.JumpGateConfiguration.JumpGateExplosionConfiguration.EnableGateExplosions.Value && MyJumpGateControllerTerminal.TerminalSection == MyJumpGateControllerTerminal.MyTerminalSection.DETONATION) MyJumpGateControllerTerminal.TerminalSection = MyJumpGateControllerTerminal.MyTerminalSection.JUMP_GATE;
+			if (!this.Configuration.JumpGateConfiguration.JumpGateExplosionConfiguration.EnableGateExplosions.Value && MyJumpGateRemoteAntennaTerminal.TerminalSection == MyJumpGateRemoteAntennaTerminal.MyTerminalSection.DETONATION) MyJumpGateRemoteAntennaTerminal.TerminalSection = MyJumpGateRemoteAntennaTerminal.MyTerminalSection.JUMP_GATE;
+			this.RedrawAllTerminalControls();
+
+			if (this.Network.Registered)
 			{
 				MyNetworkInterface.Packet packet = new MyNetworkInterface.Packet {
 					PacketType = MyPacketTypeEnum.UPDATE_CONFIG,
-					Broadcast = true,
 					TargetID = 0,
+					Broadcast = true,
 				};
-
-				packet.Payload(config);
+				packet.Payload(new MyModConfigurationV1.MyGlobalModConfiguration {
+					LocalModConfiguration = new MyModConfigurationV1.MyLocalModConfiguration {
+						CapacitorConfiguration = this.Configuration.CapacitorConfiguration,
+						DriveConfiguration = this.Configuration.DriveConfiguration,
+						JumpGateConfiguration = this.Configuration.JumpGateConfiguration,
+						ConstructConfiguration = this.Configuration.ConstructConfiguration,
+						GeneralConfiguration = this.Configuration.GeneralConfiguration,
+					},
+					ModSettings = this.Configuration.ModSettings,
+				});
 				packet.Send();
 			}
-
-			Logger.Log("Global mod configuration was modified");
 		}
 
 		/// <summary>
@@ -2265,8 +2352,7 @@ namespace IOTA.ModularJumpGates
 			if (animation == null) return;
 			animation.Stop();
 			animation.Restart((byte) animation_type);
-			AnimationInfo animation_info = new AnimationInfo(animation, animation_type, callback, on_complete);
-			this.JumpGateAnimations.AddOrUpdate(this.AnimationQueueIndex++, animation_info, (_1, _2) => animation_info);
+			this.JumpGateAnimations[this.AnimationQueueIndex++] = new AnimationInfo(animation, animation_type, callback, on_complete);
 		}
 
 		/// <summary>
@@ -2291,20 +2377,23 @@ namespace IOTA.ModularJumpGates
 		/// </summary>
 		/// <param name="grid">The grid to close</param>
 		/// <param name="override_client">Whether to force closure on client</param>
-		public void CloseGrid(MyJumpGateConstruct grid, bool override_client = false)
+		/// <param name="callback">Callback called after grid is closed</param>
+		public void CloseGrid(MyJumpGateConstruct grid, bool override_client = false, Action callback = null)
 		{
-			if (grid == null || grid.Closed || !this.GridMap.ContainsKey(grid.CubeGridID)) return;
-			this.GridCloseRequests.Enqueue(new KeyValuePair<MyJumpGateConstruct, bool>(grid, override_client));
+			if (grid == null || grid.Closed || grid.QueuedForClose || !this.GridMap.ContainsKey(grid.CubeGridID)) return;
+			grid.QueuedForClose = true;
+			this.GridCloseRequests.Enqueue(new MyTuple<MyJumpGateConstruct, bool, Action>(grid, override_client, callback));
 		}
 
 		/// <summary>
 		/// Queues a gate for closure on main game thread
 		/// </summary>
 		/// <param name="gate">The gate to close</param>
-		public void CloseGate(MyJumpGate gate)
+		/// <param name="callback">Callback called after gate is closed</param>
+		public void CloseGate(MyJumpGate gate, Action callback = null)
 		{
 			if (gate == null || gate.Closed) return;
-			this.GateCloseRequests.Enqueue(gate);
+			this.GateCloseRequests.Enqueue(new MyTuple<MyJumpGate, Action>(gate, callback));
 		}
 
 		/// <summary>
@@ -2334,8 +2423,7 @@ namespace IOTA.ModularJumpGates
 		{
 			if (MyNetworkInterface.IsServerLike) return;
 
-			MyNetworkInterface.Packet packet = new MyNetworkInterface.Packet
-			{
+			MyNetworkInterface.Packet packet = new MyNetworkInterface.Packet {
 				PacketType = MyPacketTypeEnum.UPDATE_GRIDS,
 				TargetID = 0,
 				Broadcast = false,
@@ -2528,6 +2616,13 @@ namespace IOTA.ModularJumpGates
 			return true;
 		}
 
+		/// <param name="main_grid_id">The construct main grid ID to check</param>
+		/// <returns>Whether construct is queued for partial reload</returns>
+		public bool IsConstructQueuedForPartialReload(long main_grid_id)
+		{
+			return this.PartialSuspendedGridsQueue?.ContainsKey(main_grid_id) ?? false;
+		}
+
 		/// <summary>
 		/// </summary>
 		/// <param name="grid">The construct to get</param>
@@ -2703,10 +2798,10 @@ namespace IOTA.ModularJumpGates
 		{
 			if (cube_grid == null || cube_grid.Closed || cube_grid.MarkedForClose) return null;
 			MyJumpGateConstruct jump_gate_grid;
-			if (this.GridMap.TryGetValue(cube_grid.EntityId, out jump_gate_grid) && !jump_gate_grid.MarkClosed) return jump_gate_grid;
+			if (this.GridMap.TryGetValue(cube_grid.EntityId, out jump_gate_grid) && !jump_gate_grid.MarkClosed && !jump_gate_grid.Closed) return jump_gate_grid;
 			List<IMyCubeGrid> connected_grids = new List<IMyCubeGrid>();
 			cube_grid.GetGridGroup(GridLinkTypeEnum.Logical).GetGrids(connected_grids);
-			foreach (IMyCubeGrid grid in connected_grids) if (this.GridMap.TryGetValue(grid.EntityId, out jump_gate_grid) && !jump_gate_grid.MarkClosed) return jump_gate_grid;
+			foreach (IMyCubeGrid grid in connected_grids) if (this.GridMap.TryGetValue(grid.EntityId, out jump_gate_grid) && !jump_gate_grid.MarkClosed && !jump_gate_grid.Closed) return jump_gate_grid;
 			return null;
 		}
 

@@ -140,21 +140,21 @@ namespace IOTA.ModularJumpGates.Util
 		/// <returns>Whether this GPS is an RSS proxy</returns>
 		public bool IsRSSProxy()
 		{
-			return MyJumpGateModSession.MODSLIST.RealSolarSystemsEnabled && this.Name.StartsWith("'") && this.Name.EndsWith("'") && this.Description.EndsWith(MyGpsWrapper.RSSProxySuffix);
+			return MyJumpGateModSession.Instance.ModsList.RealSolarSystemsEnabled && this.Name.StartsWith("'") && this.Name.EndsWith("'") && this.Description.EndsWith(MyGpsWrapper.RSSProxySuffix);
 		}
 
 		/// <param name="gps">The proxy gps</param>
 		/// <returns>Whether the specified GPS is an RSS proxy of this</returns>
 		public bool IsRSSProxiedBy(IMyGps gps)
 		{
-			return MyJumpGateModSession.MODSLIST.RealSolarSystemsEnabled && gps != null && gps.Name == $"'{this.Name}'" && gps.Description == $"{this.Description}{MyGpsWrapper.RSSProxySuffix}";
+			return MyJumpGateModSession.Instance.ModsList.RealSolarSystemsEnabled && gps != null && gps.Name == $"'{this.Name}'" && gps.Description == $"{this.Description}{MyGpsWrapper.RSSProxySuffix}";
 		}
 
 		/// <param name="gps">The proxy gps</param>
 		/// <returns>Whether the specified GPS is an RSS proxy of this</returns>
 		public bool IsRSSProxiedBy(MyGpsWrapper gps)
 		{
-			return MyJumpGateModSession.MODSLIST.RealSolarSystemsEnabled && gps != null && gps.Name == $"'{this.Name}'" && gps.Description == $"{this.Description}{MyGpsWrapper.RSSProxySuffix}";
+			return MyJumpGateModSession.Instance.ModsList.RealSolarSystemsEnabled && gps != null && gps.Name == $"'{this.Name}'" && gps.Description == $"{this.Description}{MyGpsWrapper.RSSProxySuffix}";
 		}
 
 		/// <returns>The GPS this object wraps</returns>
@@ -175,7 +175,7 @@ namespace IOTA.ModularJumpGates.Util
 		/// <returns>The original GPS this wrapper is proxying</returns>
 		public MyGpsWrapper GetProxiedRSSGPS()
 		{
-			if (!MyJumpGateModSession.MODSLIST.RealSolarSystemsEnabled || !this.IsRSSProxy()) return this;
+			if (!MyJumpGateModSession.Instance.ModsList.RealSolarSystemsEnabled || !this.IsRSSProxy()) return this;
 			string name = this.Name.Substring(1, this.Name.Length - 2);
 			string description = this.Description.Substring(0, this.Description.Length - MyGpsWrapper.RSSProxySuffix.Length);
 			IMyGps src = MyAPIGateway.Session.GPS.GetGpsList(MyAPIGateway.Players.TryGetIdentityId(this.OwnerID)).FirstOrDefault((gps) => gps.Name == name && gps.Description == description);

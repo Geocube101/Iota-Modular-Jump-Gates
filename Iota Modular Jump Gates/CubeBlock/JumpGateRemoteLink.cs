@@ -203,7 +203,6 @@ namespace IOTA.ModularJumpGates.CubeBlock
 
 		protected override void Clean()
 		{
-			base.Clean();
 			this.LinkDetector?.Close();
 
 			for (byte i = 0; i < this.ConnectionEffects.Length; ++i)
@@ -221,6 +220,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			MyCubeGridGroups.Static.BreakLink(GridLinkTypeEnum.Logical, this.TerminalBlock.EntityId, (MyCubeGrid) this.TerminalBlock.CubeGrid, (MyCubeGrid) this.AttachedRemoteLink.TerminalBlock.CubeGrid);
 			this.AttachedRemoteLink.AttachedRemoteLink = null;
 			this.AttachedRemoteLink = null;
+			base.Clean();
 		}
 
 		protected override void UpdateOnceAfterInit()
@@ -235,7 +235,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				Save = false,
 			};
 			this.LinkDetector.Init(new StringBuilder($"JumpGateRemoteLink_{this.BlockID}"), null, (MyEntity) this.Entity, 1f);
-			PhysicsSettings settings = MyAPIGateway.Physics.CreateSettingsForDetector(this.LinkDetector, this.OnEntityCollision, MyJumpGateModSession.WorldMatrix, Vector3D.Zero, RigidBodyFlag.RBF_KINEMATIC, 15, true);
+			PhysicsSettings settings = MyAPIGateway.Physics.CreateSettingsForDetector(this.LinkDetector, this.OnEntityCollision, MatrixD.Identity, Vector3D.Zero, RigidBodyFlag.RBF_KINEMATIC, 15, true);
 			MyAPIGateway.Physics.CreateSpherePhysics(settings, (float) this.MaxConnectionDistance);
 			MyAPIGateway.Entities.AddEntity(this.LinkDetector);
 			Logger.Debug($"CREATED_COLLIDER REMOTE_LINK={this.BlockID}, COLLIDER={this.LinkDetector.DisplayName}", 4);
@@ -315,18 +315,18 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				float max_power = (is_large) ? 0.5f : 0.75f;
 				float ratio = (float) MathHelperD.Clamp(Vector3D.Distance(this.WorldMatrix.Translation, this.AttachedRemoteLink.WorldMatrix.Translation) / this.MaxConnectionDistance, 0, 1);
 				return (max_power - base_power) * ratio + base_power;
-			}, MyJumpGateModSession.BlockComponentDataGUID, false);
+			}, MyJumpGateModSession.Instance.BlockComponentDataGUID, false);
 			this.TerminalBlock.Synchronized = true;
 			string blockdata;
 			this.ResourceSink.SetMaxRequiredInputByType(MyResourceDistributorComponent.ElectricityId, 5000f);
 
-			if (MyJumpGateModSession.Network.Registered)
+			if (MyJumpGateModSession.Instance.Network.Registered)
 			{
-				MyJumpGateModSession.Network.On(MyPacketTypeEnum.UPDATE_REMOTE_LINK, this.OnNetworkBlockUpdate);
-				MyJumpGateModSession.Network.On(MyPacketTypeEnum.LINK_CONNECTION, this.OnNetworkConnection);
+				MyJumpGateModSession.Instance.Network.On(MyPacketTypeEnum.UPDATE_REMOTE_LINK, this.OnNetworkBlockUpdate);
+				MyJumpGateModSession.Instance.Network.On(MyPacketTypeEnum.LINK_CONNECTION, this.OnNetworkConnection);
 			}
 
-			if (this.ModStorageComponent.TryGetValue(MyJumpGateModSession.BlockComponentDataGUID, out blockdata) && blockdata.Length > 0)
+			if (this.ModStorageComponent.TryGetValue(MyJumpGateModSession.Instance.BlockComponentDataGUID, out blockdata) && blockdata.Length > 0)
 			{
 				try
 				{
@@ -342,14 +342,14 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			else
 			{
 				this.BlockSettings = new MyRemoteLinkBlockSettingsStruct();
-				this.ModStorageComponent.Add(MyJumpGateModSession.BlockComponentDataGUID, "");
+				this.ModStorageComponent.Add(MyJumpGateModSession.Instance.BlockComponentDataGUID, "");
 			}
 
 			Dictionary<string, IMyModelDummy> dummies = new Dictionary<string, IMyModelDummy>();
 			this.TerminalBlock.Model.GetDummies(dummies);
 			this.LocalParticleEmitter = dummies.GetValueOrDefault("particles1", null);
 
-			if (MyJumpGateModSession.Network.Registered && MyNetworkInterface.IsStandaloneMultiplayerClient)
+			if (MyJumpGateModSession.Instance.Network.Registered && MyNetworkInterface.IsStandaloneMultiplayerClient)
 			{
 				MyNetworkInterface.Packet request = new MyNetworkInterface.Packet
 				{
@@ -462,7 +462,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			if (MyJumpGateModSession.Instance.DebugMode && this.AttachedRemoteLink != null && this.IsLinkParent)
 			{
 				Vector4 color = Color.Magenta;
-				MySimpleObjectDraw.DrawLine(this.ParticleEmitterPos, this.AttachedRemoteLink.ParticleEmitterPos, MyJumpGateModSession.MATERIALS.WeaponLaser, ref color, 0.25f);
+				MySimpleObjectDraw.DrawLine(this.ParticleEmitterPos, this.AttachedRemoteLink.ParticleEmitterPos, MyJumpGateModSession.Instance.Materials.WeaponLaser, ref color, 0.25f);
 			}
 
 			//Network sync
@@ -477,15 +477,15 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		{
 			base.MarkForClose();
 
-			if (MyJumpGateModSession.Network.Registered)
+			if (MyJumpGateModSession.Instance.Network.Registered)
 			{
-				MyJumpGateModSession.Network.Off(MyPacketTypeEnum.UPDATE_REMOTE_LINK, this.OnNetworkBlockUpdate);
-				MyJumpGateModSession.Network.Off(MyPacketTypeEnum.LINK_CONNECTION, this.OnNetworkConnection);
+				MyJumpGateModSession.Instance.Network.Off(MyPacketTypeEnum.UPDATE_REMOTE_LINK, this.OnNetworkBlockUpdate);
+				MyJumpGateModSession.Instance.Network.Off(MyPacketTypeEnum.LINK_CONNECTION, this.OnNetworkConnection);
 			}
 
 			this.LinkDetector?.Close();
 			this.LinkDetector = null;
-			this.NearbyEntities.Clear();
+			this.NearbyEntities?.Clear();
 		}
 
 		/// <summary>
@@ -495,7 +495,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		public override bool IsSerialized()
 		{
 			bool res = base.IsSerialized();
-			this.ModStorageComponent[MyJumpGateModSession.BlockComponentDataGUID] = Convert.ToBase64String(MyAPIGateway.Utilities.SerializeToBinary(this.BlockSettings));
+			this.ModStorageComponent[MyJumpGateModSession.Instance.BlockComponentDataGUID] = Convert.ToBase64String(MyAPIGateway.Utilities.SerializeToBinary(this.BlockSettings));
 			return res;
 		}
 		#endregion
@@ -579,7 +579,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// </summary>
 		private void CheckSendGlobalUpdate()
 		{
-			if (MyJumpGateModSession.Network.Registered && ((MyNetworkInterface.IsMultiplayerServer && MyJumpGateModSession.Instance.GameTick % MyCubeBlockBase.ForceUpdateDelay == 0) || this.IsDirty))
+			if (MyJumpGateModSession.Instance.Network.Registered && ((MyNetworkInterface.IsMultiplayerServer && MyJumpGateModSession.Instance.GameTick % MyCubeBlockBase.ForceUpdateDelay == 0) || this.IsDirty))
 			{
 				MyNetworkInterface.Packet update_packet = new MyNetworkInterface.Packet {
 					PacketType = MyPacketTypeEnum.UPDATE_REMOTE_LINK,

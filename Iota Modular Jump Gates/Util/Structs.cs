@@ -694,6 +694,15 @@ namespace IOTA.ModularJumpGates.Util
 		}
 
 		/// <summary>
+		/// Updates this sounds emitter's position
+		/// </summary>
+		/// <param name="volume">The new emitter position</param>
+		public void SetPosition(ref Vector3D? position)
+		{
+			if (!this.MarkedForClose && this.SoundEmitter != null) this.SoundEmitter.SetPosition(position);
+		}
+
+		/// <summary>
 		/// Marks this emitter for close<br />
 		/// Emitter will be cleaned on next tick
 		/// </summary>
@@ -1220,7 +1229,7 @@ namespace IOTA.ModularJumpGates.Util
 				Vector3D pup = Vector3D.CalculatePerpendicularVector(up);
 				MatrixD.CreateWorld(ref position, ref up, ref pup, out effect_matrix);
 			}
-			else effect_matrix = MyJumpGateModSession.WorldMatrix;
+			else effect_matrix = MatrixD.Identity;
 
 			MyAPIGateway.Players.GetPlayers(this.AllPlayers);
 			if (!MyParticlesManager.TryCreateParticleEffect((serialized.IsAtmospheric) ? "IOTA.JumpGateDetonation.Atmosphere" : "IOTA.JumpGateDetonation.Space", ref effect_matrix, ref position, uint.MaxValue, out this.DetonationEffect)) return;
@@ -1274,7 +1283,7 @@ namespace IOTA.ModularJumpGates.Util
 					float distance_scale;
 					Vector3D position = this.CalculateParticleClientPosition(MyAPIGateway.Session.Camera.Position, out distance_scale);
 
-					if (this.NearestPlanet == null) effect_matrix = MyJumpGateModSession.WorldMatrix;
+					if (this.NearestPlanet == null) effect_matrix = MatrixD.Identity;
 					else
 					{
 						Vector3D up = (this.NearestPlanet.PositionComp.GetPosition() - this.Position).Normalized();
@@ -1288,7 +1297,7 @@ namespace IOTA.ModularJumpGates.Util
 					MyAPIGateway.Players.GetPlayers(this.AllPlayers);
 				}
 
-				if (MyJumpGateModSession.Network.Registered)
+				if (MyJumpGateModSession.Instance.Network.Registered)
 				{
 					MyNetworkInterface.Packet packet = new MyNetworkInterface.Packet {
 						PacketType = MyPacketTypeEnum.GATE_DETONATION,

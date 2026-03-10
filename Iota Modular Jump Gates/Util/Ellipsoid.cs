@@ -1,4 +1,5 @@
-﻿using System;
+﻿using IOTA.ModularJumpGates.Extensions;
+using System;
 using System.Collections.Generic;
 using VRage.Utils;
 using VRageMath;
@@ -368,28 +369,65 @@ namespace IOTA.ModularJumpGates.Util
 		}
 
 		/// <summary>
-		/// Checks if this ellipsoid intersects another<br />
-		/// Due to inaccurasies in ellipsoid angles, overlap is checked with a O(log(n)) algorithim instead of O(1) math
+		/// Checks if this ellipsoid intersects another
 		/// </summary>
 		/// <param name="ellipse">The other ellipsoid</param>
 		/// <returns>Whether this and ellipse intersect</returns>
 		public bool Intersects(ref BoundingEllipsoidD ellipse)
 		{
-			Vector3D point = ellipse.WorldMatrix.Translation;
-			Vector3D.Transform(ref point, ref this.WorldMatrixInv, out point);
-			point /= 2;
-			return this.IsLocalPointInEllipse(ref point);
+			// Check this ellipsoid
+			{
+				Vector3D direction = ellipse.WorldMatrix.Translation - this.WorldMatrix.Translation;
+				Vector3D local_direction;
+				Vector3D.TransformNormal(ref direction, ref this.WorldMatrixInv, out local_direction);
+				direction /= Math.Sqrt(local_direction.Dot(local_direction));
+				direction += this.WorldMatrix.Translation;
+				if (ellipse.IsPointInEllipse(ref direction)) return true;
+			}
+
+			// Check other ellipsoid
+			{
+				Vector3D direction = this.WorldMatrix.Translation - ellipse.WorldMatrix.Translation;
+				Vector3D local_direction;
+				Vector3D.TransformNormal(ref direction, ref ellipse.WorldMatrixInv, out local_direction);
+				direction /= Math.Sqrt(local_direction.Dot(local_direction));
+				direction += ellipse.WorldMatrix.Translation;
+				if (this.IsPointInEllipse(ref direction)) return true;
+			}
+
+			return false;
 		}
 
 		/// <summary>
-		/// Checks if this ellipsoid intersects another<br />
-		/// Due to inaccurasies in ellipsoid angles, overlap is checked with a O(log(n)) algorithim instead of O(1) math
+		/// Checks if this ellipsoid intersects another
 		/// </summary>
 		/// <param name="ellipse">The other ellipsoid</param>
 		/// <returns>Whether this and ellipse intersect</returns>
 		public bool Intersects(BoundingEllipsoidD ellipse)
 		{
 			return this.Intersects(ref ellipse);
+		}
+
+		/// <summary>
+		/// Checks if this ellipsoid intersects a bounding sphere
+		/// </summary>
+		/// <param name="sphere">The bounding sphere</param>
+		/// <returns>Whether this and sphere intersect</returns>
+		public bool Intersects(ref BoundingSphereD sphere)
+		{
+			MatrixD world_matrix = MatrixD.Identity;
+			world_matrix.Translation = sphere.Center;
+			return this.Intersects(new BoundingEllipsoidD(sphere.Radius, ref world_matrix));
+		}
+
+		/// <summary>
+		/// Checks if this ellipsoid intersects a bounding sphere
+		/// </summary>
+		/// <param name="sphere">The bounding sphere</param>
+		/// <returns>Whether this and sphere intersect</returns>
+		public bool Intersects(BoundingSphereD sphere)
+		{
+			return this.Intersects(ref sphere);
 		}
 
 		/// <summary>

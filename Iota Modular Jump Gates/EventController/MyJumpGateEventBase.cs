@@ -74,7 +74,7 @@ namespace IOTA.ModularJumpGates.EventController
 		protected int LastActionTriggered { get; private set; } = 0;
 		protected TargetedGateValueType TargetValue;
 		protected IMyEventControllerBlock EventController => this.Entity as IMyEventControllerBlock;
-		protected string MODID_PREFIX => $"{MyJumpGateModSession.MODID}.EventController.{this.EventDisplayName.String}.";
+		protected string MODID_PREFIX => $"{MyJumpGateModSession.Instance.ModID}.EventController.{this.EventDisplayName.String}.";
 
 		public abstract bool IsThresholdUsed { get; }
 		public abstract bool IsConditionSelectionUsed { get; }
@@ -90,7 +90,7 @@ namespace IOTA.ModularJumpGates.EventController
 			}
 			set
 			{
-				if (this._IsSelected == value) return;
+				if (this._IsSelected == value || MyJumpGateModSession.Instance == null) return;
 				this._IsSelected = value;
 				MyCubeGrid grid = (MyCubeGrid) this.EventController?.CubeGrid;
 
@@ -125,29 +125,30 @@ namespace IOTA.ModularJumpGates.EventController
 				this.IsDirty = false;
 				this.LastUpdateTimeEpoch = packet.EpochTime;
 				packet.Forward(0, true).Send();
-				Logger.Debug($"Updated event controller event \"{this.EventDisplayName}\" @ {this.Entity.EntityId}", 4);
+				Logger.Debug($"Updated event controller event from client \"{this.EventDisplayName}\" @ {this.Entity.EntityId}", 4);
 			}
 			else if (MyNetworkInterface.IsStandaloneMultiplayerClient && (packet.PhaseFrame == 1 || packet.PhaseFrame == 2))
 			{
 				this.Deserialize(info.SerializedEvent);
 				this.IsDirty = false;
 				this.LastUpdateTimeEpoch = packet.EpochTime;
-				Logger.Debug($"Updated event controller event \"{this.EventDisplayName}\" @ {this.Entity.EntityId}", 4);
+				Logger.Debug($"Updated event controller event from server \"{this.EventDisplayName}\" @ {this.Entity.EntityId}", 4);
 			}
 		}
 
 		private void Init()
 		{
-			if (this.NetworkRegistered || !MyJumpGateModSession.Network.Registered) return;
+			if (this.NetworkRegistered || !MyJumpGateModSession.Instance.Network.Registered) return;
 			this.NetworkRegistered = true;
-			MyJumpGateModSession.Network.On(MyPacketTypeEnum.UPDATE_EVENT_CONTROLLER_EVENT, this.OnNetworkUpdate);
+			MyJumpGateModSession.Instance.Network.On(MyPacketTypeEnum.UPDATE_EVENT_CONTROLLER_EVENT, this.OnNetworkUpdate);
+			MyJumpGateModSession.Instance.OnSessionUnload += this.Release;
 		}
 
 		private void Release()
 		{
 			IMyEventControllerBlock event_controller = this.EventController;
 			if (event_controller != null && this._IsSelected) ((MyCubeGrid) event_controller.CubeGrid).DeSchedule(MyCubeGrid.UpdateQueue.BeforeSimulation, this.Update);
-			if (this.NetworkRegistered && MyJumpGateModSession.Network.Registered) MyJumpGateModSession.Network.Off(MyPacketTypeEnum.UPDATE_EVENT_CONTROLLER_EVENT, this.OnNetworkUpdate);
+			if (this.NetworkRegistered && MyJumpGateModSession.Instance.Network.Registered) MyJumpGateModSession.Instance.Network.Off(MyPacketTypeEnum.UPDATE_EVENT_CONTROLLER_EVENT, this.OnNetworkUpdate);
 			foreach (KeyValuePair<MyJumpGate, TargetedGateValueType> pair in this.TargetedJumpGates.Concat(this.TargetedRemoteJumpGates)) this.OnJumpGateRemoved(pair.Key);
 			foreach (KeyValuePair<MyJumpGateRemoteAntenna, byte> pair in this.TargetedRemoteAntennas) pair.Key.OnAntennaConnection -= this.OnAntennaConnectionChanged;
 			this.TargetedJumpGates.Clear();
@@ -157,6 +158,7 @@ namespace IOTA.ModularJumpGates.EventController
 			this.TargetedRemoteAntennas = null;
 			this.TargetedRemoteJumpGates = null;
 			this.NetworkRegistered = false;
+			MyJumpGateModSession.Instance.OnSessionUnload -= this.Release;
 		}
 
 		private void OnAntennaConnectionChanged(MyJumpGateRemoteAntenna antenna, MyJumpGateController remote_controller, MyJumpGate remote_gate, byte channel, bool is_connecting)
@@ -295,7 +297,7 @@ namespace IOTA.ModularJumpGates.EventController
 				}
 			}
 
-			if (this.IsDirty && MyJumpGateModSession.Network.Registered)
+			if (this.IsDirty && MyJumpGateModSession.Instance.Network.Registered)
 			{
 				MyNetworkInterface.Packet packet = new MyNetworkInterface.Packet {
 					PacketType = MyPacketTypeEnum.UPDATE_EVENT_CONTROLLER_EVENT,

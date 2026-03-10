@@ -39,7 +39,7 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 				foreach (KeyValuePair<MyJumpGateCapacitor, float> pair in this.ListeningCapacitors)
 				{
 					MyJumpGateCapacitor capacitor = pair.Key;
-					float new_value = (float) (capacitor.StoredChargeMW / capacitor.CapacitorConfiguration.MaxCapacitorChargeMW);
+					float new_value = (float) (capacitor.StoredChargeMW / MyJumpGateModSession.Instance.Configuration.GetCapacitorConfigurationForBlock(capacitor).MaxCapacitorChargeMW);
 					float old_value = pair.Value;
 					float target = event_controller.Threshold;
 					this.ListeningCapacitors[capacitor] = new_value;
@@ -86,7 +86,7 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 			{
 				MyJumpGateCapacitor capacitor = MyJumpGateModSession.GetBlockAsJumpGateCapacitor(block);
 				if (capacitor == null || capacitor.Closed || this.ListeningCapacitors.ContainsKey(capacitor)) continue;
-				this.ListeningCapacitors[capacitor] = (float) (capacitor.StoredChargeMW / capacitor.CapacitorConfiguration.MaxCapacitorChargeMW);
+				this.ListeningCapacitors[capacitor] = (float) (capacitor.StoredChargeMW / MyJumpGateModSession.Instance.Configuration.GetCapacitorConfigurationForBlock(capacitor).MaxCapacitorChargeMW);
 			}
 		}
 

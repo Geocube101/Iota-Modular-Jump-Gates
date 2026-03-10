@@ -329,7 +329,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			if (this.TerminalBlock == null || this.TerminalBlock?.CubeGrid?.Physics == null) return;
 			this.ResourceSink?.Update();
 			
-			if (!this.IsClosed && (this.JumpGateGrid == null || this.JumpGateGrid.Closed || !MyJumpGateModSession.Instance.IsJumpGateGridMultiplayerValid(this.JumpGateGrid) || !this.JumpGateGrid.HasCubeGrid(this.TerminalBlock.CubeGrid) || this.JumpGateGrid.GetCubeBlock(this.BlockID) != this))
+			if (!this.IsClosed && MyNetworkInterface.IsServerLike && (this.JumpGateGrid == null || this.JumpGateGrid.Closed || !MyJumpGateModSession.Instance.IsJumpGateGridMultiplayerValid(this.JumpGateGrid) || !this.JumpGateGrid.HasCubeGrid(this.TerminalBlock.CubeGrid) || this.JumpGateGrid.GetCubeBlock(this.BlockID) != this))
 			{
 				MyJumpGateConstruct new_construct = MyJumpGateModSession.Instance.GetUnclosedJumpGateGrid(this.TerminalBlock.CubeGrid);
 				if (new_construct != this.JumpGateGrid) this.OnConstructChanged(new_construct);
@@ -375,7 +375,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		{
 			base.MarkForClose();
 
-			if (MyJumpGateModSession.Network.Registered && MyNetworkInterface.IsMultiplayerServer)
+			if (MyJumpGateModSession.Instance.Network.Registered && MyNetworkInterface.IsMultiplayerServer)
 			{
 				MyNetworkInterface.Packet packet = new MyNetworkInterface.Packet
 				{
@@ -385,16 +385,17 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				};
 				packet.Payload(this.BlockID);
 				packet.Send();
-				MyJumpGateModSession.Network.Off(MyPacketTypeEnum.CLOSE_BLOCK, this.OnNetworkBlockClose);
+				MyJumpGateModSession.Instance.Network.Off(MyPacketTypeEnum.CLOSE_BLOCK, this.OnNetworkBlockClose);
 			}
 
-			MyCubeBlockBase.Instances.Remove(this.BlockID);
+			Logger.Debug($"Jump Gate Drive {this.BlockID} ({this.TerminalBlock?.CustomName}); MARKED_FOR_CLOSE", 5);
 		}
 
 		public override void Close()
 		{
 			this.Clean();
 			base.Close();
+			Logger.Debug($"Jump Gate Drive {this.BlockID} ({this.TerminalBlock?.CustomName}); CLOSED", 5);
 		}
 		#endregion
 
@@ -538,10 +539,12 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// </summary>
 		protected virtual void Clean()
 		{
+			this.TerminalBlock = null;
 			this.ModStorageComponent = null;
 			this.ResourceSink = null;
 			this.JumpGateGrid = null;
 			this.SerializedWrapperInfo = null;
+			MyCubeBlockBase.Instances.Remove(this.BlockID);
 		}
 
 		/// <summary>
@@ -564,7 +567,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			this.NeedsUpdate = update_enum | MyEntityUpdateEnum.EACH_FRAME | MyEntityUpdateEnum.BEFORE_NEXT_FRAME;
 			this.RequiresFullInput = requires_full_input;
 			if (this.TerminalBlock.Storage == null) this.TerminalBlock.Storage = (entity_component_guid == Guid.Empty) ? null : new MyModStorageComponent { [entity_component_guid] = "" };
-			if (MyJumpGateModSession.Network.Registered && MyNetworkInterface.IsMultiplayerClient) MyJumpGateModSession.Network.On(MyPacketTypeEnum.CLOSE_BLOCK, this.OnNetworkBlockClose);
+			if (MyJumpGateModSession.Instance.Network.Registered && MyNetworkInterface.IsMultiplayerClient) MyJumpGateModSession.Instance.Network.On(MyPacketTypeEnum.CLOSE_BLOCK, this.OnNetworkBlockClose);
 			this.ModStorageComponent = this.TerminalBlock.Storage;
 
 			if (this.TerminalBlock.ResourceSink == null)
@@ -611,7 +614,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			this.NeedsUpdate = update_enum | MyEntityUpdateEnum.EACH_FRAME | MyEntityUpdateEnum.BEFORE_NEXT_FRAME;
 			this.RequiresFullInput = requires_full_input;
 			if (this.TerminalBlock.Storage == null) this.TerminalBlock.Storage = (entity_component_guid == Guid.Empty) ? null : new MyModStorageComponent { [entity_component_guid] = "" };
-			if (MyJumpGateModSession.Network.Registered && MyNetworkInterface.IsMultiplayerClient) MyJumpGateModSession.Network.On(MyPacketTypeEnum.CLOSE_BLOCK, this.OnNetworkBlockClose);
+			if (MyJumpGateModSession.Instance.Network.Registered && MyNetworkInterface.IsMultiplayerClient) MyJumpGateModSession.Instance.Network.On(MyPacketTypeEnum.CLOSE_BLOCK, this.OnNetworkBlockClose);
 			this.ModStorageComponent = this.TerminalBlock.Storage;
 
 			if (this.TerminalBlock.ResourceSink == null)
@@ -674,11 +677,6 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		{
 			this.ScrollOffset = Math.Max(0, scroll_y);
 		}
-
-		/// <summary>
-		/// Reloads this block's internal configuration values if applicable
-		/// </summary>
-		public virtual void ReloadConfigurations() { }
 
 		/// <summary>
 		/// Updates this block data from a serialized block

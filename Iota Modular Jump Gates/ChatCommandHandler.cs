@@ -56,7 +56,7 @@ namespace IOTA.ModularJumpGates.Commands
 				StringBuilder sb = new StringBuilder();
 				sb.Append($" >>\n-=[ {MyTexts.GetString("ChatCommandHandler_CommandListing")} ]=-\n");
 				foreach (KeyValuePair<string, MyChatCommand> pair in MyChatCommandHandler.Commands) MyChatCommandHandler.ShowCommandHelp(sb, pair.Value, 0);
-				MyAPIGateway.Utilities.ShowMessage(MyJumpGateModSession.DISPLAYNAME, sb.ToString());
+				MyAPIGateway.Utilities.ShowMessage(MyJumpGateModSession.Instance.DisplayName, sb.ToString());
 				return;
 			}
 
@@ -93,8 +93,8 @@ namespace IOTA.ModularJumpGates.Commands
 			}
 
 			string outcome = (result.Successfull) ? MyTexts.GetString("ChatCommandHandler_Success") : MyTexts.GetString("ChatCommandHandler_Fail");
-			if (result.ResultMessage == null) MyAPIGateway.Utilities.ShowMessage(MyJumpGateModSession.DISPLAYNAME, $"\"{result.CommandName}\" ({outcome})");
-			else MyAPIGateway.Utilities.ShowMessage(MyJumpGateModSession.DISPLAYNAME, $"\"{result.CommandName}\" ({outcome}) > {result.ResultMessage}");
+			if (result.ResultMessage == null) MyAPIGateway.Utilities.ShowMessage(MyJumpGateModSession.Instance.DisplayName, $"\"{result.CommandName}\" ({outcome})");
+			else MyAPIGateway.Utilities.ShowMessage(MyJumpGateModSession.Instance.DisplayName, $"\"{result.CommandName}\" ({outcome}) > {result.ResultMessage}");
 		}
 
 		public static void ShowCommandHelp(StringBuilder sb, MyChatCommand command, byte indent)

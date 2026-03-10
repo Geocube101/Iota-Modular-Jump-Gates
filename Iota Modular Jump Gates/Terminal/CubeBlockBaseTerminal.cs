@@ -1,11 +1,9 @@
-﻿using VRage.Game.ModAPI;
-
-namespace IOTA.ModularJumpGates.Terminal
+﻿namespace IOTA.ModularJumpGates.Terminal
 {
 	internal static class MyCubeBlockTerminal
 	{
 		public static bool IsLoaded { get; private set; } = false;
-		public static string MODID_PREFIX { get; private set; } = MyJumpGateModSession.MODID + ".BlockBase.";
+		public static string MODID_PREFIX { get; private set; } = MyJumpGateModSession.Instance.ModID + ".BlockBase.";
 
 		private static void SetupJumpGateBlockTerminalControls()
 		{

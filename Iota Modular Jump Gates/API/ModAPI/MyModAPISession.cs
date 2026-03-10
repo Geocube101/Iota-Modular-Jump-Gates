@@ -75,11 +75,6 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		public byte SessionStatus => this.GetAttribute<byte>("SessionStatus");
 
 		/// <summary>
-		/// The world's world matrix
-		/// </summary>
-		public MatrixD WorldMatrix => this.GetAttribute<MatrixD>("WorldMatrix");
-
-		/// <summary>
 		/// Whether all entities in session are loaded<br />
 		/// <i>Always false on client</i>
 		/// </summary>

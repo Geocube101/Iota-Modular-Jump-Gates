@@ -1,4 +1,5 @@
-﻿using IOTA.ModularJumpGates.Terminal;
+﻿using IOTA.ModularJumpGates.ModConfiguration;
+using IOTA.ModularJumpGates.Terminal;
 using IOTA.ModularJumpGates.Util;
 using ProtoBuf;
 using Sandbox.Common.ObjectBuilders;
@@ -71,10 +72,10 @@ namespace IOTA.ModularJumpGates.CubeBlock
         /// </summary>
         public MyCapacitorBlockSettingsStruct BlockSettings { get; private set; }
 
-        /// <summary>
-        /// The capacitor configuration variables for this block
-        /// </summary>
-		public Configuration.LocalCapacitorConfiguration CapacitorConfiguration { get; private set; }
+		/// <summary>
+		/// The local block configuration for this block
+		/// </summary>
+		public MyModConfigurationV1.MyLocalCapacitorConfiguration Configuration => MyJumpGateModSession.Instance.Configuration.GetCapacitorConfigurationForBlock(this);
 		#endregion
 
 		#region Constructors
@@ -104,9 +105,9 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				double input_wattage = this.ResourceSink.CurrentInputByType(MyResourceDistributorComponent.ElectricityId);
 				double max_input = this.ResourceSink.RequiredInputByType(MyResourceDistributorComponent.ElectricityId);
 				double input_ratio = input_wattage / max_input;
-				double charge_ratio = this.StoredChargeMW / this.CapacitorConfiguration.MaxCapacitorChargeMW;
-				double charge_time = Math.Log((1 - charge_ratio) / 0.0005) * (this.CapacitorConfiguration.MaxCapacitorChargeMW / this.CapacitorConfiguration.MaxCapacitorChargeRateMW * (1 / input_ratio));
-				input_wattage *= this.CapacitorConfiguration.CapacitorChargeEfficiency;
+				double charge_ratio = this.StoredChargeMW / this.Configuration.MaxCapacitorChargeMW;
+				double charge_time = Math.Log((1 - charge_ratio) / 0.0005) * (this.Configuration.MaxCapacitorChargeMW / this.Configuration.MaxCapacitorChargeRateMW * (1 / input_ratio));
+				input_wattage *= this.Configuration.CapacitorChargeEfficiency;
 				
 				info.Append($"\n-=-=-=( {MyTexts.GetString("DisplayName_CubeBlock_JumpGateCapacitor")} )=-=-=-\n");
 				info.Append($" {MyTexts.GetString("DetailedInfo_BlockBase_Input")}: {MyJumpGateModSession.AutoconvertMetricUnits(input_wattage * 1e6, "W/s", 4)}\n");
@@ -114,8 +115,8 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				info.Append($" {MyTexts.GetString("DetailedInfo_BlockBase_InputRatio")}: {((double.IsNaN(input_ratio)) ? "N/A" : $"{Math.Round(MathHelperD.Clamp(input_ratio, 0, 1) * 100, 2):#.00}%")}\n");
 				info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateCapacitor_StoredPower")}: {MyJumpGateModSession.AutoconvertMetricUnits(this.StoredChargeMW * 1e6, "W", 4):#.0000}\n");
 				info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateCapacitor_Charge")}: {Math.Round(charge_ratio * 100, 1)}%\n");
-				info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateCapacitor_BufferSize")}: {MyJumpGateModSession.AutoconvertMetricUnits(this.CapacitorConfiguration.MaxCapacitorChargeMW * 1e6, "W", 4)}\n");
-				info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateCapacitor_ChargeEfficiency")}: {Math.Round(this.CapacitorConfiguration.CapacitorChargeEfficiency * 100, 2)}%\n");
+				info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateCapacitor_BufferSize")}: {MyJumpGateModSession.AutoconvertMetricUnits(this.Configuration.MaxCapacitorChargeMW * 1e6, "W", 4)}\n");
+				info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateCapacitor_ChargeEfficiency")}: {Math.Round(this.Configuration.CapacitorChargeEfficiency * 100, 2)}%\n");
 				info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateCapacitor_ChargeTime")}: {MyJumpGateModSession.AutoconvertTimeHHMMSS(charge_time)}");
 			}
 			else if (this.ResourceSource != null && !this.BlockSettings.RechargeEnabled)
@@ -123,8 +124,8 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				double output_wattage = this.ResourceSource.CurrentOutputByType(MyResourceDistributorComponent.ElectricityId);
 				double max_output = this.ResourceSource.MaxOutputByType(MyResourceDistributorComponent.ElectricityId);
 				double output_ratio = output_wattage / max_output;
-				double discharge_ratio = this.StoredChargeMW / this.CapacitorConfiguration.MaxCapacitorChargeMW;
-				double discharge_time = Math.Log(discharge_ratio / 0.0005) * (this.CapacitorConfiguration.MaxCapacitorChargeMW / this.CapacitorConfiguration.MaxCapacitorChargeRateMW * (1 / output_ratio));
+				double discharge_ratio = this.StoredChargeMW / this.Configuration.MaxCapacitorChargeMW;
+				double discharge_time = Math.Log(discharge_ratio / 0.0005) * (this.Configuration.MaxCapacitorChargeMW / this.Configuration.MaxCapacitorChargeRateMW * (1 / output_ratio));
 
 				info.Append($"\n-=-=-=( {MyTexts.GetString("DisplayName_CubeBlock_JumpGateCapacitor")} )=-=-=-\n");
 				info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateCapacitor_Output")}: {MyJumpGateModSession.AutoconvertMetricUnits(output_wattage * 1e6, "W/s", 4)}\n");
@@ -132,18 +133,17 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateCapacitor_OutputRatio")}: {((double.IsNaN(output_ratio)) ? "N/A" : $"{Math.Round(MathHelperD.Clamp(output_ratio, 0, 1) * 100, 2):#.00}%")}\n");
 				info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateCapacitor_StoredPower")}: {MyJumpGateModSession.AutoconvertMetricUnits(this.StoredChargeMW * 1e6, "W", 4):#.0000}\n");
 				info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateCapacitor_Charge")}: {Math.Round((discharge_ratio) * 100, 1)}%\n");
-				info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateCapacitor_BufferSize")}: {MyJumpGateModSession.AutoconvertMetricUnits(this.CapacitorConfiguration.MaxCapacitorChargeMW * 1e6, "W", 4)}\n");
-				info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateCapacitor_DischargeEfficiency")}: {Math.Round(this.CapacitorConfiguration.CapacitorDischargeEfficiency * 100, 2)}%\n");
+				info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateCapacitor_BufferSize")}: {MyJumpGateModSession.AutoconvertMetricUnits(this.Configuration.MaxCapacitorChargeMW * 1e6, "W", 4)}\n");
+				info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateCapacitor_DischargeEfficiency")}: {Math.Round(this.Configuration.CapacitorDischargeEfficiency * 100, 2)}%\n");
 				info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateCapacitor_ChargeTime")}: {MyJumpGateModSession.AutoconvertTimeHHMMSS(discharge_time)}");
 			}
 		}
 
 		protected override void Clean()
 		{
-			base.Clean();
 			this.ResourceSource = null;
 			this.BlockSettings = null;
-			this.CapacitorConfiguration = null;
+			base.Clean();
 		}
 
 		/// <summary>
@@ -156,23 +156,22 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			this.Init(object_builder, 0, () => {
 				if (this.TerminalBlock.IsWorking && this.BlockSettings.RechargeEnabled)
 				{
-					double capacity_ratio = MathHelperD.Clamp(this.StoredChargeMW / this.CapacitorConfiguration.MaxCapacitorChargeMW, 0, 1);
-					return (float) (this.CapacitorConfiguration.MaxCapacitorChargeRateMW * (1 - capacity_ratio));
+					double capacity_ratio = MathHelperD.Clamp(this.StoredChargeMW / this.Configuration.MaxCapacitorChargeMW, 0, 1);
+					return (float) (this.Configuration.MaxCapacitorChargeRateMW * (1 - capacity_ratio));
 				}
 				else return 0f;
-			}, MyJumpGateModSession.BlockComponentDataGUID, false);
-			this.CapacitorConfiguration = new Configuration.LocalCapacitorConfiguration(this, MyJumpGateModSession.Configuration.CapacitorConfiguration);
+			}, MyJumpGateModSession.Instance.BlockComponentDataGUID, false);
 			this.TerminalBlock.Synchronized = true;
-			if (MyJumpGateModSession.Network.Registered) MyJumpGateModSession.Network.On(MyPacketTypeEnum.UPDATE_CAPACITOR, this.OnNetworkBlockUpdate);
+			if (MyJumpGateModSession.Instance.Network.Registered) MyJumpGateModSession.Instance.Network.On(MyPacketTypeEnum.UPDATE_CAPACITOR, this.OnNetworkBlockUpdate);
 			string blockdata;
-			this.ResourceSink.SetMaxRequiredInputByType(MyResourceDistributorComponent.ElectricityId, (float) this.CapacitorConfiguration.MaxCapacitorChargeRateMW);
+			this.ResourceSink.SetMaxRequiredInputByType(MyResourceDistributorComponent.ElectricityId, (float) this.Configuration.MaxCapacitorChargeRateMW);
 
-			if (this.ModStorageComponent.TryGetValue(MyJumpGateModSession.BlockComponentDataGUID, out blockdata) && blockdata.Length > 0)
+			if (this.ModStorageComponent.TryGetValue(MyJumpGateModSession.Instance.BlockComponentDataGUID, out blockdata) && blockdata.Length > 0)
 			{
 				try
 				{
 					this.BlockSettings = MyAPIGateway.Utilities.SerializeFromBinary<MyCapacitorBlockSettingsStruct>(Convert.FromBase64String(blockdata));
-					this.StoredChargeMW = MathHelper.Clamp(this.BlockSettings.InternalChargeMW, 0, this.CapacitorConfiguration.MaxCapacitorChargeMW);
+					this.StoredChargeMW = MathHelper.Clamp(this.BlockSettings.InternalChargeMW, 0, this.Configuration.MaxCapacitorChargeMW);
 				}
 				catch (Exception e)
 				{
@@ -182,9 +181,9 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			}
 			else
 			{
-				this.ModStorageComponent.Add(MyJumpGateModSession.BlockComponentDataGUID, "");
+				this.ModStorageComponent.Add(MyJumpGateModSession.Instance.BlockComponentDataGUID, "");
 				this.BlockSettings = new MyCapacitorBlockSettingsStruct();
-				if (MyAPIGateway.Session.CreativeMode) this.StoredChargeMW = this.CapacitorConfiguration.MaxCapacitorChargeMW / 2d;
+				if (MyAPIGateway.Session.CreativeMode) this.StoredChargeMW = this.Configuration.MaxCapacitorChargeMW / 2d;
 			}
 
 			this.ResourceSource = new MyResourceSourceComponent();
@@ -197,7 +196,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			this.TerminalBlock.Components.Add(this.ResourceSource);
 			this.ResourceSource.Enabled = false;
 
-			if (MyJumpGateModSession.Network.Registered && MyNetworkInterface.IsStandaloneMultiplayerClient)
+			if (MyJumpGateModSession.Instance.Network.Registered && MyNetworkInterface.IsStandaloneMultiplayerClient)
 			{
 				MyNetworkInterface.Packet request = new MyNetworkInterface.Packet
 				{
@@ -231,30 +230,30 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			else if (is_working = this.IsWorking) this.TerminalBlock.SetEmissiveParts("Emissive0", Color.Lime, 1);
 			else if (this.TerminalBlock.IsFunctional) this.TerminalBlock.SetEmissiveParts("Emissive0", Color.Red, 1);
 			else this.TerminalBlock.SetEmissiveParts("Emissive0", Color.Black, 1);
-			double charge_ratio = this.StoredChargeMW / this.CapacitorConfiguration.MaxCapacitorChargeMW;
+			double charge_ratio = this.StoredChargeMW / this.Configuration.MaxCapacitorChargeMW;
 
 			// Update stored charge / resource sinks / resource sources
 			if (is_working && this.BlockSettings.RechargeEnabled && this.ResourceSink != null && this.ResourceSource != null)
 			{
 				double power_draw_mw = (double) this.ResourceSink.CurrentInputByType(MyResourceDistributorComponent.ElectricityId) / 60d;
-				this.StoredChargeMW = MathHelperD.Clamp(this.StoredChargeMW + power_draw_mw * this.CapacitorConfiguration.CapacitorChargeEfficiency, 0, this.CapacitorConfiguration.MaxCapacitorChargeMW);
+				this.StoredChargeMW = MathHelperD.Clamp(this.StoredChargeMW + power_draw_mw * this.Configuration.CapacitorChargeEfficiency, 0, this.Configuration.MaxCapacitorChargeMW);
 				this.ResourceSource.Enabled = false;
 			}
 			else if (this.TerminalBlock.IsFunctional && this.TerminalBlock.Enabled && !this.BlockSettings.RechargeEnabled && this.ResourceSink != null && this.ResourceSource != null)
 			{
-				double capacity_ratio = MathHelperD.Clamp(this.StoredChargeMW / this.CapacitorConfiguration.MaxCapacitorChargeMW, 0, 1);
-				float discharge_rate = (float) (this.CapacitorConfiguration.MaxCapacitorChargeRateMW * capacity_ratio);
+				double capacity_ratio = MathHelperD.Clamp(this.StoredChargeMW / this.Configuration.MaxCapacitorChargeMW, 0, 1);
+				float discharge_rate = (float) (this.Configuration.MaxCapacitorChargeRateMW * capacity_ratio);
 
 				this.ResourceSource.SetRemainingCapacityByType(MyResourceDistributorComponent.ElectricityId, (float) this.StoredChargeMW);
 				this.ResourceSource.SetMaxOutputByType(MyResourceDistributorComponent.ElectricityId, discharge_rate);
 				this.ResourceSource.Enabled = discharge_rate > 0;
 
 				double power_draw_mw = MathHelperD.Clamp((double) this.ResourceSource.CurrentOutputByType(MyResourceDistributorComponent.ElectricityId) / 60d, 0, discharge_rate);
-				this.StoredChargeMW = MathHelperD.Clamp(this.StoredChargeMW - power_draw_mw * (2 - this.CapacitorConfiguration.CapacitorDischargeEfficiency), 0, this.CapacitorConfiguration.MaxCapacitorChargeMW);
+				this.StoredChargeMW = MathHelperD.Clamp(this.StoredChargeMW - power_draw_mw * (2 - this.Configuration.CapacitorDischargeEfficiency), 0, this.Configuration.MaxCapacitorChargeMW);
 			}
 			else this.ResourceSource.Enabled = false;
 
-			if (!this.TerminalBlock.IsFunctional && this.StoredChargeMW > 0) this.StoredChargeMW = Math.Max(0, this.StoredChargeMW - 0.01d * this.CapacitorConfiguration.MaxCapacitorChargeMW / 60d);
+			if (!this.TerminalBlock.IsFunctional && this.StoredChargeMW > 0) this.StoredChargeMW = Math.Max(0, this.StoredChargeMW - 0.01d * this.Configuration.MaxCapacitorChargeMW / 60d);
 
 			// Update Charge Emissives
 			Random rng = new Random();
@@ -279,7 +278,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		public override void MarkForClose()
 		{
 			base.MarkForClose();
-			if (MyJumpGateModSession.Network.Registered) MyJumpGateModSession.Network.Off(MyPacketTypeEnum.UPDATE_CAPACITOR, this.OnNetworkBlockUpdate);
+			if (MyJumpGateModSession.Instance.Network.Registered) MyJumpGateModSession.Instance.Network.Off(MyPacketTypeEnum.UPDATE_CAPACITOR, this.OnNetworkBlockUpdate);
 		}
 
 		/// <summary>
@@ -290,7 +289,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		{
 			bool res = base.IsSerialized();
 			this.BlockSettings.InternalChargeMW = this.StoredChargeMW;
-			this.ModStorageComponent[MyJumpGateModSession.BlockComponentDataGUID] = Convert.ToBase64String(MyAPIGateway.Utilities.SerializeToBinary(this.BlockSettings));
+			this.ModStorageComponent[MyJumpGateModSession.Instance.BlockComponentDataGUID] = Convert.ToBase64String(MyAPIGateway.Utilities.SerializeToBinary(this.BlockSettings));
 			return res;
 		}
 		#endregion
@@ -334,7 +333,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
         /// </summary>
         private void CheckSendGlobalUpdate()
 		{
-			if (MyJumpGateModSession.Network.Registered && ((MyNetworkInterface.IsMultiplayerServer && MyJumpGateModSession.Instance.GameTick % MyCubeBlockBase.ForceUpdateDelay == 0) || this.IsDirty))
+			if (MyJumpGateModSession.Instance.Network.Registered && ((MyNetworkInterface.IsMultiplayerServer && MyJumpGateModSession.Instance.GameTick % MyCubeBlockBase.ForceUpdateDelay == 0) || this.IsDirty))
             {
                 MyNetworkInterface.Packet update_packet = new MyNetworkInterface.Packet {
                     PacketType = MyPacketTypeEnum.UPDATE_CAPACITOR,
@@ -351,11 +350,6 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		#endregion
 
 		#region Public Methods
-		public override void ReloadConfigurations()
-		{
-			this.CapacitorConfiguration = new Configuration.LocalCapacitorConfiguration(this, MyJumpGateModSession.Configuration.CapacitorConfiguration);
-		}
-
 		/// <summary>
 		/// Updates this block data from a serialized capacitor
 		/// </summary>
@@ -379,7 +373,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		public double DrainStoredCharge(double power_mw)
         {
             if (power_mw <= 0) return 0;
-            double new_charge = MathHelperD.Clamp(this.StoredChargeMW - power_mw, 0, this.CapacitorConfiguration.MaxCapacitorChargeMW);
+            double new_charge = MathHelperD.Clamp(this.StoredChargeMW - power_mw, 0, MyJumpGateModSession.Instance.Configuration.GetCapacitorConfigurationForBlock(this).MaxCapacitorChargeMW);
 			power_mw -= this.StoredChargeMW - new_charge;
             this.StoredChargeMW = new_charge;
             return power_mw;
