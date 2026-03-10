@@ -8,7 +8,6 @@ using IOTA.ModularJumpGates.Terminal;
 using IOTA.ModularJumpGates.Util;
 using IOTA.ModularJumpGates.Util.ConcurrentCollections;
 using ProtoBuf;
-using Sandbox.Engine.Platform;
 using Sandbox.Engine.Utils;
 using Sandbox.Game;
 using Sandbox.Game.Entities;
@@ -419,7 +418,7 @@ namespace IOTA.ModularJumpGates
 		/// <summary>
 		/// The current mod version (major, minor, patch)
 		/// </summary>
-		public Vector3I ModVersion => new Vector3I(1, 3, 2);
+		public Vector3I ModVersion => new Vector3I(1, 4, 0);
 
 		/// <summary>
 		/// The Guid used to store information in mod storage components
