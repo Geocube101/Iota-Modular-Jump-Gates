@@ -102,11 +102,10 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		{
 			if (this.ResourceSink != null && this.BlockSettings.RechargeEnabled)
 			{
-				double input_wattage = this.ResourceSink.CurrentInputByType(MyResourceDistributorComponent.ElectricityId);
-				double max_input = this.ResourceSink.RequiredInputByType(MyResourceDistributorComponent.ElectricityId);
-				double input_ratio = input_wattage / max_input;
+				float input_wattage = this.ResourceSink.CurrentInputByType(MyResourceDistributorComponent.ElectricityId);
+				float max_input = this.ResourceSink.RequiredInputByType(MyResourceDistributorComponent.ElectricityId);
+				float input_ratio = input_wattage / max_input;
 				double charge_ratio = this.StoredChargeMW / this.Configuration.MaxCapacitorChargeMW;
-				double charge_time = Math.Log((1 - charge_ratio) / 0.0005) * (this.Configuration.MaxCapacitorChargeMW / this.Configuration.MaxCapacitorChargeRateMW * (1 / input_ratio));
 				input_wattage *= this.Configuration.CapacitorChargeEfficiency;
 				
 				info.Append($"\n-=-=-=( {MyTexts.GetString("DisplayName_CubeBlock_JumpGateCapacitor")} )=-=-=-\n");
@@ -117,15 +116,13 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateCapacitor_Charge")}: {Math.Round(charge_ratio * 100, 1)}%\n");
 				info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateCapacitor_BufferSize")}: {MyJumpGateModSession.AutoconvertMetricUnits(this.Configuration.MaxCapacitorChargeMW * 1e6, "W", 4)}\n");
 				info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateCapacitor_ChargeEfficiency")}: {Math.Round(this.Configuration.CapacitorChargeEfficiency * 100, 2)}%\n");
-				info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateCapacitor_ChargeTime")}: {MyJumpGateModSession.AutoconvertTimeHHMMSS(charge_time)}");
 			}
 			else if (this.ResourceSource != null && !this.BlockSettings.RechargeEnabled)
 			{
-				double output_wattage = this.ResourceSource.CurrentOutputByType(MyResourceDistributorComponent.ElectricityId);
-				double max_output = this.ResourceSource.MaxOutputByType(MyResourceDistributorComponent.ElectricityId);
-				double output_ratio = output_wattage / max_output;
+				float output_wattage = this.ResourceSource.CurrentOutputByType(MyResourceDistributorComponent.ElectricityId);
+				float max_output = this.ResourceSource.MaxOutputByType(MyResourceDistributorComponent.ElectricityId);
+				float output_ratio = output_wattage / max_output;
 				double discharge_ratio = this.StoredChargeMW / this.Configuration.MaxCapacitorChargeMW;
-				double discharge_time = Math.Log(discharge_ratio / 0.0005) * (this.Configuration.MaxCapacitorChargeMW / this.Configuration.MaxCapacitorChargeRateMW * (1 / output_ratio));
 
 				info.Append($"\n-=-=-=( {MyTexts.GetString("DisplayName_CubeBlock_JumpGateCapacitor")} )=-=-=-\n");
 				info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateCapacitor_Output")}: {MyJumpGateModSession.AutoconvertMetricUnits(output_wattage * 1e6, "W/s", 4)}\n");
@@ -135,7 +132,6 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateCapacitor_Charge")}: {Math.Round((discharge_ratio) * 100, 1)}%\n");
 				info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateCapacitor_BufferSize")}: {MyJumpGateModSession.AutoconvertMetricUnits(this.Configuration.MaxCapacitorChargeMW * 1e6, "W", 4)}\n");
 				info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateCapacitor_DischargeEfficiency")}: {Math.Round(this.Configuration.CapacitorDischargeEfficiency * 100, 2)}%\n");
-				info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateCapacitor_ChargeTime")}: {MyJumpGateModSession.AutoconvertTimeHHMMSS(discharge_time)}");
 			}
 		}
 
@@ -156,8 +152,9 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			this.Init(object_builder, 0, () => {
 				if (this.TerminalBlock.IsWorking && this.BlockSettings.RechargeEnabled)
 				{
-					double capacity_ratio = MathHelperD.Clamp(this.StoredChargeMW / this.Configuration.MaxCapacitorChargeMW, 0, 1);
-					return (float) (this.Configuration.MaxCapacitorChargeRateMW * (1 - capacity_ratio));
+					MyModConfigurationV1.MyLocalCapacitorConfiguration configuration = this.Configuration;
+					double capacity_ratio = MathHelperD.Clamp(this.StoredChargeMW / configuration.MaxCapacitorChargeMW, 0, 1);
+					return (float) (configuration.MaxCapacitorChargeRateMW * MathHelper.Clamp(1 - configuration.CapacitorRateCapacityCoefficent * Math.Pow(capacity_ratio, configuration.CapacitorRateCapacityExponent), 0, 1));
 				}
 				else return 0f;
 			}, MyJumpGateModSession.Instance.BlockComponentDataGUID, false);
@@ -215,6 +212,22 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			if (!MyJumpGateCapacitorTerminal.IsLoaded) MyJumpGateCapacitorTerminal.Load();
 		}
 
+		public override void UpdateBeforeSimulation()
+		{
+			base.UpdateBeforeSimulation();
+
+			if (this.TerminalBlock.IsFunctional && this.TerminalBlock.Enabled && !this.BlockSettings.RechargeEnabled && this.ResourceSink != null && this.ResourceSource != null)
+			{
+				double capacity_ratio = MathHelperD.Clamp(this.StoredChargeMW / this.Configuration.MaxCapacitorChargeMW, 0, 1);
+				float discharge_rate = (float) (this.Configuration.MaxCapacitorChargeRateMW * MathHelper.Clamp(this.Configuration.CapacitorRateCapacityCoefficent * Math.Pow(capacity_ratio, this.Configuration.CapacitorRateCapacityExponent), 0, 1));
+
+				this.ResourceSource.SetRemainingCapacityByType(MyResourceDistributorComponent.ElectricityId, (float) this.StoredChargeMW);
+				this.ResourceSource.SetOutputByType(MyResourceDistributorComponent.ElectricityId, discharge_rate);
+				this.ResourceSource.SetMaxOutputByType(MyResourceDistributorComponent.ElectricityId, discharge_rate);
+				this.ResourceSource.Enabled = discharge_rate > 0;
+			}
+		}
+
 		/// <summary>
 		/// CubeBlockBase Method<br />
 		/// Called once every tick after simulation<br />
@@ -235,21 +248,14 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			// Update stored charge / resource sinks / resource sources
 			if (is_working && this.BlockSettings.RechargeEnabled && this.ResourceSink != null && this.ResourceSource != null)
 			{
-				double power_draw_mw = (double) this.ResourceSink.CurrentInputByType(MyResourceDistributorComponent.ElectricityId) / 60d;
-				this.StoredChargeMW = MathHelperD.Clamp(this.StoredChargeMW + power_draw_mw * this.Configuration.CapacitorChargeEfficiency, 0, this.Configuration.MaxCapacitorChargeMW);
+				double power_draw_mw = this.ResourceSink.CurrentInputByType(MyResourceDistributorComponent.ElectricityId) / 60d;
+				this.StoredChargeMW = MathHelper.Clamp(this.StoredChargeMW + power_draw_mw * this.Configuration.CapacitorChargeEfficiency, 0, this.Configuration.MaxCapacitorChargeMW);
 				this.ResourceSource.Enabled = false;
 			}
 			else if (this.TerminalBlock.IsFunctional && this.TerminalBlock.Enabled && !this.BlockSettings.RechargeEnabled && this.ResourceSink != null && this.ResourceSource != null)
 			{
-				double capacity_ratio = MathHelperD.Clamp(this.StoredChargeMW / this.Configuration.MaxCapacitorChargeMW, 0, 1);
-				float discharge_rate = (float) (this.Configuration.MaxCapacitorChargeRateMW * capacity_ratio);
-
-				this.ResourceSource.SetRemainingCapacityByType(MyResourceDistributorComponent.ElectricityId, (float) this.StoredChargeMW);
-				this.ResourceSource.SetMaxOutputByType(MyResourceDistributorComponent.ElectricityId, discharge_rate);
-				this.ResourceSource.Enabled = discharge_rate > 0;
-
-				double power_draw_mw = MathHelperD.Clamp((double) this.ResourceSource.CurrentOutputByType(MyResourceDistributorComponent.ElectricityId) / 60d, 0, discharge_rate);
-				this.StoredChargeMW = MathHelperD.Clamp(this.StoredChargeMW - power_draw_mw * (2 - this.Configuration.CapacitorDischargeEfficiency), 0, this.Configuration.MaxCapacitorChargeMW);
+				double power_draw_mw = this.ResourceSource.CurrentOutputByType(MyResourceDistributorComponent.ElectricityId) / 60d;
+				this.StoredChargeMW = MathHelper.Clamp(this.StoredChargeMW - power_draw_mw * (2 - this.Configuration.CapacitorDischargeEfficiency), 0, this.Configuration.MaxCapacitorChargeMW);
 			}
 			else this.ResourceSource.Enabled = false;
 

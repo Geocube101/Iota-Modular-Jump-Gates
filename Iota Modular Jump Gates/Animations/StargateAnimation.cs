@@ -4,7 +4,7 @@ namespace IOTA.ModularJumpGates.Animations
 {
 	public partial class AnimationDefinitions
 	{
-		public AnimationDef WormholeStargate = new AnimationDef("Stargate", "Wormhole jump effect mimicing a stargate\nYes the kawoosh works")
+		public AnimationDef WormholeStargate = new AnimationDef("Stargate", "Wormhole jump effect mimicing a stargate\nYes the kawoosh works\n\n* NOTICE: All objects placed in front of either gate will be destroyed on activation *")
 		{
 			Enabled = true,
 			ImmediateCancel = false,

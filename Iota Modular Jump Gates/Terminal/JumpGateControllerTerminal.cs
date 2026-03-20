@@ -393,17 +393,18 @@ namespace IOTA.ModularJumpGates.Terminal
 				choose_animation_lb.VisibleRowsCount = 5;
 				choose_animation_lb.ListContent = (block2, content_list, preselect_list) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block2);
-					if (controller == null || controller.JumpGateGrid == null || controller.JumpGateGrid.Closed) return;
-					MyJumpGate jump_gate = controller.AttachedJumpGate();
+					MyJumpGate jump_gate = controller?.AttachedJumpGate();
+					if (controller == null || controller.JumpGateGrid == null || controller.JumpGateGrid.Closed || jump_gate == null) return;
 					string selected_animation = controller.BlockSettings.JumpEffectAnimationName();
 					string _default = "IOTA.ModularJumpGates.AnimationDef.Standard";
+					bool do_wormhole = controller.BlockSettings.DoSustainedWormhole() && jump_gate.JumpGateConfiguration.AllowWormholeActivation;
 
 					foreach (string full_name in MyAnimationHandler.GetAnimationNames())
 					{
 						string animation_name;
 						string description;
 						AnimationDef animation = MyAnimationHandler.GetAnimationDef(full_name, jump_gate, false);
-						if (animation.IsWormholeAnimation() != controller.BlockSettings.DoSustainedWormhole()) continue;
+						if (animation.IsWormholeAnimation() != do_wormhole) continue;
 
 						if (animation == null)
 						{
@@ -566,8 +567,8 @@ namespace IOTA.ModularJumpGates.Terminal
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					MyJumpGate jump_gate = controller?.AttachedJumpGate();
 					MyAllowedRemoteSettings allowed_settings = controller?.ConnectedRemoteAntenna?.BlockSettings.AllowedRemoteSettings ?? MyAllowedRemoteSettings.ALL;
-					if (controller == null || !controller.IsWorking || controller.JumpGateGrid == null || controller.JumpGateGrid.Closed) return false;
-					else return (jump_gate == null || (jump_gate.IsIdle() && jump_gate.JumpGateConfiguration.AllowWormholeActivation)) && (allowed_settings & MyAllowedRemoteSettings.ROUTING) != 0;
+					if (controller == null || !controller.IsWorking || controller.JumpGateGrid == null || controller.JumpGateGrid.Closed || jump_gate == null) return false;
+					else return jump_gate.IsIdle() && jump_gate.JumpGateConfiguration.AllowWormholeActivation && (allowed_settings & MyAllowedRemoteSettings.ROUTING) != 0;
 				};
 				do_wormhole_activate.OnText = MyStringId.GetOrCompute(MyTexts.GetString("GeneralText_On"));
 				do_wormhole_activate.OffText = MyStringId.GetOrCompute(MyTexts.GetString("GeneralText_Off"));

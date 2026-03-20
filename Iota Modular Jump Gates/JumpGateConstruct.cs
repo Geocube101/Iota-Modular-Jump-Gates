@@ -903,19 +903,18 @@ namespace IOTA.ModularJumpGates
 				}
 
 				if (radio_antennas.Count == 0 || radio_antennas.All((radio) => radio.MarkedForClose || !radio.IsWorking || !radio.IsBroadcasting)) continue;
+				float max_range = radio_antennas.Max((antenna) => antenna.Radius);
 				BoundingBoxD world_aabb = grid.GetCombinedAABB();
-				BoundingSphereD broadcast_sphere = new BoundingSphereD(world_aabb.Center, 50000 + world_aabb.Extents.Max());
+				BoundingSphereD broadcast_sphere = new BoundingSphereD(world_aabb.Center, max_range + world_aabb.Extents.Max());
 				MyGamePruningStructure.GetAllTopMostEntitiesInSphere(ref broadcast_sphere, broadcast_entities);
 
 				foreach (IMyRadioAntenna antenna in radio_antennas)
 				{
 					if (antenna.MarkedForClose || !antenna.IsWorking || !antenna.IsBroadcasting) continue;
 
-					foreach (MyEntity entity in broadcast_entities)
+					foreach (MyJumpGateConstruct target_grid in broadcast_entities.Where((entity) => entity is IMyCubeGrid && entity.Physics != null).Cast<IMyCubeGrid>().Select(MyJumpGateModSession.Instance.GetUnclosedJumpGateGrid).Distinct())
 					{
-						IMyCubeGrid target = (entity is IMyCubeGrid) ? (MyCubeGrid) entity : null;
-						MyJumpGateConstruct target_grid = (target == null) ? null : MyJumpGateModSession.Instance.GetJumpGateGrid(target);
-						if (entity.Physics == null || target_grid == null || target_grid == this || new_comm_linked.Contains(target_grid)) continue;
+						if (target_grid == null || target_grid == this || new_comm_linked.Contains(target_grid)) continue;
 
 						foreach (IMyRadioAntenna target_antenna in grid.GetAttachedRadioAntennas())
 						{
@@ -958,20 +957,19 @@ namespace IOTA.ModularJumpGates
 					else this.BeaconLinks.Clear();
 					List<MyEntity> broadcast_entities = new List<MyEntity>();
 					BoundingBoxD world_aabb = this.GetCombinedAABB();
-					BoundingSphereD broadcast_sphere = new BoundingSphereD(world_aabb.Center, 200000 + world_aabb.Extents.Max());
+					BoundingSphereD broadcast_sphere = new BoundingSphereD(world_aabb.Center, MyJumpGateModSession.Instance.MaxBeaconBroadcastRadius + world_aabb.Extents.Max());
 					MyGamePruningStructure.GetAllTopMostEntitiesInSphere(ref broadcast_sphere, broadcast_entities);
 
-					foreach (MyEntity entity in broadcast_entities)
+					foreach (MyJumpGateConstruct target_grid in broadcast_entities.Where((entity) => entity is IMyCubeGrid && entity.Physics != null).Cast<IMyCubeGrid>().Select(MyJumpGateModSession.Instance.GetUnclosedJumpGateGrid).Distinct())
 					{
-						MyJumpGateConstruct target_grid;
-						if (!(entity is IMyCubeGrid) || entity.Physics == null || (target_grid = MyJumpGateModSession.Instance.GetJumpGateGrid(entity.EntityId)) == null || target_grid == this) continue;
+						if (target_grid == null || target_grid == this) continue;
 
 						foreach (IMyRadioAntenna antenna in this.GetAttachedRadioAntennas())
 						{
 							foreach (IMyBeacon beacon in target_grid.GetAttachedBeacons())
 							{
 								MyBeaconLinkWrapper wrapper;
-								if (beacon.MarkedForClose || !beacon.IsWorking || Vector3D.Distance(beacon.WorldMatrix.Translation, antenna.WorldMatrix.Translation) > beacon.Radius || this.BeaconLinks.Contains(wrapper = new MyBeaconLinkWrapper(beacon))) continue;
+								if (beacon.MarkedForClose || !beacon.IsWorking || Vector3D.DistanceSquared(beacon.WorldMatrix.Translation, antenna.WorldMatrix.Translation) > beacon.Radius * beacon.Radius || this.BeaconLinks.Contains(wrapper = new MyBeaconLinkWrapper(beacon))) continue;
 								this.BeaconLinks.Add(wrapper);
 							}
 						}
@@ -1057,7 +1055,12 @@ namespace IOTA.ModularJumpGates
 					
 					foreach (IMyLaserAntenna antenna in pair.Value.GetFatBlocks<IMyLaserAntenna>()) if (!antenna.MarkedForClose && !antenna.Closed) this.CommBlocks[antenna.EntityId] = antenna;
 					foreach (IMyRadioAntenna antenna in pair.Value.GetFatBlocks<IMyRadioAntenna>()) if (!antenna.MarkedForClose && !antenna.Closed) this.CommBlocks[antenna.EntityId] = antenna;
-					foreach (IMyBeacon antenna in pair.Value.GetFatBlocks<IMyBeacon>()) if (!antenna.MarkedForClose && !antenna.Closed) this.CommBlocks[antenna.EntityId] = antenna;
+
+					foreach (IMyBeacon antenna in pair.Value.GetFatBlocks<IMyBeacon>()) if (!antenna.MarkedForClose && !antenna.Closed)
+					{
+						this.CommBlocks[antenna.EntityId] = antenna;
+						MyJumpGateModSession.Instance.UpdateMaxBeaconBroadcastRadius(antenna);
+					}
 
 					this.GridBlocks.AddRange(((MyCubeGrid) pair.Value).CubeBlocks);	
 				}

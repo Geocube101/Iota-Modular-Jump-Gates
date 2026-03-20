@@ -411,6 +411,11 @@ namespace IOTA.ModularJumpGates
 		public MySessionStatusEnum SessionStatus { get; private set; } = MySessionStatusEnum.OFFLINE;
 
 		/// <summary>
+		/// The largest beacon broadcast radius of any placed beacon in the world
+		/// </summary>
+		public float MaxBeaconBroadcastRadius { get; private set; } = 200000;
+
+		/// <summary>
 		/// The maximum jump gate collider radius allowed based on config values
 		/// </summary>
 		public double MaxJumpGateColliderRadius => 2 * Math.Max(this.Configuration.DriveConfiguration.LargeDriveRaycastDistance.Value, this.Configuration.DriveConfiguration.SmallDriveRaycastDistance.Value);
@@ -418,7 +423,7 @@ namespace IOTA.ModularJumpGates
 		/// <summary>
 		/// The current mod version (major, minor, patch)
 		/// </summary>
-		public Vector3I ModVersion => new Vector3I(1, 4, 0);
+		public Vector3I ModVersion => new Vector3I(1, 4, 1);
 
 		/// <summary>
 		/// The Guid used to store information in mod storage components
@@ -2559,6 +2564,17 @@ namespace IOTA.ModularJumpGates
 				packet.Payload(new_settings);
 				packet.Send();
 			}
+		}
+
+		/// <summary>
+		/// Updates the max beacon broadcast radius using the specified beacon<br />
+		/// If the specified beacon has a larger radius, the session max broadcast distance will be updated
+		/// </summary>
+		/// <param name="beacon">The beacon</param>
+		public void UpdateMaxBeaconBroadcastRadius(IMyBeacon beacon)
+		{
+			if (beacon == null || beacon.Radius <= this.MaxBeaconBroadcastRadius) return;
+			this.MaxBeaconBroadcastRadius = beacon.Radius;
 		}
 
 		/// <summary>

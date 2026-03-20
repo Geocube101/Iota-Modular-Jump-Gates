@@ -100,6 +100,62 @@ namespace IOTA.ModularJumpGates.ModConfiguration
 			[XmlElement]
 			[ProtoMember(8)]
 			public float? SmallCapacitorDischargeEfficiency;
+
+			/// <summary>
+			/// The value 'a' in the capacitor charge rate equation 'R=r*(1-a*x^b))' where:<br />
+			/// * R is the final charge rate<br />
+			/// * r = MaxCapacitorChargeRateMW<br />
+			/// * a = CapacitorRateCapacityCoefficent<br />
+			/// * b = CapacitorRateCapacityExponent<br />
+			/// * x = The current charge percentage<br />
+			/// Cannot be NaN, Infinity or negative<br />
+			/// Defaults to 1
+			/// </summary>
+			[XmlElement]
+			[ProtoMember(9)]
+			public float? LargeCapacitorRateCapacityCoefficent;
+
+			/// <summary>
+			/// The value 'a' in the capacitor charge rate equation 'R=r*(1-a*x^b))' where:<br />
+			/// * R is the final charge rate<br />
+			/// * r = MaxCapacitorChargeRateMW<br />
+			/// * a = CapacitorRateCapacityCoefficent<br />
+			/// * b = CapacitorRateCapacityExponent<br />
+			/// * x = The current charge percentage<br />
+			/// Cannot be NaN, Infinity or negative<br />
+			/// Defaults to 1
+			/// </summary>
+			[XmlElement]
+			[ProtoMember(10)]
+			public float? SmallCapacitorRateCapacityCoefficent = 1;
+
+			/// <summary>
+			/// The value 'b' in the capacitor charge rate equation 'R=r*(1-a*x^b))' where:<br />
+			/// * R is the final charge rate<br />
+			/// * r = MaxCapacitorChargeRateMW<br />
+			/// * a = CapacitorRateCapacityCoefficent<br />
+			/// * b = CapacitorRateCapacityExponent<br />
+			/// * x = The current charge percentage<br />
+			/// Cannot be NaN, Infinity or negative<br />
+			/// Defaults to 1
+			/// </summary>
+			[XmlElement]
+			[ProtoMember(11)]
+			public float? LargeCapacitorRateCapacityExponent = 1;
+
+			/// <summary>
+			/// The value 'b' in the capacitor charge rate equation 'R=r*(1-a*x^b))' where:<br />
+			/// * R is the final charge rate<br />
+			/// * r = MaxCapacitorChargeRateMW<br />
+			/// * a = CapacitorRateCapacityCoefficent<br />
+			/// * b = CapacitorRateCapacityExponent<br />
+			/// * x = The current charge percentage<br />
+			/// Cannot be NaN, Infinity or negative<br />
+			/// Defaults to 1
+			/// </summary>
+			[XmlElement]
+			[ProtoMember(12)]
+			public float? SmallCapacitorRateCapacityExponent = 1;
 			#endregion
 
 			#region Public Methods
@@ -115,6 +171,10 @@ namespace IOTA.ModularJumpGates.ModConfiguration
 					SmallCapacitorChargeEfficiency = 0.8f,
 					LargeCapacitorDischargeEfficiency = 0.75f,
 					SmallCapacitorDischargeEfficiency = 0.5f,
+					LargeCapacitorRateCapacityCoefficent = 1f,
+					SmallCapacitorRateCapacityCoefficent = 1f,
+					LargeCapacitorRateCapacityExponent = 1f,
+					SmallCapacitorRateCapacityExponent = 1f,
 				};
 			}
 
@@ -134,6 +194,10 @@ namespace IOTA.ModularJumpGates.ModConfiguration
 					SmallCapacitorChargeEfficiency = map.GetValueOrDefault("SmallCapacitorChargeEfficiency") as float?,
 					LargeCapacitorDischargeEfficiency = map.GetValueOrDefault("LargeCapacitorDischargeEfficiency") as float?,
 					SmallCapacitorDischargeEfficiency = map.GetValueOrDefault("SmallCapacitorDischargeEfficiency") as float?,
+					LargeCapacitorRateCapacityCoefficent = map.GetValueOrDefault("LargeCapacitorRateCapacityCoefficent") as float?,
+					SmallCapacitorRateCapacityCoefficent = map.GetValueOrDefault("SmallCapacitorRateCapacityCoefficent") as float?,
+					LargeCapacitorRateCapacityExponent = map.GetValueOrDefault("LargeCapacitorRateCapacityExponent") as float?,
+					SmallCapacitorRateCapacityExponent = map.GetValueOrDefault("SmallCapacitorRateCapacityExponent") as float?,
 				};
 			}
 
@@ -153,6 +217,10 @@ namespace IOTA.ModularJumpGates.ModConfiguration
 				this.SmallCapacitorChargeEfficiency = this.SmallCapacitorChargeEfficiency ?? config.SmallCapacitorChargeEfficiency;
 				this.LargeCapacitorDischargeEfficiency = this.LargeCapacitorDischargeEfficiency ?? config.LargeCapacitorDischargeEfficiency;
 				this.SmallCapacitorDischargeEfficiency = this.SmallCapacitorDischargeEfficiency ?? config.SmallCapacitorDischargeEfficiency;
+				this.LargeCapacitorRateCapacityCoefficent = this.LargeCapacitorRateCapacityCoefficent ?? config.LargeCapacitorRateCapacityCoefficent;
+				this.SmallCapacitorRateCapacityCoefficent = this.SmallCapacitorRateCapacityCoefficent ?? config.SmallCapacitorRateCapacityCoefficent;
+				this.LargeCapacitorRateCapacityExponent = this.LargeCapacitorRateCapacityExponent ?? config.LargeCapacitorRateCapacityExponent;
+				this.SmallCapacitorRateCapacityExponent = this.SmallCapacitorRateCapacityExponent ?? config.SmallCapacitorRateCapacityExponent;
 			}
 
 			/// <summary>
@@ -170,6 +238,10 @@ namespace IOTA.ModularJumpGates.ModConfiguration
 				this.SmallCapacitorChargeEfficiency = MyModConfigurationV1.ValidateValue(this.SmallCapacitorChargeEfficiency, defaults.SmallCapacitorChargeEfficiency, 0, 1);
 				this.LargeCapacitorDischargeEfficiency = MyModConfigurationV1.ValidateValue(this.LargeCapacitorDischargeEfficiency, defaults.LargeCapacitorDischargeEfficiency, 0, 1);
 				this.SmallCapacitorDischargeEfficiency = MyModConfigurationV1.ValidateValue(this.SmallCapacitorDischargeEfficiency, defaults.SmallCapacitorDischargeEfficiency, 0, 1);
+				this.LargeCapacitorRateCapacityCoefficent = MyModConfigurationV1.ValidateValue(this.LargeCapacitorRateCapacityCoefficent, defaults.LargeCapacitorRateCapacityCoefficent, 0);
+				this.SmallCapacitorRateCapacityCoefficent = MyModConfigurationV1.ValidateValue(this.SmallCapacitorRateCapacityCoefficent, defaults.SmallCapacitorRateCapacityCoefficent, 0);
+				this.LargeCapacitorRateCapacityExponent = MyModConfigurationV1.ValidateValue(this.LargeCapacitorRateCapacityExponent, defaults.LargeCapacitorRateCapacityExponent, 0);
+				this.SmallCapacitorRateCapacityExponent = MyModConfigurationV1.ValidateValue(this.SmallCapacitorRateCapacityExponent, defaults.SmallCapacitorRateCapacityExponent, 0);
 			}
 
 			/// <summary>
@@ -198,6 +270,10 @@ namespace IOTA.ModularJumpGates.ModConfiguration
 					["SmallCapacitorChargeEfficiency"] = this.SmallCapacitorChargeEfficiency,
 					["LargeCapacitorDischargeEfficiency"] = this.LargeCapacitorDischargeEfficiency,
 					["SmallCapacitorDischargeEfficiency"] = this.SmallCapacitorDischargeEfficiency,
+					["LargeCapacitorRateCapacityCoefficent"] = this.LargeCapacitorRateCapacityCoefficent,
+					["SmallCapacitorRateCapacityCoefficent"] = this.SmallCapacitorRateCapacityCoefficent,
+					["LargeCapacitorRateCapacityExponent"] = this.LargeCapacitorRateCapacityExponent,
+					["SmallCapacitorRateCapacityExponent"] = this.SmallCapacitorRateCapacityExponent,
 				};
 			}
 			#endregion
@@ -2012,6 +2088,26 @@ namespace IOTA.ModularJumpGates.ModConfiguration
 			/// </summary>
 			public readonly float CapacitorDischargeEfficiency;
 
+			/// <summary>
+			/// The value 'a' in the capacitor charge rate equation 'R=r*(1-a*x^b))' where:<br />
+			/// * R is the final charge rate<br />
+			/// * r = MaxCapacitorChargeRateMW<br />
+			/// * a = CapacitorRateCapacityCoefficent<br />
+			/// * b = CapacitorRateCapacityExponent<br />
+			/// * x = The current charge percentage<br />
+			/// </summary>
+			public readonly float CapacitorRateCapacityCoefficent;
+
+			/// <summary>
+			/// The value 'b' in the capacitor charge rate equation 'R=r*(1-a*x^b))' where:<br />
+			/// * R is the final charge rate<br />
+			/// * r = MaxCapacitorChargeRateMW<br />
+			/// * a = CapacitorRateCapacityCoefficent<br />
+			/// * b = CapacitorRateCapacityExponent<br />
+			/// * x = The current charge percentage<br />
+			/// </summary>
+			public readonly float CapacitorRateCapacityExponent;
+
 			internal MyLocalCapacitorConfiguration(MyModCapacitorConfiguration configuration, MyCubeSize grid_size)
 			{
 				switch (grid_size)
@@ -2021,12 +2117,16 @@ namespace IOTA.ModularJumpGates.ModConfiguration
 						this.MaxCapacitorChargeRateMW = configuration.MaxSmallCapacitorChargeRateMW.Value;
 						this.CapacitorChargeEfficiency = configuration.SmallCapacitorChargeEfficiency.Value;
 						this.CapacitorDischargeEfficiency = configuration.SmallCapacitorDischargeEfficiency.Value;
+						this.CapacitorRateCapacityCoefficent = configuration.SmallCapacitorRateCapacityCoefficent.Value;
+						this.CapacitorRateCapacityExponent = configuration.SmallCapacitorRateCapacityExponent.Value;
 						break;
 					case MyCubeSize.Large:
 						this.MaxCapacitorChargeMW = configuration.MaxLargeCapacitorChargeMW.Value;
 						this.MaxCapacitorChargeRateMW = configuration.MaxLargeCapacitorChargeRateMW.Value;
 						this.CapacitorChargeEfficiency = configuration.LargeCapacitorChargeEfficiency.Value;
 						this.CapacitorDischargeEfficiency = configuration.LargeCapacitorDischargeEfficiency.Value;
+						this.CapacitorRateCapacityCoefficent = configuration.LargeCapacitorRateCapacityCoefficent.Value;
+						this.CapacitorRateCapacityExponent = configuration.LargeCapacitorRateCapacityExponent.Value;
 						break;
 					default:
 						throw new InvalidOperationException("Illegal grid size during configuration");
@@ -2040,6 +2140,8 @@ namespace IOTA.ModularJumpGates.ModConfiguration
 					["MaxCapacitorChargeRateMW"] = this.MaxCapacitorChargeRateMW,
 					["CapacitorChargeEfficiency"] = this.CapacitorChargeEfficiency,
 					["CapacitorDischargeEfficiency"] = this.CapacitorDischargeEfficiency,
+					["CapacitorRateCapacityCoefficent"] = this.CapacitorRateCapacityCoefficent,
+					["CapacitorRateCapacityExponent"] = this.CapacitorRateCapacityExponent,
 				};
 			}
 		}

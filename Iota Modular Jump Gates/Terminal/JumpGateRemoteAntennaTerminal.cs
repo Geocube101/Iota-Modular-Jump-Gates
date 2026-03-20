@@ -501,18 +501,19 @@ namespace IOTA.ModularJumpGates.Terminal
 				choose_animation_lb.VisibleRowsCount = 5;
 				choose_animation_lb.ListContent = (block2, content_list, preselect_list) => {
 					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block2);
-					if (antenna == null || antenna.JumpGateGrid == null || antenna.JumpGateGrid.Closed) return;
-					MyJumpGate jump_gate = antenna.GetInboundControlGate(antenna.CurrentTerminalChannel);
+					MyJumpGate jump_gate = antenna?.GetInboundControlGate(antenna.CurrentTerminalChannel);
+					if (antenna == null || antenna.JumpGateGrid == null || antenna.JumpGateGrid.Closed || jump_gate == null) return;
 					MyJumpGateController.MyControllerBlockSettingsStruct controller_settings = antenna.BlockSettings.BaseControllerSettings[antenna.CurrentTerminalChannel];
 					string selected_animation = controller_settings.JumpEffectAnimationName();
 					string _default = "IOTA.ModularJumpGates.AnimationDef.Standard";
+					bool do_wormhole =  controller_settings.DoSustainedWormhole() && jump_gate.JumpGateConfiguration.AllowWormholeActivation;
 
 					foreach (string full_name in MyAnimationHandler.GetAnimationNames())
 					{
 						string animation_name;
 						string description;
 						AnimationDef animation = MyAnimationHandler.GetAnimationDef(full_name, jump_gate, false);
-						if (animation.IsWormholeAnimation() != controller_settings.DoSustainedWormhole()) continue;
+						if (animation.IsWormholeAnimation() != do_wormhole) continue;
 
 						if (animation == null)
 						{
@@ -674,8 +675,8 @@ namespace IOTA.ModularJumpGates.Terminal
 				do_wormhole_activate.Enabled = (block) => {
 					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
 					MyJumpGate jump_gate = antenna?.GetInboundControlGate(antenna.CurrentTerminalChannel);
-					if (antenna == null || !antenna.IsWorking || antenna.JumpGateGrid == null || antenna.JumpGateGrid.Closed) return false;
-					else return jump_gate == null || (jump_gate.IsIdle() && jump_gate.JumpGateConfiguration.AllowWormholeActivation);
+					if (antenna == null || !antenna.IsWorking || antenna.JumpGateGrid == null || antenna.JumpGateGrid.Closed || jump_gate == null) return false;
+					else return jump_gate.IsIdle() && jump_gate.JumpGateConfiguration.AllowWormholeActivation;
 				};
 				do_wormhole_activate.OnText = MyStringId.GetOrCompute(MyTexts.GetString("GeneralText_On"));
 				do_wormhole_activate.OffText = MyStringId.GetOrCompute(MyTexts.GetString("GeneralText_Off"));
@@ -2396,6 +2397,7 @@ namespace IOTA.ModularJumpGates.Terminal
 			MyJumpGateRemoteAntennaTerminal.SetupTerminalGateExtraControls();
 			MyJumpGateRemoteAntennaTerminal.SetupTerminalGateDetonationControls();
 			MyJumpGateRemoteAntennaTerminal.SetupTerminalDebugControls();
+			MyJumpGateRemoteAntennaTerminal.SetupTerminalWormholeControls();
 		}
 
 		public static void Unload()
