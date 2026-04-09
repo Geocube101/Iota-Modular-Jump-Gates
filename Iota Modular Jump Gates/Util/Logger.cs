@@ -109,7 +109,8 @@ namespace IOTA.ModularJumpGates.Util
         {
 			if (message == null) return;
             message = string.Join("\n  ...  ", message.Split('\n').Where((s) => s.Trim().Length > 0));
-            MyLog.Default.WriteLineAndConsole($"[ {MyJumpGateModSession.Instance.ModID} ] [ INFO ]: {message}");
+			message = $"[ {MyJumpGateModSession.Instance.ModID} ] [ INFO ]: {message}";
+			MyLog.Default.WriteLineAndConsole(message);
 			Logger.WriteInternal("INFO", message);
 		}
 
@@ -121,7 +122,8 @@ namespace IOTA.ModularJumpGates.Util
 		{
 			if (message == null) return;
 			message = string.Join("\n  ...  ", message.Split('\n').Where((s) => s.Trim().Length > 0));
-            MyLog.Default.WriteLineAndConsole($"[ {MyJumpGateModSession.Instance.ModID} ] [ WARN ]:  {message}");
+			message = $"[ {MyJumpGateModSession.Instance.ModID} ] [ WARN ]:  {message}";
+			MyLog.Default.WriteLineAndConsole(message);
 			Logger.WriteInternal("WARN", message);
 		}
 
@@ -133,7 +135,8 @@ namespace IOTA.ModularJumpGates.Util
 		{
 			if (message == null) return;
 			message = string.Join("\n  ...  ", message.Split('\n').Where((s) => s.Trim().Length > 0));
-            MyLog.Default.WriteLineAndConsole($"[ {MyJumpGateModSession.Instance.ModID} ] [ ERROR ]:  {message}");
+			message = $"[ {MyJumpGateModSession.Instance.ModID} ] [ ERROR ]:  {message}";
+			MyLog.Default.WriteLineAndConsole(message);
 			Logger.WriteInternal("ERROR", message);
 		}
 
@@ -145,7 +148,8 @@ namespace IOTA.ModularJumpGates.Util
 		{
 			if (message == null) return;
 			message = string.Join("\n  ...  ", message.Split('\n').Where((s) => s.Trim().Length > 0));
-            MyLog.Default.WriteLineAndConsole($"[ {MyJumpGateModSession.Instance.ModID} ] [ CRITICAL ]:  {message}");
+			message = $"[ {MyJumpGateModSession.Instance.ModID} ] [ CRITICAL ]:  {message}";
+			MyLog.Default.WriteLineAndConsole(message);
 			Logger.WriteInternal("CRITICAL", message);
 		}
 

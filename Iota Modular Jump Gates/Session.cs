@@ -423,7 +423,7 @@ namespace IOTA.ModularJumpGates
 		/// <summary>
 		/// The current mod version (major, minor, patch)
 		/// </summary>
-		public Vector3I ModVersion => new Vector3I(1, 4, 1);
+		public Vector3I ModVersion => new Vector3I(1, 4, 2);
 
 		/// <summary>
 		/// The Guid used to store information in mod storage components
@@ -1284,7 +1284,7 @@ namespace IOTA.ModularJumpGates
 					byte concurrency = (MyNetworkInterface.IsStandaloneMultiplayerClient) ? (byte) 1 : this.Configuration.GeneralConfiguration.ConcurrentGridUpdateThreads.Value;
 					int grids_per_thread = (int) Math.Ceiling(this.GridMap.Count / (float) concurrency);
 					while (this.GridUpdateThreads.Count < concurrency) this.GridUpdateThreads.Add(new MyThreadedUpdateInfo());
-					while (this.GridUpdateThreads.Count > concurrency) this.GridUpdateThreads.Pop();
+					while (this.GridUpdateThreads.Count > concurrency) this.GridUpdateThreads.Pop().Dispose();
 					int index = 0;
 					
 					foreach (KeyValuePair<long, MyJumpGateConstruct> pair in this.GridMap)
@@ -1985,12 +1985,35 @@ namespace IOTA.ModularJumpGates
 				foreach (long gridid in grid_queue.ReadEnqueuedIDs())
 				{
 					MyJumpGateConstruct grid = this.GridMap.GetValueOrDefault(gridid, null);
+					long cube_grid_id;
 
 					if (grid == null || this.IsConstructQueuedForPartialReload(gridid)) continue;
 					else if (grid.Closed)
 					{
 						this.GridMap.Remove(gridid);
 						Logger.Log($"Grid {gridid} FULL_CLOSE");
+						continue;
+					}
+					else if ((cube_grid_id = grid.CubeGridID) != gridid)
+					{
+						if (this.GridMap.TryAdd(cube_grid_id, grid))
+						{
+							Logger.Warn($"Grid at ID {gridid} does not match grid ID {cube_grid_id}; CONSTRUCT_MOVED");
+							this.GridMap.Remove(gridid);
+						}
+						else if (grid.FailedTickCount >= 3)
+						{
+							Logger.Warn($"Grid at ID {gridid} does not match grid ID {cube_grid_id} and target exists; CONSTRUCT_CLOSED");
+							grid.Close(true);
+							this.GridMap.Remove(gridid);
+							Logger.Log($"Grid {gridid} FULL_CLOSE");
+						}
+						else
+						{
+							Logger.Warn($"Grid at ID {gridid} does not match grid ID {cube_grid_id} and target exists; CONSTRUCT_MOVE_DEFERRED_{grid.FailedTickCount}");
+							grid.FailedTickCount += 1;
+						}
+
 						continue;
 					}
 
@@ -2005,7 +2028,7 @@ namespace IOTA.ModularJumpGates
 							if (grid.FailedTickCount > 0) grid.SetDirty();
 							grid.FailedTickCount = 0;
 						}
-						
+
 					}
 					catch (Exception e)
 					{
@@ -2036,7 +2059,8 @@ namespace IOTA.ModularJumpGates
 
 									if (this.Network.Registered)
 									{
-										MyNetworkInterface.Packet packet = new MyNetworkInterface.Packet {
+										MyNetworkInterface.Packet packet = new MyNetworkInterface.Packet
+										{
 											PacketType = MyPacketTypeEnum.UPDATE_GRIDS,
 											TargetID = 0,
 											Broadcast = true,

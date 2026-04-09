@@ -828,8 +828,8 @@ namespace IOTA.ModularJumpGates.ModConfiguration
 				public static MyModJumpGateWormholeConfiguration Defaults()
 				{
 					return new MyModJumpGateWormholeConfiguration {
-						AllowLargeGateWormholeActivation = false,
-						AllowSmallGateWormholeActivation = false,
+						AllowLargeGateWormholeActivation = true,
+						AllowSmallGateWormholeActivation = true,
 						LargeGateWormholePowerMultiplier = 1.5f,
 						SmallGateWormholePowerMultiplier = 2f,
 						MaxLargeGateWormholeDurationSeconds = 2280f,
