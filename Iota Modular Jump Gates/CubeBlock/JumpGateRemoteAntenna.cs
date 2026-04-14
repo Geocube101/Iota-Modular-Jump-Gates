@@ -108,11 +108,6 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		private readonly object NearbyAntennasMutex = new object();
 
 		/// <summary>
-		/// Mutex object for exclusive read-write operations on the WaypointsList
-		/// </summary>
-		private readonly object[] WaypointsListMutex = new object[MyJumpGateRemoteAntenna.ChannelCount] { new object(), new object(), new object() };
-
-		/// <summary>
 		/// The list of jump gates listening from this antenna
 		/// </summary>
 		private readonly long[] InboundConnectionJumpGates = new long[MyJumpGateRemoteAntenna.ChannelCount] { -1, -1, -1 };
@@ -128,9 +123,14 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		private readonly MyJumpGateRemoteAntenna[] ConnectionThreads = new MyJumpGateRemoteAntenna[MyJumpGateRemoteAntenna.ChannelCount] { null, null, null };
 
 		/// <summary>
-		/// The collision detector for finding nearby antennas
+		/// The collision detector entity for finding nearby antennas
 		/// </summary>
 		private MyEntity AntennaDetector = null;
+
+		/// <summary>
+		/// The collision detector for finding nearby antennas
+		/// </summary>
+		private MyPhysicalDetector PhysicalDetector = null;
 
 		/// <summary>
 		/// Queue of pairings that cannot be completed
@@ -141,12 +141,6 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// A list of all nearby antennas
 		/// </summary>
 		private List<MyJumpGateRemoteAntenna> NearbyAntennas = new List<MyJumpGateRemoteAntenna>();
-
-		/// <summary>
-		/// Client-side only<br />
-		/// Stores all applicable waypoints for this block
-		/// </summary>
-		private readonly List<MyJumpGateWaypoint>[] WaypointsList = new List<MyJumpGateWaypoint>[MyJumpGateRemoteAntenna.ChannelCount] { new List<MyJumpGateWaypoint>(), new List<MyJumpGateWaypoint>(), new List<MyJumpGateWaypoint>() };
 
 		/// <summary>
 		/// A map of all topmost entities within search range
@@ -188,6 +182,12 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// Callback takes the form "Action(this_antenna, connected_controller, connected_gate, channel, connection_formed)"
 		/// </summary>
 		public event Action<MyJumpGateRemoteAntenna, MyJumpGateController, MyJumpGate, byte, bool> OnAntennaConnection;
+
+		/// <summary>
+		/// Client-side only<br />
+		/// Stores all applicable waypoints for this block
+		/// </summary>
+		public readonly MyJumpGateController.MyWaypointsList[] WaypointsList = new MyJumpGateController.MyWaypointsList[MyJumpGateRemoteAntenna.ChannelCount] { new MyJumpGateController.MyWaypointsList(), new MyJumpGateController.MyWaypointsList(), new MyJumpGateController.MyWaypointsList() };
 		#endregion
 
 		#region Constructors
@@ -218,10 +218,8 @@ namespace IOTA.ModularJumpGates.CubeBlock
 
 			for (byte i = 0; i < MyJumpGateRemoteAntenna.ChannelCount; ++i)
 			{
-				List<MyJumpGateWaypoint> waypoints = this.WaypointsList[i];
-				lock (this.WaypointsListMutex[i]) waypoints.Clear();
+				this.WaypointsList[i].Clear();
 				this.WaypointsList[i] = null;
-				this.WaypointsListMutex[i] = null;
 			}
 
 			base.Clean();
@@ -633,13 +631,13 @@ namespace IOTA.ModularJumpGates.CubeBlock
 
 				for (byte channel = 0; channel < MyJumpGateRemoteAntenna.ChannelCount; ++channel)
 				{
+					bool src_do_wormhole = this.BlockSettings.BaseControllerSettings[channel].DoSustainedWormhole();
 					MyJumpGate jump_gate = this.GetInboundControlGate(channel);
 					if (jump_gate == null || !jump_gate.IsValid()) continue;
 					Vector3D jump_node = jump_gate.WorldJumpNode;
 					double distance;
-					List<MyJumpGateWaypoint> waypoints = this.WaypointsList[channel];
-					object mutex = this.WaypointsListMutex[channel];
-					lock (mutex) waypoints.Clear();
+					MyJumpGateController.MyWaypointsList waypoints = this.WaypointsList[channel];
+					waypoints.Clear();
 
 					foreach (MyJumpGateConstruct connected_grid in reachable_grids)
 					{
@@ -647,12 +645,18 @@ namespace IOTA.ModularJumpGates.CubeBlock
 
 						foreach (MyJumpGateController controller in connected_grid.GetAttachedJumpGateControllers())
 						{
+							bool dst_do_wormhole = controller.BlockSettings.DoSustainedWormhole();
 							MyJumpGate other_gate = controller.AttachedJumpGate();
 							if (other_gate == null || other_gate.MarkClosed) continue;
 							distance = Vector3D.Distance(jump_node, other_gate.WorldJumpNode);
-							if (distance < jump_gate.JumpGateConfiguration.MinimumJumpDistance || distance > jump_gate.JumpGateConfiguration.MaximumJumpDistance || !controller.IsFactionRelationValid(player_identity)) continue;
 							MyJumpGateWaypoint waypoint = new MyJumpGateWaypoint(other_gate);
-							lock (mutex) if (!waypoints.Contains(waypoint)) waypoints.Add(waypoint);
+							if (distance < jump_gate.JumpGateConfiguration.MinimumJumpDistance) waypoint.InvalidationReason = MyWaypointInvalidationReason.TOO_CLOSE;
+							else if (distance > jump_gate.JumpGateConfiguration.MaximumJumpDistance) waypoint.InvalidationReason = MyWaypointInvalidationReason.TOO_FAR;
+							else if (!controller.IsFactionRelationValid(player_identity)) waypoint.InvalidationReason = MyWaypointInvalidationReason.FACTION_MISMATCH;
+							else if (src_do_wormhole && !dst_do_wormhole) waypoint.InvalidationReason = MyWaypointInvalidationReason.TARGET_WORMHOLE_DISABLED;
+							else if (!src_do_wormhole && dst_do_wormhole) waypoint.InvalidationReason = MyWaypointInvalidationReason.TARGET_WORMHOLE_ENABLED;
+							else waypoint.InvalidationReason = MyWaypointInvalidationReason.NONE;
+							waypoints.AddWaypoint(waypoint);
 						}
 
 						foreach (MyJumpGateRemoteAntenna antenna in connected_grid.GetAttachedJumpGateRemoteAntennas())
@@ -662,17 +666,35 @@ namespace IOTA.ModularJumpGates.CubeBlock
 								MyJumpGate other_gate = antenna.GetInboundControlGate(i);
 								if (other_gate == null || other_gate.MarkClosed) continue;
 								distance = Vector3D.Distance(jump_node, other_gate.WorldJumpNode);
-								if (distance < jump_gate.JumpGateConfiguration.MinimumJumpDistance || distance > jump_gate.JumpGateConfiguration.MaximumJumpDistance || !antenna.IsFactionRelationValid(i, player_identity)) continue;
 								MyJumpGateWaypoint waypoint = new MyJumpGateWaypoint(other_gate);
-								lock (mutex) if (!waypoints.Contains(waypoint)) waypoints.Add(waypoint);
+								if (distance < jump_gate.JumpGateConfiguration.MinimumJumpDistance) waypoint.InvalidationReason = MyWaypointInvalidationReason.TOO_CLOSE;
+								else if (distance > jump_gate.JumpGateConfiguration.MaximumJumpDistance) waypoint.InvalidationReason = MyWaypointInvalidationReason.TOO_FAR;
+								else if (!antenna.IsFactionRelationValid(i, player_identity)) waypoint.InvalidationReason = MyWaypointInvalidationReason.FACTION_MISMATCH;
+								else waypoint.InvalidationReason = MyWaypointInvalidationReason.NONE;
+								waypoints.AddWaypoint(waypoint);
 							}
 						}
 					}
 
-					lock (mutex)
+					foreach (MyBeaconLinkWrapper beacon in this.JumpGateGrid.GetBeaconsWithinReverseBroadcastSphere())
 					{
-						waypoints.AddRange(this.JumpGateGrid.GetBeaconsWithinReverseBroadcastSphere().Where((beacon) => (distance = Vector3D.Distance(jump_node, beacon.BeaconPosition)) >= jump_gate.JumpGateConfiguration.MinimumJumpDistance && distance <= jump_gate.JumpGateConfiguration.MaximumJumpDistance).OrderBy((beacon) => Vector3D.Distance(beacon.BeaconPosition, jump_node)).Select((beacon) => new MyJumpGateWaypoint(beacon)));
-						waypoints.AddRange(MyAPIGateway.Session.GPS.GetGpsList(player_identity).Where(MyJumpGateController.IsGPSValid).OrderBy((gps) => Vector3D.Distance(gps.Coords, jump_node)).Select((gps) => new MyJumpGateWaypoint(gps, MyAPIGateway.Multiplayer.MyId)));
+						distance = Vector3D.Distance(jump_node, beacon.BeaconPosition);
+						MyJumpGateWaypoint waypoint = new MyJumpGateWaypoint(beacon);
+						if (distance < jump_gate.JumpGateConfiguration.MinimumJumpDistance) waypoint.InvalidationReason = MyWaypointInvalidationReason.TOO_CLOSE;
+						else if (distance > jump_gate.JumpGateConfiguration.MaximumJumpDistance) waypoint.InvalidationReason = MyWaypointInvalidationReason.TOO_FAR;
+						else waypoint.InvalidationReason = MyWaypointInvalidationReason.NONE;
+						waypoints.AddWaypoint(waypoint);
+					}
+
+					foreach (IMyGps gps in MyAPIGateway.Session.GPS.GetGpsList(player_identity))
+					{
+						if (!MyJumpGateController.IsGPSValid(gps)) continue;
+						distance = Vector3D.Distance(jump_node, gps.Coords);
+						MyJumpGateWaypoint waypoint = new MyJumpGateWaypoint(gps, MyAPIGateway.Multiplayer.MyId);
+						if (distance < jump_gate.JumpGateConfiguration.MinimumJumpDistance) waypoint.InvalidationReason = MyWaypointInvalidationReason.TOO_CLOSE;
+						else if (distance > jump_gate.JumpGateConfiguration.MaximumJumpDistance) waypoint.InvalidationReason = MyWaypointInvalidationReason.TOO_FAR;
+						else waypoint.InvalidationReason = MyWaypointInvalidationReason.NONE;
+						waypoints.AddWaypoint(waypoint);
 					}
 
 					// Fix selected waypoint
@@ -850,6 +872,9 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			}
 		}
 
+		/// <summary>
+		/// Recreates this antenna's physical detector
+		/// </summary>
 		private void UpdateResetCollider()
 		{
 			if (MyNetworkInterface.IsStandaloneMultiplayerClient || this.TerminalBlock?.CubeGrid?.Physics == null || this.MarkedForClose || this.NearbyEntities == null) return;
@@ -861,8 +886,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			};
 			this.AntennaDetector.Init(new StringBuilder($"JumpGateRemoteAntenna_{this.BlockID}"), null, (MyEntity) this.Entity, 1f);
 			this.NearbyEntities.Clear();
-			PhysicsSettings settings = MyAPIGateway.Physics.CreateSettingsForDetector(this.AntennaDetector, this.OnEntityCollision, MatrixD.Identity, Vector3D.Zero, RigidBodyFlag.RBF_KINEMATIC, 15, true);
-			MyAPIGateway.Physics.CreateSpherePhysics(settings, (float) MyJumpGateRemoteAntenna.MaxCollisionDistance);
+			this.PhysicalDetector = new MyPhysicalDetector(this.AntennaDetector, MyJumpGateRemoteAntenna.MaxCollisionDistance, this.OnEntityCollision);
 			MyAPIGateway.Entities.AddEntity(this.AntennaDetector);
 			Logger.Debug($"CREATED_COLLIDER REMOTE_ANTENNA={this.BlockID}, COLLIDER={this.AntennaDetector.DisplayName}", 4);
 		}
@@ -939,19 +963,6 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			this.OutboundConnectionControllers[channel] = (controller == null) ? -1 : controller.BlockID;
 			controller?.BaseBlockSettings.RemoteAntennaChannel(channel);
 			controller?.BaseBlockSettings.RemoteAntennaID(this.BlockID);
-		}
-
-		/// <summary>
-		/// Gets the list of waypoints this controller has<br />
-		/// This is client dependent
-		/// </summary>
-		/// <param name="waypoints">A list to populate with this antenna's waypoints</param>
-		/// <param name="channel">The channel who's visible waypoints to get</param>
-		public void GetWaypointsList(List<MyJumpGateWaypoint> waypoints, byte channel)
-		{
-			List<MyJumpGateWaypoint> internal_list;
-			if (channel >= MyJumpGateRemoteAntenna.ChannelCount || waypoints == null || (internal_list = this.WaypointsList[channel]) == null) return;
-			lock (this.WaypointsListMutex[channel]) waypoints.AddRange(internal_list.Distinct());
 		}
 
 		public bool FromSerialized(MySerializedJumpGateRemoteAntenna antenna, MyJumpGateConstruct parent = null)

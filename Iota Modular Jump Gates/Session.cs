@@ -423,7 +423,7 @@ namespace IOTA.ModularJumpGates
 		/// <summary>
 		/// The current mod version (major, minor, patch)
 		/// </summary>
-		public Vector3I ModVersion => new Vector3I(1, 4, 2);
+		public Vector3I ModVersion => new Vector3I(1, 4, 3);
 
 		/// <summary>
 		/// The Guid used to store information in mod storage components
@@ -2094,30 +2094,51 @@ namespace IOTA.ModularJumpGates
 		private void FlushClosureQueues()
 		{
 			int count = this.GridCloseRequests.Count;
+			int final_count = 0;
 
 			for (int i = 0; i < count; ++i)
 			{
 				MyTuple<MyJumpGateConstruct, bool, Action> data;
 				if (!this.GridCloseRequests.TryDequeue(out data)) break;
+				bool can_finalize = data.Item1.CanFinalizeClosure();
+				long gridid = data.Item1.CubeGridID;
 				data.Item1.IsClosing = true;
-				if (!data.Item1.CanFinalizeClosure()) this.GridCloseRequests.Enqueue(data);
-				else if (data.Item1.Closed) continue;
-				data.Item1.Close(data.Item2);
-				data.Item3?.Invoke();
+				Logger.Debug($"Closing grid construct {gridid} (CanFinalize={can_finalize})...", 4);
+
+				if (!can_finalize) this.GridCloseRequests.Enqueue(data);
+				else if (!data.Item1.Closed)
+				{
+					data.Item1.Close(data.Item2);
+					data.Item3?.Invoke();
+					++final_count;
+					Logger.Debug($"Closed grid construct {gridid}.", 4);
+				}
 			}
 
+			if (final_count > 0) Logger.Debug($"Closed {final_count} grid constructs", 3);
 			count = this.GateCloseRequests.Count;
+			final_count = 0;
 
 			for (int i = 0; i < count; ++i)
 			{
 				MyTuple<MyJumpGate, Action> data;
 				if (!this.GateCloseRequests.TryDequeue(out data)) break;
+				bool can_finalize = data.Item1.CanFinalizeClosure();
+				JumpGateUUID gateid = JumpGateUUID.FromJumpGate(data.Item1);
 				data.Item1.IsClosing = true;
-				if (!data.Item1.CanFinalizeClosure()) this.GateCloseRequests.Enqueue(data);
-				else if (data.Item1.Closed) continue;
-				data.Item1.Close();
-				data.Item2?.Invoke();
+				Logger.Debug($"Closing jump gate {gateid} (CanFinalize={can_finalize})...", 4);
+
+				if (!can_finalize) this.GateCloseRequests.Enqueue(data);
+				else if (!data.Item1.Closed)
+				{
+					data.Item1.Close();
+					data.Item2?.Invoke();
+					++final_count;
+					Logger.Debug($"Closed jump gate {gateid}.", 4);
+				}
 			}
+
+			if (final_count > 0) Logger.Debug($"Closed {final_count} jump gates", 3);
 		}
 
 		/// <summary>

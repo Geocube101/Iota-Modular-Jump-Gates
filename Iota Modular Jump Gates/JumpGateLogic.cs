@@ -514,6 +514,11 @@ namespace IOTA.ModularJumpGates
 		private MyEntity JumpSpaceCollisionDetector = null;
 
 		/// <summary>
+		/// The jump space detector for this gate
+		/// </summary>
+		private MyPhysicalDetector PhysicalDetector = null;
+
+		/// <summary>
 		/// The list of intersect nodes for this gate
 		/// </summary>
 		private List<Vector3D> InnerDriveIntersectNodes = new List<Vector3D>();
@@ -4937,7 +4942,7 @@ namespace IOTA.ModularJumpGates
 			if (this.JumpSpaceCollisionDetector != null && this.JumpSpaceCollisionDetector.Closed) this.JumpSpaceCollisionDetector = null;
 			else if (this.JumpSpaceCollisionDetector != null) this.JumpSpaceCollisionDetector.WorldMatrix = MatrixD.Normalize(this.TrueWorldJumpEllipse.WorldMatrix);
 			else if (this.ForceUpdateJumpSpaceDetector && this.JumpSpaceCollisionDetector != null && !this.JumpSpaceCollisionDetector.MarkedForClose) this.JumpSpaceCollisionDetector.Close();
-			
+
 			// Update jump space detector
 			if (MyNetworkInterface.IsServerLike && this.JumpSpaceCollisionDetector == null && this.TrueLocalJumpEllipse != BoundingEllipsoidD.Zero && MyJumpGateModSession.Instance.AllSessionEntitiesLoaded && MyJumpGateModSession.Instance.AllFirstTickComplete())
 			{
@@ -4953,8 +4958,7 @@ namespace IOTA.ModularJumpGates
 				this.JumpSpaceColliderEntities.Clear();
 				this.JumpSpaceEntities.Clear();
 				float radius = (float) MyJumpGateModSession.Instance.MaxJumpGateColliderRadius;
-				PhysicsSettings settings = MyAPIGateway.Physics.CreateSettingsForDetector(this.JumpSpaceCollisionDetector, this.OnEntityCollision, world_matrix, Vector3.Zero, VRage.Game.Components.RigidBodyFlag.RBF_KINEMATIC, 15, true);
-				MyAPIGateway.Physics.CreateSpherePhysics(settings, radius);
+				this.PhysicalDetector = new MyPhysicalDetector(this.JumpSpaceCollisionDetector, radius, this.OnEntityCollision);
 				MyAPIGateway.Entities.AddEntity(this.JumpSpaceCollisionDetector);
 				Logger.Debug($"CREATED_COLLIDER JUMP_GATE={this.GetPrintableName()}, COLLIDER={this.JumpSpaceCollisionDetector.DisplayName}, RADIUS={radius}", 4);
 			}
@@ -5720,7 +5724,7 @@ namespace IOTA.ModularJumpGates
 		/// <returns>Whether this jump gate can be safely closed</returns>
 		public bool CanFinalizeClosure()
 		{
-			return this.Closed || this.JumpGateGrid == null || MyJumpGateModSession.Instance.SessionStatus != MySessionStatusEnum.RUNNING || ((this.Status == MyJumpGateStatus.NONE || this.Status == MyJumpGateStatus.IDLE) && (this.Phase == MyJumpGatePhase.NONE || this.Phase == MyJumpGatePhase.IDLE)) && MyJumpGateModSession.Instance.GetGateDetonationInfo(JumpGateUUID.FromJumpGate(this)) == null;
+			return (this.Closed || this.JumpGateGrid == null || MyJumpGateModSession.Instance.SessionStatus != MySessionStatusEnum.RUNNING || ((this.Status == MyJumpGateStatus.NONE || this.Status == MyJumpGateStatus.IDLE) && (this.Phase == MyJumpGatePhase.NONE || this.Phase == MyJumpGatePhase.IDLE))) && MyJumpGateModSession.Instance.GetGateDetonationInfo(JumpGateUUID.FromJumpGate(this)) == null;
 		}
 
 		/// <summary>

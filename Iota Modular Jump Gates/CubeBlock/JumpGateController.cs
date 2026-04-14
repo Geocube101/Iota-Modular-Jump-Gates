@@ -666,21 +666,76 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			}
 		}
 
+		public sealed class MyWaypointsList
+		{
+			private object JumpGateWaypointsListMutex = new object();
+			private object BeaconWaypointsListMutex = new object();
+			private object GPSWaypointsListMutex = new object();
+			private object ServerWaypointListMutex = new object();
+
+			private List<MyJumpGateWaypoint> JumpGateWaypoints = new List<MyJumpGateWaypoint>();
+			private List<MyJumpGateWaypoint> BeaconWaypoints = new List<MyJumpGateWaypoint>();
+			private List<MyJumpGateWaypoint> GPSWaypoints = new List<MyJumpGateWaypoint>();
+			private List<MyJumpGateWaypoint> ServerWaypoints = new List<MyJumpGateWaypoint>();
+
+			public void Clear()
+			{
+				lock (this.JumpGateWaypointsListMutex) this.JumpGateWaypoints.Clear();
+				lock (this.BeaconWaypointsListMutex) this.BeaconWaypoints.Clear();
+				lock (this.GPSWaypointsListMutex) this.GPSWaypoints.Clear();
+				lock (this.ServerWaypointListMutex) this.ServerWaypoints.Clear();
+			}
+
+			public void AddWaypoint(MyJumpGateWaypoint waypoint)
+			{
+				if (waypoint == null) return;
+
+				switch (waypoint.WaypointType)
+				{
+					case MyWaypointType.JUMP_GATE:
+						lock (this.JumpGateWaypointsListMutex) if (!this.JumpGateWaypoints.Contains(waypoint)) this.JumpGateWaypoints.Add(waypoint);
+						break;
+					case MyWaypointType.BEACON:
+						lock (this.BeaconWaypointsListMutex) if (!this.BeaconWaypoints.Contains(waypoint)) this.BeaconWaypoints.Add(waypoint);
+						break;
+					case MyWaypointType.GPS:
+						lock (this.GPSWaypointsListMutex) if (!this.GPSWaypoints.Contains(waypoint)) this.GPSWaypoints.Add(waypoint);
+						break;
+					case MyWaypointType.SERVER:
+						lock (this.ServerWaypointListMutex) if (!this.ServerWaypoints.Contains(waypoint)) this.ServerWaypoints.Add(waypoint);
+						break;
+				}
+			}
+
+			public void GetJumpGateWaypoints(List<MyJumpGateWaypoint> output)
+			{
+				if (output == null) return;
+				lock (this.JumpGateWaypointsListMutex) output.AddList(this.JumpGateWaypoints);
+			}
+
+			public void GetBeaconWaypoints(List<MyJumpGateWaypoint> output)
+			{
+				if (output == null) return;
+				lock (this.BeaconWaypointsListMutex) output.AddList(this.BeaconWaypoints);
+			}
+
+			public void GetGPSWaypoints(List<MyJumpGateWaypoint> output)
+			{
+				if (output == null) return;
+				lock (this.GPSWaypointsListMutex) output.AddList(this.GPSWaypoints);
+			}
+
+			public void GetServerWaypoints(List<MyJumpGateWaypoint> output)
+			{
+				if (output == null) return;
+				lock (this.ServerWaypointListMutex) output.AddList(this.ServerWaypoints);
+			}
+		}
+
 		#region Private Variables
 		private double HoloDisplayScale = 1;
 
-		/// <summary>
-		/// Mutex object for exclusive read-write operations on the WaypointsList
-		/// </summary>
-		private object WaypointsListMutex = new object();
-
 		private MatrixD HoloDisplayScalar = MatrixD.CreateScale(1);
-
-		/// <summary>
-		/// Client-side only<br />
-		/// Stores all applicable waypoints for this block
-		/// </summary>
-		private List<MyJumpGateWaypoint> WaypointsList = new List<MyJumpGateWaypoint>();
 
 		/// <summary>
 		/// A temporary list of this controller's attached jump gate drives
@@ -725,6 +780,12 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// IMyTextSurfaceProvider Property
 		/// </summary>
 		public int SurfaceCount => this.MultiPanelComponent.SurfaceCount;
+
+		/// <summary>
+		/// Client-side only<br />
+		/// Stores all applicable waypoints for this block
+		/// </summary>
+		public MyWaypointsList WaypointsList { get; private set; } = new MyWaypointsList();
 
 		/// <summary>
 		/// The block data for this block
@@ -1013,7 +1074,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 
 		protected override void Clean()
 		{
-			lock (this.WaypointsListMutex) this.WaypointsList.Clear();
+			this.WaypointsList.Clear();
 			this.AttachedJumpGateDrives.Clear();
 
 			this.TEMP_DetailedInfoConstructsList.Clear();
@@ -1021,7 +1082,6 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			this.TEMP_WaypointGPS.Clear();
 
 			this.WaypointsList = null;
-			this.WaypointsListMutex = null;
 			this.AttachedJumpGateDrives = null;
 			this.MultiPanelComponent = null;
 			this.TEMP_DetailedInfoConstructsList = null;
@@ -1168,11 +1228,12 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			// Update waypoints
 			if (jump_gate_valid && !MyNetworkInterface.IsDedicatedMultiplayerServer && MyAPIGateway.Gui.GetCurrentScreen == MyTerminalPageEnum.ControlPanel && this.LocalGameTick % 60 == 0)
 			{
+				bool src_do_wormhole = this.BlockSettings.DoSustainedWormhole();
 				long player_identity = MyAPIGateway.Players.TryGetIdentityId(MyAPIGateway.Multiplayer.MyId);
 				double distance;
 				IEnumerable<MyJumpGateConstruct> reachable_grids = (MyJumpGateModSession.Instance.Configuration.ConstructConfiguration.RequireGridCommLink.Value) ? this.JumpGateGrid.GetCommLinkedJumpGateGrids() : MyJumpGateModSession.Instance.GetAllJumpGateGrids();
 				Vector3D jump_node = jump_gate.WorldJumpNode;
-				lock (this.WaypointsListMutex) this.WaypointsList.Clear();
+				this.WaypointsList.Clear();
 
 				if (jump_gate.ServerAntenna != null)
 				{
@@ -1185,12 +1246,18 @@ namespace IOTA.ModularJumpGates.CubeBlock
 
 					foreach (MyJumpGateController controller in connected_grid.GetAttachedJumpGateControllers())
 					{
+						bool dst_do_wormhole = controller.BlockSettings.DoSustainedWormhole();
 						MyJumpGate other_gate = controller.AttachedJumpGate();
 						if (other_gate == null || other_gate.MarkClosed) continue;
 						distance = Vector3D.Distance(jump_node, other_gate.WorldJumpNode);
-						if (distance < jump_gate.JumpGateConfiguration.MinimumJumpDistance || distance > jump_gate.JumpGateConfiguration.MaximumJumpDistance || !controller.IsFactionRelationValid(player_identity)) continue;
 						MyJumpGateWaypoint waypoint = new MyJumpGateWaypoint(other_gate);
-						lock (this.WaypointsListMutex) if (!this.WaypointsList.Contains(waypoint)) this.WaypointsList.Add(waypoint);
+						if (distance < jump_gate.JumpGateConfiguration.MinimumJumpDistance) waypoint.InvalidationReason = MyWaypointInvalidationReason.TOO_CLOSE;
+						else if (distance > jump_gate.JumpGateConfiguration.MaximumJumpDistance) waypoint.InvalidationReason = MyWaypointInvalidationReason.TOO_FAR;
+						else if (!controller.IsFactionRelationValid(player_identity)) waypoint.InvalidationReason = MyWaypointInvalidationReason.FACTION_MISMATCH;
+						else if (src_do_wormhole && !dst_do_wormhole) waypoint.InvalidationReason = MyWaypointInvalidationReason.TARGET_WORMHOLE_DISABLED;
+						else if (!src_do_wormhole && dst_do_wormhole) waypoint.InvalidationReason = MyWaypointInvalidationReason.TARGET_WORMHOLE_ENABLED;
+						else waypoint.InvalidationReason = MyWaypointInvalidationReason.NONE;
+						this.WaypointsList.AddWaypoint(waypoint);
 					}
 
 					foreach (MyJumpGateRemoteAntenna antenna in connected_grid.GetAttachedJumpGateRemoteAntennas())
@@ -1200,17 +1267,35 @@ namespace IOTA.ModularJumpGates.CubeBlock
 							MyJumpGate other_gate = antenna.GetInboundControlGate(channel);
 							if (other_gate == null || other_gate.MarkClosed) continue;
 							distance = Vector3D.Distance(jump_node, other_gate.WorldJumpNode);
-							if (distance < jump_gate.JumpGateConfiguration.MinimumJumpDistance || distance > jump_gate.JumpGateConfiguration.MaximumJumpDistance || !antenna.IsFactionRelationValid(channel, player_identity)) continue;
 							MyJumpGateWaypoint waypoint = new MyJumpGateWaypoint(other_gate);
-							lock (this.WaypointsListMutex) if (!this.WaypointsList.Contains(waypoint)) this.WaypointsList.Add(waypoint);
+							if (distance < jump_gate.JumpGateConfiguration.MinimumJumpDistance) waypoint.InvalidationReason = MyWaypointInvalidationReason.TOO_CLOSE;
+							else if (distance > jump_gate.JumpGateConfiguration.MaximumJumpDistance) waypoint.InvalidationReason = MyWaypointInvalidationReason.TOO_FAR;
+							else if (!antenna.IsFactionRelationValid(channel, player_identity)) waypoint.InvalidationReason = MyWaypointInvalidationReason.FACTION_MISMATCH;
+							else waypoint.InvalidationReason = MyWaypointInvalidationReason.NONE;
+							this.WaypointsList.AddWaypoint(waypoint);
 						}
 					}
 				}
 
-				lock (this.WaypointsListMutex)
+				foreach (MyBeaconLinkWrapper beacon in this.JumpGateGrid.GetBeaconsWithinReverseBroadcastSphere())
 				{
-					this.WaypointsList.AddRange(this.JumpGateGrid.GetBeaconsWithinReverseBroadcastSphere().Where((beacon) => (distance = Vector3D.Distance(jump_node, beacon.BeaconPosition)) >= jump_gate.JumpGateConfiguration.MinimumJumpDistance && distance <= jump_gate.JumpGateConfiguration.MaximumJumpDistance).OrderBy((beacon) => Vector3D.Distance(beacon.BeaconPosition, jump_node)).Select((beacon) => new MyJumpGateWaypoint(beacon)));
-					this.WaypointsList.AddRange(MyAPIGateway.Session.GPS.GetGpsList(player_identity).Where(MyJumpGateController.IsGPSValid).OrderBy((gps) => Vector3D.Distance(gps.Coords, jump_node)).Select((gps) => new MyJumpGateWaypoint(gps, MyAPIGateway.Multiplayer.MyId)));
+					distance = Vector3D.Distance(jump_node, beacon.BeaconPosition);
+					MyJumpGateWaypoint waypoint = new MyJumpGateWaypoint(beacon);
+					if (distance < jump_gate.JumpGateConfiguration.MinimumJumpDistance) waypoint.InvalidationReason = MyWaypointInvalidationReason.TOO_CLOSE;
+					else if (distance > jump_gate.JumpGateConfiguration.MaximumJumpDistance) waypoint.InvalidationReason = MyWaypointInvalidationReason.TOO_FAR;
+					else waypoint.InvalidationReason = MyWaypointInvalidationReason.NONE;
+					this.WaypointsList.AddWaypoint(waypoint);
+				}
+
+				foreach (IMyGps gps in MyAPIGateway.Session.GPS.GetGpsList(player_identity))
+				{
+					if (!MyJumpGateController.IsGPSValid(gps)) continue;
+					distance = Vector3D.Distance(jump_node, gps.Coords);
+					MyJumpGateWaypoint waypoint = new MyJumpGateWaypoint(gps, MyAPIGateway.Multiplayer.MyId);
+					if (distance < jump_gate.JumpGateConfiguration.MinimumJumpDistance) waypoint.InvalidationReason = MyWaypointInvalidationReason.TOO_CLOSE;
+					else if (distance > jump_gate.JumpGateConfiguration.MaximumJumpDistance) waypoint.InvalidationReason = MyWaypointInvalidationReason.TOO_FAR;
+					else waypoint.InvalidationReason = MyWaypointInvalidationReason.NONE;
+					this.WaypointsList.AddWaypoint(waypoint);
 				}
 			}
 			
@@ -1366,11 +1451,9 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				local_jump_ellipse.WorldMatrix.Up = local_forward;
 				local_jump_ellipse.Draw2(aqua, 20, 16, 0.00125f * scale, MyJumpGateModSession.Instance.Materials.WeaponLaser, 10);
 				
-				Vector3D player_facing = table_holo_center - MyAPIGateway.Session.Camera.Position;
-				Vector3D up = Vector3D.Cross(player_facing, MyAPIGateway.Session.Camera.WorldMatrix.Left);
-				MatrixD player_holo_matrix;
-				MatrixD.CreateWorld(ref table_holo_center, ref player_facing, ref up, out player_holo_matrix);
-				
+				MatrixD player_holo_matrix = MyAPIGateway.Session.Camera.WorldMatrix;
+				player_holo_matrix.Translation = table_holo_center;
+
 				foreach (MyJumpGateDrive drive in this.AttachedJumpGateDrives)
 				{
 					if (drive.TerminalBlock == null) continue;
@@ -1389,7 +1472,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 
 					if (construct == null)
 					{
-						Vector3D pos = MyJumpGateModSession.WorldVectorToLocalVectorP(ref jump_ellipse.WorldMatrix, entity.WorldMatrix.Translation);
+						Vector3D pos = Vector3D.Transform(entity.WorldMatrix.Translation, ref jump_ellipse.WorldMatrixInv);
 						Vector3D.Transform(ref pos, ref holo_matrix, out pos);
 						MyStringId marker = (jump_gate.IsEntityValidForJumpSpace(entity)) ? MyJumpGateModSession.Instance.Materials.EnabledEntityMarker : MyJumpGateModSession.Instance.Materials.DisabledEntityMarker;
 						MyTransparentGeometry.AddBillboardOriented(marker, intense_red, pos, player_holo_matrix.Right, player_holo_matrix.Down, 0.05f * scale);
@@ -1494,17 +1577,6 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			if (jump_gate == null || jump_gate.Closed || this.RemoteAntenna == null) return;
 			jump_gate.Controller = this;
 			this.BaseBlockSettings.JumpGateName(jump_gate.GetName());
-		}
-
-		/// <summary>
-		/// Gets the list of waypoints this controller has<br />
-		/// This is client dependent
-		/// </summary>
-		/// <param name="waypoints">An enumerable to be populated this controller's waypoints</param>
-		public void GetWaypointsList(List<MyJumpGateWaypoint> waypoints)
-		{
-			if (waypoints == null || this.WaypointsList == null) return;
-			lock (this.WaypointsListMutex) waypoints.AddRange(this.WaypointsList.Distinct());
 		}
 
 		/// <summary>

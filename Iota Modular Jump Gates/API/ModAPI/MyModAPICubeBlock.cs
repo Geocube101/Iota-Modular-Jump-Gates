@@ -750,13 +750,43 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		}
 
 		/// <summary>
-		/// Gets the list of waypoints this controller has<br />
+		/// Gets the list of jump gate waypoints this controller has<br />
 		/// This is client dependent
 		/// </summary>
-		/// <returns>An enumerable containing this controller's waypoints</returns>
-		public IEnumerable<MyAPIJumpGateWaypoint> GetWaypointsList()
+		/// <returns>An enumerable containing this controller's jump gate waypoints</returns>
+		public IEnumerable<MyAPIJumpGateWaypoint> GetJumpGateWaypoints()
 		{
-			return this.GetMethod<Func<IEnumerable<byte[]>>>("GetWaypointsList")().Select(MyAPIGateway.Utilities.SerializeFromBinary<MyAPIJumpGateWaypoint>);
+			return this.GetMethod<Func<IEnumerable<byte[]>>>("GetJumpGateWaypoints")().Select(MyAPIGateway.Utilities.SerializeFromBinary<MyAPIJumpGateWaypoint>);
+		}
+
+		/// <summary>
+		/// Gets the list of beacon waypoints this controller has<br />
+		/// This is client dependent
+		/// </summary>
+		/// <returns>An enumerable containing this controller's beacon waypoints</returns>
+		public IEnumerable<MyAPIJumpGateWaypoint> GetBeaconWaypoints()
+		{
+			return this.GetMethod<Func<IEnumerable<byte[]>>>("GetBeaconWaypoints")().Select(MyAPIGateway.Utilities.SerializeFromBinary<MyAPIJumpGateWaypoint>);
+		}
+
+		/// <summary>
+		/// Gets the list of GPS waypoints this controller has<br />
+		/// This is client dependent
+		/// </summary>
+		/// <returns>An enumerable containing this controller's GPS waypoints</returns>
+		public IEnumerable<MyAPIJumpGateWaypoint> GetGPSWaypoints()
+		{
+			return this.GetMethod<Func<IEnumerable<byte[]>>>("GetGPSWaypoints")().Select(MyAPIGateway.Utilities.SerializeFromBinary<MyAPIJumpGateWaypoint>);
+		}
+
+		/// <summary>
+		/// Gets the list of server waypoints this controller has<br />
+		/// This is client dependent
+		/// </summary>
+		/// <returns>An enumerable containing this controller's server waypoints</returns>
+		public IEnumerable<MyAPIJumpGateWaypoint> GetServerWaypoints()
+		{
+			return this.GetMethod<Func<IEnumerable<byte[]>>>("GetServerWaypoints")().Select(MyAPIGateway.Utilities.SerializeFromBinary<MyAPIJumpGateWaypoint>);
 		}
 	}
 
@@ -1126,14 +1156,47 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		}
 
 		/// <summary>
-		/// Gets the list of waypoints this controller has<br />
+		/// Gets the list of jump gate waypoints this controller has<br />
 		/// This is client dependent
 		/// </summary>
-		/// <param name="channel">The channel who's visible waypoints to get</param>
-		/// <returns>An enumerable containing this controller's waypoints</returns>
-		public IEnumerable<MyAPIJumpGateWaypoint> GetWaypointsList(byte channel)
+		/// <param name="channel">The channel whose waypoints to get</param>
+		/// <returns>An enumerable containing this controller's jump gate waypoints</returns>
+		public IEnumerable<MyAPIJumpGateWaypoint> GetJumpGateWaypoints(byte channel)
 		{
-			return this.GetMethod<Func<byte, IEnumerable<byte[]>>>("GetWaypointsList")(channel).Select(MyAPIGateway.Utilities.SerializeFromBinary<MyAPIJumpGateWaypoint>);
+			return this.GetMethod<Func<byte, IEnumerable<byte[]>>>("GetJumpGateWaypoints")(channel).Select(MyAPIGateway.Utilities.SerializeFromBinary<MyAPIJumpGateWaypoint>);
+		}
+
+		/// <summary>
+		/// Gets the list of beacon waypoints this controller has<br />
+		/// This is client dependent
+		/// </summary>
+		/// <param name="channel">The channel whose waypoints to get</param>
+		/// <returns>An enumerable containing this controller's beacon waypoints</returns>
+		public IEnumerable<MyAPIJumpGateWaypoint> GetBeaconWaypoints(byte channel)
+		{
+			return this.GetMethod<Func<byte, IEnumerable<byte[]>>>("GetBeaconWaypoints")(channel).Select(MyAPIGateway.Utilities.SerializeFromBinary<MyAPIJumpGateWaypoint>);
+		}
+
+		/// <summary>
+		/// Gets the list of GPS waypoints this controller has<br />
+		/// This is client dependent
+		/// </summary>
+		/// <param name="channel">The channel whose waypoints to get</param>
+		/// <returns>An enumerable containing this controller's GPS waypoints</returns>
+		public IEnumerable<MyAPIJumpGateWaypoint> GetGPSWaypoints(byte channel)
+		{
+			return this.GetMethod<Func<byte, IEnumerable<byte[]>>>("GetGPSWaypoints")(channel).Select(MyAPIGateway.Utilities.SerializeFromBinary<MyAPIJumpGateWaypoint>);
+		}
+
+		/// <summary>
+		/// Gets the list of server waypoints this controller has<br />
+		/// This is client dependent
+		/// </summary>
+		/// <param name="channel">The channel whose waypoints to get</param>
+		/// <returns>An enumerable containing this controller's server waypoints</returns>
+		public IEnumerable<MyAPIJumpGateWaypoint> GetServerWaypoints(byte channel)
+		{
+			return this.GetMethod<Func<byte, IEnumerable<byte[]>>>("GetServerWaypoints")(channel).Select(MyAPIGateway.Utilities.SerializeFromBinary<MyAPIJumpGateWaypoint>);
 		}
 	}
 

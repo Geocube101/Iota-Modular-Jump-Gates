@@ -281,9 +281,24 @@ namespace IOTA.ModularJumpGates.API
 				["IsPlayerFactionRelationValid"] = (Func<long, bool>) block.IsFactionRelationValid,
 				["IsSteamFactionRelationValid"] = (Func<ulong, bool>) block.IsFactionRelationValid,
 				["GetAttachedJumpGate"] = (Func<Dictionary<string, object>>) (() => this.ReturnJumpGateWrapper(block.AttachedJumpGate())),
-				["GetWaypointsList"] = (Func<IEnumerable<byte[]>>) (() => {
+				["GetJumpGateWaypoints"] = (Func<IEnumerable<byte[]>>) (() => {
 					List<MyJumpGateWaypoint> waypoints = new List<MyJumpGateWaypoint>();
-					block.GetWaypointsList(waypoints);
+					block.WaypointsList.GetJumpGateWaypoints(waypoints);
+					return waypoints.Select(MyAPIGateway.Utilities.SerializeToBinary);
+				}),
+				["GetBeaconWaypoints"] = (Func<IEnumerable<byte[]>>) (() => {
+					List<MyJumpGateWaypoint> waypoints = new List<MyJumpGateWaypoint>();
+					block.WaypointsList.GetBeaconWaypoints(waypoints);
+					return waypoints.Select(MyAPIGateway.Utilities.SerializeToBinary);
+				}),
+				["GetGPSWaypoints"] = (Func<IEnumerable<byte[]>>) (() => {
+					List<MyJumpGateWaypoint> waypoints = new List<MyJumpGateWaypoint>();
+					block.WaypointsList.GetGPSWaypoints(waypoints);
+					return waypoints.Select(MyAPIGateway.Utilities.SerializeToBinary);
+				}),
+				["GetServerWaypoints"] = (Func<IEnumerable<byte[]>>) (() => {
+					List<MyJumpGateWaypoint> waypoints = new List<MyJumpGateWaypoint>();
+					block.WaypointsList.GetServerWaypoints(waypoints);
 					return waypoints.Select(MyAPIGateway.Utilities.SerializeToBinary);
 				}),
 			};
@@ -370,9 +385,24 @@ namespace IOTA.ModularJumpGates.API
 				["GetNearbyAntennas"] = (Func<IEnumerable<Dictionary<string, object>>>) (() => block.GetNearbyAntennas().Select(this.ReturnCubeBlockRemoteAntennaWrapper)),
 				["IsPlayerFactionRelationValid"] = (Func<byte, long, bool>) block.IsFactionRelationValid,
 				["IsSteamFactionRelationValid"] = (Func<byte, ulong, bool>) block.IsFactionRelationValid,
-				["GetWaypointsList"] = (Func<byte, IEnumerable<byte[]>>) ((channel) => {
+				["GetJumpGateWaypoints"] = (Func<byte, IEnumerable<byte[]>>) ((channel) => {
 					List<MyJumpGateWaypoint> waypoints = new List<MyJumpGateWaypoint>();
-					block.GetWaypointsList(waypoints, channel);
+					block.WaypointsList[channel].GetJumpGateWaypoints(waypoints);
+					return waypoints.Select(MyAPIGateway.Utilities.SerializeToBinary);
+				}),
+				["GetBeaconWaypoints"] = (Func<byte, IEnumerable<byte[]>>) ((channel) => {
+					List<MyJumpGateWaypoint> waypoints = new List<MyJumpGateWaypoint>();
+					block.WaypointsList[channel].GetBeaconWaypoints(waypoints);
+					return waypoints.Select(MyAPIGateway.Utilities.SerializeToBinary);
+				}),
+				["GetGPSWaypoints"] = (Func<byte, IEnumerable<byte[]>>) ((channel) => {
+					List<MyJumpGateWaypoint> waypoints = new List<MyJumpGateWaypoint>();
+					block.WaypointsList[channel].GetGPSWaypoints(waypoints);
+					return waypoints.Select(MyAPIGateway.Utilities.SerializeToBinary);
+				}),
+				["GetServerWaypoints"] = (Func<byte, IEnumerable<byte[]>>) ((channel) => {
+					List<MyJumpGateWaypoint> waypoints = new List<MyJumpGateWaypoint>();
+					block.WaypointsList[channel].GetServerWaypoints(waypoints);
 					return waypoints.Select(MyAPIGateway.Utilities.SerializeToBinary);
 				}),
 				["GetJumpGateName"] = (Func<byte, string>) block.GetJumpGateName,

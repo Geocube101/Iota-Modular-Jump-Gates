@@ -1,4 +1,5 @@
-﻿using ProtoBuf;
+﻿using IOTA.ModularJumpGates.ModConfiguration;
+using ProtoBuf;
 using Sandbox.ModAPI;
 using System;
 using System.Collections.Generic;
@@ -10,6 +11,7 @@ using VRageMath;
 namespace IOTA.ModularJumpGates.Util
 {
     public enum MyWaypointType : byte { NONE = 0, JUMP_GATE = 1, JUMPGATE = 1, GATE = 1, GPS = 2, BEACON = 3, SERVER = 4 };
+	public enum MyWaypointInvalidationReason : byte { NONE, TOO_FAR, TOO_CLOSE, FACTION_MISMATCH, TARGET_WORMHOLE_DISABLED, TARGET_WORMHOLE_ENABLED }
 
     /// <summary>
     /// Serializable wrapper for GPSs
@@ -299,12 +301,35 @@ namespace IOTA.ModularJumpGates.Util
 		#endregion
 	}
 
-    /// <summary>
-    /// Class representing a destination for a jump gate
-    /// </summary>
+	internal class JumpGateWaypointComparer : IComparer<MyJumpGateWaypoint>
+	{
+		public readonly Vector3D JumpNode;
+
+		public JumpGateWaypointComparer(ref Vector3D jump_node)
+		{
+			this.JumpNode = jump_node;
+		}
+
+		public int Compare(MyJumpGateWaypoint a, MyJumpGateWaypoint b)
+		{
+			if (object.ReferenceEquals(a, b)) return 0;
+			else if (object.ReferenceEquals(a, null)) return 1;
+			else if (object.ReferenceEquals(b, null)) return -1;
+			Vector3D? point1 = a.GetEndpoint();
+			Vector3D? point2 = b.GetEndpoint();
+			if (point1 == null && point2 == null) return 0;
+			else if (point1 == null) return 1;
+			else if (point2 == null) return -1;
+			else return Vector3D.DistanceSquared(this.JumpNode, point1.Value).CompareTo(Vector3D.DistanceSquared(this.JumpNode, point2.Value));
+		}
+	}
+
+	/// <summary>
+	/// Class representing a destination for a jump gate
+	/// </summary>
 	[ProtoContract]
 	internal class MyJumpGateWaypoint : IEquatable<MyJumpGateWaypoint>
-    {
+	{
 		#region Public Variables
         /// <summary>
         /// The target jump gate
@@ -335,6 +360,12 @@ namespace IOTA.ModularJumpGates.Util
         /// </summary>
         [ProtoMember(5)]
         public MyWaypointType WaypointType { get; private set; } = MyWaypointType.NONE;
+
+		/// <summary>
+		/// The reason this waypoint is invalid
+		/// </summary>
+		[ProtoMember(6)]
+		public MyWaypointInvalidationReason InvalidationReason = MyWaypointInvalidationReason.NONE;
 		#endregion
 
 		#region Public Static Operators
@@ -520,7 +551,14 @@ namespace IOTA.ModularJumpGates.Util
 			}
         }
 
-		public void GetNameAndTooltip(ref Vector3D this_pos, out string name, out string tooltip)
+		/// <summary>
+		/// Gets the display name and tooltip for this waypoint based on its type, distance from the specified position, and invalidation reason if applicable
+		/// </summary>
+		/// <param name="this_pos">The jump node</param>
+		/// <param name="gate_configuration">The gate configuration</param>
+		/// <param name="name">The display name</param>
+		/// <param name="tooltip">The tooltip</param>
+		public void GetNameAndTooltip(ref Vector3D this_pos, MyModConfigurationV1.MyLocalJumpGateConfiguration gate_configuration, out string name, out string tooltip)
 		{
 			name = null;
 			tooltip = null;
@@ -529,6 +567,23 @@ namespace IOTA.ModularJumpGates.Util
 			Vector3D? endpoint = this.GetEndpoint(out destination_jump_gate);
 			if (endpoint == null) return;
 			double distance = Vector3D.Distance(this_pos, endpoint.Value);
+			string invalid = (this.InvalidationReason == MyWaypointInvalidationReason.NONE) ? "" : "[ Invalid ] ";
+			string invalid_tooltip = "";
+
+			switch (this.InvalidationReason)
+			{
+				case MyWaypointInvalidationReason.TOO_FAR:
+					invalid_tooltip = $"\n\n{MyTexts.GetString("MyWaypointInvalidationReason_TOO_FAR").Replace("{%0}", MyJumpGateModSession.AutoconvertMetricUnits(gate_configuration.MaximumJumpDistance, "m", 2))}";
+					break;
+				case MyWaypointInvalidationReason.TOO_CLOSE:
+					invalid_tooltip = $"\n\n{MyTexts.GetString("MyWaypointInvalidationReason_TOO_CLOSE").Replace("{%0}", MyJumpGateModSession.AutoconvertMetricUnits(gate_configuration.MinimumJumpDistance, "m", 2))}";
+					break;
+				case MyWaypointInvalidationReason.NONE:
+					break;
+				default:
+					invalid_tooltip = $"\n\n{MyTexts.GetString($"MyWaypointInvalidationReason_{this.InvalidationReason}")}";
+					break;
+			}
 
 			if (this.WaypointType == MyWaypointType.JUMP_GATE && destination_jump_gate != null && (MyNetworkInterface.IsStandaloneMultiplayerClient || destination_jump_gate.IsComplete()))
 			{
@@ -542,8 +597,8 @@ namespace IOTA.ModularJumpGates.Util
 				string faction_name = faction?.Name ?? "N/A";
 				string value = MyJumpGateModSession.AutoconvertMetricUnits(distance, "m", 2);
 				string name_value = MyTexts.GetString("Terminal_JumpGateController_JumpGateWaypointName").Replace("{%0}", value);
-				tooltip = MyTexts.GetString("Terminal_JumpGateController_JumpGateWaypointTooltip").Replace("{%0}", grid_name).Replace("{%1}", gate_name).Replace("{%2}", value).Replace("{%3}", owner_name).Replace("{%4}", faction_name);
-				name = $"{grid_name_cut} - {gate_name_cut}: ({name_value})";
+				tooltip = MyTexts.GetString("Terminal_JumpGateController_JumpGateWaypointTooltip").Replace("{%0}", grid_name).Replace("{%1}", gate_name).Replace("{%2}", value).Replace("{%3}", owner_name).Replace("{%4}", faction_name) + invalid_tooltip;
+				name = $"{invalid}{grid_name_cut} - {gate_name_cut}: ({name_value})";
 			}
 			else if (this.WaypointType == MyWaypointType.GPS)
 			{
@@ -554,8 +609,8 @@ namespace IOTA.ModularJumpGates.Util
 				string name_value = MyTexts.GetString("Terminal_JumpGateController_GPSWaypointName").Replace("{%0}", value);
 				string owner_name = owner?.DisplayName ?? "N/A";
 				string faction_name = faction?.Name ?? "N/A";
-				tooltip = MyTexts.GetString("Terminal_JumpGateController_GPSWaypointTooltip").Replace("{%0}", gps.Name).Replace("{%1}", value).Replace("{%2}", owner_name).Replace("{%3}", faction_name);
-				name = $"{gps.Name} ({name_value})";
+				tooltip = MyTexts.GetString("Terminal_JumpGateController_GPSWaypointTooltip").Replace("{%0}", gps.Name).Replace("{%1}", value).Replace("{%2}", owner_name).Replace("{%3}", faction_name) + invalid_tooltip;
+				name = $"{invalid}{gps.Name} ({name_value})";
 			}
 			else if (this.WaypointType == MyWaypointType.BEACON)
 			{
@@ -568,8 +623,8 @@ namespace IOTA.ModularJumpGates.Util
 				string beacon_name = this.Beacon.BroadcastName ?? "N/A";
 				string owner_name = owner?.DisplayName ?? "N/A";
 				string faction_name = faction?.Name ?? "N/A";
-				tooltip = MyTexts.GetString("Terminal_JumpGateController_BeaconWaypointTooltip").Replace("{%0}", grid_name).Replace("{%1}", beacon_name).Replace("{%2}", value).Replace("{%3}", owner_name).Replace("{%4}", faction_name);
-				name = $"{this.Beacon.BroadcastName} ({value})";
+				tooltip = MyTexts.GetString("Terminal_JumpGateController_BeaconWaypointTooltip").Replace("{%0}", grid_name).Replace("{%1}", beacon_name).Replace("{%2}", value).Replace("{%3}", owner_name).Replace("{%4}", faction_name) + invalid_tooltip;
+				name = $"{invalid}{this.Beacon.BroadcastName} ({value})";
 			}
 		}
 		#endregion

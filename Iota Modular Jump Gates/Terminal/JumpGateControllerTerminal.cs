@@ -1,4 +1,5 @@
 ﻿using IOTA.ModularJumpGates.CubeBlock;
+using IOTA.ModularJumpGates.ModConfiguration;
 using IOTA.ModularJumpGates.Util;
 using Sandbox.ModAPI;
 using Sandbox.ModAPI.Interfaces.Terminal;
@@ -255,6 +256,7 @@ namespace IOTA.ModularJumpGates.Terminal
 			{
 				IMyTerminalControlTextbox search_waypoint_tb = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlTextbox, IMyUpgradeModule>(MODID_PREFIX + "SearchControllerWaypoint");
 				search_waypoint_tb.Title = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_SearchDestinationWaypoints"));
+				search_waypoint_tb.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_SearchDestinationWaypoints_Tooltip"));
 				search_waypoint_tb.SupportsMultipleBlocks = false;
 				search_waypoint_tb.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.JUMP_GATE;
 				search_waypoint_tb.Enabled = (block) => {
@@ -291,19 +293,19 @@ namespace IOTA.ModularJumpGates.Terminal
 					MyJumpGate jump_gate = controller?.AttachedJumpGate();
 					if (controller == null || !controller.IsWorking || jump_gate == null || jump_gate.Closed) return;
 					MyJumpGateWaypoint selected_waypoint = controller.BlockSettings.SelectedWaypoint();
+					MyModConfigurationV1.MyLocalJumpGateConfiguration jump_gate_configuration = jump_gate.JumpGateConfiguration;
+					MyTerminalControlListBoxItem item;
 					Vector3D jump_node = jump_gate.WorldJumpNode;
-					MyWaypointType last_waypoint_type = MyWaypointType.NONE;
 
 					if (selected_waypoint != null)
 					{
-						MyTerminalControlListBoxItem item;
 						MyJumpGate destination_jump_gate;
 						Vector3D? endpoint = selected_waypoint.GetEndpoint(out destination_jump_gate);
 
 						if (endpoint != null)
 						{
 							string name, tooltip;
-							selected_waypoint.GetNameAndTooltip(ref jump_node, out name, out tooltip);
+							selected_waypoint.GetNameAndTooltip(ref jump_node, jump_gate_configuration, out name, out tooltip);
 							item = new MyTerminalControlListBoxItem(MyStringId.GetOrCompute(name), MyStringId.GetOrCompute(tooltip), selected_waypoint);
 							preselect_list.Add(item);
 							content_list.Add(item);
@@ -312,57 +314,121 @@ namespace IOTA.ModularJumpGates.Terminal
 					}
 
 					content_list.Add(new MyTerminalControlListBoxItem(MyStringId.GetOrCompute($"--{MyTexts.GetString("Terminal_JumpGateController_Deselect")}--"), MyStringId.NullOrEmpty, (MyJumpGateWaypoint) null));
-					controller.GetWaypointsList(waypoints_list);
+					controller.WaypointsList.GetJumpGateWaypoints(waypoints_list);
+					int pass_count = 0;
 
-					foreach (MyJumpGateWaypoint waypoint in waypoints_list)
+					if (waypoints_list.Count > 0)
 					{
-						if (controller.BlockSettings.DoSustainedWormhole() && waypoint.WaypointType != MyWaypointType.JUMP_GATE) continue;
-						MyTerminalControlListBoxItem item;
-						Vector3D? endpoint = waypoint.GetEndpoint();
-						string name, tooltip;
-						if (endpoint == null || !MyJumpGateControllerTerminal.DoesWaypointMatchSearch(controller, waypoint, jump_node, out name, out tooltip) || name == null || tooltip == null) continue;
-						double distance = Vector3D.Distance(jump_node, endpoint.Value);
-						if (distance < jump_gate.JumpGateConfiguration.MinimumJumpDistance || distance > jump_gate.JumpGateConfiguration.MaximumJumpDistance) continue;
+						waypoints_list.Sort(new JumpGateWaypointComparer(ref jump_node));
 
-						if (waypoint.WaypointType != last_waypoint_type)
+						item = new MyTerminalControlListBoxItem(MyStringId.GetOrCompute(" "), MyStringId.NullOrEmpty, selected_waypoint);
+						content_list.Add(item);
+						item = new MyTerminalControlListBoxItem(MyStringId.GetOrCompute($"   -- {MyTexts.GetString("Terminal_JumpGateController_JumpGateWaypointsList")} --"), MyStringId.NullOrEmpty, selected_waypoint);
+						content_list.Add(item);
+
+						foreach (MyJumpGateWaypoint waypoint in waypoints_list)
 						{
-							last_waypoint_type = waypoint.WaypointType;
+							Vector3D? endpoint = waypoint.GetEndpoint();
+							string name, tooltip;
+							if (endpoint == null || !MyJumpGateControllerTerminal.DoesWaypointMatchSearch(controller, waypoint, ref jump_node, jump_gate_configuration, out name, out tooltip) || name == null || tooltip == null) continue;
+							++pass_count;
+							double distance = Vector3D.Distance(jump_node, endpoint.Value);
 
-							switch (last_waypoint_type)
-							{
-								case MyWaypointType.JUMP_GATE:
-									item = new MyTerminalControlListBoxItem(MyStringId.GetOrCompute(" "), MyStringId.NullOrEmpty, selected_waypoint);
-									content_list.Add(item);
-									item = new MyTerminalControlListBoxItem(MyStringId.GetOrCompute($"   -- {MyTexts.GetString("Terminal_JumpGateController_JumpGateWaypointsList")} --"), MyStringId.NullOrEmpty, selected_waypoint);
-									content_list.Add(item);
-									break;
-								case MyWaypointType.BEACON:
-									item = new MyTerminalControlListBoxItem(MyStringId.GetOrCompute(" "), MyStringId.NullOrEmpty, selected_waypoint);
-									content_list.Add(item);
-									item = new MyTerminalControlListBoxItem(MyStringId.GetOrCompute($"   -- {MyTexts.GetString("Terminal_JumpGateController_BeaconWaypointsList")} --"), MyStringId.NullOrEmpty, selected_waypoint);
-									content_list.Add(item);
-									break;
-								case MyWaypointType.GPS:
-									item = new MyTerminalControlListBoxItem(MyStringId.GetOrCompute(" "), MyStringId.NullOrEmpty, selected_waypoint);
-									content_list.Add(item);
-									item = new MyTerminalControlListBoxItem(MyStringId.GetOrCompute($"   -- {MyTexts.GetString("Terminal_JumpGateController_GPSWaypointsList")} --"), MyStringId.NullOrEmpty, selected_waypoint);
-									content_list.Add(item);
-									break;
-								case MyWaypointType.SERVER:
-									item = new MyTerminalControlListBoxItem(MyStringId.GetOrCompute(" "), MyStringId.NullOrEmpty, selected_waypoint);
-									content_list.Add(item);
-									item = new MyTerminalControlListBoxItem(MyStringId.GetOrCompute($"   -- {MyTexts.GetString("Terminal_JumpGateController_ServerWaypointsList")} --"), MyStringId.NullOrEmpty, selected_waypoint);
-									content_list.Add(item);
-									break;
-							}
+							item = new MyTerminalControlListBoxItem(MyStringId.GetOrCompute(name), MyStringId.GetOrCompute(tooltip), (waypoint.InvalidationReason == MyWaypointInvalidationReason.NONE) ? waypoint : selected_waypoint);
+							if (selected_waypoint == waypoint) preselect_list.Add(item);
+							content_list.Add(item);
 						}
 
-						item = new MyTerminalControlListBoxItem(MyStringId.GetOrCompute(name), MyStringId.GetOrCompute(tooltip), waypoint);
-						if (selected_waypoint == waypoint) preselect_list.Add(item);
-						content_list.Add(item);
+						if (pass_count == 0) content_list.RemoveRange(content_list.Count - 2, 2);
+						waypoints_list.Clear();
 					}
 
-					waypoints_list.Clear();
+					if (!controller.BlockSettings.DoSustainedWormhole())
+					{
+						controller.WaypointsList.GetBeaconWaypoints(waypoints_list);
+						
+						if (waypoints_list.Count > 0)
+						{
+							waypoints_list.Sort(new JumpGateWaypointComparer(ref jump_node));
+
+							item = new MyTerminalControlListBoxItem(MyStringId.GetOrCompute(" "), MyStringId.NullOrEmpty, selected_waypoint);
+							content_list.Add(item);
+							item = new MyTerminalControlListBoxItem(MyStringId.GetOrCompute($"   -- {MyTexts.GetString("Terminal_JumpGateController_BeaconWaypointsList")} --"), MyStringId.NullOrEmpty, selected_waypoint);
+							content_list.Add(item);
+
+							foreach (MyJumpGateWaypoint waypoint in waypoints_list)
+							{
+								Vector3D? endpoint = waypoint.GetEndpoint();
+								string name, tooltip;
+								if (endpoint == null || !MyJumpGateControllerTerminal.DoesWaypointMatchSearch(controller, waypoint, ref jump_node, jump_gate_configuration, out name, out tooltip) || name == null || tooltip == null) continue;
+								++pass_count;
+								double distance = Vector3D.Distance(jump_node, endpoint.Value);
+
+								item = new MyTerminalControlListBoxItem(MyStringId.GetOrCompute(name), MyStringId.GetOrCompute(tooltip), (waypoint.InvalidationReason == MyWaypointInvalidationReason.NONE) ? waypoint : selected_waypoint);
+								if (selected_waypoint == waypoint) preselect_list.Add(item);
+								content_list.Add(item);
+							}
+
+							if (pass_count == 0) content_list.RemoveRange(content_list.Count - 2, 2);
+							waypoints_list.Clear();
+						}
+
+						controller.WaypointsList.GetGPSWaypoints(waypoints_list);
+						
+						if (waypoints_list.Count > 0)
+						{
+							waypoints_list.Sort(new JumpGateWaypointComparer(ref jump_node));
+
+							item = new MyTerminalControlListBoxItem(MyStringId.GetOrCompute(" "), MyStringId.NullOrEmpty, selected_waypoint);
+							content_list.Add(item);
+							item = new MyTerminalControlListBoxItem(MyStringId.GetOrCompute($"   -- {MyTexts.GetString("Terminal_JumpGateController_GPSWaypointsList")} --"), MyStringId.NullOrEmpty, selected_waypoint);
+							content_list.Add(item);
+
+							foreach (MyJumpGateWaypoint waypoint in waypoints_list)
+							{
+								Vector3D? endpoint = waypoint.GetEndpoint();
+								string name, tooltip;
+								if (endpoint == null || !MyJumpGateControllerTerminal.DoesWaypointMatchSearch(controller, waypoint, ref jump_node, jump_gate_configuration, out name, out tooltip) || name == null || tooltip == null) continue;
+								++pass_count;
+								double distance = Vector3D.Distance(jump_node, endpoint.Value);
+
+								item = new MyTerminalControlListBoxItem(MyStringId.GetOrCompute(name), MyStringId.GetOrCompute(tooltip), (waypoint.InvalidationReason == MyWaypointInvalidationReason.NONE) ? waypoint : selected_waypoint);
+								if (selected_waypoint == waypoint) preselect_list.Add(item);
+								content_list.Add(item);
+							}
+
+							if (pass_count == 0) content_list.RemoveRange(content_list.Count - 2, 2);
+							waypoints_list.Clear();
+						}
+
+						controller.WaypointsList.GetServerWaypoints(waypoints_list);
+					
+						if (waypoints_list.Count > 0)
+						{
+							waypoints_list.Sort(new JumpGateWaypointComparer(ref jump_node));
+
+							item = new MyTerminalControlListBoxItem(MyStringId.GetOrCompute(" "), MyStringId.NullOrEmpty, selected_waypoint);
+							content_list.Add(item);
+							item = new MyTerminalControlListBoxItem(MyStringId.GetOrCompute($"   -- {MyTexts.GetString("Terminal_JumpGateController_ServerWaypointsList")} --"), MyStringId.NullOrEmpty, selected_waypoint);
+							content_list.Add(item);
+
+							foreach (MyJumpGateWaypoint waypoint in waypoints_list)
+							{
+								Vector3D? endpoint = waypoint.GetEndpoint();
+								string name, tooltip;
+								if (endpoint == null || !MyJumpGateControllerTerminal.DoesWaypointMatchSearch(controller, waypoint, ref jump_node, jump_gate_configuration, out name, out tooltip) || name == null || tooltip == null) continue;
+								++pass_count;
+								double distance = Vector3D.Distance(jump_node, endpoint.Value);
+
+								item = new MyTerminalControlListBoxItem(MyStringId.GetOrCompute(name), MyStringId.GetOrCompute(tooltip), (waypoint.InvalidationReason == MyWaypointInvalidationReason.NONE) ? waypoint : selected_waypoint);
+								if (selected_waypoint == waypoint) preselect_list.Add(item);
+								content_list.Add(item);
+							}
+
+							if (pass_count == 0) content_list.RemoveRange(content_list.Count - 2, 2);
+							waypoints_list.Clear();
+						}
+					}
 				};
 				choose_waypoint_lb.ItemSelected = (block, selected) => {
 					if (!choose_waypoint_lb.Enabled(block)) return;
@@ -3360,13 +3426,13 @@ namespace IOTA.ModularJumpGates.Terminal
 			return MyJumpGateControllerTerminal.TerminalControls.Contains(control);
 		}
 
-		public static bool DoesWaypointMatchSearch(MyJumpGateController controller, MyJumpGateWaypoint waypoint, Vector3D this_pos, out string name, out string tooltip)
+		public static bool DoesWaypointMatchSearch(MyJumpGateController controller, MyJumpGateWaypoint waypoint, ref Vector3D this_pos, MyModConfigurationV1.MyLocalJumpGateConfiguration jump_gate_configuration, out string name, out string tooltip)
 		{
 			name = null;
 			tooltip = null;
 			if (controller == null || waypoint == null) return false;
 			string input = MyJumpGateControllerTerminal.ControllerSearchInputs.GetValueOrDefault(controller.BlockID, null);
-			waypoint.GetNameAndTooltip(ref this_pos, out name, out tooltip);
+			waypoint.GetNameAndTooltip(ref this_pos, jump_gate_configuration, out name, out tooltip);
 			Vector3D? null_point;
 			MyJumpGate destination_jump_gate;
 			if (input == null || input.Length == 0) return true;
@@ -3376,7 +3442,8 @@ namespace IOTA.ModularJumpGates.Terminal
 			
 			foreach (string filter in input.ToLowerInvariant().Split(new char[] { ';' }))
 			{
-				if (filter.StartsWith("#"))
+				if (filter == "#valid") matched = matched && waypoint.InvalidationReason == MyWaypointInvalidationReason.NONE;
+				else if (filter.StartsWith("#"))
 				{
 					string[] parts = filter.Split(new char[] { '=' }, 2);
 					if (parts.Length < 2) matched = matched && true;

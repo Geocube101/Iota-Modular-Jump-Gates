@@ -117,9 +117,14 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		private IMyModelDummy LocalParticleEmitter;
 
 		/// <summary>
-		/// The collision detector for finding nearby links
+		/// The collision detector entity for finding nearby links
 		/// </summary>
 		private MyEntity LinkDetector = null;
+
+		/// <summary>
+		/// The collision detector for finding nearby links
+		/// </summary>
+		private MyPhysicalDetector PhysicalDetector = null;
 
 		/// <summary>
 		/// The connection effect spline to show when a link is established
@@ -235,8 +240,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				Save = false,
 			};
 			this.LinkDetector.Init(new StringBuilder($"JumpGateRemoteLink_{this.BlockID}"), null, (MyEntity) this.Entity, 1f);
-			PhysicsSettings settings = MyAPIGateway.Physics.CreateSettingsForDetector(this.LinkDetector, this.OnEntityCollision, MatrixD.Identity, Vector3D.Zero, RigidBodyFlag.RBF_KINEMATIC, 15, true);
-			MyAPIGateway.Physics.CreateSpherePhysics(settings, (float) this.MaxConnectionDistance);
+			this.PhysicalDetector = new MyPhysicalDetector(this.LinkDetector, this.MaxConnectionDistance, this.OnEntityCollision);
 			MyAPIGateway.Entities.AddEntity(this.LinkDetector);
 			Logger.Debug($"CREATED_COLLIDER REMOTE_LINK={this.BlockID}, COLLIDER={this.LinkDetector.DisplayName}", 4);
 

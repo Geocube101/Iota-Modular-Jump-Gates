@@ -352,7 +352,6 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			{
 				this.UpdateOnceAfterInit();
 				this.IsInitFrameCalled = true;
-				Logger.Debug($"[{this.BlockID}] ({this}) UPDATE_ONCE_AFTER_INIT", 5);
 			}
 
 			if (this.ResourceSink != null)
