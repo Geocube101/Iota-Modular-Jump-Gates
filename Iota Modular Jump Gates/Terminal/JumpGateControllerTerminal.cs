@@ -103,8 +103,14 @@ namespace IOTA.ModularJumpGates.Terminal
 						for (byte i = 0; i < MyJumpGateRemoteAntenna.ChannelCount; ++i)
 						{
 							MyJumpGateController attached = antenna.GetOutboundControlController(i);
+							MyJumpGate remote = antenna.GetConnectedControlledJumpGate(i);
 							if (attached != null && attached != controller) continue;
-							string tooltip = MyTexts.GetString("Terminal_JumpGateController_ActiveJumpGateTooltip1").Replace("{%0}", i.ToString());
+							string tooltip = MyTexts.GetString("Terminal_JumpGateController_ActiveJumpGateTooltip1")
+								.Replace("{%0}", i.ToString())
+								.Replace("{%1}", antenna.TerminalBlock?.CustomName ?? "N/A")
+								.Replace("{%2}", (remote == null) ? MyTexts.GetString("GeneralText_No") : MyTexts.GetString("GeneralText_Yes"))
+								.Replace("{%3}", remote?.JumpGateID.ToString() ?? "N/A")
+								.Replace("{%4}", remote?.GetJumpGateDrives()?.Count().ToString() ?? "N/A");
 							MyTerminalControlListBoxItem item = new MyTerminalControlListBoxItem(MyStringId.GetOrCompute($"{name}"), MyStringId.GetOrCompute(tooltip), new KeyValuePair<MyJumpGateRemoteAntenna, byte>(antenna, i));
 							content_list.Add(item);
 							if (attached == controller) preselect_list.Add(item);
