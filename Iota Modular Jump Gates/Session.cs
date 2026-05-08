@@ -385,6 +385,7 @@ namespace IOTA.ModularJumpGates
 		/// Whether the session has loaded completely
 		/// </summary>
 		public bool InitializationComplete { get; private set; } = false;
+
 		/// <summary>
 		/// The current, session local game tick
 		/// </summary>
@@ -423,7 +424,7 @@ namespace IOTA.ModularJumpGates
 		/// <summary>
 		/// The current mod version (major, minor, patch)
 		/// </summary>
-		public Vector3I ModVersion => new Vector3I(1, 4, 4);
+		public Vector3I ModVersion => new Vector3I(1, 4, 5);
 
 		/// <summary>
 		/// The Guid used to store information in mod storage components

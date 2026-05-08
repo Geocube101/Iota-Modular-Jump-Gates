@@ -16,7 +16,7 @@ using VRage.Utils;
 
 namespace IOTA.ModularJumpGates.EventController
 {
-	internal abstract class MyJumpGateEventBase<TargetedGateValueType> : MyEventProxyEntityComponent, IMyEventComponentWithGui where TargetedGateValueType : IComparable<TargetedGateValueType>
+	internal abstract class MyJumpGateEventBase<TargetedGateValueType> : MyEventProxyEntityComponent, IMyEventComponentWithGui, IMyEventControllerEntityComponent where TargetedGateValueType : IComparable<TargetedGateValueType>
 	{
 		[ProtoContract]
 		private sealed class MySerializedJumpGateEvent
@@ -530,7 +530,7 @@ namespace IOTA.ModularJumpGates.EventController
 			return this.TargetedJumpGates.Concat(this.TargetedRemoteJumpGates).Select((pair) => pair.Key).ToList();
 		}
 
-		public MyJumpGateEventBase()
+		public MyJumpGateEventBase() : base()
 		{
 			this.Init();
 		}
@@ -571,7 +571,7 @@ namespace IOTA.ModularJumpGates.EventController
 
 		public abstract void CreateTerminalInterfaceControls<T>() where T : IMyTerminalBlock;
 
-		public override void Deserialize(MyObjectBuilder_ComponentBase builder)
+		public sealed override void Deserialize(MyObjectBuilder_ComponentBase builder)
 		{
 			base.Deserialize(builder);
 			MyObjectBuilder_ModCustomComponent serialized_event = (MyObjectBuilder_ModCustomComponent) builder;
@@ -579,9 +579,10 @@ namespace IOTA.ModularJumpGates.EventController
 			catch { this.DeserializedInfo = null; }
 		}
 
-		public override MyObjectBuilder_ComponentBase Serialize(bool copy = false)
+		public sealed override MyObjectBuilder_ComponentBase Serialize(bool copy = false)
 		{
-			MySerializedJumpGateEventInfo info = new MySerializedJumpGateEventInfo {
+			MySerializedJumpGateEventInfo info = new MySerializedJumpGateEventInfo
+			{
 				TargetValue = this.TargetValue,
 				SelectedJumpGates = this.TargetedJumpGates.Select((pair) => pair.Key.JumpGateID).ToList(),
 				SelectedRemoteJumpGates = this.TargetedRemoteAntennas.Select((pair) => new KeyValuePair<long, byte>(pair.Key.BlockID, pair.Value)).ToList(),
@@ -591,10 +592,10 @@ namespace IOTA.ModularJumpGates.EventController
 			this.OnSave(info);
 
 			return new MyObjectBuilder_ModCustomComponent {
-				ComponentType = this.ComponentTypeDebugString,
-				CustomModData = Convert.ToBase64String(MyAPIGateway.Utilities.SerializeToBinary(info)),
-				RemoveExistingComponentOnNewInsert = true,
 				SubtypeName = this.ComponentTypeDebugString,
+				ComponentType = this.ComponentTypeDebugString,
+				RemoveExistingComponentOnNewInsert = false,
+				CustomModData = Convert.ToBase64String(MyAPIGateway.Utilities.SerializeToBinary(info)),
 			};
 		}
 	}

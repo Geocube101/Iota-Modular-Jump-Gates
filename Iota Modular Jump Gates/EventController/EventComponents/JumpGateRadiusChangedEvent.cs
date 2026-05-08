@@ -1,7 +1,6 @@
 ﻿using IOTA.ModularJumpGates.EventController.ObjectBuilders;
 using Sandbox.ModAPI;
 using Sandbox.ModAPI.Interfaces.Terminal;
-using System;
 using VRage;
 using VRage.Game.Components;
 using VRage.Utils;

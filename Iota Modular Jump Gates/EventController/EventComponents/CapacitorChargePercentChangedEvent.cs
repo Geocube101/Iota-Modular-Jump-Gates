@@ -69,7 +69,7 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 
 		public override void CreateTerminalInterfaceControls<T>()
 		{
-			base.CreateTerminalControls<T, JumpGateEntityEnteredEvent>();
+			base.CreateTerminalControls<T, CapacitorChargePercentChangedEvent>();
 		}
 
 		public override bool IsBlockValidForList(IMyTerminalBlock block)
