@@ -9,9 +9,9 @@ using VRage.Utils;
 namespace IOTA.ModularJumpGates.EventController.EventComponents
 {
 	[MyComponentBuilder(typeof(MyObjectBuilder_EventJumpGateDetonatorCountdownChanged))]
-	[MyComponentType(typeof(JumpGateDetonatorCountdownChangedEvent))]
+	[MyComponentType(typeof(MyObjectBuilder_EventJumpGateDetonatorCountdownChanged))]
 	[MyEntityDependencyType(typeof(IMyEventControllerBlock))]
-	internal class JumpGateDetonatorCountdownChangedEvent : MyJumpGateEventBase<float>
+	internal class JumpGateDetonatorCountdownChangedEvent : MyJumpGateEventBase<float, MyObjectBuilder_EventJumpGateDetonatorCountdownChanged>
 	{
 		public override bool IsThresholdUsed => false;
 		public override bool IsConditionSelectionUsed => true;

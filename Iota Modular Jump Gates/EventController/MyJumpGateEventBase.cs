@@ -1,4 +1,5 @@
 ﻿using IOTA.ModularJumpGates.CubeBlock;
+using IOTA.ModularJumpGates.EventController.ObjectBuilders;
 using IOTA.ModularJumpGates.Util;
 using ProtoBuf;
 using Sandbox.Game.Entities;
@@ -16,7 +17,7 @@ using VRage.Utils;
 
 namespace IOTA.ModularJumpGates.EventController
 {
-	internal abstract class MyJumpGateEventBase<TargetedGateValueType> : MyEventProxyEntityComponent, IMyEventComponentWithGui, IMyEventControllerEntityComponent where TargetedGateValueType : IComparable<TargetedGateValueType>
+	internal abstract class MyJumpGateEventBase<TargetedGateValueType, ObjectBuilderType> : MyEventProxyEntityComponent, IMyEventComponentWithGui, IMyEventControllerEntityComponent where TargetedGateValueType : IComparable<TargetedGateValueType> where ObjectBuilderType : MyObjectBuilder_JumpGateEvent, new()
 	{
 		[ProtoContract]
 		private sealed class MySerializedJumpGateEvent
@@ -27,45 +28,10 @@ namespace IOTA.ModularJumpGates.EventController
 			public MyObjectBuilder_ComponentBase SerializedEvent;
 		}
 
-		[ProtoContract]
-		protected sealed class MySerializedJumpGateEventInfo
-		{
-			[ProtoMember(1)]
-			public TargetedGateValueType TargetValue;
-			[ProtoMember(2)]
-			public List<long> SelectedJumpGates;
-			[ProtoMember(3)]
-			public List<KeyValuePair<long, byte>> SelectedRemoteJumpGates;
-			[ProtoMember(4)]
-			public Dictionary<string, string> MetaData;
-
-			public void SetValue<T>(string key, T value)
-			{
-				if (this.MetaData == null) this.MetaData = new Dictionary<string, string>();
-				this.MetaData[key] = Convert.ToBase64String(MyAPIGateway.Utilities.SerializeToBinary(value));
-			}
-
-			public void RemoveValue(string key)
-			{
-				this.MetaData?.Remove(key);
-			}
-
-			public T GetValue<T>(string key)
-			{
-				if (this.MetaData == null || !this.MetaData.ContainsKey(key)) throw new KeyNotFoundException($"No key with the specified name \"{key}\"");
-				return MyAPIGateway.Utilities.SerializeFromBinary<T>(Convert.FromBase64String(this.MetaData[key]));
-			}
-
-			public T GetValueOrDefault<T>(string key, T default_ = default(T))
-			{
-				return (this.MetaData != null && this.MetaData.ContainsKey(key)) ? MyAPIGateway.Utilities.SerializeFromBinary<T>(Convert.FromBase64String(this.MetaData[key])) : default_;
-			}
-		}
-
 		private bool _IsSelected = false;
 		private bool NetworkRegistered = false;
 		private ulong LastUpdateTimeEpoch = 0;
-		private MySerializedJumpGateEventInfo DeserializedInfo = null;
+		private ObjectBuilderType DeserializedInfo = null;
 		private Dictionary<MyJumpGate, TargetedGateValueType> TargetedJumpGates = new Dictionary<MyJumpGate, TargetedGateValueType>();
 		private Dictionary<MyJumpGate, TargetedGateValueType> TargetedRemoteJumpGates = new Dictionary<MyJumpGate, TargetedGateValueType>();
 		private List<KeyValuePair<MyJumpGateRemoteAntenna, byte>> TargetedRemoteAntennas = new List<KeyValuePair<MyJumpGateRemoteAntenna, byte>>();
@@ -213,7 +179,7 @@ namespace IOTA.ModularJumpGates.EventController
 			{
 				MyJumpGateConstruct construct = MyJumpGateModSession.Instance.GetJumpGateGrid(this.EventController.CubeGrid);
 				if (construct == null || !construct.FullyInitialized) return;
-				this.TargetValue = this.DeserializedInfo.TargetValue;
+				this.TargetValue = MyAPIGateway.Utilities.SerializeFromBinary<TargetedGateValueType>(Convert.FromBase64String(this.DeserializedInfo.SerializedTargetValue));
 
 				if (this.DeserializedInfo.SelectedJumpGates != null)
 				{
@@ -395,7 +361,7 @@ namespace IOTA.ModularJumpGates.EventController
 			foreach (MyJumpGate gate in this.TargetedJumpGates.Keys.ToList()) this.TargetedJumpGates[gate] = value;
 		}
 
-		protected void CreateTerminalControls<T, EventType>() where T : IMyTerminalBlock where EventType : MyJumpGateEventBase<TargetedGateValueType>
+		protected void CreateTerminalControls<T, EventType>() where T : IMyTerminalBlock where EventType : MyJumpGateEventBase<TargetedGateValueType, ObjectBuilderType>
 		{
 			if (this.IsJumpGateSelectionUsed)
 			{
@@ -406,7 +372,7 @@ namespace IOTA.ModularJumpGates.EventController
 				choose_jump_gate_lb.Multiselect = true;
 				choose_jump_gate_lb.VisibleRowsCount = 5;
 				choose_jump_gate_lb.ListContent = (block, content_list, preselect_list) => {
-					MyJumpGateEventBase<TargetedGateValueType> event_block = block.Components.Get<EventType>();
+					MyJumpGateEventBase<TargetedGateValueType, ObjectBuilderType> event_block = block.Components.Get<EventType>();
 					IMyEventControllerBlock event_controller = event_block?.EventController;
 					MyJumpGateConstruct construct;
 					if (event_controller == null || event_controller.MarkedForClose || (construct = MyJumpGateModSession.Instance.GetJumpGateGrid(event_controller.CubeGrid)) == null) return;
@@ -438,7 +404,7 @@ namespace IOTA.ModularJumpGates.EventController
 					}
 				};
 				choose_jump_gate_lb.ItemSelected = (block, selected) => {
-					MyJumpGateEventBase<TargetedGateValueType> event_block = block.Components.Get<EventType>();
+					MyJumpGateEventBase<TargetedGateValueType, ObjectBuilderType> event_block = block.Components.Get<EventType>();
 					IMyEventControllerBlock event_controller = event_block?.EventController;
 					MyJumpGateConstruct construct;
 					if (event_controller == null || event_controller.MarkedForClose || (construct = MyJumpGateModSession.Instance.GetJumpGateGrid(event_controller.CubeGrid)) == null) return;
@@ -490,9 +456,9 @@ namespace IOTA.ModularJumpGates.EventController
 			}
 		}
 
-		protected virtual void OnSave(MySerializedJumpGateEventInfo info) { }
+		protected virtual void OnSave(ObjectBuilderType builder) { }
 
-		protected virtual void OnLoad(MySerializedJumpGateEventInfo info) { }
+		protected virtual void OnLoad(ObjectBuilderType builder) { }
 
 		protected virtual void OnSelected()
 		{
@@ -571,32 +537,23 @@ namespace IOTA.ModularJumpGates.EventController
 
 		public abstract void CreateTerminalInterfaceControls<T>() where T : IMyTerminalBlock;
 
-		public sealed override void Deserialize(MyObjectBuilder_ComponentBase builder)
+		public sealed override void Deserialize(MyObjectBuilder_ComponentBase builder_base)
 		{
-			base.Deserialize(builder);
-			MyObjectBuilder_ModCustomComponent serialized_event = (MyObjectBuilder_ModCustomComponent) builder;
-			try { this.DeserializedInfo = MyAPIGateway.Utilities.SerializeFromBinary<MySerializedJumpGateEventInfo>(Convert.FromBase64String(serialized_event.CustomModData)); }
-			catch { this.DeserializedInfo = null; }
+			base.Deserialize(builder_base);
+			ObjectBuilderType builder = (ObjectBuilderType) builder_base;
+			this.DeserializedInfo = builder;
+			this.OnLoad(builder);
 		}
 
 		public sealed override MyObjectBuilder_ComponentBase Serialize(bool copy = false)
 		{
-			MySerializedJumpGateEventInfo info = new MySerializedJumpGateEventInfo
-			{
-				TargetValue = this.TargetValue,
+			ObjectBuilderType builder = new ObjectBuilderType {
+				SerializedTargetValue = Convert.ToBase64String(MyAPIGateway.Utilities.SerializeToBinary(this.TargetValue)),
 				SelectedJumpGates = this.TargetedJumpGates.Select((pair) => pair.Key.JumpGateID).ToList(),
 				SelectedRemoteJumpGates = this.TargetedRemoteAntennas.Select((pair) => new KeyValuePair<long, byte>(pair.Key.BlockID, pair.Value)).ToList(),
-				MetaData = new Dictionary<string, string>(),
 			};
-
-			this.OnSave(info);
-
-			return new MyObjectBuilder_ModCustomComponent {
-				SubtypeName = this.ComponentTypeDebugString,
-				ComponentType = this.ComponentTypeDebugString,
-				RemoveExistingComponentOnNewInsert = false,
-				CustomModData = Convert.ToBase64String(MyAPIGateway.Utilities.SerializeToBinary(info)),
-			};
+			this.OnSave(builder);
+			return builder;
 		}
 	}
 }

@@ -12,9 +12,9 @@ using VRage.Utils;
 namespace IOTA.ModularJumpGates.EventController.EventComponents
 {
 	[MyComponentBuilder(typeof(MyObjectBuilder_EventRemoteAntennaConnected))]
-	[MyComponentType(typeof(RemoteAntennaConnectedEvent))]
+	[MyComponentType(typeof(MyObjectBuilder_EventRemoteAntennaConnected))]
 	[MyEntityDependencyType(typeof(IMyEventControllerBlock))]
-	internal class RemoteAntennaConnectedEvent : MyJumpGateEventBase<bool>
+	internal class RemoteAntennaConnectedEvent : MyJumpGateEventBase<bool, MyObjectBuilder_EventRemoteAntennaConnected>
 	{
 		private bool? TriggerIndex = null;
 		private readonly ConcurrentLinkedHashSet<MyJumpGateRemoteAntenna> ListeningAntennas = new ConcurrentLinkedHashSet<MyJumpGateRemoteAntenna>();

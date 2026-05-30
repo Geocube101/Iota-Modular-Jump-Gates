@@ -13,9 +13,9 @@ using VRage.Utils;
 namespace IOTA.ModularJumpGates.EventController.EventComponents
 {
 	[MyComponentBuilder(typeof(MyObjectBuilder_EventCapacitorChargePercentChanged))]
-	[MyComponentType(typeof(CapacitorChargePercentChangedEvent))]
+	[MyComponentType(typeof(MyObjectBuilder_EventCapacitorChargePercentChanged))]
 	[MyEntityDependencyType(typeof(IMyEventControllerBlock))]
-	internal class CapacitorChargePercentChangedEvent : MyJumpGateEventBase<bool>
+	internal class CapacitorChargePercentChangedEvent : MyJumpGateEventBase<bool, MyObjectBuilder_EventCapacitorChargePercentChanged>
 	{
 		private readonly ConcurrentDictionary<MyJumpGateCapacitor, float> ListeningCapacitors = new ConcurrentDictionary<MyJumpGateCapacitor, float>();
 

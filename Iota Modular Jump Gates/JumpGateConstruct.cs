@@ -1230,7 +1230,8 @@ namespace IOTA.ModularJumpGates
 					}
 					else if ((duplicate = MyJumpGateModSession.Instance.GetDuplicateGrid(this)) != null)
 					{
-						MyJumpGateModSession.Instance.CloseGrid(duplicate, false);
+						long gid = this.CubeGridID;
+						MyJumpGateModSession.Instance.CloseGrid(duplicate, true, () => MyJumpGateModSession.Instance.RequestGridDownload(gid));
 						Logger.Debug($"[{grid_id}]] - Grid duplicate exists; UPDATE_SKIPPED", 2);
 						return;
 					}
@@ -1555,7 +1556,7 @@ namespace IOTA.ModularJumpGates
 				if (new_grid != null)
 				{
 					this.CubeGrid = new_grid;
-					this.SetupConstruct(grid.CubeGrids.Select((subgrid) => (IMyCubeGrid) MyAPIGateway.Entities.GetEntityById(subgrid)).Where((subgrid) => subgrid != null));
+					this.SetupConstruct(grid.CubeGrids?.Select((subgrid) => (IMyCubeGrid) MyAPIGateway.Entities.GetEntityById(subgrid))?.Where((subgrid) => subgrid != null));
 				}
 				
 				if (grid.JumpGateDrives != null)

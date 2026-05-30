@@ -9,9 +9,9 @@ using VRage.Utils;
 namespace IOTA.ModularJumpGates.EventController.EventComponents
 {
 	[MyComponentBuilder(typeof(MyObjectBuilder_EventJumpGateEntityMassChanged))]
-	[MyComponentType(typeof(JumpGateEntityMassChangedEvent))]
+	[MyComponentType(typeof(MyObjectBuilder_EventJumpGateEntityMassChanged))]
 	[MyEntityDependencyType(typeof(IMyEventControllerBlock))]
-	internal class JumpGateEntityMassChangedEvent : MyJumpGateEventBase<double>
+	internal class JumpGateEntityMassChangedEvent : MyJumpGateEventBase<double, MyObjectBuilder_EventJumpGateEntityMassChanged>
 	{
 		private bool IsControllerFiltered = true;
 		
@@ -34,16 +34,16 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 			else if (!event_controller.IsLowerOrEqualCondition && new_value < target && old_value >= target) this.TriggerAction(1);
 		}
 
-		protected override void OnSave(MySerializedJumpGateEventInfo info)
+		protected override void OnSave(MyObjectBuilder_EventJumpGateEntityMassChanged builder)
 		{
-			base.OnSave(info);
-			info.SetValue("IsControllerFiltered", this.IsControllerFiltered);
+			base.OnSave(builder);
+			builder.UseControllerEntityFilter = this.IsControllerFiltered;
 		}
 
-		protected override void OnLoad(MySerializedJumpGateEventInfo info)
+		protected override void OnLoad(MyObjectBuilder_EventJumpGateEntityMassChanged builder)
 		{
-			base.OnLoad(info);
-			this.IsControllerFiltered = info.GetValueOrDefault("IsControllerFiltered", true);
+			base.OnLoad(builder);
+			this.IsControllerFiltered = builder.UseControllerEntityFilter;
 		}
 
 		protected override double GetValueFromJumpGate(MyJumpGate jump_gate)

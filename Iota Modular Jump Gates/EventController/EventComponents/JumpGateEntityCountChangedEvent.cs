@@ -8,9 +8,9 @@ using VRage.Utils;
 namespace IOTA.ModularJumpGates.EventController.EventComponents
 {
 	[MyComponentBuilder(typeof(MyObjectBuilder_EventJumpGateEntityCountChanged))]
-	[MyComponentType(typeof(JumpGateEntityCountChangedEvent))]
+	[MyComponentType(typeof(MyObjectBuilder_EventJumpGateEntityCountChanged))]
 	[MyEntityDependencyType(typeof(IMyEventControllerBlock))]
-	internal class JumpGateEntityCountChangedEvent : MyJumpGateEventBase<int>
+	internal class JumpGateEntityCountChangedEvent : MyJumpGateEventBase<int, MyObjectBuilder_EventJumpGateEntityCountChanged>
 	{
 		private bool IsControllerFiltered = true;
 		
@@ -34,16 +34,16 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 			else if (!event_controller.IsLowerOrEqualCondition && new_value < target && old_value >= target) this.TriggerAction(1);
 		}
 
-		protected override void OnSave(MySerializedJumpGateEventInfo info)
+		protected override void OnSave(MyObjectBuilder_EventJumpGateEntityCountChanged builder)
 		{
-			base.OnSave(info);
-			info.SetValue("IsControllerFiltered", this.IsControllerFiltered);
+			base.OnSave(builder);
+			builder.UseControllerEntityFilter = this.IsControllerFiltered;
 		}
 
-		protected override void OnLoad(MySerializedJumpGateEventInfo info)
+		protected override void OnLoad(MyObjectBuilder_EventJumpGateEntityCountChanged builder)
 		{
-			base.OnLoad(info);
-			this.IsControllerFiltered = info.GetValueOrDefault("IsControllerFiltered", true);
+			base.OnLoad(builder);
+			this.IsControllerFiltered = builder.UseControllerEntityFilter;
 		}
 
 		protected override bool IsJumpGateValidForList(MyJumpGate jump_gate)

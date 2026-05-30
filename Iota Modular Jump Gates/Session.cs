@@ -424,7 +424,7 @@ namespace IOTA.ModularJumpGates
 		/// <summary>
 		/// The current mod version (major, minor, patch)
 		/// </summary>
-		public Vector3I ModVersion => new Vector3I(1, 4, 5);
+		public Vector3I ModVersion => new Vector3I(1, 4, 6);
 
 		/// <summary>
 		/// The Guid used to store information in mod storage components
@@ -1788,9 +1788,10 @@ namespace IOTA.ModularJumpGates
 			{
 				long grid_id = packet.Payload<long>();
 				packet = packet.Forward(packet.SenderID, false);
-				packet.Payload(this.GridMap.GetValueOrDefault(grid_id, null)?.ToSerialized(false));
+				MySerializedJumpGateConstruct serialized = this.GridMap.GetValueOrDefault(grid_id, null)?.ToSerialized(false);
+				packet.Payload(serialized);
 				packet.Send();
-				Logger.Debug($"Got client grid download request - Sent grid: {grid_id}", 2);
+				Logger.Debug($"Got client grid download request - Sent grid: {grid_id}, ISNULL={serialized == null}", 2);
 			}
 			else if (MyNetworkInterface.IsStandaloneMultiplayerClient && packet.PhaseFrame == 2)
 			{

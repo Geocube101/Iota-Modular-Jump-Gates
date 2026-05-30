@@ -11,9 +11,9 @@ using VRage.Utils;
 namespace IOTA.ModularJumpGates.EventController.EventComponents
 {
 	[MyComponentBuilder(typeof(MyObjectBuilder_EventJumpGatePhaseChanged))]
-	[MyComponentType(typeof(JumpGatePhaseChangedEvent))]
+	[MyComponentType(typeof(MyObjectBuilder_EventJumpGatePhaseChanged))]
 	[MyEntityDependencyType(typeof(IMyEventControllerBlock))]
-	internal class JumpGatePhaseChangedEvent : MyJumpGateEventBase<byte>
+	internal class JumpGatePhaseChangedEvent : MyJumpGateEventBase<byte, MyObjectBuilder_EventJumpGatePhaseChanged>
 	{
 		private static List<MyTerminalControlComboBoxItem> ComboBoxItems = null;
 		private static object ComboBoxLock = new object();
@@ -55,9 +55,9 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 			}
 		}
 
-		protected override void OnLoad(MySerializedJumpGateEventInfo info)
+		protected override void OnLoad(MyObjectBuilder_EventJumpGatePhaseChanged builder)
 		{
-			base.OnLoad(info);
+			base.OnLoad(builder);
 			this.TargetValue = ((MyJumpGatePhase) this.TargetValue == MyJumpGatePhase.NONE || (MyJumpGatePhase) this.TargetValue == MyJumpGatePhase.INVALID) ? ((byte) MyJumpGatePhase.IDLE) : this.TargetValue;
 		}
 

@@ -10,9 +10,9 @@ using VRage.Utils;
 namespace IOTA.ModularJumpGates.EventController.EventComponents
 {
 	[MyComponentBuilder(typeof(MyObjectBuilder_EventJumpGateDriveCountChanged))]
-	[MyComponentType(typeof(JumpGateDriveCountChangedEvent))]
+	[MyComponentType(typeof(MyObjectBuilder_EventJumpGateDriveCountChanged))]
 	[MyEntityDependencyType(typeof(IMyEventControllerBlock))]
-	internal class JumpGateDriveCountChangedEvent : MyJumpGateEventBase<int>
+	internal class JumpGateDriveCountChangedEvent : MyJumpGateEventBase<int, MyObjectBuilder_EventJumpGateDriveCountChanged>
 	{
 		private bool IsWorkingOnly = false;
 		private readonly List<MyJumpGateDrive> JumpGateDrives = new List<MyJumpGateDrive>();
@@ -36,16 +36,16 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 			else if (!event_controller.IsLowerOrEqualCondition && new_value < target && old_value >= target) this.TriggerAction(1);
 		}
 
-		protected override void OnSave(MySerializedJumpGateEventInfo info)
+		protected override void OnSave(MyObjectBuilder_EventJumpGateDriveCountChanged builder)
 		{
-			base.OnSave(info);
-			info.SetValue("IsWorkingOnly", this.IsWorkingOnly);
+			base.OnSave(builder);
+			builder.TargetWorkingOnly = this.IsWorkingOnly;
 		}
 
-		protected override void OnLoad(MySerializedJumpGateEventInfo info)
+		protected override void OnLoad(MyObjectBuilder_EventJumpGateDriveCountChanged builder)
 		{
-			base.OnLoad(info);
-			this.IsWorkingOnly = info.GetValueOrDefault("IsWorkingOnly", true);
+			base.OnLoad(builder);
+			this.IsWorkingOnly = builder.TargetWorkingOnly;
 		}
 
 		protected override int GetValueFromJumpGate(MyJumpGate jump_gate)

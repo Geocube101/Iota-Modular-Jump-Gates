@@ -11,13 +11,11 @@ using VRageMath;
 namespace IOTA.ModularJumpGates.EventController.EventComponents
 {
 	[MyComponentBuilder(typeof(MyObjectBuilder_EventJumpGateControllerChanged))]
-	[MyComponentType(typeof(JumpGateControllerChangedEvent))]
+	[MyComponentType(typeof(MyObjectBuilder_EventJumpGateControllerChanged))]
 	[MyEntityDependencyType(typeof(IMyEventControllerBlock))]
-	internal class JumpGateControllerChangedEvent : MyJumpGateEventBase<long>
+	internal class JumpGateControllerChangedEvent : MyJumpGateEventBase<long, MyObjectBuilder_EventJumpGateControllerChanged>
 	{
-		private enum MyControllerConnectionType : byte { ALL, DIRECT, REMOTE };
-
-		private MyControllerConnectionType ConnectionType = MyControllerConnectionType.ALL;
+		private MyObjectBuilder_EventJumpGateControllerChanged.MyControllerConnectionType ConnectionType = MyObjectBuilder_EventJumpGateControllerChanged.MyControllerConnectionType.ALL;
 
 		public override bool IsThresholdUsed => false;
 		public override bool IsConditionSelectionUsed => false;
@@ -35,21 +33,21 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 			if (construct == null) return;
 			MyJumpGateController controller = MyJumpGateModSession.Instance.GetJumpGateBlock<MyJumpGateController>(new_value) ?? MyJumpGateModSession.Instance.GetJumpGateBlock<MyJumpGateController>(old_value);
 			bool remote = controller != null && controller.JumpGateGrid != construct;
-			bool allowed = this.ConnectionType == MyControllerConnectionType.ALL || (this.ConnectionType == MyControllerConnectionType.DIRECT && !remote) || (this.ConnectionType == MyControllerConnectionType.REMOTE && remote);
+			bool allowed = this.ConnectionType == MyObjectBuilder_EventJumpGateControllerChanged.MyControllerConnectionType.ALL || (this.ConnectionType == MyObjectBuilder_EventJumpGateControllerChanged.MyControllerConnectionType.DIRECT && !remote) || (this.ConnectionType == MyObjectBuilder_EventJumpGateControllerChanged.MyControllerConnectionType.REMOTE && remote);
 			if (new_value != -1 && old_value == -1 && allowed) this.TriggerAction(0);
 			else if (new_value == -1 && old_value != -1 && allowed) this.TriggerAction(1);
 		}
 
-		protected override void OnSave(MySerializedJumpGateEventInfo info)
+		protected override void OnSave(MyObjectBuilder_EventJumpGateControllerChanged builder)
 		{
-			base.OnSave(info);
-			info.SetValue("ConnectionType", this.ConnectionType);
+			base.OnSave(builder);
+			builder.ControllerConnectionType = this.ConnectionType;
 		}
 
-		protected override void OnLoad(MySerializedJumpGateEventInfo info)
+		protected override void OnLoad(MyObjectBuilder_EventJumpGateControllerChanged builder)
 		{
-			base.OnLoad(info);
-			this.ConnectionType = info.GetValueOrDefault("ConnectionType", MyControllerConnectionType.ALL);
+			base.OnLoad(builder);
+			this.ConnectionType = builder.ControllerConnectionType;
 		}
 
 		protected override long GetValueFromJumpGate(MyJumpGate jump_gate)
@@ -70,7 +68,7 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 				connection_type_sdr.Getter = (block) => (byte) block.Components.Get<JumpGateControllerChangedEvent>().ConnectionType;
 				connection_type_sdr.Setter = (block, value) => {
 					JumpGateControllerChangedEvent event_block = block.Components.Get<JumpGateControllerChangedEvent>();
-					event_block.ConnectionType = (MyControllerConnectionType) ((byte) Math.Round(MathHelper.Clamp(value, 0, 2)));
+					event_block.ConnectionType = (MyObjectBuilder_EventJumpGateControllerChanged.MyControllerConnectionType) ((byte) Math.Round(MathHelper.Clamp(value, 0, 2)));
 					event_block.SetDirty();
 					connection_type_sdr.UpdateVisual();
 				};
