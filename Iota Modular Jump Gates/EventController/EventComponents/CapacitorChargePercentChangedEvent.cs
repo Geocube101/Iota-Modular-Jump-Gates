@@ -13,7 +13,7 @@ using VRage.Utils;
 namespace IOTA.ModularJumpGates.EventController.EventComponents
 {
 	[MyComponentBuilder(typeof(MyObjectBuilder_EventCapacitorChargePercentChanged))]
-	[MyComponentType(typeof(MyObjectBuilder_EventCapacitorChargePercentChanged))]
+	[MyComponentType(typeof(CapacitorChargePercentChangedEvent))]
 	[MyEntityDependencyType(typeof(IMyEventControllerBlock))]
 	internal class CapacitorChargePercentChangedEvent : MyJumpGateEventBase<bool, MyObjectBuilder_EventCapacitorChargePercentChanged>
 	{
@@ -26,8 +26,8 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 		public override long UniqueSelectionId => 0x7FFFFFFFFFFFFFF1;
 		public override MyStringId EventDisplayName => MyStringId.GetOrCompute(MyTexts.GetString("DisplayName_CapacitorChargePercentChangedEvent"));
 		public override string ComponentTypeDebugString => nameof(CapacitorChargePercentChangedEvent);
-		public override string YesNoToolbarYesDescription => MyTexts.GetString("DisplayName_CapacitorChargePercentChangedEvent_YesDescription");
-		public override string YesNoToolbarNoDescription => MyTexts.GetString("DisplayName_CapacitorChargePercentChangedEvent_NoDescription");
+		public override string YesNoToolbarYesDescription => MyTexts.GetString("DisplayName_CapacitorChargePercentChangedEvent_YesDescription").Replace("{%0}", ((this.EventController.IsLowerOrEqualCondition) ? "<=" : ">=")).Replace("{%1}", $"{Math.Round(this.EventController.Threshold * 100, 2):F2}%");
+		public override string YesNoToolbarNoDescription => MyTexts.GetString("DisplayName_CapacitorChargePercentChangedEvent_NoDescription").Replace("{%0}", ((this.EventController.IsLowerOrEqualCondition) ? ">=" : "<=")).Replace("{%1}", $"{Math.Round(this.EventController.Threshold * 100, 2):F2}%");
 
 		protected override void Update()
 		{

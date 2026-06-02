@@ -9,7 +9,7 @@ using VRage.Utils;
 namespace IOTA.ModularJumpGates.EventController.EventComponents
 {
 	[MyComponentBuilder(typeof(MyObjectBuilder_EventJumpGateDetonatorCountdownChanged))]
-	[MyComponentType(typeof(MyObjectBuilder_EventJumpGateDetonatorCountdownChanged))]
+	[MyComponentType(typeof(JumpGateDetonatorCountdownChangedEvent))]
 	[MyEntityDependencyType(typeof(IMyEventControllerBlock))]
 	internal class JumpGateDetonatorCountdownChangedEvent : MyJumpGateEventBase<float, MyObjectBuilder_EventJumpGateDetonatorCountdownChanged>
 	{
@@ -20,8 +20,8 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 		public override long UniqueSelectionId => 0x7FFFFFFFFFFFFFF0;
 		public override MyStringId EventDisplayName => MyStringId.GetOrCompute(MyTexts.GetString("DisplayName_JumpGateDetonatorCountdownChangedEvent"));
 		public override string ComponentTypeDebugString => nameof(JumpGateDetonatorCountdownChangedEvent);
-		public override string YesNoToolbarYesDescription => MyTexts.GetString("DisplayName_JumpGateDetonatorCountdownChangedEvent_YesDescription").Replace("{%0}", ((this.EventController.IsLowerOrEqualCondition) ? "<=" : ">=").Replace("{%1}", MyJumpGateModSession.AutoconvertMetricUnits(this.TargetValue, "m", 2).ToString()));
-		public override string YesNoToolbarNoDescription => MyTexts.GetString("DisplayName_JumpGateDetonatorCountdownChangedEvent_NoDescription").Replace("{%0}", ((this.EventController.IsLowerOrEqualCondition) ? ">=" : "<=").Replace("{%1}", MyJumpGateModSession.AutoconvertMetricUnits(this.TargetValue, "m", 2).ToString()));
+		public override string YesNoToolbarYesDescription => MyTexts.GetString("DisplayName_JumpGateDetonatorCountdownChangedEvent_YesDescription").Replace("{%0}", ((this.EventController.IsLowerOrEqualCondition) ? "<=" : ">=")).Replace("{%1}", MyJumpGateModSession.AutoconvertTimeHHMMSS(this.TargetValue).ToString());
+		public override string YesNoToolbarNoDescription => MyTexts.GetString("DisplayName_JumpGateDetonatorCountdownChangedEvent_NoDescription").Replace("{%0}", ((this.EventController.IsLowerOrEqualCondition) ? ">=" : "<=")).Replace("{%1}", MyJumpGateModSession.AutoconvertTimeHHMMSS(this.TargetValue).ToString());
 
 		protected override void CheckValueAgainstTarget(float new_value, float old_value, float target)
 		{

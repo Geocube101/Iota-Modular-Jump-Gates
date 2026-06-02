@@ -8,7 +8,7 @@ using VRage.Utils;
 namespace IOTA.ModularJumpGates.EventController.EventComponents
 {
 	[MyComponentBuilder(typeof(MyObjectBuilder_EventJumpGateEntityCountChanged))]
-	[MyComponentType(typeof(MyObjectBuilder_EventJumpGateEntityCountChanged))]
+	[MyComponentType(typeof(JumpGateEntityCountChangedEvent))]
 	[MyEntityDependencyType(typeof(IMyEventControllerBlock))]
 	internal class JumpGateEntityCountChangedEvent : MyJumpGateEventBase<int, MyObjectBuilder_EventJumpGateEntityCountChanged>
 	{
@@ -22,8 +22,8 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 		public override MyStringId EventDisplayName => MyStringId.GetOrCompute(MyTexts.GetString("DisplayName_JumpGateEntityCountChangedEvent"));
 
 		public override string ComponentTypeDebugString => nameof(JumpGateEntityCountChangedEvent);
-		public override string YesNoToolbarYesDescription => MyTexts.GetString("DisplayName_JumpGateEntityCountChangedEvent_YesDescription").Replace("{%0}", ((this.EventController.IsLowerOrEqualCondition) ? "<=" : ">=").Replace("{%1}", MyJumpGateModSession.AutoconvertSciNotUnits(this.TargetValue, 0).ToString()));
-		public override string YesNoToolbarNoDescription => MyTexts.GetString("DisplayName_JumpGateEntityCountChangedEvent_NoDescription").Replace("{%0}", ((this.EventController.IsLowerOrEqualCondition) ? ">=" : "<=").Replace("{%1}", MyJumpGateModSession.AutoconvertSciNotUnits(this.TargetValue, 0).ToString()));
+		public override string YesNoToolbarYesDescription => MyTexts.GetString("DisplayName_JumpGateEntityCountChangedEvent_YesDescription").Replace("{%0}", ((this.EventController.IsLowerOrEqualCondition) ? "<=" : ">=")).Replace("{%1}", MyJumpGateModSession.AutoconvertSciNotUnits(this.TargetValue, 0).ToString());
+		public override string YesNoToolbarNoDescription => MyTexts.GetString("DisplayName_JumpGateEntityCountChangedEvent_NoDescription").Replace("{%0}", ((this.EventController.IsLowerOrEqualCondition) ? ">=" : "<=")).Replace("{%1}", MyJumpGateModSession.AutoconvertSciNotUnits(this.TargetValue, 0).ToString());
 
 		protected override void CheckValueAgainstTarget(int new_value, int old_value, int target)
 		{

@@ -9,7 +9,7 @@ using VRage.Utils;
 namespace IOTA.ModularJumpGates.EventController.EventComponents
 {
 	[MyComponentBuilder(typeof(MyObjectBuilder_EventJumpGateNodeVelocityChanged))]
-	[MyComponentType(typeof(MyObjectBuilder_EventJumpGateNodeVelocityChanged))]
+	[MyComponentType(typeof(JumpGateNodeVelocityChangedEvent))]
 	[MyEntityDependencyType(typeof(IMyEventControllerBlock))]
 	internal class JumpGateNodeVelocityChangedEvent : MyJumpGateEventBase<double, MyObjectBuilder_EventJumpGateNodeVelocityChanged>
 	{
@@ -20,8 +20,8 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 		public override long UniqueSelectionId => 0x7FFFFFFFFFFFFFF6;
 		public override MyStringId EventDisplayName => MyStringId.GetOrCompute(MyTexts.GetString("DisplayName_JumpGateNodeVelocityChangedEvent"));
 		public override string ComponentTypeDebugString => nameof(JumpGateNodeVelocityChangedEvent);
-		public override string YesNoToolbarYesDescription => MyTexts.GetString("DisplayName_JumpGateNodeVelocityChangedEvent_YesDescription").Replace("{%0}", ((this.EventController.IsLowerOrEqualCondition) ? "<=" : ">=").Replace("{%1}", MyJumpGateModSession.AutoconvertMetricUnits(this.TargetValue, "m/s", 2).ToString()));
-		public override string YesNoToolbarNoDescription => MyTexts.GetString("DisplayName_JumpGateNodeVelocityChangedEvent_NoDescription").Replace("{%0}", ((this.EventController.IsLowerOrEqualCondition) ? ">=" : "<=").Replace("{%1}", MyJumpGateModSession.AutoconvertMetricUnits(this.TargetValue, "m/s", 2).ToString()));
+		public override string YesNoToolbarYesDescription => MyTexts.GetString("DisplayName_JumpGateNodeVelocityChangedEvent_YesDescription").Replace("{%0}", ((this.EventController.IsLowerOrEqualCondition) ? "<=" : ">=")).Replace("{%1}", MyJumpGateModSession.AutoconvertMetricUnits(this.TargetValue, "m/s", 2).ToString());
+		public override string YesNoToolbarNoDescription => MyTexts.GetString("DisplayName_JumpGateNodeVelocityChangedEvent_NoDescription").Replace("{%0}", ((this.EventController.IsLowerOrEqualCondition) ? ">=" : "<=")).Replace("{%1}", MyJumpGateModSession.AutoconvertMetricUnits(this.TargetValue, "m/s", 2).ToString());
 
 		protected override void CheckValueAgainstTarget(double new_value, double old_value, double target)
 		{

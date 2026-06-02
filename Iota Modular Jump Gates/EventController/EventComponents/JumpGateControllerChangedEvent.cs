@@ -11,7 +11,7 @@ using VRageMath;
 namespace IOTA.ModularJumpGates.EventController.EventComponents
 {
 	[MyComponentBuilder(typeof(MyObjectBuilder_EventJumpGateControllerChanged))]
-	[MyComponentType(typeof(MyObjectBuilder_EventJumpGateControllerChanged))]
+	[MyComponentType(typeof(JumpGateControllerChangedEvent))]
 	[MyEntityDependencyType(typeof(IMyEventControllerBlock))]
 	internal class JumpGateControllerChangedEvent : MyJumpGateEventBase<long, MyObjectBuilder_EventJumpGateControllerChanged>
 	{

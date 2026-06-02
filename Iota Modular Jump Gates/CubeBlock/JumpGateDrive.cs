@@ -196,9 +196,9 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateCapacitor_Charge")}: {Math.Round(charge_ratio * 100, 1)}%\n");
 				info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateCapacitor_BufferSize")}: {MyJumpGateModSession.AutoconvertMetricUnits(this.Configuration.MaxDriveChargeMW * 1e6, "w", 4)}\n");
 				info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateCapacitor_ChargeEfficiency")}: {Math.Round(this.Configuration.DriveChargeEfficiency * 100, 2)}%\n");
-				if (double.IsInfinity(charge_time)) info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateCapacitor_ChargeTime")} --:--:--\n");
-				else if (double.IsNaN(charge_time)) info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateCapacitor_ChargeTime")} 00:00:00\n");
-				else info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateCapacitor_ChargeTime")} {(int) Math.Floor(charge_time / 3600):00}:{(int) Math.Floor(charge_time % 3600 / 60d):00}:{(int) Math.Floor(charge_time % 60d):00}\n\n");
+				if (double.IsInfinity(charge_time)) info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateDrive_ChargeTime")}: --:--:--\n");
+				else if (double.IsNaN(charge_time)) info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateDrive_ChargeTime")}: 00:00:00\n");
+				else info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateDrive_ChargeTime")}: {(int) Math.Floor(charge_time / 3600):00}:{(int) Math.Floor(charge_time % 3600 / 60d):00}:{(int) Math.Floor(charge_time % 60d):00}\n\n");
 				info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateDrive_JumpGate")}: {jump_gate?.GetPrintableName() ?? "N/A"}\n");
 				info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateDrive_JumpGateId")}: {jump_gate?.JumpGateID.ToString() ?? "N/A"}\n");
 				info.Append($" {MyTexts.GetString("DetailedInfo_JumpGateDrive_CurrentConstruct")}: {(this.JumpGateGrid?.CubeGridID.ToString() ?? "N/A")}");

@@ -10,7 +10,7 @@ using VRage.Utils;
 namespace IOTA.ModularJumpGates.EventController.EventComponents
 {
 	[MyComponentBuilder(typeof(MyObjectBuilder_EventJumpGateDriveCountChanged))]
-	[MyComponentType(typeof(MyObjectBuilder_EventJumpGateDriveCountChanged))]
+	[MyComponentType(typeof(JumpGateDriveCountChangedEvent))]
 	[MyEntityDependencyType(typeof(IMyEventControllerBlock))]
 	internal class JumpGateDriveCountChangedEvent : MyJumpGateEventBase<int, MyObjectBuilder_EventJumpGateDriveCountChanged>
 	{
@@ -24,8 +24,8 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 		public override long UniqueSelectionId => 0x7FFFFFFFFFFFFFF4;
 		public override MyStringId EventDisplayName => MyStringId.GetOrCompute(MyTexts.GetString("DisplayName_JumpGateDriveCountChangedEvent"));
 		public override string ComponentTypeDebugString => nameof(JumpGateDriveCountChangedEvent);
-		public override string YesNoToolbarYesDescription => MyTexts.GetString("DisplayName_JumpGateDriveCountChangedEvent_YesDescription").Replace("{%0}", ((this.EventController.IsLowerOrEqualCondition) ? "<=" : ">=").Replace("{%1}", MyJumpGateModSession.AutoconvertSciNotUnits(this.TargetValue, 0).ToString()));
-		public override string YesNoToolbarNoDescription => MyTexts.GetString("DisplayName_JumpGateDriveCountChangedEvent_NoDescription").Replace("{%0}", ((this.EventController.IsLowerOrEqualCondition) ? ">=" : "<=").Replace("{%1}", MyJumpGateModSession.AutoconvertSciNotUnits(this.TargetValue, 0).ToString()));
+		public override string YesNoToolbarYesDescription => MyTexts.GetString("DisplayName_JumpGateDriveCountChangedEvent_YesDescription").Replace("{%0}", ((this.EventController.IsLowerOrEqualCondition) ? "<=" : ">=")).Replace("{%1}", MyJumpGateModSession.AutoconvertSciNotUnits(this.TargetValue, 0).ToString());
+		public override string YesNoToolbarNoDescription => MyTexts.GetString("DisplayName_JumpGateDriveCountChangedEvent_NoDescription").Replace("{%0}", ((this.EventController.IsLowerOrEqualCondition) ? ">=" : "<=")).Replace("{%1}", MyJumpGateModSession.AutoconvertSciNotUnits(this.TargetValue, 0).ToString());
 
 		protected override void CheckValueAgainstTarget(int new_value, int old_value, int target)
 		{

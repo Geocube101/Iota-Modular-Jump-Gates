@@ -24,6 +24,7 @@ namespace IOTA.ModularJumpGates.EventController.ObjectBuilders
 	[ProtoInclude(160, typeof(MyObjectBuilder_EventJumpGateDetonatorCountdownChanged))]
 	[ProtoInclude(170, typeof(MyObjectBuilder_EventRemoteAntennaConnected))]
 	[ProtoInclude(180, typeof(MyObjectBuilder_EventCapacitorChargePercentChanged))]
+	[MyObjectBuilderDefinition]
 	public class MyObjectBuilder_JumpGateEvent : MyObjectBuilder_ComponentBase
 	{
 		[ProtoMember(1)]

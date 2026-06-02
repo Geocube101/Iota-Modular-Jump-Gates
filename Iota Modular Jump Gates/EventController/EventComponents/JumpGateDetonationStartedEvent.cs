@@ -8,7 +8,7 @@ using VRage.Utils;
 namespace IOTA.ModularJumpGates.EventController.EventComponents
 {
 	[MyComponentBuilder(typeof(MyObjectBuilder_EventJumpGateDetonationStarted))]
-	[MyComponentType(typeof(MyObjectBuilder_EventJumpGateDetonationStarted))]
+	[MyComponentType(typeof(JumpGateDetonationStartedEvent))]
 	[MyEntityDependencyType(typeof(IMyEventControllerBlock))]
 	internal class JumpGateDetonationStartedEvent : MyJumpGateEventBase<bool, MyObjectBuilder_EventJumpGateDetonationStarted>
 	{

@@ -5194,12 +5194,12 @@ namespace IOTA.ModularJumpGates
 				else if (this.ManualDetonationTimeout > 0) --this.ManualDetonationTimeout;
 
 				// Kick Unauthorized Controllers
-				if (MyNetworkInterface.IsServerLike)
+				if (MyNetworkInterface.IsServerLike && MyJumpGateModSession.Instance.GameTick % 30 == 0)
 				{
 					float ratio = this.JumpGateConfiguration.MinimumControlOwnerFactionRatio;
 					List<IMyPlayer> players = new List<IMyPlayer>();
 					MyAPIGateway.Players.GetPlayers(players);
-					IMyPlayer controller = players.FirstOrDefault((player) => player.SteamUserId == this.Controller?.OwnerSteamID);
+					IMyPlayer controller = players.FirstOrDefault((player) => player.IdentityId == this.Controller?.OwnerID);
 					
 					if (controller != null && this.GetFactionControlRatio(controller) < ratio)
 					{
@@ -5850,6 +5850,7 @@ namespace IOTA.ModularJumpGates
 
 			foreach (MyJumpGateDrive drive in this.GetJumpGateDrives())
 			{
+				if (drive.OwnerID == 0) continue;
 				++total;
 				IMyFaction drive_faction = MyAPIGateway.Session.Factions.TryGetPlayerFaction(drive.OwnerID);
 				if (player_faction != null && drive_faction != null && player_faction.FactionId == drive_faction.FactionId) ++owned;

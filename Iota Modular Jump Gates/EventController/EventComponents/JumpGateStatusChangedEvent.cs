@@ -11,7 +11,7 @@ using VRage.Utils;
 namespace IOTA.ModularJumpGates.EventController.EventComponents
 {
 	[MyComponentBuilder(typeof(MyObjectBuilder_EventJumpGateStatusChanged))]
-	[MyComponentType(typeof(MyObjectBuilder_EventJumpGateStatusChanged))]
+	[MyComponentType(typeof(JumpGateStatusChangedEvent))]
 	[MyEntityDependencyType(typeof(IMyEventControllerBlock))]
 	internal class JumpGateStatusChangedEvent : MyJumpGateEventBase<byte, MyObjectBuilder_EventJumpGateStatusChanged>
 	{
@@ -26,8 +26,8 @@ namespace IOTA.ModularJumpGates.EventController.EventComponents
 		public override long UniqueSelectionId => 0x7FFFFFFFFFFFFFFE;
 		public override MyStringId EventDisplayName => MyStringId.GetOrCompute(MyTexts.GetString("DisplayName_JumpGateStatusChangedEvent"));
 		public override string ComponentTypeDebugString => nameof(JumpGateStatusChangedEvent);
-		public override string YesNoToolbarYesDescription => MyTexts.GetString("DisplayName_JumpGateStatusChangedEvent_YesDescription").Replace("{%1}", MyTexts.GetString($"StatusText_{(MyJumpGateStatus) this.TargetValue}"));
-		public override string YesNoToolbarNoDescription => MyTexts.GetString("DisplayName_JumpGateStatusChangedEvent_NoDescription").Replace("{%1}", MyTexts.GetString($"StatusText_{(MyJumpGateStatus) this.TargetValue}"));
+		public override string YesNoToolbarYesDescription => MyTexts.GetString("DisplayName_JumpGateStatusChangedEvent_YesDescription").Replace("{%0}", MyTexts.GetString($"StatusText_{(MyJumpGateStatus) this.TargetValue}"));
+		public override string YesNoToolbarNoDescription => MyTexts.GetString("DisplayName_JumpGateStatusChangedEvent_NoDescription").Replace("{%0}", MyTexts.GetString($"StatusText_{(MyJumpGateStatus) this.TargetValue}"));
 
 		public static void Dispose()
 		{

@@ -25,6 +25,8 @@ namespace IOTA.ModularJumpGates.EventController
 			[ProtoMember(1)]
 			public long EntityID;
 			[ProtoMember(2)]
+			public long EventID;
+			[ProtoMember(3)]
 			public MyObjectBuilder_ComponentBase SerializedEvent;
 		}
 
@@ -82,7 +84,7 @@ namespace IOTA.ModularJumpGates.EventController
 		private void OnNetworkUpdate(MyNetworkInterface.Packet packet)
 		{
 			MySerializedJumpGateEvent info = packet?.Payload<MySerializedJumpGateEvent>();
-			if (info == null || this.Entity == null || info.EntityID != this.Entity.EntityId) return;
+			if (info == null || this.Entity == null || info.EntityID != this.Entity.EntityId || info.EventID != this.UniqueSelectionId) return;
 
 			if (MyNetworkInterface.IsMultiplayerServer && packet.PhaseFrame == 1)
 			{
@@ -273,6 +275,7 @@ namespace IOTA.ModularJumpGates.EventController
 
 				packet.Payload(new MySerializedJumpGateEvent {
 					EntityID = this.Entity.EntityId,
+					EventID = this.UniqueSelectionId,
 					SerializedEvent = this.Serialize(),
 				});
 
@@ -540,7 +543,8 @@ namespace IOTA.ModularJumpGates.EventController
 		public sealed override void Deserialize(MyObjectBuilder_ComponentBase builder_base)
 		{
 			base.Deserialize(builder_base);
-			ObjectBuilderType builder = (ObjectBuilderType) builder_base;
+			MyObjectBuilder_ModCustomComponent mod_component = (MyObjectBuilder_ModCustomComponent) builder_base;
+			ObjectBuilderType builder = MyAPIGateway.Utilities.SerializeFromBinary<ObjectBuilderType>(Convert.FromBase64String(mod_component.CustomModData));
 			this.DeserializedInfo = builder;
 			this.OnLoad(builder);
 		}
@@ -553,7 +557,12 @@ namespace IOTA.ModularJumpGates.EventController
 				SelectedRemoteJumpGates = this.TargetedRemoteAntennas.Select((pair) => new KeyValuePair<long, byte>(pair.Key.BlockID, pair.Value)).ToList(),
 			};
 			this.OnSave(builder);
-			return builder;
+			return new MyObjectBuilder_ModCustomComponent() {
+				SubtypeName = typeof(ObjectBuilderType).Name,
+				ComponentType = this.ComponentTypeDebugString,
+				RemoveExistingComponentOnNewInsert = false,
+				CustomModData = Convert.ToBase64String(MyAPIGateway.Utilities.SerializeToBinary(builder)),
+			};
 		}
 	}
 }
