@@ -1056,7 +1056,6 @@ namespace IOTA.ModularJumpGates
 			if (is_old = MyAPIGateway.Utilities.FileExistsInLocalStorage(this.ModLogSettingsFile, this.GetType()))
 			{
 				log_decode_success = this.UpdateLoadLogFileList();
-				this.UpdateSaveModDataFile();
 				MyAPIGateway.Utilities.DeleteFileInLocalStorage(this.ModLogSettingsFile, this.GetType());
 			}
 			else
@@ -1118,8 +1117,9 @@ namespace IOTA.ModularJumpGates
 			}
 
 			if (MyNetworkInterface.IsDedicatedMultiplayerServer) MyInterServerCommunication.Register(0, 0, null);
-			
+
 			// Finalize
+			this.UpdateSaveModDataFile();
 			MyAPIGateway.Entities.OnEntityAdd += this.OnEntityAdd;
 			MyAPIGateway.Entities.OnEntityRemove += this.OnEntityRemove;
 			this.ModAPIInterface.Init();
