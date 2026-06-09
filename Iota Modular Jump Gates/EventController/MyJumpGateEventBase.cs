@@ -542,11 +542,19 @@ namespace IOTA.ModularJumpGates.EventController
 
 		public sealed override void Deserialize(MyObjectBuilder_ComponentBase builder_base)
 		{
-			base.Deserialize(builder_base);
-			MyObjectBuilder_ModCustomComponent mod_component = (MyObjectBuilder_ModCustomComponent) builder_base;
-			ObjectBuilderType builder = MyAPIGateway.Utilities.SerializeFromBinary<ObjectBuilderType>(Convert.FromBase64String(mod_component.CustomModData));
-			this.DeserializedInfo = builder;
-			this.OnLoad(builder);
+			try
+			{
+				base.Deserialize(builder_base);
+				MyObjectBuilder_ModCustomComponent mod_component = (MyObjectBuilder_ModCustomComponent) builder_base;
+				ObjectBuilderType builder = MyAPIGateway.Utilities.SerializeFromBinary<ObjectBuilderType>(Convert.FromBase64String(mod_component.CustomModData));
+				this.DeserializedInfo = builder;
+				this.OnLoad(builder);
+			}
+			catch (Exception e)
+			{
+				this.DeserializedInfo = null;
+				Logger.Error($"Failed to load event data: {this.GetType().Name}-{this.EventController?.CustomName ?? "N/A"}\n{e}");
+			}
 		}
 
 		public sealed override MyObjectBuilder_ComponentBase Serialize(bool copy = false)

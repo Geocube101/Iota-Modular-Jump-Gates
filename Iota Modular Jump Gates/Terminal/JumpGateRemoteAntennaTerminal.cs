@@ -1240,12 +1240,12 @@ namespace IOTA.ModularJumpGates.Terminal
 					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
 					return antenna != null && antenna.IsWorking && antenna.JumpGateGrid != null && !antenna.JumpGateGrid.Closed && antenna.BlockSettings.BaseControllerSettings[antenna.CurrentTerminalChannel].CanAutoActivate();
 				};
-				autoactivate_delay.SetLimits(0, 60);
+				autoactivate_delay.SetLimits(0, 3600);
 				autoactivate_delay.Writer = (block, string_builder) => {
 					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
 					if (antenna == null) return;
 					else if (!antenna.BlockSettings.BaseControllerSettings[antenna.CurrentTerminalChannel].CanAutoActivate()) string_builder.Append($"- {MyTexts.GetString("GeneralText_Disabled")} -");
-					else if (antenna.IsWorking) string_builder.Append($"{antenna.BlockSettings.BaseControllerSettings[antenna.CurrentTerminalChannel].AutoActivationDelay()} s");
+					else if (antenna.IsWorking) string_builder.Append(MyJumpGateModSession.AutoconvertTimeHHMMSS(antenna.BlockSettings.BaseControllerSettings[antenna.CurrentTerminalChannel].AutoActivationDelay()));
 					else string_builder.Append($"- {MyTexts.GetString("GeneralText_Offline")} -");
 				};
 				autoactivate_delay.Getter = (block) => {

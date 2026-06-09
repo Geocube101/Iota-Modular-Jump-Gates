@@ -341,7 +341,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			}
 			public void AutoActivationDelay(float seconds)
 			{
-				lock (this.WriterLock) this.AutoActivationDelay_V = MathHelper.Clamp(seconds, 0, 60);
+				lock (this.WriterLock) this.AutoActivationDelay_V = MathHelper.Clamp(seconds, 0, 3600);
 			}
 			public void JumpSpaceRadius(double radius)
 			{

@@ -1429,12 +1429,12 @@ namespace IOTA.ModularJumpGates.Terminal
 					MyAllowedRemoteSettings allowed_settings = controller?.ConnectedRemoteAntenna?.BlockSettings.AllowedRemoteSettings ?? MyAllowedRemoteSettings.ALL;
 					return controller != null && controller.IsWorking && controller.JumpGateGrid != null && !controller.JumpGateGrid.Closed && controller.BlockSettings.CanAutoActivate() && (allowed_settings & MyAllowedRemoteSettings.AUTO_ACTIVATE) != 0;
 				};
-				autoactivate_delay.SetLimits(0, 60);
+				autoactivate_delay.SetLimits(0, 3600);
 				autoactivate_delay.Writer = (block, string_builder) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					if (controller == null) return;
 					else if (!controller.BlockSettings.CanAutoActivate()) string_builder.Append($"- {MyTexts.GetString("GeneralText_Disabled")} -");
-					else if (controller.IsWorking) string_builder.Append($"{controller.BlockSettings.AutoActivationDelay()} s");
+					else if (controller.IsWorking) string_builder.Append(MyJumpGateModSession.AutoconvertTimeHHMMSS(controller.BlockSettings.AutoActivationDelay()));
 					else string_builder.Append($"- {MyTexts.GetString("GeneralText_Offline")} -");
 				};
 				autoactivate_delay.Getter = (block) => MyJumpGateModSession.GetBlockAsJumpGateController(block)?.BlockSettings.AutoActivationDelay() ?? 0;

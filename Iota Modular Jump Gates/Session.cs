@@ -424,7 +424,7 @@ namespace IOTA.ModularJumpGates
 		/// <summary>
 		/// The current mod version (major, minor, patch)
 		/// </summary>
-		public Vector3I ModVersion => new Vector3I(1, 4, 7);
+		public Vector3I ModVersion => new Vector3I(1, 4, 8);
 
 		/// <summary>
 		/// The Guid used to store information in mod storage components

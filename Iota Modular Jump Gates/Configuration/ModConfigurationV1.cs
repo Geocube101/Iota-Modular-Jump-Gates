@@ -1647,7 +1647,7 @@ namespace IOTA.ModularJumpGates.ModConfiguration
 			public static MyModGeneralConfiguration Defaults()
 			{
 				return new MyModGeneralConfiguration {
-					DebugLogVerbosity = 5,
+					DebugLogVerbosity = 3,
 					DrawSyncDistance = 5000f,
 					LenientJumps = true,
 					HighlightShearBlocks = true,
@@ -2563,8 +2563,8 @@ namespace IOTA.ModularJumpGates.ModConfiguration
 		private static byte ValidateValue(byte? value, byte? default_, byte? min = null, byte? max = null)
 		{
 			byte result = value ?? default_ ?? default(byte);
-			if (min != null) value = Math.Max(min.Value, result);
-			if (max != null) value = Math.Min(max.Value, result);
+			if (min != null) result = Math.Max(min.Value, result);
+			if (max != null) result = Math.Min(max.Value, result);
 			return result;
 		}
 
@@ -2581,8 +2581,8 @@ namespace IOTA.ModularJumpGates.ModConfiguration
 		private static uint ValidateValue(uint? value, uint? default_, uint? min = null, uint? max = null)
 		{
 			uint result = value ?? default_ ?? default(uint);
-			if (min != null) value = Math.Max(min.Value, result);
-			if (max != null) value = Math.Min(max.Value, result);
+			if (min != null) result = Math.Max(min.Value, result);
+			if (max != null) result = Math.Min(max.Value, result);
 			return result;
 		}
 
@@ -2600,8 +2600,8 @@ namespace IOTA.ModularJumpGates.ModConfiguration
 		{
 			float result = value ?? default_ ?? default(float);
 			if (!allow_nan && float.IsNaN(result) || !allow_inf && float.IsInfinity(result)) value = default_;
-			if (min != null) value = Math.Max(min.Value, result);
-			if (max != null) value = Math.Min(max.Value, result);
+			if (min != null) result = Math.Max(min.Value, result);
+			if (max != null) result = Math.Min(max.Value, result);
 			return result;
 		}
 
@@ -2619,8 +2619,8 @@ namespace IOTA.ModularJumpGates.ModConfiguration
 		{
 			double result = value ?? default_ ?? default(double);
 			if (!allow_nan && double.IsNaN(result) || !allow_inf && double.IsInfinity(result)) value = default_;
-			if (min != null) value = Math.Max(min.Value, result);
-			if (max != null) value = Math.Min(max.Value, result);
+			if (min != null) result = Math.Max(min.Value, result);
+			if (max != null) result = Math.Min(max.Value, result);
 			return result;
 		}
 		#endregion
