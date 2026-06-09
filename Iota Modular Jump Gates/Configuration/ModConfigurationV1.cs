@@ -127,7 +127,7 @@ namespace IOTA.ModularJumpGates.ModConfiguration
 			/// </summary>
 			[XmlElement]
 			[ProtoMember(10)]
-			public float? SmallCapacitorRateCapacityCoefficent = 1;
+			public float? SmallCapacitorRateCapacityCoefficent;
 
 			/// <summary>
 			/// The value 'b' in the capacitor charge rate equation 'R=r*(1-a*x^b))' where:<br />
@@ -141,7 +141,7 @@ namespace IOTA.ModularJumpGates.ModConfiguration
 			/// </summary>
 			[XmlElement]
 			[ProtoMember(11)]
-			public float? LargeCapacitorRateCapacityExponent = 1;
+			public float? LargeCapacitorRateCapacityExponent;
 
 			/// <summary>
 			/// The value 'b' in the capacitor charge rate equation 'R=r*(1-a*x^b))' where:<br />
@@ -155,7 +155,7 @@ namespace IOTA.ModularJumpGates.ModConfiguration
 			/// </summary>
 			[XmlElement]
 			[ProtoMember(12)]
-			public float? SmallCapacitorRateCapacityExponent = 1;
+			public float? SmallCapacitorRateCapacityExponent;
 			#endregion
 
 			#region Public Methods
@@ -2738,7 +2738,13 @@ namespace IOTA.ModularJumpGates.ModConfiguration
 			};
 			config.Validate();
 			MyAPIGateway.Utilities.SetVariable(MyModConfigurationV1.ConfigVariableName, Convert.ToBase64String(MyAPIGateway.Utilities.SerializeToBinary(new MyGlobalModConfiguration {
-				LocalModConfiguration = local_config,
+				LocalModConfiguration = new MyLocalModConfiguration {
+					CapacitorConfiguration = config.CapacitorConfiguration,
+					DriveConfiguration = config.DriveConfiguration,
+					JumpGateConfiguration = config.JumpGateConfiguration,
+					ConstructConfiguration = config.ConstructConfiguration,
+					GeneralConfiguration = config.GeneralConfiguration,
+				},
 				ModSettings = config.ModSettings,
 			})));
 			return config;
