@@ -1,8 +1,10 @@
-﻿using IOTA.ModularJumpGates.API;
+﻿using IOTA.ModularJumpGates.Animation;
+using IOTA.ModularJumpGates.API;
 using IOTA.ModularJumpGates.Commands;
 using IOTA.ModularJumpGates.CubeBlock;
 using IOTA.ModularJumpGates.EventController.EventComponents;
 using IOTA.ModularJumpGates.ISC;
+using IOTA.ModularJumpGates.JumpGates;
 using IOTA.ModularJumpGates.ModConfiguration;
 using IOTA.ModularJumpGates.Terminal;
 using IOTA.ModularJumpGates.Util;
@@ -424,7 +426,7 @@ namespace IOTA.ModularJumpGates
 		/// <summary>
 		/// The current mod version (major, minor, patch)
 		/// </summary>
-		public Vector3I ModVersion => new Vector3I(1, 4, 9);
+		public Vector3I ModVersion => new Vector3I(1, 4, 10);
 
 		/// <summary>
 		/// The Guid used to store information in mod storage components

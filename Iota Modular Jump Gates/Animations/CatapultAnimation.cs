@@ -1,4 +1,5 @@
-﻿using IOTA.ModularJumpGates.Extensions;
+﻿using IOTA.ModularJumpGates.Animation;
+using IOTA.ModularJumpGates.Extensions;
 using System;
 using VRageMath;
 

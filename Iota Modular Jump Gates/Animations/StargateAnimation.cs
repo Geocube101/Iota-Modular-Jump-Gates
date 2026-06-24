@@ -1,10 +1,11 @@
-﻿using VRageMath;
+﻿using IOTA.ModularJumpGates.Animation;
+using VRageMath;
 
 namespace IOTA.ModularJumpGates.Animations
 {
 	public partial class AnimationDefinitions
 	{
-		public AnimationDef WormholeStargate = new AnimationDef("Stargate", "Wormhole jump effect mimicing a stargate\nYes the kawoosh works\n\n* NOTICE: All objects placed in front of either gate will be destroyed on activation *")
+		public AnimationDef WormholeStargate = new AnimationDef("Stargate", "Wormhole jump effect mimicing a stargate\nYes the kawoosh works\n\nNOTICE:\n- All objects placed in front of either gate will be destroyed on activation\n- This animation is one way - all ships attempting to enter from the receiving end will be destroyed")
 		{
 			Enabled = true,
 			ImmediateCancel = false,
@@ -270,7 +271,19 @@ namespace IOTA.ModularJumpGates.Animations
 					new ShapeColliderDef {
 						CollisionShape = CollisionShapeEnum.CYLINDER,
 						CollisionEffectType = CollisionEffectTypeEnum.JUMP,
-						EffectArguments = new double[] { 60 },
+						EffectArguments = new double[] { 15 },
+						Animations = new AttributeAnimationDef {
+							ShapeScaleAnimation = new VectorKeyframe[] {
+								new VectorKeyframe(0, AnimationSourceEnum.JUMP_GATE_RADII)
+							},
+						},
+					},
+				},
+				AntiNodeShapeColliders = new ShapeColliderDef[] {
+					new ShapeColliderDef {
+						CollisionShape = CollisionShapeEnum.CYLINDER,
+						CollisionEffectType = CollisionEffectTypeEnum.DELETE,
+						EffectArguments = new double[] { 15 },
 						Animations = new AttributeAnimationDef {
 							ShapeScaleAnimation = new VectorKeyframe[] {
 								new VectorKeyframe(0, AnimationSourceEnum.JUMP_GATE_RADII)

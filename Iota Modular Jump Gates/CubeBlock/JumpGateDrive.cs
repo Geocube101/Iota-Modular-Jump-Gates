@@ -1,4 +1,5 @@
-﻿using IOTA.ModularJumpGates.ModConfiguration;
+﻿using IOTA.ModularJumpGates.JumpGates;
+using IOTA.ModularJumpGates.ModConfiguration;
 using IOTA.ModularJumpGates.Terminal;
 using IOTA.ModularJumpGates.Util;
 using ProtoBuf;

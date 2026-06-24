@@ -1,4 +1,5 @@
-﻿using IOTA.ModularJumpGates.EventController.ObjectBuilders;
+﻿using IOTA.ModularJumpGates.JumpGates;
+using IOTA.ModularJumpGates.EventController.ObjectBuilders;
 using Sandbox.ModAPI;
 using Sandbox.ModAPI.Interfaces.Terminal;
 using System.Linq;

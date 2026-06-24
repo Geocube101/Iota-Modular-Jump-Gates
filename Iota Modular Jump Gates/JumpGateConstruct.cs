@@ -1,5 +1,6 @@
 ﻿using IOTA.ModularJumpGates.CubeBlock;
 using IOTA.ModularJumpGates.Extensions;
+using IOTA.ModularJumpGates.JumpGates;
 using IOTA.ModularJumpGates.ModConfiguration;
 using IOTA.ModularJumpGates.Util;
 using IOTA.ModularJumpGates.Util.ConcurrentCollections;

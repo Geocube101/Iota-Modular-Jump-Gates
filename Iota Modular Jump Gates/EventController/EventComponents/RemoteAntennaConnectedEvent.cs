@@ -1,4 +1,5 @@
 ﻿using IOTA.ModularJumpGates.CubeBlock;
+using IOTA.ModularJumpGates.JumpGates;
 using IOTA.ModularJumpGates.EventController.ObjectBuilders;
 using IOTA.ModularJumpGates.Util.ConcurrentCollections;
 using Sandbox.ModAPI;
