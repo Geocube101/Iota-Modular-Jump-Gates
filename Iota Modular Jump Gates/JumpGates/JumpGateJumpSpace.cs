@@ -1,5 +1,7 @@
 ﻿using IOTA.ModularJumpGates.Animation;
 using IOTA.ModularJumpGates.CubeBlock;
+using IOTA.ModularJumpGates.Session;
+using IOTA.ModularJumpGates.JumpGateConstruct;
 using IOTA.ModularJumpGates.Util;
 using IOTA.ModularJumpGates.Util.ConcurrentCollections;
 using Sandbox.Game.Entities;

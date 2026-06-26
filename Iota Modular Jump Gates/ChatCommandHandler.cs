@@ -1,4 +1,5 @@
 ﻿using IOTA.ModularJumpGates.ChatCommands;
+using IOTA.ModularJumpGates.Session;
 using IOTA.ModularJumpGates.Util;
 using Sandbox.ModAPI;
 using System;

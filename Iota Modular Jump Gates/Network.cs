@@ -1,4 +1,5 @@
-﻿using IOTA.ModularJumpGates.Util;
+﻿using IOTA.ModularJumpGates.Session;
+using IOTA.ModularJumpGates.Util;
 using ProtoBuf;
 using Sandbox.ModAPI;
 using System;

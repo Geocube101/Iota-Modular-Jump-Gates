@@ -1,5 +1,6 @@
 ﻿using IOTA.ModularJumpGates.CubeBlock;
 using IOTA.ModularJumpGates.JumpGates;
+using IOTA.ModularJumpGates.JumpGateConstruct;
 using ProtoBuf;
 using System;
 

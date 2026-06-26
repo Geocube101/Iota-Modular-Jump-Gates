@@ -2,6 +2,7 @@
 using IOTA.ModularJumpGates.CubeBlock;
 using IOTA.ModularJumpGates.JumpGates;
 using IOTA.ModularJumpGates.ModConfiguration;
+using IOTA.ModularJumpGates.Session;
 using IOTA.ModularJumpGates.Util;
 using Sandbox.ModAPI;
 using Sandbox.ModAPI.Interfaces.Terminal;
@@ -1783,7 +1784,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				gravity_alignment_type.Enabled = (block) => {
 					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
 					MyJumpGate jump_gate = antenna?.GetInboundControlGate(antenna.CurrentTerminalChannel);
-					if (antenna == null || !antenna.IsWorking || antenna.JumpGateGrid == null || antenna.JumpGateGrid.Closed) return false;
+					if (antenna == null || !antenna.IsWorking || antenna.JumpGateGrid == null || antenna.JumpGateGrid.Closed || antenna.BlockSettings.BaseControllerSettings[antenna.CurrentTerminalChannel].BypassComputedEntityOrientation()) return false;
 					else return jump_gate == null || jump_gate.IsIdle();
 				};
 				gravity_alignment_type.VisibleRowsCount = 4;
@@ -2002,6 +2003,198 @@ namespace IOTA.ModularJumpGates.Terminal
 				};
 				MyJumpGateRemoteAntennaTerminal.TerminalControls.Add(vector_normal_z_sd);
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(vector_normal_z_sd);
+			}
+
+			// Spacer
+			{
+				IMyTerminalControlLabel spacer_lb = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlLabel, IMyUpgradeModule>(MODID_PREFIX + "controller_override_spacer_lb");
+				spacer_lb.Label = MyStringId.GetOrCompute(" ");
+				spacer_lb.Visible = (block) => {
+					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
+					return MyJumpGateRemoteAntennaTerminal.TerminalSection == MyTerminalSection.EXTRA && antenna != null && antenna.IsWorking && antenna.JumpGateGrid != null && !antenna.JumpGateGrid.Closed;
+				};
+				spacer_lb.SupportsMultipleBlocks = true;
+				MyJumpGateRemoteAntennaTerminal.TerminalControls.Add(spacer_lb);
+				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(spacer_lb);
+			}
+
+			// OnOffSwitch [Entity Orientation Override]
+			{
+				IMyTerminalControlOnOffSwitch do_entity_orientation_override_off = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlOnOffSwitch, IMyUpgradeModule>(MODID_PREFIX + "EntityOrientationOverride");
+				do_entity_orientation_override_off.Title = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_EntityOrientationOverride"));
+				do_entity_orientation_override_off.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_EntityOrientationOverride_Tooltip"));
+				do_entity_orientation_override_off.SupportsMultipleBlocks = true;
+				do_entity_orientation_override_off.Visible = (block) => MyJumpGateRemoteAntennaTerminal.TerminalSection == MyTerminalSection.EXTRA && MyJumpGateModSession.IsBlockJumpGateRemoteAntenna(block);
+				do_entity_orientation_override_off.Enabled = (block) => {
+					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
+					MyJumpGate jump_gate = antenna?.GetInboundControlGate(antenna.CurrentTerminalChannel);
+					return antenna != null && antenna.IsWorking && antenna.JumpGateGrid != null && !antenna.JumpGateGrid.Closed && (jump_gate == null || (jump_gate.IsComplete() && jump_gate.IsIdle()));
+				};
+				do_entity_orientation_override_off.OnText = MyStringId.GetOrCompute(MyTexts.GetString("GeneralText_On"));
+				do_entity_orientation_override_off.OffText = MyStringId.GetOrCompute(MyTexts.GetString("GeneralText_Off"));
+				do_entity_orientation_override_off.Getter = (block) => {
+					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
+					return antenna?.BlockSettings.BaseControllerSettings[antenna.CurrentTerminalChannel].HasEntityOrientationOverride() ?? false;
+				};
+				do_entity_orientation_override_off.Setter = (block, value) => {
+					if (!do_entity_orientation_override_off.Enabled(block)) return;
+					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
+					antenna.BlockSettings.BaseControllerSettings[antenna.CurrentTerminalChannel].HasEntityOrientationOverride(value);
+					antenna.SetDirty();
+					MyJumpGateModSession.Instance.RedrawAllTerminalControls();
+				};
+				MyJumpGateRemoteAntennaTerminal.TerminalControls.Add(do_entity_orientation_override_off);
+				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(do_entity_orientation_override_off);
+			}
+
+			// OnOffSwitch [Entity Orientation Bypass]
+			{
+				IMyTerminalControlOnOffSwitch do_entity_orientation_bypass_off = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlOnOffSwitch, IMyUpgradeModule>(MODID_PREFIX + "EntityOrientationBypass");
+				do_entity_orientation_bypass_off.Title = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_EntityOrientationBypass"));
+				do_entity_orientation_bypass_off.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_EntityOrientationBypass_Tooltip"));
+				do_entity_orientation_bypass_off.SupportsMultipleBlocks = true;
+				do_entity_orientation_bypass_off.Visible = (block) => MyJumpGateRemoteAntennaTerminal.TerminalSection == MyTerminalSection.EXTRA && MyJumpGateModSession.IsBlockJumpGateRemoteAntenna(block);
+				do_entity_orientation_bypass_off.Enabled = (block) => {
+					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
+					MyJumpGate jump_gate = antenna?.GetInboundControlGate(antenna.CurrentTerminalChannel);
+					return antenna != null && antenna.IsWorking && antenna.JumpGateGrid != null && !antenna.JumpGateGrid.Closed && (jump_gate == null || (jump_gate.IsComplete() && jump_gate.IsIdle()));
+				};
+				do_entity_orientation_bypass_off.OnText = MyStringId.GetOrCompute(MyTexts.GetString("GeneralText_On"));
+				do_entity_orientation_bypass_off.OffText = MyStringId.GetOrCompute(MyTexts.GetString("GeneralText_Off"));
+				do_entity_orientation_bypass_off.Getter = (block) => {
+					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
+					return antenna?.BlockSettings.BaseControllerSettings[antenna.CurrentTerminalChannel].BypassComputedEntityOrientation() ?? false;
+				};
+				do_entity_orientation_bypass_off.Setter = (block, value) => {
+					if (!do_entity_orientation_bypass_off.Enabled(block)) return;
+					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
+					antenna.BlockSettings.BaseControllerSettings[antenna.CurrentTerminalChannel].BypassComputedEntityOrientation(value);
+					antenna.SetDirty();
+					MyJumpGateModSession.Instance.RedrawAllTerminalControls();
+				};
+				MyJumpGateRemoteAntennaTerminal.TerminalControls.Add(do_entity_orientation_bypass_off);
+				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(do_entity_orientation_bypass_off);
+			}
+
+			// Label
+			{
+				IMyTerminalControlLabel settings_label_lb = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlLabel, IMyUpgradeModule>(MODID_PREFIX + "AntennaEntityOrientationOverrideLabel");
+				settings_label_lb.Label = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_EntityOrientation"));
+				settings_label_lb.Visible = (block) => MyJumpGateRemoteAntennaTerminal.TerminalSection == MyTerminalSection.EXTRA && MyJumpGateModSession.IsBlockJumpGateRemoteAntenna(block);
+				settings_label_lb.SupportsMultipleBlocks = true;
+				MyJumpGateRemoteAntennaTerminal.TerminalControls.Add(settings_label_lb);
+				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(settings_label_lb);
+			}
+
+			// Slider [Entity Orientation X]
+			{
+				IMyTerminalControlSlider entity_orientation_x_sd = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSlider, IMyUpgradeModule>(MODID_PREFIX + "EntityOrientationX");
+				entity_orientation_x_sd.Title = MyStringId.GetOrCompute("Yaw:");
+				entity_orientation_x_sd.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_EntityOrientationComponent_Tooltip").Replace("{%0}", "Yaw"));
+				entity_orientation_x_sd.SupportsMultipleBlocks = true;
+				entity_orientation_x_sd.Visible = (block) => MyJumpGateRemoteAntennaTerminal.TerminalSection == MyTerminalSection.EXTRA && MyJumpGateModSession.IsBlockJumpGateRemoteAntenna(block);
+				entity_orientation_x_sd.Enabled = (block) => {
+					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
+					MyJumpGate jump_gate = antenna?.GetInboundControlGate(antenna.CurrentTerminalChannel);
+					return antenna != null && antenna.IsWorking && antenna.BlockSettings.BaseControllerSettings[antenna.CurrentTerminalChannel].HasEntityOrientationOverride() && antenna.JumpGateGrid != null && !antenna.JumpGateGrid.Closed && (jump_gate == null || (!jump_gate.Closed && jump_gate.IsIdle()));
+				};
+				entity_orientation_x_sd.SetLimits(0, 360);
+				entity_orientation_x_sd.Writer = (block, string_builder) => {
+					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
+					if (antenna == null) return;
+					else if (!antenna.IsWorking) string_builder.Append($"- {MyTexts.GetString("GeneralText_Offline")} -");
+					else if (!antenna.BlockSettings.BaseControllerSettings[antenna.CurrentTerminalChannel].HasEntityOrientationOverride()) string_builder.Append("- DISABLED -");
+					else string_builder.Append(Math.Round(antenna.BlockSettings.BaseControllerSettings[antenna.CurrentTerminalChannel].EntityOrientationOverride().Value.X * (180d / Math.PI), 4));
+				};
+				entity_orientation_x_sd.Getter = (block) => {
+					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
+					if (antenna == null || !antenna.BlockSettings.BaseControllerSettings[antenna.CurrentTerminalChannel].HasEntityOrientationOverride()) return 0;
+					return (float) (antenna.BlockSettings.BaseControllerSettings[antenna.CurrentTerminalChannel].EntityOrientationOverride().Value.X * (180d / Math.PI));
+				};
+				entity_orientation_x_sd.Setter = (block, value) => {
+					if (!entity_orientation_x_sd.Enabled(block)) return;
+					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
+					Vector3D normal_override = antenna.BlockSettings.BaseControllerSettings[antenna.CurrentTerminalChannel].EntityOrientationOverride().Value;
+					normal_override.X = (value % 360) * (Math.PI / 180d);
+					antenna.BlockSettings.BaseControllerSettings[antenna.CurrentTerminalChannel].EntityOrientationOverride(normal_override);
+					antenna.SetDirty();
+				};
+				MyJumpGateRemoteAntennaTerminal.TerminalControls.Add(entity_orientation_x_sd);
+				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(entity_orientation_x_sd);
+			}
+
+			// Slider [Entity Orientation Y]
+			{
+				IMyTerminalControlSlider entity_orientation_y_sd = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSlider, IMyUpgradeModule>(MODID_PREFIX + "EntityOrientationY");
+				entity_orientation_y_sd.Title = MyStringId.GetOrCompute("Pitch:");
+				entity_orientation_y_sd.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_EntityOrientationComponent_Tooltip").Replace("{%0}", "Pitch"));
+				entity_orientation_y_sd.SupportsMultipleBlocks = true;
+				entity_orientation_y_sd.Visible = (block) => MyJumpGateRemoteAntennaTerminal.TerminalSection == MyTerminalSection.EXTRA && MyJumpGateModSession.IsBlockJumpGateRemoteAntenna(block);
+				entity_orientation_y_sd.Enabled = (block) => {
+					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
+					MyJumpGate jump_gate = antenna?.GetInboundControlGate(antenna.CurrentTerminalChannel);
+					return antenna != null && antenna.IsWorking && antenna.BlockSettings.BaseControllerSettings[antenna.CurrentTerminalChannel].HasEntityOrientationOverride() && antenna.JumpGateGrid != null && !antenna.JumpGateGrid.Closed && (jump_gate == null || (!jump_gate.Closed && jump_gate.IsIdle()));
+				};
+				entity_orientation_y_sd.SetLimits(0, 360);
+				entity_orientation_y_sd.Writer = (block, string_builder) => {
+					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
+					if (antenna == null) return;
+					else if (!antenna.IsWorking) string_builder.Append($"- {MyTexts.GetString("GeneralText_Offline")} -");
+					else if (!antenna.BlockSettings.BaseControllerSettings[antenna.CurrentTerminalChannel].HasEntityOrientationOverride()) string_builder.Append("- DISABLED -");
+					else string_builder.Append(Math.Round(antenna.BlockSettings.BaseControllerSettings[antenna.CurrentTerminalChannel].EntityOrientationOverride().Value.Y * (180d / Math.PI), 4));
+				};
+				entity_orientation_y_sd.Getter = (block) => {
+					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
+					if (antenna == null || !antenna.BlockSettings.BaseControllerSettings[antenna.CurrentTerminalChannel].HasEntityOrientationOverride()) return 0;
+					return (float) (antenna.BlockSettings.BaseControllerSettings[antenna.CurrentTerminalChannel].EntityOrientationOverride().Value.Y * (180d / Math.PI));
+				};
+				entity_orientation_y_sd.Setter = (block, value) => {
+					if (!entity_orientation_y_sd.Enabled(block)) return;
+					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
+					Vector3D normal_override = antenna.BlockSettings.BaseControllerSettings[antenna.CurrentTerminalChannel].EntityOrientationOverride().Value;
+					normal_override.Y = (value % 360) * (Math.PI / 180d);
+					antenna.BlockSettings.BaseControllerSettings[antenna.CurrentTerminalChannel].EntityOrientationOverride(normal_override);
+					antenna.SetDirty();
+				};
+				MyJumpGateRemoteAntennaTerminal.TerminalControls.Add(entity_orientation_y_sd);
+				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(entity_orientation_y_sd);
+			}
+
+			// Slider [Entity Orientation Z]
+			{
+				IMyTerminalControlSlider entity_orientation_z_sd = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSlider, IMyUpgradeModule>(MODID_PREFIX + "EntityOrientationZ");
+				entity_orientation_z_sd.Title = MyStringId.GetOrCompute("Roll:");
+				entity_orientation_z_sd.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_EntityOrientationComponent_Tooltip").Replace("{%0}", "Roll"));
+				entity_orientation_z_sd.SupportsMultipleBlocks = true;
+				entity_orientation_z_sd.Visible = (block) => MyJumpGateRemoteAntennaTerminal.TerminalSection == MyTerminalSection.EXTRA && MyJumpGateModSession.IsBlockJumpGateRemoteAntenna(block);
+				entity_orientation_z_sd.Enabled = (block) => {
+					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
+					MyJumpGate jump_gate = antenna?.GetInboundControlGate(antenna.CurrentTerminalChannel);
+					return antenna != null && antenna.IsWorking && antenna.BlockSettings.BaseControllerSettings[antenna.CurrentTerminalChannel].HasEntityOrientationOverride() && antenna.JumpGateGrid != null && !antenna.JumpGateGrid.Closed && (jump_gate == null || (!jump_gate.Closed && jump_gate.IsIdle()));
+				};
+				entity_orientation_z_sd.SetLimits(0, 360);
+				entity_orientation_z_sd.Writer = (block, string_builder) => {
+					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
+					if (antenna == null) return;
+					else if (!antenna.IsWorking) string_builder.Append($"- {MyTexts.GetString("GeneralText_Offline")} -");
+					else if (!antenna.BlockSettings.BaseControllerSettings[antenna.CurrentTerminalChannel].HasEntityOrientationOverride()) string_builder.Append("- DISABLED -");
+					else string_builder.Append(Math.Round(antenna.BlockSettings.BaseControllerSettings[antenna.CurrentTerminalChannel].EntityOrientationOverride().Value.Z * (180d / Math.PI), 4));
+				};
+				entity_orientation_z_sd.Getter = (block) => {
+					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
+					if (antenna == null || !antenna.BlockSettings.BaseControllerSettings[antenna.CurrentTerminalChannel].HasEntityOrientationOverride()) return 0;
+					return (float) (antenna.BlockSettings.BaseControllerSettings[antenna.CurrentTerminalChannel].EntityOrientationOverride().Value.Z * (180d / Math.PI));
+				};
+				entity_orientation_z_sd.Setter = (block, value) => {
+					if (!entity_orientation_z_sd.Enabled(block)) return;
+					MyJumpGateRemoteAntenna antenna = MyJumpGateModSession.GetBlockAsJumpGateRemoteAntenna(block);
+					Vector3D normal_override = antenna.BlockSettings.BaseControllerSettings[antenna.CurrentTerminalChannel].EntityOrientationOverride().Value;
+					normal_override.Z = (value % 360) * (Math.PI / 180d);
+					antenna.BlockSettings.BaseControllerSettings[antenna.CurrentTerminalChannel].EntityOrientationOverride(normal_override);
+					antenna.SetDirty();
+				};
+				MyJumpGateRemoteAntennaTerminal.TerminalControls.Add(entity_orientation_z_sd);
+				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(entity_orientation_z_sd);
 			}
 
 			// Spacer

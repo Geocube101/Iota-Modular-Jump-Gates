@@ -1,5 +1,6 @@
 ﻿using IOTA.ModularJumpGates.Animation;
 using IOTA.ModularJumpGates.CubeBlock;
+using IOTA.ModularJumpGates.JumpGateConstruct;
 using IOTA.ModularJumpGates.Util;
 using ProtoBuf;
 using Sandbox.Game;

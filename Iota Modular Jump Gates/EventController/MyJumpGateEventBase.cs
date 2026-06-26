@@ -1,6 +1,8 @@
 ﻿using IOTA.ModularJumpGates.CubeBlock;
 using IOTA.ModularJumpGates.EventController.ObjectBuilders;
 using IOTA.ModularJumpGates.JumpGates;
+using IOTA.ModularJumpGates.JumpGateConstruct;
+using IOTA.ModularJumpGates.Session;
 using IOTA.ModularJumpGates.Util;
 using ProtoBuf;
 using Sandbox.Game.Entities;

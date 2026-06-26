@@ -2,6 +2,8 @@
 using IOTA.ModularJumpGates.CubeBlock;
 using IOTA.ModularJumpGates.Extensions;
 using IOTA.ModularJumpGates.ModConfiguration;
+using IOTA.ModularJumpGates.JumpGateConstruct;
+using IOTA.ModularJumpGates.Session;
 using IOTA.ModularJumpGates.Util;
 using Sandbox.Game;
 using Sandbox.ModAPI;
@@ -354,8 +356,7 @@ namespace IOTA.ModularJumpGates.JumpGates
 
 				if (MyJumpGateModSession.Instance != null && MyJumpGateModSession.Instance.Network.Registered && MyNetworkInterface.IsMultiplayerServer)
 				{
-					MyNetworkInterface.Packet update_packet = new MyNetworkInterface.Packet
-					{
+					MyNetworkInterface.Packet update_packet = new MyNetworkInterface.Packet {
 						PacketType = MyPacketTypeEnum.UPDATE_JUMP_GATE,
 						TargetID = 0,
 						Broadcast = true,

@@ -1,4 +1,6 @@
 ﻿using IOTA.ModularJumpGates.JumpGates;
+using IOTA.ModularJumpGates.JumpGateConstruct;
+using IOTA.ModularJumpGates.Session;
 using IOTA.ModularJumpGates.Terminal;
 using IOTA.ModularJumpGates.Util;
 using ProtoBuf;
@@ -23,7 +25,7 @@ using VRageMath;
 namespace IOTA.ModularJumpGates.CubeBlock
 {
 	public enum MyAllowedRemoteSettings : ushort {
-		NAME = 1, DESTINATIONS = 2, ANIMATIONS = 4, ROUTING = 8, ENTITY_FILTER = 16, AUTO_ACTIVATE = 32, COMM_LINKAGE = 64, JUMPSPACE = 128, COLOR_OVERRIDE = 256, VECTOR_OVERRIDE = 512, JUMP = 1024, NOJUMP = 2048, DETONATION_CONTROL = 4096, WORMHOLE = 8192,
+		NAME = 1, DESTINATIONS = 2, ANIMATIONS = 4, ROUTING = 8, ENTITY_FILTER = 16, AUTO_ACTIVATE = 32, COMM_LINKAGE = 64, JUMPSPACE = 128, COLOR_OVERRIDE = 256, VECTOR_OVERRIDE = 512, JUMP = 1024, NOJUMP = 2048, DETONATION_CONTROL = 4096, WORMHOLE = 8192, ORIENTATION_OVERRIDE = 16384,
 		ALL = 0xFFFF, NONE = 0,
 	}
 

@@ -1,4 +1,6 @@
-﻿namespace IOTA.ModularJumpGates.Terminal
+﻿using IOTA.ModularJumpGates.Session;
+
+namespace IOTA.ModularJumpGates.Terminal
 {
 	internal static class MyJumpGateDriveTerminal
 	{

@@ -1,4 +1,6 @@
 ﻿using IOTA.ModularJumpGates.CubeBlock;
+using IOTA.ModularJumpGates.JumpGateConstruct;
+using IOTA.ModularJumpGates.Session;
 using IOTA.ModularJumpGates.Util;
 using ProtoBuf;
 using Sandbox.ModAPI;
@@ -90,9 +92,9 @@ namespace IOTA.ModularJumpGates.JumpGates
 					ColliderStatus = this.JumpSpaceColliderStatus(),
 					LocalJumpNode = this.LocalJumpNode,
 					LocalJumpEllipse = (this.Closed) ? null : Convert.ToBase64String(this.TrueLocalJumpEllipse.ToSerialized()),
-					Controller = (this.Controller == null) ? JumpGateUUID.Empty : JumpGateUUID.FromBlock(this.Controller),
-					RemoteAntenna = (this.RemoteAntenna == null) ? JumpGateUUID.Empty : JumpGateUUID.FromBlock(this.RemoteAntenna),
-					ServerAntenna = (this.ServerAntenna == null) ? JumpGateUUID.Empty : JumpGateUUID.FromBlock(this.ServerAntenna),
+					Controller = (this.Controller == null || this.Controller.IsClosed) ? JumpGateUUID.Empty : JumpGateUUID.FromBlock(this.Controller),
+					RemoteAntenna = (this.RemoteAntenna == null || this.RemoteAntenna.IsClosed) ? JumpGateUUID.Empty : JumpGateUUID.FromBlock(this.RemoteAntenna),
+					ServerAntenna = (this.ServerAntenna == null || this.ServerAntenna.IsClosed) ? JumpGateUUID.Empty : JumpGateUUID.FromBlock(this.ServerAntenna),
 					JumpGateGrid = (this.Closed) ? JumpGateUUID.Empty : JumpGateUUID.FromJumpGateGrid(this.JumpGateGrid),
 					IntersectNodes = (this.Closed) ? null : this.LocalDriveIntersectNodes,
 					GridSize = (this.Closed) ? MyCubeSize.Large : this.CubeGridSize(),

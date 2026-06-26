@@ -1,6 +1,8 @@
 ﻿using IOTA.ModularJumpGates.Animation;
 using IOTA.ModularJumpGates.CubeBlock;
 using IOTA.ModularJumpGates.Extensions;
+using IOTA.ModularJumpGates.JumpGateConstruct;
+using IOTA.ModularJumpGates.Session;
 using IOTA.ModularJumpGates.Util;
 using Sandbox.Game.Entities;
 using Sandbox.ModAPI;
@@ -1125,6 +1127,7 @@ namespace IOTA.ModularJumpGates.JumpGates
 			MyJumpGate target_gate = target_endpoint as MyJumpGate;
 			Vector3D endpoint = target_gate?.TrueWorldJumpEllipse.WorldMatrix.Translation ?? (Vector3D) target_endpoint;
 			BoundingEllipsoidD jump_ellipse = this.JumpEllipse;
+			bool compute_orientation = !controller_settings.BypassComputedEntityOrientation();
 
 			allow_power_syphon = MyJumpGateModSession.Instance.Configuration.GeneralConfiguration.SyphonReactorPower.Value && allow_power_syphon;
 			ushort jump_duration = animation?.GateJumpedAnimationDef?.BeamPulse?.TravelTime ?? animation?.GateJumpedAnimationDef?.TravelTime ?? animation?.GateJumpedAnimationDef?.Duration ?? 0;
@@ -1246,10 +1249,21 @@ namespace IOTA.ModularJumpGates.JumpGates
 				// Calculate end position
 				Vector3D position = MyJumpGateModSession.WorldVectorToLocalVectorP(ref this_matrix, orientation_matrix.Translation);
 				position = MyJumpGateModSession.LocalVectorToWorldVectorP(ref target_matrix, position);
-				Vector3D forward_dir = MyJumpGateModSession.WorldVectorToLocalVectorD(ref this_matrix, orientation_matrix.Forward);
-				forward_dir = MyJumpGateModSession.LocalVectorToWorldVectorD(ref target_matrix, forward_dir);
-				Vector3D up_dir = MyJumpGateModSession.WorldVectorToLocalVectorD(ref this_matrix, orientation_matrix.Up);
-				up_dir = MyJumpGateModSession.LocalVectorToWorldVectorD(ref target_matrix, up_dir);
+				Vector3D forward_dir, up_dir;
+
+				if (compute_orientation)
+				{
+					forward_dir = MyJumpGateModSession.WorldVectorToLocalVectorD(ref this_matrix, orientation_matrix.Forward);
+					forward_dir = MyJumpGateModSession.LocalVectorToWorldVectorD(ref target_matrix, forward_dir);
+					up_dir = MyJumpGateModSession.WorldVectorToLocalVectorD(ref this_matrix, orientation_matrix.Up);
+					up_dir = MyJumpGateModSession.LocalVectorToWorldVectorD(ref target_matrix, up_dir);
+				}
+				else
+				{
+					forward_dir = entity.WorldMatrix.Forward;
+					up_dir = entity.WorldMatrix.Up;
+				}
+
 				MatrixD.CreateWorld(ref position, ref forward_dir, ref up_dir, out entity_final_matrix);
 				Vector3D entity_target_position = target_matrix.Translation + (orientation_matrix.Translation - this_matrix.Translation);
 				Vector3D gravity_vector = Vector3D.Zero;
@@ -1275,7 +1289,7 @@ namespace IOTA.ModularJumpGates.JumpGates
 				}
 
 				// Align entity to gravity
-				if (alignment != MyGravityAlignmentType.NONE)
+				if (alignment != MyGravityAlignmentType.NONE && compute_orientation)
 				{
 					//Vector3D gravity_vector = Vector3D.Zero;
 					float gravity_strength;
@@ -1574,10 +1588,24 @@ namespace IOTA.ModularJumpGates.JumpGates
 				velocity += target_gate?.JumpNodeVelocity ?? Vector3D.Zero;
 
 				MyJumpGateModSession.Instance.WarpEntityBatchOverTime(this, batch.Batch, ref entity_matrix, ref batch.ParentFinalMatrix, ref batch.ParentTargetPosition, jump_duration, velocity.Length(), (batch_) => {
-					MatrixD new_target_matrix = MatrixD.Normalize(target_gate?.TrueWorldJumpEllipse.WorldMatrix ?? target_matrix);
-					MatrixD relation = new_target_matrix * MatrixD.Invert(target_matrix);
-					QuaternionD rotation_inverter = QuaternionD.CreateFromYawPitchRoll(0, Math.PI, 0);
-					Extensions.Extensions.Transform(ref relation, ref rotation_inverter);
+					MatrixD relation;
+					Vector3? orientation;
+
+					if (controller_settings.BypassComputedEntityOrientation())
+					{
+						relation = MatrixD.Identity;
+					}
+					else if ((orientation = controller_settings.EntityOrientationOverride()).HasValue)
+					{
+						relation = MatrixD.Identity;
+						QuaternionD rotation = QuaternionD.CreateFromYawPitchRoll(orientation.Value.X, orientation.Value.Y, orientation.Value.Z);
+						Extensions.Extensions.Transform(ref relation, ref rotation, ref relation);
+					}
+					else
+					{
+						MatrixD new_target_matrix = MatrixD.Normalize(target_gate?.TrueWorldJumpEllipse.WorldMatrix ?? target_matrix);
+						relation = new_target_matrix * MatrixD.Invert(target_matrix);
+					}
 
 					foreach (MyEntity child in batch_.EntityBatch)
 					{
@@ -1706,11 +1734,26 @@ namespace IOTA.ModularJumpGates.JumpGates
 						MatrixD entity_matrix = entity.WorldMatrix;
 						Vector3D velocity = MyJumpGateModSession.WorldVectorToLocalVectorD(ref this_matrix, entity.Physics.LinearVelocity);
 						velocity = MyJumpGateModSession.LocalVectorToWorldVectorD(ref target_matrix, velocity);
+
 						MyJumpGateModSession.Instance.WarpEntityBatchOverTime(this, batch.Batch, ref entity_matrix, ref batch.ParentFinalMatrix, ref batch.ParentTargetPosition, jump_duration, velocity.Length(), (batch_) => {
-							MatrixD new_target_matrix = MatrixD.Normalize(target_gate?.TrueWorldJumpEllipse.WorldMatrix ?? target_matrix);
-							MatrixD relation = new_target_matrix * MatrixD.Invert(target_matrix);
-							QuaternionD rotation_inverter = QuaternionD.CreateFromYawPitchRoll(0, Math.PI, 0);
-							Extensions.Extensions.Transform(ref relation, ref rotation_inverter);
+							MatrixD relation;
+							Vector3? orientation;
+
+							if (controller_settings.BypassComputedEntityOrientation())
+							{
+								relation = MatrixD.Identity;
+							}
+							else if ((orientation = controller_settings.EntityOrientationOverride()).HasValue)
+							{
+								relation = MatrixD.Identity;
+								QuaternionD rotation = QuaternionD.CreateFromYawPitchRoll(orientation.Value.X, orientation.Value.Y, orientation.Value.Z);
+								Extensions.Extensions.Transform(ref relation, ref rotation, ref relation);
+							}
+							else
+							{
+								MatrixD new_target_matrix = MatrixD.Normalize(target_gate?.TrueWorldJumpEllipse.WorldMatrix ?? target_matrix);
+								relation = new_target_matrix * MatrixD.Invert(target_matrix);
+							}
 
 							foreach (MyEntity child in batch_.EntityBatch)
 							{

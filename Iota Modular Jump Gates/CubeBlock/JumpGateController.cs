@@ -1,4 +1,6 @@
 ﻿using IOTA.ModularJumpGates.JumpGates;
+using IOTA.ModularJumpGates.JumpGateConstruct;
+using IOTA.ModularJumpGates.Session;
 using IOTA.ModularJumpGates.Terminal;
 using IOTA.ModularJumpGates.Util;
 using ProtoBuf;
@@ -111,6 +113,12 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			private float HoloDisplayScale_V = 1;
 			[ProtoMember(35)]
 			private float GateWormholeAutoCloseTime_V = 0;
+			[ProtoMember(36)]
+			private bool HasEntityOrientationOverride_V = false;
+			[ProtoMember(37)]
+			private Vector3 EntityOrientation_V = Vector3.Zero;
+			[ProtoMember(38)]
+			private bool BypassComputedEntityOrientation_V = false;
 
 			private readonly object WriterLock = new object();
 
@@ -139,6 +147,8 @@ namespace IOTA.ModularJumpGates.CubeBlock
 					this.CanBeInbound_V = (bool) mapping.GetValueOrDefault("CanBeInbound", this.CanBeInbound_V);
 					this.CanBeOutbound_V = (bool) mapping.GetValueOrDefault("CanBeOutbound", this.CanBeOutbound_V);
 					this.HasVectorNormalOverride_V = (bool) mapping.GetValueOrDefault("HasVectorNormalOverride", this.HasVectorNormalOverride_V);
+					this.HasEntityOrientationOverride_V = (bool) mapping.GetValueOrDefault("HasEntityOrientationOverride", this.HasEntityOrientationOverride_V);
+					this.BypassComputedEntityOrientation_V = (bool) mapping.GetValueOrDefault("BypassComputedEntityOrientation", this.BypassComputedEntityOrientation_V);
 					this.FactionDisplayType_V = (MyFactionDisplayType) (byte) mapping.GetValueOrDefault("FactionDisplayType", (byte) this.FactionDisplayType_V);
 					this.JumpSpaceRadius_V = (double) mapping.GetValueOrDefault("JumpSpaceRadius", this.JumpSpaceRadius_V);
 					this.JumpSpaceDepthPercent_V = (double) mapping.GetValueOrDefault("JumpSpaceDepthPercent", this.JumpSpaceDepthPercent_V);
@@ -147,6 +157,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 					this.JumpEffectName_V = (string) mapping.GetValueOrDefault("JumpEffectName", this.JumpEffectName_V);
 					string name = (string) mapping.GetValueOrDefault("JumpGateName", this.JumpGateName_V);
 					this.VectorNormal_V = (Vector3D) mapping.GetValueOrDefault("VectorNormal", this.VectorNormal_V);
+					this.EntityOrientation_V = (Vector3) mapping.GetValueOrDefault("EntityOrientation", this.EntityOrientation_V);
 					this.EffectColorShift_V = (Color) mapping.GetValueOrDefault("EffectColorShift", this.EffectColorShift_V);
 					this.JumpGateName_V = (name != null && (name.StartsWith("#") || name.Contains(';'))) ? this.JumpGateName_V : name;
 					this.GateDetonatorArmed_V = (bool) mapping.GetValueOrDefault("GateDetonatorArmed", this.GateDetonatorArmed_V);
@@ -240,6 +251,8 @@ namespace IOTA.ModularJumpGates.CubeBlock
 						["CanBeInbound"] = this.CanBeInbound_V,
 						["CanBeOutbound"] = this.CanBeOutbound_V,
 						["HasVectorNormalOverride"] = this.HasVectorNormalOverride_V,
+						["HasEntityOrientationOverride"] = this.HasEntityOrientationOverride_V,
+						["BypassComputedEntityOrientation"] = this.BypassComputedEntityOrientation_V,
 						["RemoteAntennaChannel"] = this.RemoteAntennaChannel_V,
 						["RemoteAntennaID"] = this.RemoteAntennaID_V,
 						["FactionDisplayType"] = (byte) this.FactionDisplayType_V,
@@ -250,6 +263,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 						["JumpEffectName"] = this.JumpEffectName_V,
 						["JumpGateName"] = this.JumpGateName_V,
 						["VectorNormal"] = this.VectorNormal_V,
+						["EntityOrientation"] = this.EntityOrientation_V,
 						["EffectColorShift"] = this.EffectColorShift_V,
 						["SelectedWaypoint"] = selected_waypoint,
 						["BlacklistedEntities"] = this.BlacklistedEntities,
@@ -336,6 +350,14 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			{
 				lock (this.WriterLock) this.HasVectorNormalOverride_V = flag;
 			}
+			public void HasEntityOrientationOverride(bool flag)
+			{
+				lock (this.WriterLock) this.HasEntityOrientationOverride_V = flag;
+			}
+			public void BypassComputedEntityOrientation(bool flag)
+			{
+				lock (this.WriterLock) this.BypassComputedEntityOrientation_V = flag;
+			}
 			public void RemoteAntennaChannel(byte channel)
 			{
 				lock (this.WriterLock) this.RemoteAntennaChannel_V = (channel >= MyJumpGateRemoteAntenna.ChannelCount) ? (byte) 0xFF : channel;
@@ -379,6 +401,14 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				{
 					this.HasVectorNormalOverride_V = vector != null;
 					this.VectorNormal_V = (vector == null || !vector.IsValid()) ? Vector3D.Zero : vector.Value;
+				}
+			}
+			public void EntityOrientationOverride(Vector3? vector)
+			{
+				lock (this.WriterLock)
+				{
+					this.HasEntityOrientationOverride_V = vector != null;
+					this.EntityOrientation_V = (vector == null || !vector.IsValid()) ? Vector3.Zero : vector.Value;
 				}
 			}
 			public void JumpEffectAnimationColorShift(Color color_shift)
@@ -548,6 +578,10 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			{
 				return (this.FactionDisplayType_V & MyFactionDisplayType.OWNED) != 0;
 			}
+			public bool BypassComputedEntityOrientation()
+			{
+				return this.BypassComputedEntityOrientation_V;
+			}
 			public MyFactionDisplayType CanAccept()
 			{
 				return this.FactionDisplayType_V;
@@ -563,6 +597,10 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			public bool HasVectorNormalOverride()
 			{
 				return this.HasVectorNormalOverride_V;
+			}
+			public bool HasEntityOrientationOverride()
+			{
+				return this.HasEntityOrientationOverride_V;
 			}
 			public byte RemoteAntennaChannel()
 			{
@@ -599,6 +637,11 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			public Vector3D? VectorNormalOverride()
 			{
 				if (this.HasVectorNormalOverride_V && this.VectorNormal_V.IsValid()) return this.VectorNormal_V;
+				else return null;
+			}
+			public Vector3? EntityOrientationOverride()
+			{
+				if (this.HasEntityOrientationOverride_V && this.EntityOrientation_V.IsValid()) return this.EntityOrientation_V;
 				else return null;
 			}
 			public Color JumpEffectAnimationColorShift()
@@ -1651,6 +1694,8 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				this.BaseBlockSettings.JumpSpaceRadius(new_settings.JumpSpaceRadius());
 				this.BaseBlockSettings.JumpEffectAnimationName(new_settings.JumpEffectAnimationName());
 				this.BaseBlockSettings.VectorNormalOverride(new_settings.VectorNormalOverride());
+				this.BaseBlockSettings.EntityOrientationOverride(new_settings.EntityOrientationOverride());
+				this.BaseBlockSettings.BypassComputedEntityOrientation(new_settings.BypassComputedEntityOrientation());
 				this.BaseBlockSettings.JumpEffectAnimationColorShift(new_settings.JumpEffectAnimationColorShift());
 				this.BaseBlockSettings.JumpSpaceDepthPercent(new_settings.JumpSpaceDepthPercent());
 				this.BaseBlockSettings.JumpSpaceFitType(new_settings.JumpSpaceFitType());

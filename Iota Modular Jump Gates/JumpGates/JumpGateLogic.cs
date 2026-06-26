@@ -1,4 +1,6 @@
-﻿using IOTA.ModularJumpGates.Util;
+﻿using IOTA.ModularJumpGates.JumpGateConstruct;
+using IOTA.ModularJumpGates.Session;
+using IOTA.ModularJumpGates.Util;
 using Sandbox.Game;
 using System;
 using System.Collections.Generic;

@@ -1,4 +1,5 @@
-﻿using ProtoBuf;
+﻿using IOTA.ModularJumpGates.JumpGateConstruct;
+using ProtoBuf;
 
 namespace IOTA.ModularJumpGates.CubeBlock
 {

@@ -1,4 +1,6 @@
-﻿using IOTA.ModularJumpGates.Terminal;
+﻿using IOTA.ModularJumpGates.Session;
+using IOTA.ModularJumpGates.JumpGateConstruct;
+using IOTA.ModularJumpGates.Terminal;
 using IOTA.ModularJumpGates.Util;
 using ProtoBuf;
 using Sandbox.Game.Entities;
@@ -138,7 +140,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// <summary>
 		/// Whether this component or it's attached block is closed
 		/// </summary>
-		public virtual bool IsClosed => (this.IsNullWrapper) ? (this.SerializedWrapperInfo?.IsClosed ?? true) : (this.TerminalBlock.Closed || this.TerminalBlock.MarkedForClose || this.TerminalBlock.CubeGrid?.Physics == null);
+		public virtual bool IsClosed => (this.IsNullWrapper) ? (this.SerializedWrapperInfo?.IsClosed ?? true) : (this.TerminalBlock == null || this.TerminalBlock.Closed || this.TerminalBlock.MarkedForClose || this.TerminalBlock.CubeGrid?.Physics == null);
 
 		/// <summary>
 		/// Whether block is powered<br />

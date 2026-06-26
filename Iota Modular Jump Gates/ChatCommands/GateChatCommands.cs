@@ -1,5 +1,6 @@
 ﻿using IOTA.ModularJumpGates.Commands;
 using IOTA.ModularJumpGates.JumpGates;
+using IOTA.ModularJumpGates.Session;
 using IOTA.ModularJumpGates.Util;
 using Sandbox.ModAPI;
 using System.Collections.Generic;

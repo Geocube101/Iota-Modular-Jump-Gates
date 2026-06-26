@@ -1,6 +1,8 @@
 ﻿using IOTA.ModularJumpGates.Animation;
 using IOTA.ModularJumpGates.CubeBlock;
 using IOTA.ModularJumpGates.JumpGates;
+using IOTA.ModularJumpGates.JumpGateConstruct;
+using IOTA.ModularJumpGates.Session;
 using IOTA.ModularJumpGates.Util;
 using Sandbox.ModAPI;
 using System;

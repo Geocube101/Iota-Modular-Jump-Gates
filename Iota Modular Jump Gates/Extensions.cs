@@ -109,6 +109,54 @@ namespace IOTA.ModularJumpGates.Extensions
 		}
 
 		/// <summary>
+		/// Applies a quaternion rotation to the specified matrix<br />
+		/// Equivilent to "MatrixD.Transform" but takes a QuaternionD instead of a Quaternion
+		/// </summary>
+		/// <param name="value">The matrix to transform</param>
+		/// <param name="rotation">The quaterion to rotate by</param>
+		/// <returns>The transformed matrix</returns>
+		public static void Transform(ref MatrixD value, ref QuaternionD rotation, ref MatrixD result)
+		{
+			double num = rotation.X + rotation.X;
+			double num2 = rotation.Y + rotation.Y;
+			double num3 = rotation.Z + rotation.Z;
+			double num4 = rotation.W * num;
+			double num5 = rotation.W * num2;
+			double num6 = rotation.W * num3;
+			double num7 = rotation.X * num;
+			double num8 = rotation.X * num2;
+			double num9 = rotation.X * num3;
+			double num10 = rotation.Y * num2;
+			double num11 = rotation.Y * num3;
+			double num12 = rotation.Z * num3;
+			double num13 = 1.0 - num10 - num12;
+			double num14 = num8 - num6;
+			double num15 = num9 + num5;
+			double num16 = num8 + num6;
+			double num17 = 1.0 - num7 - num12;
+			double num18 = num11 - num4;
+			double num19 = num9 - num5;
+			double num20 = num11 + num4;
+			double num21 = 1.0 - num7 - num10;
+			result.M11 = value.M11 * num13 + value.M12 * num14 + value.M13 * num15;
+			result.M12 = value.M11 * num16 + value.M12 * num17 + value.M13 * num18;
+			result.M13 = value.M11 * num19 + value.M12 * num20 + value.M13 * num21;
+			result.M14 = value.M14;
+			result.M21 = value.M21 * num13 + value.M22 * num14 + value.M23 * num15;
+			result.M22 = value.M21 * num16 + value.M22 * num17 + value.M23 * num18;
+			result.M23 = value.M21 * num19 + value.M22 * num20 + value.M23 * num21;
+			result.M24 = value.M24;
+			result.M31 = value.M31 * num13 + value.M32 * num14 + value.M33 * num15;
+			result.M32 = value.M31 * num16 + value.M32 * num17 + value.M33 * num18;
+			result.M33 = value.M31 * num19 + value.M32 * num20 + value.M33 * num21;
+			result.M34 = value.M34;
+			result.M41 = value.M41 * num13 + value.M42 * num14 + value.M43 * num15;
+			result.M42 = value.M41 * num16 + value.M42 * num17 + value.M43 * num18;
+			result.M43 = value.M41 * num19 + value.M42 * num20 + value.M43 * num21;
+			result.M44 = value.M44;
+		}
+
+		/// <summary>
 		/// Removes all duplicate elements from this list
 		/// </summary>
 		/// <typeparam name="T">The list typename</typeparam>
