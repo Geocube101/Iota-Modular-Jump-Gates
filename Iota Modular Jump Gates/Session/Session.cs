@@ -38,7 +38,7 @@ namespace IOTA.ModularJumpGates.Session
 		/// <summary>
 		/// The current mod version (major, minor, patch)
 		/// </summary>
-		public Vector3I ModVersion => new Vector3I(1, 5, 2);
+		public Vector3I ModVersion => new Vector3I(1, 5, 3);
 
 		/// <summary>
 		/// The Mod ID string used for terminal controls

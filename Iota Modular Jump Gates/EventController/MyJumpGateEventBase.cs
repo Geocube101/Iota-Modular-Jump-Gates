@@ -252,21 +252,7 @@ namespace IOTA.ModularJumpGates.EventController
 			}
 
 			this.Poll(false);
-			StringBuilder sb = this.EventController?.GetDetailedInfo();
-
-			if (sb != null)
-			{
-				try
-				{
-					sb.Clear();
-					sb.Append("- - - [[ Event Controller ]] - - -\n");
-					this.AppendCustomInfo(sb);
-				}
-				catch (Exception e)
-				{
-					sb.Append(e.StackTrace);
-				}
-			}
+			this.RefreshDetailedInfo();
 
 			if (this.IsDirty && MyJumpGateModSession.Instance.Network.Registered)
 			{
@@ -574,6 +560,25 @@ namespace IOTA.ModularJumpGates.EventController
 				RemoveExistingComponentOnNewInsert = false,
 				CustomModData = Convert.ToBase64String(MyAPIGateway.Utilities.SerializeToBinary(builder)),
 			};
+		}
+
+		public void RefreshDetailedInfo()
+		{
+			StringBuilder sb = this.EventController?.GetDetailedInfo();
+
+			if (sb != null)
+			{
+				try
+				{
+					sb.Clear();
+					sb.Append("- - - [[ Event Controller ]] - - -\n");
+					this.AppendCustomInfo(sb);
+				}
+				catch (Exception e)
+				{
+					sb.Append(e.StackTrace);
+				}
+			}
 		}
 	}
 }
