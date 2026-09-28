@@ -1219,17 +1219,26 @@ namespace IOTA.ModularJumpGates.ModConfiguration
 			public float? MinimumControlOwnerFactionRatio;
 
 			/// <summary>
-			/// The jump gate explosion configuration
+			/// The maximum number of path segments that can be checked when calculating gravity warping<br />
+			/// Cannot be NaN, Infinite, or less than 1
+			/// Defaults to 100,000
 			/// </summary>
 			[XmlElement]
 			[ProtoMember(26)]
+			public uint? MaximumGravitySegmentCount;
+
+			/// <summary>
+			/// The jump gate explosion configuration
+			/// </summary>
+			[XmlElement]
+			[ProtoMember(100)]
 			public MyModJumpGateExplosionConfiguration JumpGateExplosionConfiguration;
 
 			/// <summary>
 			/// The jump gate wormhole configuration
 			/// </summary>
 			[XmlElement]
-			[ProtoMember(27)]
+			[ProtoMember(101)]
 			public MyModJumpGateWormholeConfiguration JumpGateWormholeConfiguration;
 			#endregion
 
@@ -1263,6 +1272,7 @@ namespace IOTA.ModularJumpGates.ModConfiguration
 					LargeGateRandomDisplacementRadius = 0,
 					SmallGateRandomDisplacementRadius = 0,
 					MinimumControlOwnerFactionRatio = 0.25f,
+					MaximumGravitySegmentCount = 100000,
 					JumpGateExplosionConfiguration = MyModJumpGateExplosionConfiguration.Defaults(),
 					JumpGateWormholeConfiguration = MyModJumpGateWormholeConfiguration.Defaults(),
 				};
@@ -1299,6 +1309,7 @@ namespace IOTA.ModularJumpGates.ModConfiguration
 					LargeGateRandomDisplacementRadius = map.GetValueOrDefault("LargeGateRandomDisplacementRadius") as float?,
 					SmallGateRandomDisplacementRadius = map.GetValueOrDefault("SmallGateRandomDisplacementRadius") as float?,
 					MinimumControlOwnerFactionRatio = map.GetValueOrDefault("MinimumControlOwnerFactionRatio") as float?,
+					MaximumGravitySegmentCount = map.GetValueOrDefault("MaximumGravitySegmentCount") as uint?,
 					JumpGateExplosionConfiguration = MyModJumpGateExplosionConfiguration.FromDictionary(map.GetValueOrDefault("JumpGateExplosionConfiguration") as Dictionary<string, object>),
 					JumpGateWormholeConfiguration = MyModJumpGateWormholeConfiguration.FromDictionary(map.GetValueOrDefault("JumpGateWormholeConfiguration") as Dictionary<string, object>),
 				};
@@ -1326,6 +1337,8 @@ namespace IOTA.ModularJumpGates.ModConfiguration
 				this.SmallGatePowerFalloffFactor = this.SmallGatePowerFalloffFactor ?? config.SmallGatePowerFalloffFactor;
 				this.LargeGateKilowattPerKilogram = this.LargeGateKilowattPerKilogram ?? config.LargeGateKilowattPerKilogram;
 				this.SmallGateKilowattPerKilogram = this.SmallGateKilowattPerKilogram ?? config.SmallGateKilowattPerKilogram;
+				this.LargeGateRandomOffsetPerKilometer = this.LargeGateRandomOffsetPerKilometer ?? config.LargeGateRandomOffsetPerKilometer;
+				this.SmallGateRandomOffsetPerKilometer = this.SmallGateRandomOffsetPerKilometer ?? config.SmallGateRandomOffsetPerKilometer;
 				this.LargeGateKilometerOffsetPerUnitG = this.LargeGateKilometerOffsetPerUnitG ?? config.LargeGateKilometerOffsetPerUnitG;
 				this.SmallGateKilometerOffsetPerUnitG = this.SmallGateKilometerOffsetPerUnitG ?? config.SmallGateKilometerOffsetPerUnitG;
 				this.IgnoreDockedGrids = this.IgnoreDockedGrids ?? config.IgnoreDockedGrids;
@@ -1335,6 +1348,7 @@ namespace IOTA.ModularJumpGates.ModConfiguration
 				this.LargeGateRandomDisplacementRadius = this.LargeGateRandomDisplacementRadius ?? config.LargeGateRandomDisplacementRadius;
 				this.SmallGateRandomDisplacementRadius = this.SmallGateRandomDisplacementRadius ?? config.SmallGateRandomDisplacementRadius;
 				this.MinimumControlOwnerFactionRatio = this.MinimumControlOwnerFactionRatio ?? config.MinimumControlOwnerFactionRatio;
+				this.MaximumGravitySegmentCount = this.MaximumGravitySegmentCount ?? config.MaximumGravitySegmentCount;
 				if (this.JumpGateExplosionConfiguration == null) this.JumpGateExplosionConfiguration = config.JumpGateExplosionConfiguration;
 				else this.JumpGateExplosionConfiguration.Overlay(config.JumpGateExplosionConfiguration);
 				if (this.JumpGateWormholeConfiguration == null) this.JumpGateWormholeConfiguration = config.JumpGateWormholeConfiguration;
@@ -1371,6 +1385,7 @@ namespace IOTA.ModularJumpGates.ModConfiguration
 				this.SmallGateRandomDisplacementRadius = MyModConfigurationV1.ValidateValue(this.SmallGateRandomDisplacementRadius, defaults.SmallGateRandomDisplacementRadius, 0);
 				this.ConfineUntetheredSpread = this.ConfineUntetheredSpread ?? defaults.ConfineUntetheredSpread ?? false;
 				this.MinimumControlOwnerFactionRatio = MyModConfigurationV1.ValidateValue(this.MinimumControlOwnerFactionRatio, defaults.MinimumControlOwnerFactionRatio, 0, 1);
+				this.MaximumGravitySegmentCount = MyModConfigurationV1.ValidateValue(this.MaximumGravitySegmentCount, defaults.MaximumGravitySegmentCount, 1);
 				this.JumpGateExplosionConfiguration?.Validate();
 				this.JumpGateWormholeConfiguration?.Validate();
 
@@ -1422,6 +1437,7 @@ namespace IOTA.ModularJumpGates.ModConfiguration
 					["LargeGateRandomDisplacementRadius"] = this.LargeGateRandomDisplacementRadius,
 					["SmallGateRandomDisplacementRadius"] = this.SmallGateRandomDisplacementRadius,
 					["MinimumControlOwnerFactionRatio"] = this.MinimumControlOwnerFactionRatio,
+					["MaximumGravitySegmentCount"] = this.MaximumGravitySegmentCount,
 					["JumpGateExplosionConfiguration"] = this.JumpGateExplosionConfiguration?.ToDictionary(),
 					["JumpGateWormholeConfiguration"] = this.JumpGateWormholeConfiguration?.ToDictionary(),
 				};
@@ -2367,6 +2383,11 @@ namespace IOTA.ModularJumpGates.ModConfiguration
 			/// </summary>
 			public readonly float JumpDistancePerExplosionPower = 1;
 
+			/// <summary>
+			/// The maximum number of path segments that can be checked when calculating gravity warping
+			/// </summary>
+			public readonly uint MaximumGravitySegmentCount = 100000;
+
 			internal MyLocalJumpGateConfiguration(MyModJumpGateConfiguration configuration, MyCubeSize grid_size)
 			{
 				switch (grid_size)
@@ -2420,6 +2441,7 @@ namespace IOTA.ModularJumpGates.ModConfiguration
 				this.IgnoreDockedGrids = configuration.IgnoreDockedGrids.Value;
 				this.ConfineUntetheredSpread = configuration.ConfineUntetheredSpread.Value;
 				this.MinimumControlOwnerFactionRatio = configuration.MinimumControlOwnerFactionRatio.Value;
+				this.MaximumGravitySegmentCount = configuration.MaximumGravitySegmentCount.Value;
 				this.OverrunPowerMultiplierPerSecond = configuration.JumpGateWormholeConfiguration.OverrunPowerMultiplierPerSecond.Value;
 				this.GravityPassthroughMultiplier = configuration.JumpGateWormholeConfiguration.GravityPassthroughMultiplier.Value;
 				this.AllowWormholeJumpsOutsideFaction = configuration.JumpGateWormholeConfiguration.AllowWormholeJumpsOutsideFaction.Value;
@@ -2455,6 +2477,7 @@ namespace IOTA.ModularJumpGates.ModConfiguration
 					["AllowWormholeJumpsOutsideFaction"] = this.AllowWormholeJumpsOutsideFaction,
 					["AllowWormholeJumpsToStandardGate"] = this.AllowWormholeJumpsToStandardGate,
 					["JumpDistancePerExplosionPower"] = this.JumpDistancePerExplosionPower,
+					["MaximumGravitySegmentCount"] = this.MaximumGravitySegmentCount,
 				};
 			}
 		}
@@ -2995,13 +3018,13 @@ namespace IOTA.ModularJumpGates.ModConfiguration
 				this.SmallGridJumpGateConfiguration = null;
 				this.LargeGridJumpGateConfiguration = null;
 			}
-
+			
 			if (mod_settings != null)
 			{
 				mod_settings.Validate();
 				this.ModSettings = mod_settings;
 			}
-
+			
 			if (MyNetworkInterface.IsMultiplayerServer)
 			{
 				MyAPIGateway.Utilities.SetVariable(MyModConfigurationV1.ConfigVariableName, Convert.ToBase64String(MyAPIGateway.Utilities.SerializeToBinary(new MyGlobalModConfiguration {

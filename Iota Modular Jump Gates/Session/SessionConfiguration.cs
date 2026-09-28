@@ -229,6 +229,8 @@ namespace IOTA.ModularJumpGates.Session
 				});
 				packet.Send();
 			}
+
+			this.SaveConfiguration();
 		}
 
 		/// <summary>
@@ -261,6 +263,20 @@ namespace IOTA.ModularJumpGates.Session
 			List<MyModLogFileInfo> closed = this.ModData.ModLogFiles.Where((info) => info.Filename != this.ActiveModLogFile).OrderBy((info) => info.ModificationTime).Skip((int) count).ToList();
 			foreach (MyModLogFileInfo file in closed) MyAPIGateway.Utilities.DeleteFileInLocalStorage(file.Filename, this.GetType());
 			this.ModData.ModLogFiles.RemoveAll((info) => closed.Contains(info));
+		}
+
+		/// <summary>
+		/// Saves the mod configuration to file
+		/// </summary>
+		/// <returns>Whether save was successful</returns>
+		public bool SaveConfiguration()
+		{
+			Exception global_save_err, local_save_err;
+			this.Configuration.Save(this, out global_save_err, out local_save_err);
+			if (global_save_err != null) Logger.Error($"Error saving global config file:\n  ...\n[ {global_save_err.GetType().Name} ]: {global_save_err.Message}\n{global_save_err.StackTrace}\n{global_save_err.InnerException}");
+			if (local_save_err != null) Logger.Error($"Error saving local config file:\n  ...\n[ {local_save_err.GetType().Name} ]: {local_save_err.Message}\n{local_save_err.StackTrace}\n{local_save_err.InnerException}");
+			if (local_save_err == null && global_save_err == null) Logger.Log($"Mod configuration saved successfully");
+			return global_save_err == null && local_save_err == null;
 		}
 
 		/// <summary>

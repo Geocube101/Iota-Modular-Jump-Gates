@@ -55,7 +55,6 @@ namespace IOTA.ModularJumpGates.JumpGates
 					if (jump_gate.JumpSpaceEntities != null) foreach (KeyValuePair<long, float> pair in jump_gate.JumpSpaceEntities) this.JumpSpaceEntities[pair.Key] = new KeyValuePair<float, MyEntity>(pair.Value, (MyEntity) MyAPIGateway.Entities.GetEntityById(pair.Key));
 					this.MPGateColliderStatus = jump_gate.ColliderStatus;
 					this.WormholeStartTime = jump_gate.WormholeStartTime;
-					this.UpdateDriveIntersectNodes(jump_gate.IntersectNodes);
 					if (this.JumpGateGrid == null) throw new NullReferenceException("Jump gate host construct is null");
 				}
 
@@ -96,7 +95,6 @@ namespace IOTA.ModularJumpGates.JumpGates
 					RemoteAntenna = (this.RemoteAntenna == null || this.RemoteAntenna.IsClosed) ? JumpGateUUID.Empty : JumpGateUUID.FromBlock(this.RemoteAntenna),
 					ServerAntenna = (this.ServerAntenna == null || this.ServerAntenna.IsClosed) ? JumpGateUUID.Empty : JumpGateUUID.FromBlock(this.ServerAntenna),
 					JumpGateGrid = (this.Closed) ? JumpGateUUID.Empty : JumpGateUUID.FromJumpGateGrid(this.JumpGateGrid),
-					IntersectNodes = (this.Closed) ? null : this.LocalDriveIntersectNodes,
 					GridSize = (this.Closed) ? MyCubeSize.Large : this.CubeGridSize(),
 					ConstructMatrix = (this.Closed) ? null : Convert.ToBase64String(new BoundingEllipsoidD(ref this.ConstructMatrix).ToSerialized()),
 					JumpSpaceEntities = (MyNetworkInterface.IsMultiplayerServer && !this.Closed) ? this.JumpSpaceEntities.Select((pair) => new KeyValuePair<long, float>(pair.Key, pair.Value.Key)).ToImmutableDictionary() : null,
@@ -188,39 +186,33 @@ namespace IOTA.ModularJumpGates.JumpGates
 		public JumpGateUUID JumpGateGrid;
 
 		/// <summary>
-		/// A list of this gate's drive intersect nodes
-		/// </summary>
-		[ProtoMember(13)]
-		public ImmutableList<Vector3D> IntersectNodes;
-
-		/// <summary>
 		/// This gate's grid size
 		/// </summary>
-		[ProtoMember(14)]
+		[ProtoMember(13)]
 		public MyCubeSize GridSize;
 
 		/// <summary>
 		/// This gate's construct matrix
 		/// </summary>
-		[ProtoMember(15)]
+		[ProtoMember(14)]
 		public string ConstructMatrix;
 
 		/// <summary>
 		/// A map of this gate's jump space entities with their mass
 		/// </summary>
-		[ProtoMember(16)]
+		[ProtoMember(15)]
 		public ImmutableDictionary<long, float> JumpSpaceEntities;
 
 		/// <summary>
 		/// The time at which this gate opened as a wormhole
 		/// </summary>
-		[ProtoMember(17)]
+		[ProtoMember(16)]
 		public DateTime? WormholeStartTime;
 
 		/// <summary>
 		/// If true, this data should be used by server to identify gate and send updated data
 		/// </summary>
-		[ProtoMember(18)]
+		[ProtoMember(17)]
 		public bool IsClientRequest;
 	}
 

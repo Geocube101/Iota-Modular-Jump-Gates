@@ -38,11 +38,6 @@ namespace IOTA.ModularJumpGates.JumpGates
 		private bool HasBlocksWithinShearZone = false;
 
 		/// <summary>
-		/// A mutex for exclusive read-write to the intersect nodes list
-		/// </summary>
-		private readonly object DriveIntersectNodesMutex = new object();
-
-		/// <summary>
 		/// The actual local-aligned bounding ellipsoid of this gate's jump space
 		/// </summary>
 		private BoundingEllipsoidD TrueLocalJumpEllipse = BoundingEllipsoidD.Zero;
@@ -76,11 +71,6 @@ namespace IOTA.ModularJumpGates.JumpGates
 		/// The jump space detector for this gate
 		/// </summary>
 		private MyPhysicalDetector PhysicalDetector = null;
-
-		/// <summary>
-		/// The list of intersect nodes for this gate
-		/// </summary>
-		private List<Vector3D> InnerDriveIntersectNodes = new List<Vector3D>();
 
 		/// <summary>
 		/// Temporary list used when updating jump space entities
@@ -180,28 +170,6 @@ namespace IOTA.ModularJumpGates.JumpGates
 		/// This ellipse is the jump ellipse padded by 5 meters
 		/// </summary>
 		public BoundingEllipsoidD ShearEllipse => this.JumpEllipse + 5;
-
-		/// <summary>
-		/// Gets the list of construct-local space drive ray-cast intersections for this jump gate
-		/// </summary>
-		public ImmutableList<Vector3D> LocalDriveIntersectNodes
-		{
-			get
-			{
-				lock (this.DriveIntersectNodesMutex) return this.InnerDriveIntersectNodes.ToImmutableList();
-			}
-		}
-
-		/// <summary>
-		/// Gets the list of world space drive ray-cast intersections for this jump gate
-		/// </summary>
-		public ImmutableList<Vector3D> WorldDriveIntersectNodes
-		{
-			get
-			{
-				lock (this.DriveIntersectNodesMutex) return this.InnerDriveIntersectNodes.Select((node) => MyJumpGateModSession.LocalVectorToWorldVectorP(ref this.ConstructMatrix, node)).ToImmutableList();
-			}
-		}
 		#endregion
 
 		#region Private Methods
@@ -466,38 +434,6 @@ namespace IOTA.ModularJumpGates.JumpGates
 		public void SetJumpSpaceEllipsoidDirty()
 		{
 			this.ForceUpdateJumpEllipsoid = !this.Closed;
-		}
-
-		/// <summary>
-		/// Updates the public list of drive intersect nodes
-		/// </summary>
-		/// <param name="intersect_nodes">The new intersections list</param>
-		public void UpdateDriveIntersectNodes(IEnumerable<Vector3D> intersect_nodes)
-		{
-			if (this.Closed) return;
-
-			lock (this.DriveIntersectNodesMutex)
-			{
-				this.InnerDriveIntersectNodes.Clear();
-				if (intersect_nodes == null) return;
-
-				foreach (Vector3D node in intersect_nodes)
-				{
-					bool add = true;
-					Vector3D node1 = MyJumpGateModSession.WorldVectorToLocalVectorP(ref this.ConstructMatrix, node);
-
-					foreach (Vector3D node2 in this.InnerDriveIntersectNodes)
-					{
-						if (Vector3D.Distance(node1, node2) < 1)
-						{
-							add = false;
-							break;
-						}
-					}
-
-					if (add) this.InnerDriveIntersectNodes.Add(node1);
-				}
-			}
 		}
 
 		/// <summary>

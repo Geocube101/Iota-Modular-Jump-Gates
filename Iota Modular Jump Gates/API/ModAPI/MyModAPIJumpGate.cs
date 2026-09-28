@@ -182,16 +182,6 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		/// </summary>
 		public BoundingEllipsoidD ShearEllipse => BoundingEllipsoidD.FromSerialized(this.GetAttribute<byte[]>("ShearEllipse"), 0);
 
-		/// <summary>
-		/// Gets the list of construct-local space drive ray-cast intersections for this jump gate
-		/// </summary>
-		public ImmutableList<Vector3D> LocalDriveIntersectNodes => this.GetAttribute<ImmutableList<Vector3D>>("LocalDriveIntersectNodes");
-
-		/// <summary>
-		/// Gets the list of world space drive ray-cast intersections for this jump gate
-		/// </summary>
-		public ImmutableList<Vector3D> WorldDriveIntersectNodes => this.GetAttribute<ImmutableList<Vector3D>>("WorldDriveIntersectNodes");
-
 		protected override void Close()
 		{
 			base.Close();

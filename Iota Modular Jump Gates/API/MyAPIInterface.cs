@@ -20,7 +20,7 @@ namespace IOTA.ModularJumpGates.API
 {
 	internal class MyAPIInterface
 	{
-		public static int[] ModAPIVersion { get; private set; } = new int[2] { 2, 1 };
+		public static int[] ModAPIVersion { get; private set; } = new int[2] { 2, 2 };
 		public static int[] AnimationAPIVersion { get; private set; } = new int[2] { 2, 0 };
 
 		private bool Registered = false;
@@ -595,8 +595,6 @@ namespace IOTA.ModularJumpGates.API
 				["JumpGateGrid"] = new object[2] { (Func<Dictionary<string, object>>) (() => this.ReturnConstructWrapper(gate.JumpGateGrid)), null },
 				["JumpEllipse"] = new object[2] { (Func<byte[]>) (() => gate.JumpEllipse.ToSerialized()), null },
 				["ShearEllipse"] = new object[2] { (Func<byte[]>) (() => gate.ShearEllipse.ToSerialized()), null },
-				["LocalDriveIntersectNodes"] = new object[2] { (Func<ImmutableList<Vector3D>>) (() => gate.LocalDriveIntersectNodes), null },
-				["WorldDriveIntersectNodes"] = new object[2] { (Func<ImmutableList<Vector3D>>) (() => gate.WorldDriveIntersectNodes), null },
 				["GetFailureDescription"] = (Func<byte, string>) ((failure) => MyJumpGate.GetFailureDescription((MyJumpFailReason) failure)),
 				["GetFailureSound"] = (Func<byte, bool, string>) ((failure, isinit) => MyJumpGate.GetFailureSound((MyJumpFailReason) failure, isinit)),
 				["#HASH"] = (Func<int>) gate.GetHashCode,

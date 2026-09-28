@@ -119,6 +119,8 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			private Vector3 EntityOrientation_V = Vector3.Zero;
 			[ProtoMember(38)]
 			private bool BypassComputedEntityOrientation_V = false;
+			[ProtoMember(39)]
+			private bool HoloDisplayEnabled_V = true;
 
 			private readonly object WriterLock = new object();
 
@@ -167,6 +169,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 					this.HoloDisplayTranslation_V = (Vector3) mapping.GetValueOrDefault("HoloDisplayTranslation", this.HoloDisplayTranslation_V);
 					this.HoloDisplayScale_V = (float) mapping.GetValueOrDefault("HoloDisplayScale", this.HoloDisplayScale_V);
 					this.GateWormholeAutoCloseTime_V = (float) mapping.GetValueOrDefault("GateWormholeAutoCloseTime", this.GateWormholeAutoCloseTime_V);
+					this.HoloDisplayEnabled_V = (bool) mapping.GetValueOrDefault("HoloDisplayEnabled", this.HoloDisplayEnabled_V);
 
 					{
 						object selected_waypoint = mapping.GetValueOrDefault("SelectedWaypoint", null);
@@ -278,6 +281,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 						["HoloDisplayTranslation"] = this.HoloDisplayTranslation_V,
 						["HoloDisplayScale"] = this.HoloDisplayScale_V,
 						["GateWormholeAutoCloseTime"] = this.GateWormholeAutoCloseTime_V,
+						["HoloDisplayEnabled"] = this.HoloDisplayEnabled_V,
 					};
 				}
 			}
@@ -545,6 +549,10 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			{
 				lock (this.WriterLock) this.GateWormholeAutoCloseTime_V = MathHelper.Clamp(time_seconds, 0, 3600);
 			}
+			public void HoloDisplayEnabled(bool enabled)
+			{
+				lock (this.WriterLock) this.HoloDisplayEnabled_V = enabled;
+			}
 
 			public bool CanAutoActivate()
 			{
@@ -707,6 +715,10 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			public float GateWormholeAutoCloseTime()
 			{
 				return this.GateWormholeAutoCloseTime_V;
+			}
+			public bool HoloDisplayEnabled()
+			{
+				return this.HoloDisplayEnabled_V;
 			}
 		}
 
@@ -877,6 +889,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				this.OverlayedBlockSettings.GateDetonatorArmed(((allowed & MyAllowedRemoteSettings.DETONATION_CONTROL) != 0) ? this.BaseBlockSettings.GateDetonatorArmed() : remote.GateDetonatorArmed());
 				this.OverlayedBlockSettings.GateDetonationTime(((allowed & MyAllowedRemoteSettings.DETONATION_CONTROL) != 0) ? this.BaseBlockSettings.GateDetonationTime() : remote.GateDetonationTime());
 				this.OverlayedBlockSettings.GateWormholeAutoCloseTime(((allowed & MyAllowedRemoteSettings.WORMHOLE) != 0) ? this.BaseBlockSettings.GateWormholeAutoCloseTime() : remote.GateWormholeAutoCloseTime());
+				this.OverlayedBlockSettings.HoloDisplayEnabled(this.BaseBlockSettings.HoloDisplayEnabled());
 
 				return this.OverlayedBlockSettings;
 			}
@@ -974,6 +987,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				float required_input = sink.RequiredInputByType(MyResourceDistributorComponent.ElectricityId);
 				MyJumpGateConstruct this_grid = (this.JumpGateGrid?.MarkClosed ?? true) ? null : this.JumpGateGrid;
 				MyJumpGate jump_gate = this.AttachedJumpGate();
+				JumpGateUUID target_gate = this.BlockSettings.SelectedWaypoint()?.JumpGate ?? JumpGateUUID.Empty;
 				jump_gate = (jump_gate?.MarkClosed ?? true) ? null : jump_gate;
 				BoundingEllipsoidD? jump_ellipse = jump_gate?.JumpEllipse;
 				Vector3D? jump_node = jump_gate?.WorldJumpNode;
@@ -1061,7 +1075,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 				sb.Append($" - {MyTexts.GetString("DetailedInfo_JumpGateController_ReasonableDistance")}: {((jump_gate == null) ? "N/A" : MyJumpGateModSession.AutoconvertMetricUnits(jump_gate.CalculateMaxGateDistance(), "m", 4))}\n");
 				sb.Append($" - {MyTexts.GetString("DetailedInfo_JumpGateController_Ideal50Distance")}: {((jump_gate == null) ? "N/A" : MyJumpGateModSession.AutoconvertMetricUnits(jump_gate.JumpGateConfiguration.MaxJumpGate50Distance, "m", 4))}\n");
 				sb.Append($" - {MyTexts.GetString("DetailedInfo_JumpGateController_TargetDistance")}: {((jump_gate == null) ? "N/A" : MyJumpGateModSession.AutoconvertMetricUnits(distance, "m", 4))}\n");
-				sb.Append($" - {MyTexts.GetString("DetailedInfo_JumpGateController_MaxPossibleDeviation")}: {((jump_gate == null) ? "N/A" : MyJumpGateModSession.AutoconvertMetricUnits(distance * jump_gate.JumpGateConfiguration.GateRandomOffsetPerKilometer, "m", 4))}\n");
+				sb.Append($" - {MyTexts.GetString("DetailedInfo_JumpGateController_MaxPossibleDeviation")}: {((jump_gate == null) ? "N/A" : MyJumpGateModSession.AutoconvertMetricUnits((target_gate != JumpGateUUID.Empty) ? 0 : (distance * jump_gate.JumpGateConfiguration.GateRandomOffsetPerKilometer), "m", 4))}\n");
 				sb.Append($" - {MyTexts.GetString("DetailedInfo_JumpGateController_NeededDrives")}: {((jump_gate == null) ? "N/A" : jump_gate.CalculateDrivesRequiredForDistance(distance).ToString())}\n");
 				sb.Append($" - {MyTexts.GetString("DetailedInfo_JumpGateController_DistanceRatio")}: {((jump_gate == null) ? "N/A" : MyJumpGateModSession.AutoconvertSciNotUnits(distance_ratio, 4))}\n");
 				sb.Append("[/color]");
@@ -1470,7 +1484,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// <param name="jump_gate">The attached jump gate</param>
 		private void TickUpdateHoloDisplay(MyJumpGate jump_gate)
 		{
-			if (MyNetworkInterface.IsDedicatedMultiplayerServer || this.TerminalBlock == null) return;
+			if (MyNetworkInterface.IsDedicatedMultiplayerServer || this.TerminalBlock == null || !this.BaseBlockSettings.HoloDisplayEnabled()) return;
 			MatrixD block_matrix = this.TerminalBlock.WorldMatrix;
 			Vector3D table_holo_center = MyJumpGateModSession.LocalVectorToWorldVectorP(ref block_matrix, new Vector3D(0, (this.IsLargeGrid) ? 0.5 : 1, 0));
 			double view_distance = Vector3D.Distance(MyAPIGateway.Session.Camera.Position, table_holo_center);

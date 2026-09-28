@@ -768,6 +768,41 @@ namespace IOTA.ModularJumpGates.Terminal
 				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(spacer_lb);
 			}
 
+			// OnOffSwitch [Show Holo Dislay]
+			{
+				IMyTerminalControlOnOffSwitch do_enable_display = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlOnOffSwitch, IMyUpgradeModule>(MODID_PREFIX + "ShowHoloDisplay");
+				do_enable_display.Title = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_EnableHoloDisplay"));
+				do_enable_display.Tooltip = MyStringId.GetOrCompute(MyTexts.GetString("Terminal_JumpGateController_EnableHoloDisplay_Tooltip"));
+				do_enable_display.SupportsMultipleBlocks = true;
+				do_enable_display.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.HOLO_DISPLAY;
+				do_enable_display.Enabled = (block) => {
+					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
+					return controller != null && controller.IsWorking && controller.JumpGateGrid != null && !controller.JumpGateGrid.Closed;
+				};
+				do_enable_display.OnText = MyStringId.GetOrCompute(MyTexts.GetString("GeneralText_On"));
+				do_enable_display.OffText = MyStringId.GetOrCompute(MyTexts.GetString("GeneralText_Off"));
+				do_enable_display.Getter = (block) => MyJumpGateModSession.GetBlockAsJumpGateController(block)?.BlockSettings.HoloDisplayEnabled() ?? false;
+				do_enable_display.Setter = (block, value) => {
+					if (!do_enable_display.Enabled(block)) return;
+					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
+					controller.BaseBlockSettings.HoloDisplayEnabled(value);
+					controller.SetDirty();
+					MyJumpGateModSession.Instance.RedrawAllTerminalControls();
+				};
+				MyJumpGateControllerTerminal.TerminalControls.Add(do_enable_display);
+				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(do_enable_display);
+			}
+
+			// Spacer
+			{
+				IMyTerminalControlLabel spacer_lb = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlLabel, IMyUpgradeModule>(MODID_PREFIX + "HoloDisplaySectionMiddle0Spacer");
+				spacer_lb.Label = MyStringId.GetOrCompute(" ");
+				spacer_lb.Visible = (block) => MyJumpGateModSession.IsBlockJumpGateController(block) && MyJumpGateControllerTerminal.TerminalSection == MyTerminalSection.HOLO_DISPLAY;
+				spacer_lb.SupportsMultipleBlocks = true;
+				MyJumpGateControllerTerminal.TerminalControls.Add(spacer_lb);
+				MyAPIGateway.TerminalControls.AddControl<IMyUpgradeModule>(spacer_lb);
+			}
+
 			// Slider [Holo Display Scale]
 			{
 				IMyTerminalControlSlider holo_display_scale = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSlider, IMyUpgradeModule>(MODID_PREFIX + "HoloDisplayScale");
@@ -778,7 +813,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				holo_display_scale.Enabled = (block) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					MyJumpGate jump_gate = controller?.AttachedJumpGate();
-					return controller != null && controller.IsWorking && controller.JumpGateGrid != null && !controller.JumpGateGrid.Closed && (jump_gate == null || (!jump_gate.Closed && jump_gate.IsIdle()));
+					return controller != null && controller.IsWorking && controller.JumpGateGrid != null && !controller.JumpGateGrid.Closed && controller.BaseBlockSettings.HoloDisplayEnabled() && (jump_gate == null || (!jump_gate.Closed && jump_gate.IsIdle()));
 				};
 				holo_display_scale.SetLogLimits(0.1f, 10);
 				holo_display_scale.Writer = (block, string_builder) => {
@@ -822,7 +857,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				holo_display_yaw.Enabled = (block) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					MyJumpGate jump_gate = controller?.AttachedJumpGate();
-					return controller != null && controller.IsWorking&& controller.JumpGateGrid != null && !controller.JumpGateGrid.Closed && (jump_gate == null || (!jump_gate.Closed && jump_gate.IsIdle()));
+					return controller != null && controller.IsWorking&& controller.JumpGateGrid != null && !controller.JumpGateGrid.Closed && controller.BaseBlockSettings.HoloDisplayEnabled() && (jump_gate == null || (!jump_gate.Closed && jump_gate.IsIdle()));
 				};
 				holo_display_yaw.SetLimits(-180, 180);
 				holo_display_yaw.Writer = (block, string_builder) => {
@@ -858,7 +893,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				holo_display_pitch.Enabled = (block) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					MyJumpGate jump_gate = controller?.AttachedJumpGate();
-					return controller != null && controller.IsWorking && controller.JumpGateGrid != null && !controller.JumpGateGrid.Closed && (jump_gate == null || (!jump_gate.Closed && jump_gate.IsIdle()));
+					return controller != null && controller.IsWorking && controller.JumpGateGrid != null && !controller.JumpGateGrid.Closed && controller.BaseBlockSettings.HoloDisplayEnabled() && (jump_gate == null || (!jump_gate.Closed && jump_gate.IsIdle()));
 				};
 				holo_display_pitch.SetLimits(-180, 180);
 				holo_display_pitch.Writer = (block, string_builder) => {
@@ -894,7 +929,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				holo_display_roll.Enabled = (block) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					MyJumpGate jump_gate = controller?.AttachedJumpGate();
-					return controller != null && controller.IsWorking && controller.JumpGateGrid != null && !controller.JumpGateGrid.Closed && (jump_gate == null || (!jump_gate.Closed && jump_gate.IsIdle()));
+					return controller != null && controller.IsWorking && controller.JumpGateGrid != null && !controller.JumpGateGrid.Closed && controller.BaseBlockSettings.HoloDisplayEnabled() && (jump_gate == null || (!jump_gate.Closed && jump_gate.IsIdle()));
 				};
 				holo_display_roll.SetLimits(-90, 90);
 				holo_display_roll.Writer = (block, string_builder) => {
@@ -940,7 +975,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				holo_display_offset_x.Enabled = (block) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					MyJumpGate jump_gate = controller?.AttachedJumpGate();
-					return controller != null && controller.IsWorking && controller.JumpGateGrid != null && !controller.JumpGateGrid.Closed && (jump_gate == null || (!jump_gate.Closed && jump_gate.IsIdle()));
+					return controller != null && controller.IsWorking && controller.JumpGateGrid != null && !controller.JumpGateGrid.Closed && controller.BaseBlockSettings.HoloDisplayEnabled() && (jump_gate == null || (!jump_gate.Closed && jump_gate.IsIdle()));
 				};
 				holo_display_offset_x.SetLimits(-10, 10);
 				holo_display_offset_x.Writer = (block, string_builder) => {
@@ -976,7 +1011,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				holo_display_offset_y.Enabled = (block) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					MyJumpGate jump_gate = controller?.AttachedJumpGate();
-					return controller != null && controller.IsWorking && controller.JumpGateGrid != null && !controller.JumpGateGrid.Closed && (jump_gate == null || (!jump_gate.Closed && jump_gate.IsIdle()));
+					return controller != null && controller.IsWorking && controller.JumpGateGrid != null && !controller.JumpGateGrid.Closed && controller.BaseBlockSettings.HoloDisplayEnabled() && (jump_gate == null || (!jump_gate.Closed && jump_gate.IsIdle()));
 				};
 				holo_display_offset_y.SetLimits(-10, 10);
 				holo_display_offset_y.Writer = (block, string_builder) => {
@@ -1012,7 +1047,7 @@ namespace IOTA.ModularJumpGates.Terminal
 				holo_display_offset_z.Enabled = (block) => {
 					MyJumpGateController controller = MyJumpGateModSession.GetBlockAsJumpGateController(block);
 					MyJumpGate jump_gate = controller?.AttachedJumpGate();
-					return controller != null && controller.IsWorking && controller.JumpGateGrid != null && !controller.JumpGateGrid.Closed && (jump_gate == null || (!jump_gate.Closed && jump_gate.IsIdle()));
+					return controller != null && controller.IsWorking && controller.JumpGateGrid != null && !controller.JumpGateGrid.Closed && controller.BaseBlockSettings.HoloDisplayEnabled() && (jump_gate == null || (!jump_gate.Closed && jump_gate.IsIdle()));
 				};
 				holo_display_offset_z.SetLimits(-10, 10);
 				holo_display_offset_z.Writer = (block, string_builder) => {

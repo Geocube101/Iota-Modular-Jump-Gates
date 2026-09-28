@@ -339,7 +339,6 @@ namespace IOTA.ModularJumpGates.JumpGates
 				foreach (KeyValuePair<ulong, KeyValuePair<Vector3D?, MySoundEmitter3D>> pair in this.SoundEmitters) pair.Value.Value.Dispose(true);
 				this.Controller?.AttachedJumpGate(null);
 				this.Release();
-				lock (this.DriveIntersectNodesMutex) this.InnerDriveIntersectNodes.Clear();
 				this.Closed = true;
 
 				foreach (KeyValuePair<long, KeyValuePair<float, MyEntity>> pair in this.JumpSpaceEntities)
@@ -382,7 +381,6 @@ namespace IOTA.ModularJumpGates.JumpGates
 
 				this.Controller = null;
 				this.JumpGateGrid = null;
-				this.InnerDriveIntersectNodes = null;
 				this.JumpSpaceEntities = null;
 				this.ShearBlocks = null;
 				this.JumpSpaceColliderEntities = null;
@@ -694,7 +692,7 @@ namespace IOTA.ModularJumpGates.JumpGates
 							break;
 						case MyGateInvalidationReason.INSUFFICIENT_DRIVES:
 						{
-							Logger.Debug($" ... Closure Info - {main_grid}::{this.JumpGateID} - DRIVE_COUNT={this.GetJumpGateDrives().Count()}, INTERSECTIONS={this.InnerDriveIntersectNodes.Count}, GRID_DRIVE_INFO=\n[{string.Join("\n ... ", this.JumpGateGrid?.GetAttachedJumpGateDrives().Select((drive) => $"GRID={drive.CubeGridID}, GATE={drive.JumpGateID}, CLOSED={drive.IsClosed}"))}]", 2);
+							Logger.Debug($" ... Closure Info - {main_grid}::{this.JumpGateID} - DRIVE_COUNT={this.GetJumpGateDrives().Count()}, GRID_DRIVE_INFO=\n[{string.Join("\n ... ", this.JumpGateGrid?.GetAttachedJumpGateDrives().Select((drive) => $"GRID={drive.CubeGridID}, GATE={drive.JumpGateID}, CLOSED={drive.IsClosed}"))}]", 2);
 							break;
 						}
 					}
@@ -945,7 +943,6 @@ namespace IOTA.ModularJumpGates.JumpGates
 			else if (this.Status == MyJumpGateStatus.NONE) return MyGateInvalidationReason.NULL_STATUS;
 			else if (this.Phase == MyJumpGatePhase.NONE) return MyGateInvalidationReason.NULL_PHASE;
 			else if (this.JumpGateID < 0) return MyGateInvalidationReason.INVALID_ID;
-			else if (this.InnerDriveIntersectNodes.Count < 1) return MyGateInvalidationReason.INSUFFICIENT_NODES;
 			else if (this.MarkClosed) return MyGateInvalidationReason.CLOSED;
 			else if (!this.GetJumpGateDrives().AtLeast(2)) return MyGateInvalidationReason.INSUFFICIENT_DRIVES;
 			else return MyGateInvalidationReason.NONE;

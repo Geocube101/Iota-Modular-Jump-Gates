@@ -1189,11 +1189,18 @@ namespace IOTA.ModularJumpGates.JumpGates
 				// Bend jump path around gravity
 				byte distance_multiplier = 1;
 				uint per_meter = 1000u * distance_multiplier;
-				ulong segments = (ulong) Math.Round(distance_to_endpoint / per_meter);
-				Vector3D direction = (endpoint - jump_node).Normalized() * per_meter;
+				uint segments = (uint) Math.Round(distance_to_endpoint / per_meter);
 				Vector3D startpos = jump_node;
 
-				for (ulong i = 0; i < segments; ++i)
+				if (segments > this.JumpGateConfiguration.MaximumGravitySegmentCount)
+				{
+					segments = this.JumpGateConfiguration.MaximumGravitySegmentCount;
+					per_meter = (uint) Math.Ceiling(distance_to_endpoint / segments);
+				}
+
+				Vector3D direction = (endpoint - jump_node).Normalized() * per_meter;
+
+				for (uint i = 0; i < segments; ++i)
 				{
 					float _;
 					Vector3D gravity_direction = MyAPIGateway.Physics.CalculateNaturalGravityAt(startpos, out _);
@@ -1203,7 +1210,7 @@ namespace IOTA.ModularJumpGates.JumpGates
 				}
 
 				distance_to_endpoint = Vector3D.Distance(startpos, jump_node);
-				Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} GRAVITY_ENDPOINT_OFFSET - OLD={default_endpoint}; NEW={startpos}; OFFSET={Vector3D.Distance(startpos, default_endpoint)}", 5);
+				Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} GRAVITY_ENDPOINT_OFFSET - OLD={default_endpoint}; NEW={startpos}; OFFSET={Vector3D.Distance(startpos, default_endpoint)}; GRAVITY_SEGMENT_COUNT={segments}", 5);
 
 				// Apply random offset to endpoint
 				if (this.JumpGateConfiguration.ConfineUntetheredSpread)

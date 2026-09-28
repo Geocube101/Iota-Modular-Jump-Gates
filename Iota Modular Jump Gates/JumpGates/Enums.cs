@@ -1,15 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace IOTA.ModularJumpGates.JumpGates
+﻿namespace IOTA.ModularJumpGates.JumpGates
 {
 	public enum MyJumpGateStatus : byte { NONE, SWITCHING, IDLE, OUTBOUND, INBOUND, CANCELLED, INVALID = 0xFF };
 	public enum MyJumpGatePhase : byte { NONE, IDLE, CHARGING, JUMPING, RESETTING, INVALID = 0xFF };
 	public enum MyJumpGateWormholePhase : byte { NONE, OPENING, ACTIVE, CLOSING, INVALID = 0xFF };
-	public enum MyGateInvalidationReason : byte { NONE, CLOSED, INSUFFICIENT_DRIVES, NULL_GRID, NULL_STATUS, NULL_PHASE, INVALID_ID, INSUFFICIENT_NODES };
+	public enum MyGateInvalidationReason : byte { NONE, CLOSED, INSUFFICIENT_DRIVES, NULL_GRID, NULL_STATUS, NULL_PHASE, INVALID_ID };
 	public enum MyJumpFailReason : byte {
 		NONE, SUCCESS, IN_PROGRESS,
 		SRC_INVALID, CONTROLLER_NOT_CONNECTED, SRC_DISABLED, SRC_NOT_CONFIGURED, SRC_BUSY, SRC_ROUTING_DISABLED, SRC_INBOUND_ONLY, SRC_ROUTING_CHANGED, SRC_CLOSED, SRC_DAMAGED,

@@ -197,14 +197,13 @@ namespace IOTA.ModularJumpGates.JumpGateConstruct
 				{
 					jump_gate.ConstructMatrix = this.CubeGrid.WorldMatrix;
 					jump_gate.WorldJumpNode = jump_node;
-					jump_gate.UpdateDriveIntersectNodes(node_group);
 					jump_gate.SetJumpSpaceEllipsoidDirty();
 					foreach (MyJumpGateDrive drive in drive_group) drive.SetAttachedJumpGate(jump_gate);
 				}
 				else if (jump_gate != null && jump_gate.MarkClosed && !jump_gate.Closed) MyJumpGateModSession.Instance.CloseGate(jump_gate);
 				else if (jump_gate == null)
 				{
-					this.JumpGates[primary_id] = (jump_gate = new MyJumpGate(this, primary_id, ref jump_node, node_group));
+					this.JumpGates[primary_id] = (jump_gate = new MyJumpGate(this, primary_id, ref jump_node));
 					foreach (MyJumpGateDrive drive in drive_group) drive.SetAttachedJumpGate(jump_gate);
 				}
 			}

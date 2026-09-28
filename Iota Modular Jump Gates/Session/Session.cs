@@ -38,7 +38,7 @@ namespace IOTA.ModularJumpGates.Session
 		/// <summary>
 		/// The current mod version (major, minor, patch)
 		/// </summary>
-		public Vector3I ModVersion => new Vector3I(1, 5, 3);
+		public Vector3I ModVersion => new Vector3I(1, 5, 4);
 
 		/// <summary>
 		/// The Mod ID string used for terminal controls
@@ -489,16 +489,6 @@ namespace IOTA.ModularJumpGates.Session
 							bool complete = gate.IsComplete();
 							color = Color.Aqua;
 
-							// Display drive intersections
-							if (Vector3D.Distance(this_position, world_node) <= 100)
-							{
-								foreach (Vector3D node in gate.WorldDriveIntersectNodes)
-								{
-									BoundingBoxD node_box = BoundingBoxD.CreateFromSphere(new BoundingSphereD(MyJumpGateModSession.WorldVectorToLocalVectorP(ref grid_matrix, node), 1));
-									MySimpleObjectDraw.DrawTransparentBox(ref grid_matrix, ref node_box, ref color, MySimpleObjectRasterizer.Wireframe, 1, 0.1f, null, line_material);
-								}
-							}
-
 							// Display gate ellipsoid
 							jump_ellipse.Draw((complete) ? Color.Lime : Color.Red, 90, 0.1f, line_material);
 							BoundingEllipsoidD effective_ellipse = gate.GetEffectiveJumpEllipse();
@@ -633,12 +623,7 @@ namespace IOTA.ModularJumpGates.Session
 		{
 			base.SaveData();
 			if (MyNetworkInterface.IsStandaloneMultiplayerClient) return;
-
-			Exception global_save_err, local_save_err;
-			this.Configuration.Save(this, out global_save_err, out local_save_err);
-			if (global_save_err != null) Logger.Error($"Error saving global config file:\n  ...\n[ {global_save_err.GetType().Name} ]: {global_save_err.Message}\n{global_save_err.StackTrace}\n{global_save_err.InnerException}");
-			if (local_save_err != null) Logger.Error($"Error saving local config file:\n  ...\n[ {local_save_err.GetType().Name} ]: {local_save_err.Message}\n{local_save_err.StackTrace}\n{local_save_err.InnerException}");
-
+			this.SaveConfiguration();
 			MyAPIGateway.Utilities.SetVariable($"{this.ModID}.DebugMode", this.DebugMode);
 			this.UpdateSaveModDataFile();
 			List<MyCockpitInfo> cockpit_terminal_settings = new List<MyCockpitInfo>(this.CockpitBlockSettings.Count);

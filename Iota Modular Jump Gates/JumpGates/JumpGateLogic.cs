@@ -148,9 +148,8 @@ namespace IOTA.ModularJumpGates.JumpGates
 		/// <param name="grid">The parent construct</param>
 		/// <param name="id">The jump gate ID</param>
 		/// <param name="jump_node">The jump node world coordinate</param>
-		/// <param name="nodes">The drive intersect nodes</param>
 		/// <exception cref="ArgumentException"></exception>
-		public MyJumpGate(MyJumpGateConstruct grid, long id, ref Vector3D jump_node, IEnumerable<Vector3D> nodes)
+		public MyJumpGate(MyJumpGateConstruct grid, long id, ref Vector3D jump_node)
 		{
 			if (grid == null) throw new ArgumentException("MyJumpGate CONSTRUCTOR[MyJumpGateConstruct grid] was NULL");
 			this.ConstructMatrix = grid.CubeGrid.WorldMatrix;
@@ -158,29 +157,9 @@ namespace IOTA.ModularJumpGates.JumpGates
 			this.JumpGateID = id;
 			this.WorldJumpNode = jump_node;
 
-			lock (this.DriveIntersectNodesMutex)
-			{
-				foreach (Vector3D node in nodes)
-				{
-					bool add = true;
-					Vector3D node1 = MyJumpGateModSession.WorldVectorToLocalVectorP(ref this.ConstructMatrix, node);
+			Logger.Debug($"CREATE_JUMP_GATE: MyJumpGateConstruct={(this.JumpGateGrid?.CubeGrid?.EntityId.ToString() ?? "N/A")} GRID_CLOSED={(grid?.Closed.ToString() ?? "N/A")} JumpGateID={this.JumpGateID}", 3);
 
-					foreach (Vector3D node2 in this.InnerDriveIntersectNodes)
-					{
-						if (Vector3D.Distance(node1, node2) < 1)
-						{
-							add = false;
-							break;
-						}
-					}
-
-					if (add) this.InnerDriveIntersectNodes.Add(node1);
-				}
-			}
-
-			Logger.Debug($"CREATE_JUMP_GATE: MyJumpGateConstruct={(this.JumpGateGrid?.CubeGrid?.EntityId.ToString() ?? "N/A")} GRID_CLOSED={(grid?.Closed.ToString() ?? "N/A")} JumpGateID={this.JumpGateID} DriveIntersectNodes={this.InnerDriveIntersectNodes.Count}", 3);
-
-			if (this.JumpGateGrid != null && !grid.Closed && this.JumpGateID >= 0 && this.InnerDriveIntersectNodes.Count >= 1)
+			if (this.JumpGateGrid != null && !grid.Closed && this.JumpGateID >= 0)
 			{
 				this.Status = MyJumpGateStatus.IDLE;
 				this.Phase = MyJumpGatePhase.IDLE;
@@ -211,7 +190,7 @@ namespace IOTA.ModularJumpGates.JumpGates
 		{
 			this.FromSerialized(serialized, true, parent);
 
-			if (this.JumpGateGrid != null && !this.JumpGateGrid.Closed && this.JumpGateID >= 0 && this.InnerDriveIntersectNodes.Count >= 1)
+			if (this.JumpGateGrid != null && !this.JumpGateGrid.Closed && this.JumpGateID >= 0)
 			{
 				this.Status = MyJumpGateStatus.IDLE;
 				this.Phase = MyJumpGatePhase.IDLE;
