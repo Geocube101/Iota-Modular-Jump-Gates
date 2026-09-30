@@ -264,12 +264,12 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 						object selected_waypoint = mapping.GetValueOrDefault("SelectedWaypoint", null);
 						MyAPIJumpGateWaypoint result_waypoint = null;
 						if (selected_waypoint == null) result_waypoint = null;
-						else if (selected_waypoint is IMyGps) result_waypoint = new MyAPIJumpGateWaypoint((IMyGps) selected_waypoint);
+						else if (selected_waypoint is IMyGps) result_waypoint = new MyAPIJumpGateWaypoint((IMyGps) selected_waypoint, MyAPIGateway.Multiplayer.MyId);
 						else if (selected_waypoint is Vector3D)
 						{
 							Vector3D position = (Vector3D) selected_waypoint;
 							IMyGps gps = MyAPIGateway.Session.GPS.Create("�TemporaryGPS�", $"[{Math.Round(position.X, 2)}, {Math.Round(position.Y, 2)}, {Math.Round(position.Z, 2)}]", position, false);
-							result_waypoint = new MyAPIJumpGateWaypoint(gps);
+							result_waypoint = new MyAPIJumpGateWaypoint(gps, MyAPIGateway.Multiplayer.MyId);
 						}
 						else if (selected_waypoint is long[])
 						{

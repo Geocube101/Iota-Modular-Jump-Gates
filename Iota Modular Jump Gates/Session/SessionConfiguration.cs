@@ -194,8 +194,7 @@ namespace IOTA.ModularJumpGates.Session
 		public void UpdateConfiguration(MyModConfigurationV1 configuration)
 		{
 			if (configuration == null || MyNetworkInterface.IsStandaloneMultiplayerClient) return;
-			this.Configuration.Update(new MyModConfigurationV1.MyLocalModConfiguration
-			{
+			this.Configuration.Update(new MyModConfigurationV1.MyLocalModConfiguration {
 				CapacitorConfiguration = configuration.CapacitorConfiguration,
 				DriveConfiguration = configuration.DriveConfiguration,
 				JumpGateConfiguration = configuration.JumpGateConfiguration,

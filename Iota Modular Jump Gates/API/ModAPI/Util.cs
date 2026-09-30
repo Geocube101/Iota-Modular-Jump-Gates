@@ -766,6 +766,10 @@ namespace IOTA.ModularJumpGates.API.ModAPI.Util
 	[ProtoContract]
 	public class MyAPIGpsWrapper : IEquatable<MyAPIGpsWrapper>
 	{
+		#region Public Static Variables
+		public static string RSSProxySuffix => " : PROXY_DO_NOT_EDIT";
+		#endregion
+
 		#region Public Variables
 		/// <summary>
 		/// The GPS's coordinates
@@ -796,6 +800,17 @@ namespace IOTA.ModularJumpGates.API.ModAPI.Util
 		/// </summary>
 		[ProtoMember(5)]
 		public ulong OwnerID;
+
+		/// <summary>
+		/// The GPS's hash code
+		/// </summary>
+		[ProtoMember(6)]
+		public int GPSID;
+
+		/// <summary>
+		/// The GPS's current coordinates
+		/// </summary>
+		public Vector3D CurrentCoords => this.Coords = (this.GetSourceGPS()?.Coords ?? this.Coords);
 		#endregion
 
 		#region Public Static Operators
@@ -834,7 +849,7 @@ namespace IOTA.ModularJumpGates.API.ModAPI.Util
 		/// Creates a new MyGpsWrapper from a GPS
 		/// </summary>
 		/// <param name="gps">The source GPS</param>
-		public MyAPIGpsWrapper(IMyGps gps)
+		public MyAPIGpsWrapper(IMyGps gps, ulong owner)
 		{
 			if (gps != null)
 			{
@@ -842,6 +857,8 @@ namespace IOTA.ModularJumpGates.API.ModAPI.Util
 				this.Name = gps.Name;
 				this.Description = gps.Description;
 				this.GPSColor = gps.GPSColor;
+				this.GPSID = gps.Hash;
+				this.OwnerID = owner;
 			}
 		}
 		#endregion
@@ -880,6 +897,45 @@ namespace IOTA.ModularJumpGates.API.ModAPI.Util
 			return this.Coords == other.Coords && this.GPSColor == other.GPSColor && this.Name == other.Name && this.Description == other.Description;
 		}
 
+		/// <returns>Whether this GPS is an RSS proxy</returns>
+		public bool IsRSSProxy()
+		{
+			return MyModAPISession.Instance.ModsList.RealSolarSystemsEnabled && this.Name.StartsWith("'") && this.Name.EndsWith("'") && this.Description.EndsWith(MyAPIGpsWrapper.RSSProxySuffix);
+		}
+
+		/// <param name="gps">The proxy gps</param>
+		/// <returns>Whether the specified GPS is an RSS proxy of this</returns>
+		public bool IsRSSProxiedBy(IMyGps gps)
+		{
+			return MyModAPISession.Instance.ModsList.RealSolarSystemsEnabled && gps != null && gps.Name == $"'{this.Name}'" && gps.Description == $"{this.Description}{MyAPIGpsWrapper.RSSProxySuffix}";
+		}
+
+		/// <param name="gps">The proxy gps</param>
+		/// <returns>Whether the specified GPS is an RSS proxy of this</returns>
+		public bool IsRSSProxiedBy(MyAPIGpsWrapper gps)
+		{
+			return MyModAPISession.Instance.ModsList.RealSolarSystemsEnabled && gps != null && gps.Name == $"'{this.Name}'" && gps.Description == $"{this.Description}{MyAPIGpsWrapper.RSSProxySuffix}";
+		}
+
+		/// <summary>
+		/// Gets the true coordinates of this GPS, accounting for RSS proxying if applicable
+		/// </summary>
+		/// <returns>The true coordinates of this GPS</returns>
+		public Vector3D GetTrueCoordinates()
+		{
+			return (this.IsRSSProxy()) ? (this.GetProxiedRSSGPS()?.Coords ?? new Vector3D(double.NaN)) : this.Coords;
+		}
+
+		/// <returns>The GPS this object wraps</returns>
+		public IMyGps GetSourceGPS()
+		{
+			long identity = MyAPIGateway.Players.TryGetIdentityId(this.OwnerID);
+			List<IMyGps> gps_list = MyAPIGateway.Session.GPS.GetGpsList(identity);
+			IMyGps gps = null;
+			if (this.GPSID != 0) gps = gps_list.FirstOrDefault((g) => g.Hash == this.GPSID);
+			return gps ?? gps_list.FirstOrDefault((g) => g.Name == this.Name && g.Description == this.Description);
+		}
+
 		/// <returns>This GPS's owner or null</returns>
 		public IMyPlayer GetOwner()
 		{
@@ -887,6 +943,25 @@ namespace IOTA.ModularJumpGates.API.ModAPI.Util
 			List<IMyPlayer> players = new List<IMyPlayer>();
 			MyAPIGateway.Players.GetPlayers(players);
 			return players.FirstOrDefault((player) => player.SteamUserId == this.OwnerID);
+		}
+
+		/// <returns>The original GPS this wrapper is proxying</returns>
+		public MyAPIGpsWrapper GetProxiedRSSGPS()
+		{
+			if (!MyModAPISession.Instance.ModsList.RealSolarSystemsEnabled || !this.IsRSSProxy()) return this;
+			string name = this.Name.Substring(1, this.Name.Length - 2);
+			string description = this.Description.Substring(0, this.Description.Length - MyAPIGpsWrapper.RSSProxySuffix.Length);
+			IMyGps src = MyAPIGateway.Session.GPS.GetGpsList(MyAPIGateway.Players.TryGetIdentityId(this.OwnerID)).FirstOrDefault((gps) => this.Name == $"'{gps.Name}'" && this.Description.StartsWith(gps.Description));
+			return (src == null) ? null : new MyAPIGpsWrapper(src, this.OwnerID);
+		}
+
+		/// <returns>All RSS proxy GPS</returns>
+		public IEnumerable<IMyGps> GetRSSProxies()
+		{
+			foreach (IMyGps gps in MyAPIGateway.Session.GPS.GetGpsList(MyAPIGateway.Players.TryGetIdentityId(this.OwnerID)))
+			{
+				if (this.IsRSSProxiedBy(gps)) yield return gps;
+			}
 		}
 		#endregion
 	}
@@ -1081,9 +1156,10 @@ namespace IOTA.ModularJumpGates.API.ModAPI.Util
 		/// Creates a new waypoint targeting the specified GPS
 		/// </summary>
 		/// <param name="gps">The non-null GPS</param>
-		public MyAPIJumpGateWaypoint(IMyGps gps)
+		/// <param name="owner">The GPS's owner steam ID</param>
+		public MyAPIJumpGateWaypoint(IMyGps gps, ulong owner)
 		{
-			this.GPS = new MyAPIGpsWrapper(gps);
+			this.GPS = new MyAPIGpsWrapper(gps, owner);
 			this.WaypointType = MyAPIWaypointType.GPS;
 		}
 

@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.Linq;
 using VRage;
 using VRage.Game.ModAPI;
+using VRage.Utils;
 using VRageMath;
 
 namespace IOTA.ModularJumpGates.Util
@@ -55,6 +56,17 @@ namespace IOTA.ModularJumpGates.Util
 		/// </summary>
 		[ProtoMember(5)]
 		public ulong OwnerID;
+
+		/// <summary>
+		/// The GPS's hash code
+		/// </summary>
+		[ProtoMember(6)]
+		public int GPSID;
+
+		/// <summary>
+		/// The GPS's current coordinates
+		/// </summary>
+		public Vector3D CurrentCoords => this.Coords = (this.GetSourceGPS()?.Coords ?? this.Coords);
 		#endregion
 
 		#region Public Static Operators
@@ -103,6 +115,7 @@ namespace IOTA.ModularJumpGates.Util
                 this.Name = gps.Name;
                 this.Description = gps.Description;
                 this.GPSColor = gps.GPSColor;
+				this.GPSID = gps.Hash;
             }
 		}
 		#endregion
@@ -138,7 +151,7 @@ namespace IOTA.ModularJumpGates.Util
 		{
 			if (object.ReferenceEquals(other, null)) return false;
 			else if (object.ReferenceEquals(this, other)) return true;
-			return this.OwnerID == other.OwnerID && this.Coords == other.Coords && this.GPSColor == other.GPSColor && this.Name == other.Name && this.Description == other.Description;
+			return this.OwnerID == other.OwnerID && (this.GPSID != 0 && this.GPSID == other.GPSID || (this.GPSColor == other.GPSColor && this.Name == other.Name && this.Description == other.Description));
 		}
 
 		/// <returns>Whether this GPS is an RSS proxy</returns>
@@ -161,10 +174,23 @@ namespace IOTA.ModularJumpGates.Util
 			return MyJumpGateModSession.Instance.ModsList.RealSolarSystemsEnabled && gps != null && gps.Name == $"'{this.Name}'" && gps.Description == $"{this.Description}{MyGpsWrapper.RSSProxySuffix}";
 		}
 
+		/// <summary>
+		/// Gets the true coordinates of this GPS, accounting for RSS proxying if applicable
+		/// </summary>
+		/// <returns>The true coordinates of this GPS</returns>
+		public Vector3D GetTrueCoordinates()
+		{
+			return (this.IsRSSProxy()) ? (this.GetProxiedRSSGPS()?.Coords ?? new Vector3D(double.NaN)) : this.Coords;
+		}
+
 		/// <returns>The GPS this object wraps</returns>
 		public IMyGps GetSourceGPS()
 		{
-			return MyAPIGateway.Session.GPS.GetGpsList(MyAPIGateway.Players.TryGetIdentityId(this.OwnerID)).FirstOrDefault((gps) => gps.Name == this.Name && gps.Description == this.Description && Vector3D.DistanceSquared(gps.Coords, this.Coords) < 100);
+			long identity = MyAPIGateway.Players.TryGetIdentityId(this.OwnerID);
+			List<IMyGps> gps_list = MyAPIGateway.Session.GPS.GetGpsList(identity);
+			IMyGps gps = null;
+			if (this.GPSID != 0) gps = gps_list.FirstOrDefault((g) => g.Hash == this.GPSID);
+			return gps ?? gps_list.FirstOrDefault((g) => g.Name == this.Name && g.Description == this.Description);
 		}
 
 		/// <returns>This GPS's owner or null</returns>
@@ -182,7 +208,7 @@ namespace IOTA.ModularJumpGates.Util
 			if (!MyJumpGateModSession.Instance.ModsList.RealSolarSystemsEnabled || !this.IsRSSProxy()) return this;
 			string name = this.Name.Substring(1, this.Name.Length - 2);
 			string description = this.Description.Substring(0, this.Description.Length - MyGpsWrapper.RSSProxySuffix.Length);
-			IMyGps src = MyAPIGateway.Session.GPS.GetGpsList(MyAPIGateway.Players.TryGetIdentityId(this.OwnerID)).FirstOrDefault((gps) => gps.Name == name && gps.Description == description);
+			IMyGps src = MyAPIGateway.Session.GPS.GetGpsList(MyAPIGateway.Players.TryGetIdentityId(this.OwnerID)).FirstOrDefault((gps) => this.Name == $"'{gps.Name}'" && this.Description.StartsWith(gps.Description));
 			return (src == null) ? null : new MyGpsWrapper(src, this.OwnerID);
 		}
 
@@ -486,7 +512,7 @@ namespace IOTA.ModularJumpGates.Util
 					if (target_jump_gate == null || (!MyNetworkInterface.IsStandaloneMultiplayerClient && !target_jump_gate.IsValid())) return null;
 					return target_jump_gate.WorldJumpNode;
 				case MyWaypointType.GPS:
-					return this.GPS?.Coords;
+					return this.GPS?.CurrentCoords;
 				case MyWaypointType.BEACON:
 					return this.Beacon?.BeaconPosition;
 				case MyWaypointType.SERVER:
@@ -542,7 +568,7 @@ namespace IOTA.ModularJumpGates.Util
 					return jump_gate.WorldJumpNode;
 				}
 				case MyWaypointType.GPS:
-					return this.GPS?.Coords;
+					return this.GPS?.CurrentCoords;
 				case MyWaypointType.BEACON:
 					return this.Beacon?.BeaconPosition;
 				case MyWaypointType.SERVER:
@@ -567,7 +593,7 @@ namespace IOTA.ModularJumpGates.Util
 			int cutoff = 15;
 			MyJumpGate destination_jump_gate;
 			Vector3D? endpoint = this.GetEndpoint(out destination_jump_gate);
-			if (endpoint == null) return;
+			if (endpoint == null || !endpoint.Value.IsValid()) return;
 			double distance = Vector3D.Distance(this_pos, endpoint.Value);
 			string invalid = (this.InvalidationReason == MyWaypointInvalidationReason.NONE) ? "" : "[ Invalid ] ";
 			string invalid_tooltip = "";
@@ -628,6 +654,8 @@ namespace IOTA.ModularJumpGates.Util
 				tooltip = MyTexts.GetString("Terminal_JumpGateController_BeaconWaypointTooltip").Replace("{%0}", grid_name).Replace("{%1}", beacon_name).Replace("{%2}", value).Replace("{%3}", owner_name).Replace("{%4}", faction_name) + invalid_tooltip;
 				name = $"{invalid}{this.Beacon.BroadcastName} ({value})";
 			}
+
+			tooltip = tooltip.Replace("{%5}", endpoint.Value.X.ToString()).Replace("{%6}", endpoint.Value.Y.ToString()).Replace("{%7}", endpoint.Value.Z.ToString());
 		}
 		#endregion
 	}

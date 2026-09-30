@@ -311,7 +311,7 @@ namespace IOTA.ModularJumpGates.Terminal
 						MyJumpGate destination_jump_gate;
 						Vector3D? endpoint = selected_waypoint.GetEndpoint(out destination_jump_gate);
 
-						if (endpoint != null)
+						if (endpoint != null && endpoint.Value.IsValid())
 						{
 							string name, tooltip;
 							selected_waypoint.GetNameAndTooltip(ref jump_node, jump_gate_configuration, out name, out tooltip);
@@ -319,7 +319,6 @@ namespace IOTA.ModularJumpGates.Terminal
 							preselect_list.Add(item);
 							content_list.Add(item);
 						}
-
 					}
 
 					content_list.Add(new MyTerminalControlListBoxItem(MyStringId.GetOrCompute($"--{MyTexts.GetString("Terminal_JumpGateController_Deselect")}--"), MyStringId.NullOrEmpty, (MyJumpGateWaypoint) null));
@@ -3671,7 +3670,7 @@ namespace IOTA.ModularJumpGates.Terminal
 			Vector3D? null_point;
 			MyJumpGate destination_jump_gate;
 			if (input == null || input.Length == 0) return true;
-			else if ((null_point = waypoint.GetEndpoint(out destination_jump_gate)) == null) return false;
+			else if ((null_point = waypoint.GetEndpoint(out destination_jump_gate)) == null || !null_point.Value.IsValid()) return false;
 			double distance = Vector3D.Distance(this_pos, null_point.Value);
 			bool matched = true;
 			

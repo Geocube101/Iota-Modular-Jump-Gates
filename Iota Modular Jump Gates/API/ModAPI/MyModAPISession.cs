@@ -2,6 +2,7 @@
 using Sandbox.ModAPI;
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Linq;
 using VRage.Game;
 using VRage.Game.ModAPI;
@@ -13,6 +14,18 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 {
 	public class MyModAPISession : MyModAPIObjectBase
 	{
+		public sealed class MyModAPIExternalModInfo
+		{
+			public readonly bool RealSolarSystemsEnabled;
+			public readonly ImmutableHashSet<ulong> LoadedModIDs;
+
+			public MyModAPIExternalModInfo(IMyModContext context)
+			{
+				this.LoadedModIDs = MyAPIGateway.Session.Mods.Select((mod) => mod.GetWorkshopId().Id).ToImmutableHashSet();
+				this.RealSolarSystemsEnabled = this.LoadedModIDs.Contains(3351055036);
+			}
+		}
+
 		public static long ModAPIID => 3313236685;
 		public static int[] ModAPIVersion { get; private set; } = new int[2] { 2, 0 };
 		public static MyModAPISession Instance { get; private set; } = null;
@@ -47,7 +60,7 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 			MyAPIGateway.Utilities.SendModMessage(MyModAPISession.ModAPIID, new Dictionary<string, object>() {
 				["Type"] = "modapi",
 				["Callback"] = (Action<Dictionary<string, object>>) ((attributes) => {
-					if (result = attributes != null) MyModAPISession.Instance = new MyModAPISession(attributes);
+					if (result = attributes != null) MyModAPISession.Instance = new MyModAPISession(attributes, context);
 				}),
 				["Unloader"] = (Action) MyModAPISession.Deinit,
 				["Version"] = MyModAPISession.ModAPIVersion,
@@ -56,7 +69,10 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 			return result;
 		}
 
-		private MyModAPISession(Dictionary<string, object> attributes) : base(attributes) { }
+		private MyModAPISession(Dictionary<string, object> attributes, IMyModContext context) : base(attributes)
+		{
+			this.ModsList = new MyModAPIExternalModInfo(context);
+		}
 
 		/// <summary>
 		/// The current, session local game tick
@@ -84,6 +100,11 @@ namespace IOTA.ModularJumpGates.API.ModAPI
 		/// Whether the session has loaded completely
 		/// </summary>
 		public bool InitializationComplete => this.GetAttribute<bool>("InitializationComplete");
+
+		/// <summary>
+		/// External mod information
+		/// </summary>
+		public MyModAPIExternalModInfo ModsList { get; private set; } = null;
 
 		/// <summary>
 		/// Requests a download of the specified construct from server<br />

@@ -193,6 +193,7 @@ namespace IOTA.ModularJumpGates.JumpGates
 				Vector3D default_endpoint = endpoint;
 				double distance_to_endpoint = Vector3D.Distance(endpoint, jump_node);
 				this.TrueEndpoint = endpoint;
+				if (dst.WaypointType == MyWaypointType.GPS) Logger.Debug($"[{this.JumpGateGrid.CubeGridID}]-{this.JumpGateID} GPS_INFO; NAME={dst.GPS.GPSID}//{dst.GPS.Name}, ENDPOINT={endpoint}, GPS={dst.GPS.CurrentCoords}, IS_PROXY={dst.GPS.IsRSSProxy()}, TRUE_GPS={dst.GPS.GetTrueCoordinates()}", 3);
 
 				// Setup gate animation
 				string gate_animation_name = controller_settings.JumpEffectAnimationName();
@@ -281,6 +282,12 @@ namespace IOTA.ModularJumpGates.JumpGates
 						if (MyJumpGateModSession.Instance.Network.Registered && endpoint != this.TrueEndpoint) SendUpdatedJumpEndpoint(endpoint);
 						this.TrueEndpoint = endpoint;
 					}
+					else if (dst.WaypointType == MyWaypointType.GPS)
+					{
+						endpoint = dst.GPS.GetTrueCoordinates();
+						if (MyJumpGateModSession.Instance.Network.Registered && endpoint != this.TrueEndpoint) SendUpdatedJumpEndpoint(endpoint);
+						this.TrueEndpoint = endpoint;
+					}
 
 					if (MyJumpGateModSession.Instance.GameTick % 30 == 0)
 					{
@@ -361,7 +368,7 @@ namespace IOTA.ModularJumpGates.JumpGates
 							SendJumpResponse(MyJumpFailReason.NO_ENTITIES, false, null);
 							return;
 						}
-
+						Logger.Debug($"ENDPOINT; COORDS={endpoint}");
 						if (target_gate == null)
 							this.JumpEntitiesToEndpoint(entities_to_jump, ref jump_node, endpoint, ref default_endpoint, dst.WaypointType, controller_settings, gate_animation, true, SendJumpResponse);
 						else
@@ -599,7 +606,7 @@ namespace IOTA.ModularJumpGates.JumpGates
 
 				// Setup endpoint
 				Vector3D? _endpoint = dst.GetEndpoint();
-
+				
 				if (_endpoint == null)
 				{
 					SendWormholeJumpResponse(MyJumpFailReason.DESTINATION_UNAVAILABLE, false, null);
@@ -610,7 +617,7 @@ namespace IOTA.ModularJumpGates.JumpGates
 				Vector3D default_endpoint = endpoint;
 				double distance_to_endpoint = Vector3D.Distance(endpoint, jump_node);
 				this.TrueEndpoint = endpoint;
-
+				
 				// Setup gate animation
 				string gate_animation_name = controller_settings.JumpEffectAnimationName();
 				gate_animation = MyAnimationHandler.GetAnimation(gate_animation_name, MyAPIGateway.Session.Player, this, target_gate, controller_settings, target_controller_settings, MyJumpTypeEnum.STANDARD);
@@ -1136,7 +1143,7 @@ namespace IOTA.ModularJumpGates.JumpGates
 			double syphon_power = 0;
 			double distance_to_endpoint;
 			Vector3D.Distance(ref jump_node, ref endpoint, out distance_to_endpoint);
-
+			
 			MatrixD this_matrix = MatrixD.Normalize(this.TrueWorldJumpEllipse.WorldMatrix);
 			MatrixD target_matrix = MatrixD.Normalize(target_gate?.TrueWorldJumpEllipse.WorldMatrix ?? MatrixD.CreateWorld(endpoint, this_matrix.Forward, this_matrix.Up));
 			Vector3D src_gate_velocity = this.JumpNodeVelocity;
@@ -1187,8 +1194,7 @@ namespace IOTA.ModularJumpGates.JumpGates
 			if (!MyJumpGateModSession.Instance.Configuration.GeneralConfiguration.SafeJumps.Value && target_gate == null)
 			{
 				// Bend jump path around gravity
-				byte distance_multiplier = 1;
-				uint per_meter = 1000u * distance_multiplier;
+				uint per_meter = 1000u;
 				uint segments = (uint) Math.Round(distance_to_endpoint / per_meter);
 				Vector3D startpos = jump_node;
 
@@ -1204,9 +1210,9 @@ namespace IOTA.ModularJumpGates.JumpGates
 				{
 					float _;
 					Vector3D gravity_direction = MyAPIGateway.Physics.CalculateNaturalGravityAt(startpos, out _);
-					double g_effector = this.JumpGateConfiguration.GateKilometerOffsetPerUnitG * gravity_direction.Length() * distance_multiplier;
-					direction += gravity_direction * g_effector;
-					startpos += direction;
+					double g_effector = this.JumpGateConfiguration.GateKilometerOffsetPerUnitG * gravity_direction.Length();
+					Vector3D effector = direction + gravity_direction * g_effector;
+					startpos += effector;
 				}
 
 				distance_to_endpoint = Vector3D.Distance(startpos, jump_node);
