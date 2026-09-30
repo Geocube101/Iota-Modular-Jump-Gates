@@ -1502,7 +1502,7 @@ namespace IOTA.ModularJumpGates.Util
 			MyExplosions.AddExplosion(ref explosion);
 			this.TargetDrive.TerminalBlock?.CubeGrid.RemoveBlock(this.TargetDrive.TerminalBlock.SlimBlock, true);
 			this.TargetDrive.TerminalBlock?.Close();
-			this.TargetDrive = this.JumpGateDrives.FirstOrDefault((drive) => !drive.TerminalBlock.MarkedForClose);
+			this.TargetDrive = this.JumpGateDrives.FirstOrDefault((drive) => drive.TerminalBlock != null && !drive.TerminalBlock.MarkedForClose);
 			int milliseconds = (this.TargetDrive == null) ? 3000 : this.TimeRandomGenerator.Next(250, 1000);
 			this.NextTickTime = DateTime.UtcNow.AddMilliseconds(milliseconds);
 			return false;

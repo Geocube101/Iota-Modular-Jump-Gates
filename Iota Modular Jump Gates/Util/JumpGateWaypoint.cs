@@ -189,8 +189,8 @@ namespace IOTA.ModularJumpGates.Util
 			long identity = MyAPIGateway.Players.TryGetIdentityId(this.OwnerID);
 			List<IMyGps> gps_list = MyAPIGateway.Session.GPS.GetGpsList(identity);
 			IMyGps gps = null;
-			if (this.GPSID != 0) gps = gps_list.FirstOrDefault((g) => g.Hash == this.GPSID);
-			return gps ?? gps_list.FirstOrDefault((g) => g.Name == this.Name && g.Description == this.Description);
+			if (this.GPSID != 0) gps = gps_list.FirstOrDefault((g1) => g1 != null && g1.Hash == this.GPSID);
+			return gps ?? gps_list.FirstOrDefault((g2) => g2 != null && g2.Name == this.Name && g2.Description == this.Description);
 		}
 
 		/// <returns>This GPS's owner or null</returns>

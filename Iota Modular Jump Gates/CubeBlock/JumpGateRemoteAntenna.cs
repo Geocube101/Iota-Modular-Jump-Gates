@@ -21,6 +21,7 @@ using VRage.Game.ModAPI;
 using VRage.ModAPI;
 using VRage.ObjectBuilders;
 using VRageMath;
+using IOTA.ModularJumpGates.ModConfiguration;
 
 namespace IOTA.ModularJumpGates.CubeBlock
 {
@@ -627,116 +628,7 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			}
 
 			// Update waypoints
-			if (is_working && this.JumpGateGrid != null && !MyNetworkInterface.IsDedicatedMultiplayerServer && MyAPIGateway.Gui.GetCurrentScreen == MyTerminalPageEnum.ControlPanel && MyJumpGateModSession.Instance.GameTick % 60 == 0)
-			{
-				long player_identity = MyAPIGateway.Players.TryGetIdentityId(MyAPIGateway.Multiplayer.MyId);
-				IEnumerable<MyJumpGateConstruct> reachable_grids = (MyJumpGateModSession.Instance.Configuration.ConstructConfiguration.RequireGridCommLink.Value) ? this.JumpGateGrid.GetCommLinkedJumpGateGrids() : MyJumpGateModSession.Instance.GetAllJumpGateGrids();
-
-				for (byte channel = 0; channel < MyJumpGateRemoteAntenna.ChannelCount; ++channel)
-				{
-					bool src_do_wormhole = this.BlockSettings.BaseControllerSettings[channel].DoSustainedWormhole();
-					MyJumpGate jump_gate = this.GetInboundControlGate(channel);
-					if (jump_gate == null || !jump_gate.IsValid()) continue;
-					Vector3D jump_node = jump_gate.WorldJumpNode;
-					double distance;
-					MyJumpGateController.MyWaypointsList waypoints = this.WaypointsList[channel];
-					waypoints.Clear();
-
-					foreach (MyJumpGateConstruct connected_grid in reachable_grids)
-					{
-						if (connected_grid == this.JumpGateGrid || !MyJumpGateModSession.Instance.IsJumpGateGridMultiplayerValid(connected_grid)) continue;
-
-						foreach (MyJumpGateController controller in connected_grid.GetAttachedJumpGateControllers())
-						{
-							bool dst_do_wormhole = controller.BlockSettings.DoSustainedWormhole();
-							MyJumpGate other_gate = controller.AttachedJumpGate();
-							if (other_gate == null || other_gate.MarkClosed) continue;
-							distance = Vector3D.Distance(jump_node, other_gate.WorldJumpNode);
-							MyJumpGateWaypoint waypoint = new MyJumpGateWaypoint(other_gate);
-							if (distance < jump_gate.JumpGateConfiguration.MinimumJumpDistance) waypoint.InvalidationReason = MyWaypointInvalidationReason.TOO_CLOSE;
-							else if (distance > jump_gate.JumpGateConfiguration.MaximumJumpDistance) waypoint.InvalidationReason = MyWaypointInvalidationReason.TOO_FAR;
-							else if (!controller.IsFactionRelationValid(player_identity)) waypoint.InvalidationReason = MyWaypointInvalidationReason.FACTION_MISMATCH;
-							else if (src_do_wormhole && !dst_do_wormhole) waypoint.InvalidationReason = MyWaypointInvalidationReason.TARGET_WORMHOLE_DISABLED;
-							else if (!src_do_wormhole && dst_do_wormhole) waypoint.InvalidationReason = MyWaypointInvalidationReason.TARGET_WORMHOLE_ENABLED;
-							else waypoint.InvalidationReason = MyWaypointInvalidationReason.NONE;
-							waypoints.AddWaypoint(waypoint);
-						}
-
-						foreach (MyJumpGateRemoteAntenna antenna in connected_grid.GetAttachedJumpGateRemoteAntennas())
-						{
-							for (byte i = 0; i < MyJumpGateRemoteAntenna.ChannelCount; ++i)
-							{
-								MyJumpGate other_gate = antenna.GetInboundControlGate(i);
-								if (other_gate == null || other_gate.MarkClosed) continue;
-								distance = Vector3D.Distance(jump_node, other_gate.WorldJumpNode);
-								MyJumpGateWaypoint waypoint = new MyJumpGateWaypoint(other_gate);
-								if (distance < jump_gate.JumpGateConfiguration.MinimumJumpDistance) waypoint.InvalidationReason = MyWaypointInvalidationReason.TOO_CLOSE;
-								else if (distance > jump_gate.JumpGateConfiguration.MaximumJumpDistance) waypoint.InvalidationReason = MyWaypointInvalidationReason.TOO_FAR;
-								else if (!antenna.IsFactionRelationValid(i, player_identity)) waypoint.InvalidationReason = MyWaypointInvalidationReason.FACTION_MISMATCH;
-								else waypoint.InvalidationReason = MyWaypointInvalidationReason.NONE;
-								waypoints.AddWaypoint(waypoint);
-							}
-						}
-					}
-
-					foreach (MyBeaconLinkWrapper beacon in this.JumpGateGrid.GetBeaconsWithinReverseBroadcastSphere())
-					{
-						distance = Vector3D.Distance(jump_node, beacon.BeaconPosition);
-						MyJumpGateWaypoint waypoint = new MyJumpGateWaypoint(beacon);
-						if (distance < jump_gate.JumpGateConfiguration.MinimumJumpDistance) waypoint.InvalidationReason = MyWaypointInvalidationReason.TOO_CLOSE;
-						else if (distance > jump_gate.JumpGateConfiguration.MaximumJumpDistance) waypoint.InvalidationReason = MyWaypointInvalidationReason.TOO_FAR;
-						else waypoint.InvalidationReason = MyWaypointInvalidationReason.NONE;
-						waypoints.AddWaypoint(waypoint);
-					}
-
-					foreach (IMyGps gps in MyAPIGateway.Session.GPS.GetGpsList(player_identity))
-					{
-						if (!MyJumpGateController.IsGPSValid(gps)) continue;
-						distance = Vector3D.Distance(jump_node, gps.Coords);
-						MyJumpGateWaypoint waypoint = new MyJumpGateWaypoint(gps, MyAPIGateway.Multiplayer.MyId);
-						if (distance < jump_gate.JumpGateConfiguration.MinimumJumpDistance) waypoint.InvalidationReason = MyWaypointInvalidationReason.TOO_CLOSE;
-						else if (distance > jump_gate.JumpGateConfiguration.MaximumJumpDistance) waypoint.InvalidationReason = MyWaypointInvalidationReason.TOO_FAR;
-						else waypoint.InvalidationReason = MyWaypointInvalidationReason.NONE;
-						waypoints.AddWaypoint(waypoint);
-					}
-
-					// Fix selected waypoint
-					if (MyNetworkInterface.IsServerLike)
-					{
-						MyJumpGateWaypoint selected_waypoint = this.BlockSettings.BaseControllerSettings[channel].SelectedWaypoint();
-						Vector3D? waypoint_endpoint = selected_waypoint?.GetEndpoint();
-						bool waypoint_cleared = false;
-
-						if (waypoint_endpoint != null)
-						{
-							Vector3D endpoint = waypoint_endpoint.Value;
-							distance = Vector3D.Distance(endpoint, jump_node);
-
-							if (distance < jump_gate.JumpGateConfiguration.MinimumJumpDistance || distance > jump_gate.JumpGateConfiguration.MaximumJumpDistance)
-							{
-								this.BlockSettings.BaseControllerSettings[channel].SelectedWaypoint(null);
-								this.SetDirty();
-								waypoint_cleared = true;
-							}
-						}
-
-						if (!waypoint_cleared && selected_waypoint != null && selected_waypoint.WaypointType == MyWaypointType.GPS && MyJumpGateModSession.Instance.ModsList.RealSolarSystemsEnabled)
-						{
-							MyGpsWrapper gps = selected_waypoint.GPS;
-							MyGpsWrapper src = gps.GetProxiedRSSGPS();
-							long identity = MyAPIGateway.Players.TryGetIdentityId(gps.OwnerID);
-
-							if (src == null)
-							{
-								this.BlockSettings.BaseControllerSettings[channel].SelectedWaypoint(null);
-								this.SetDirty();
-							}
-
-							this.TEMP_WaypointGPS.Clear();
-						}
-					}
-				}
-			}
+			if (is_working) this.UpdateAntennaApplicableWaypoints();
 
 			// Update connection emissives
 			ulong tick_offset = this.LocalGameTick % 30;
@@ -805,6 +697,140 @@ namespace IOTA.ModularJumpGates.CubeBlock
 			{
 				this.LastUpdateTime = packet.EpochTime;
 				this.IsDirty = false;
+			}
+		}
+
+		private void UpdateAntennaApplicableWaypoints()
+		{
+			if (this.JumpGateGrid == null || MyNetworkInterface.IsDedicatedMultiplayerServer || MyAPIGateway.Gui.GetCurrentScreen != MyTerminalPageEnum.ControlPanel || MyJumpGateModSession.Instance.GameTick % 60 != 0) return;
+			long player_identity = MyAPIGateway.Players.TryGetIdentityId(MyAPIGateway.Multiplayer.MyId);
+			IEnumerable<MyJumpGateConstruct> reachable_grids = (MyJumpGateModSession.Instance.Configuration.ConstructConfiguration.RequireGridCommLink.Value) ? this.JumpGateGrid.GetCommLinkedJumpGateGrids() : MyJumpGateModSession.Instance.GetAllJumpGateGrids();
+
+			for (byte channel = 0; channel < MyJumpGateRemoteAntenna.ChannelCount; ++channel)
+			{
+				bool src_do_wormhole = this.BlockSettings.BaseControllerSettings[channel].DoSustainedWormhole();
+				MyJumpGate jump_gate = this.GetInboundControlGate(channel);
+				if (jump_gate == null || !jump_gate.IsValid()) continue;
+				MyModConfigurationV1.MyLocalJumpGateConfiguration configuration = jump_gate.JumpGateConfiguration;
+				Vector3D jump_node = jump_gate.WorldJumpNode;
+				double distance;
+				MyJumpGateController.MyWaypointsList waypoints = this.WaypointsList[channel];
+				waypoints.Clear();
+
+				if (configuration.AllowJumpGateWaypoints)
+				{
+					foreach (MyJumpGateConstruct connected_grid in reachable_grids)
+					{
+						if (connected_grid == this.JumpGateGrid || !MyJumpGateModSession.Instance.IsJumpGateGridMultiplayerValid(connected_grid)) continue;
+
+						foreach (MyJumpGateController controller in connected_grid.GetAttachedJumpGateControllers())
+						{
+							bool dst_do_wormhole = controller.BlockSettings.DoSustainedWormhole();
+							MyJumpGate other_gate = controller.AttachedJumpGate();
+							if (other_gate == null || other_gate.MarkClosed) continue;
+							distance = Vector3D.Distance(jump_node, other_gate.WorldJumpNode);
+							MyJumpGateWaypoint waypoint = new MyJumpGateWaypoint(other_gate);
+							if (distance < jump_gate.JumpGateConfiguration.MinimumJumpDistance) waypoint.InvalidationReason = MyWaypointInvalidationReason.TOO_CLOSE;
+							else if (distance > jump_gate.JumpGateConfiguration.MaximumJumpDistance) waypoint.InvalidationReason = MyWaypointInvalidationReason.TOO_FAR;
+							else if (!controller.IsFactionRelationValid(player_identity)) waypoint.InvalidationReason = MyWaypointInvalidationReason.FACTION_MISMATCH;
+							else if (src_do_wormhole && !dst_do_wormhole) waypoint.InvalidationReason = MyWaypointInvalidationReason.TARGET_WORMHOLE_DISABLED;
+							else if (!src_do_wormhole && dst_do_wormhole) waypoint.InvalidationReason = MyWaypointInvalidationReason.TARGET_WORMHOLE_ENABLED;
+							else waypoint.InvalidationReason = MyWaypointInvalidationReason.NONE;
+							waypoints.AddWaypoint(waypoint);
+						}
+
+						foreach (MyJumpGateRemoteAntenna antenna in connected_grid.GetAttachedJumpGateRemoteAntennas())
+						{
+							for (byte i = 0; i < MyJumpGateRemoteAntenna.ChannelCount; ++i)
+							{
+								MyJumpGate other_gate = antenna.GetInboundControlGate(i);
+								if (other_gate == null || other_gate.MarkClosed) continue;
+								distance = Vector3D.Distance(jump_node, other_gate.WorldJumpNode);
+								MyJumpGateWaypoint waypoint = new MyJumpGateWaypoint(other_gate);
+								if (distance < jump_gate.JumpGateConfiguration.MinimumJumpDistance) waypoint.InvalidationReason = MyWaypointInvalidationReason.TOO_CLOSE;
+								else if (distance > jump_gate.JumpGateConfiguration.MaximumJumpDistance) waypoint.InvalidationReason = MyWaypointInvalidationReason.TOO_FAR;
+								else if (!antenna.IsFactionRelationValid(i, player_identity)) waypoint.InvalidationReason = MyWaypointInvalidationReason.FACTION_MISMATCH;
+								else waypoint.InvalidationReason = MyWaypointInvalidationReason.NONE;
+								waypoints.AddWaypoint(waypoint);
+							}
+						}
+					}
+				}
+
+				if (configuration.AllowBeaconWaypoints)
+				{
+					foreach (MyBeaconLinkWrapper beacon in this.JumpGateGrid.GetBeaconsWithinReverseBroadcastSphere())
+					{
+						distance = Vector3D.Distance(jump_node, beacon.BeaconPosition);
+						MyJumpGateWaypoint waypoint = new MyJumpGateWaypoint(beacon);
+						if (distance < jump_gate.JumpGateConfiguration.MinimumJumpDistance) waypoint.InvalidationReason = MyWaypointInvalidationReason.TOO_CLOSE;
+						else if (distance > jump_gate.JumpGateConfiguration.MaximumJumpDistance) waypoint.InvalidationReason = MyWaypointInvalidationReason.TOO_FAR;
+						else waypoint.InvalidationReason = MyWaypointInvalidationReason.NONE;
+						waypoints.AddWaypoint(waypoint);
+					}
+				}
+
+				if (configuration.AllowGPSWaypoints)
+				{
+					foreach (IMyGps gps in MyAPIGateway.Session.GPS.GetGpsList(player_identity))
+					{
+						if (!MyJumpGateController.IsGPSValid(gps)) continue;
+						distance = Vector3D.Distance(jump_node, gps.Coords);
+						MyJumpGateWaypoint waypoint = new MyJumpGateWaypoint(gps, MyAPIGateway.Multiplayer.MyId);
+						if (distance < jump_gate.JumpGateConfiguration.MinimumJumpDistance) waypoint.InvalidationReason = MyWaypointInvalidationReason.TOO_CLOSE;
+						else if (distance > jump_gate.JumpGateConfiguration.MaximumJumpDistance) waypoint.InvalidationReason = MyWaypointInvalidationReason.TOO_FAR;
+						else waypoint.InvalidationReason = MyWaypointInvalidationReason.NONE;
+						waypoints.AddWaypoint(waypoint);
+					}
+				}
+
+				// Fix selected waypoint
+				if (MyNetworkInterface.IsServerLike)
+				{
+					MyJumpGateWaypoint selected_waypoint = this.BlockSettings.BaseControllerSettings[channel].SelectedWaypoint();
+					Vector3D? waypoint_endpoint = selected_waypoint?.GetEndpoint();
+					bool waypoint_cleared = false;
+
+					if (selected_waypoint != null &&
+						((selected_waypoint.WaypointType == MyWaypointType.GPS && !configuration.AllowGPSWaypoints)
+						|| (selected_waypoint.WaypointType == MyWaypointType.BEACON && !configuration.AllowBeaconWaypoints)
+						|| (selected_waypoint.WaypointType == MyWaypointType.JUMP_GATE && !configuration.AllowJumpGateWaypoints)
+						|| (selected_waypoint.WaypointType == MyWaypointType.SERVER && !configuration.AllowServerWaypoints)
+					))
+					{
+						this.BlockSettings.BaseControllerSettings[channel].SelectedWaypoint(null);
+						this.SetDirty();
+						waypoint_cleared = true;
+					}
+
+					if (!waypoint_cleared && waypoint_endpoint != null)
+					{
+						Vector3D endpoint = waypoint_endpoint.Value;
+						distance = Vector3D.Distance(endpoint, jump_node);
+
+						if (distance < jump_gate.JumpGateConfiguration.MinimumJumpDistance || distance > jump_gate.JumpGateConfiguration.MaximumJumpDistance)
+						{
+							this.BlockSettings.BaseControllerSettings[channel].SelectedWaypoint(null);
+							this.SetDirty();
+							waypoint_cleared = true;
+						}
+					}
+
+					if (!waypoint_cleared && selected_waypoint != null && selected_waypoint.WaypointType == MyWaypointType.GPS && MyJumpGateModSession.Instance.ModsList.RealSolarSystemsEnabled)
+					{
+						MyGpsWrapper gps = selected_waypoint.GPS;
+						MyGpsWrapper src = gps.GetProxiedRSSGPS();
+						long identity = MyAPIGateway.Players.TryGetIdentityId(gps.OwnerID);
+
+						if (src == null)
+						{
+							this.BlockSettings.BaseControllerSettings[channel].SelectedWaypoint(null);
+							this.SetDirty();
+						}
+
+						this.TEMP_WaypointGPS.Clear();
+					}
+				}
 			}
 		}
 

@@ -16,7 +16,7 @@ namespace IOTA.ModularJumpGates.ModConfiguration
 	public sealed class MyModConfigurationV1
 	{
 		#region Section Schemas
-		public interface IMYConfigurationSchema
+		public interface IMyConfigurationSchema
 		{
 			void Validate();
 
@@ -26,7 +26,7 @@ namespace IOTA.ModularJumpGates.ModConfiguration
 		[Serializable]
 		[XmlRoot("CapacitorConfiguration")]
 		[ProtoContract(UseProtoMembersOnly = true)]
-		public class MyModCapacitorConfiguration : IMYConfigurationSchema
+		public class MyModCapacitorConfiguration : IMyConfigurationSchema
 		{
 			#region Schema
 			/// <summary>
@@ -284,7 +284,7 @@ namespace IOTA.ModularJumpGates.ModConfiguration
 		[Serializable]
 		[XmlRoot("DriveConfiguration")]
 		[ProtoContract(UseProtoMembersOnly = true)]
-		public class MyModDriveConfiguration : IMYConfigurationSchema
+		public class MyModDriveConfiguration : IMyConfigurationSchema
 		{
 			#region Schema
 			/// <summary>
@@ -554,13 +554,13 @@ namespace IOTA.ModularJumpGates.ModConfiguration
 		[Serializable]
 		[XmlRoot("JumpGateConfiguration")]
 		[ProtoContract(UseProtoMembersOnly = true)]
-		public class MyModJumpGateConfiguration : IMYConfigurationSchema
+		public class MyModJumpGateConfiguration : IMyConfigurationSchema
 		{
 			#region Sub-Schemas
 			[Serializable]
 			[XmlRoot("JumpGateExplosionConfiguration")]
 			[ProtoContract(UseProtoMembersOnly = true)]
-			public class MyModJumpGateExplosionConfiguration : IMYConfigurationSchema
+			public class MyModJumpGateExplosionConfiguration : IMyConfigurationSchema
 			{
 				#region Schema
 				/// <summary>
@@ -639,7 +639,7 @@ namespace IOTA.ModularJumpGates.ModConfiguration
 				}
 
 				/// <summary>
-				/// Overlays a jump gate explision configuration on top of this one<br />
+				/// Overlays a jump gate explosion configuration on top of this one<br />
 				/// Any null values in this configuration will be replaced by values from "config"
 				/// </summary>
 				/// <param name="config">The configuration to overlay</param>
@@ -955,6 +955,171 @@ namespace IOTA.ModularJumpGates.ModConfiguration
 				}
 				#endregion
 			}
+
+			[Serializable]
+			[XmlRoot("JumpGateWaypointConfiguration")]
+			[ProtoContract(UseProtoMembersOnly = true)]
+			public class MyModJumpGateWaypointConfiguration
+			{
+				#region Schema
+				/// <summary>
+				/// Whether to allow large grid jump gates to target GPS waypoints<br />
+				/// Defaults to true
+				/// </summary>
+				[XmlElement]
+				[ProtoMember(1)]
+				public bool? AllowLargeGateGPSWaypoints;
+
+				/// <summary>
+				/// Whether to allow small grid jump gates to target GPS waypoints<br />
+				/// Defaults to true
+				/// </summary>
+				[XmlElement]
+				[ProtoMember(2)]
+				public bool? AllowSmallGateGPSWaypoints;
+
+				/// <summary>
+				/// Whether to allow large grid jump gates to target server waypoints<br />
+				/// Defaults to true
+				/// </summary>
+				[XmlElement]
+				[ProtoMember(3)]
+				public bool? AllowLargeGateBeaconWaypoints;
+
+				/// <summary>
+				/// Whether to allow small grid jump gates to target beacon waypoints<br />
+				/// Defaults to true
+				/// </summary>
+				[XmlElement]
+				[ProtoMember(4)]
+				public bool? AllowSmallGateBeaconWaypoints;
+
+				/// <summary>
+				/// Whether to allow large grid jump gates to target jump gate waypoints<br />
+				/// Defaults to true
+				/// </summary>
+				[XmlElement]
+				[ProtoMember(5)]
+				public bool? AllowLargeGateJumpGateWaypoints;
+
+				/// <summary>
+				/// Whether to allow small grid jump gates to target jump gate waypoints<br />
+				/// Defaults to true
+				/// </summary>
+				[XmlElement]
+				[ProtoMember(6)]
+				public bool? AllowSmallGateJumpGateWaypoints;
+
+				/// <summary>
+				/// Whether to allow large grid jump gates to target server waypoints<br />
+				/// Defaults to true
+				/// </summary>
+				[XmlElement]
+				[ProtoMember(7)]
+				public bool? AllowLargeGateServerWaypoints;
+
+				/// <summary>
+				/// Whether to allow small grid jump gates to target server waypoints<br />
+				/// Defaults to true
+				/// </summary>
+				[XmlElement]
+				[ProtoMember(8)]
+				public bool? AllowSmallGateServerWaypoints;
+				#endregion
+
+				#region Public Methods
+				/// <returns>The default jump gate waypoint configuration values</returns>
+				public static MyModJumpGateWaypointConfiguration Defaults()
+				{
+					return new MyModJumpGateWaypointConfiguration {
+						AllowLargeGateGPSWaypoints = true,
+						AllowSmallGateGPSWaypoints = true,
+						AllowLargeGateBeaconWaypoints = true,
+						AllowSmallGateBeaconWaypoints = true,
+						AllowLargeGateJumpGateWaypoints = true,
+						AllowSmallGateJumpGateWaypoints = true,
+						AllowLargeGateServerWaypoints = true,
+						AllowSmallGateServerWaypoints = true,
+					};
+				}
+
+				/// <summary>
+				/// Loads this configuration from a dictionary
+				/// </summary>
+				/// <param name="map">The dictionary to read from</param>
+				/// <returns>The configuration</returns>
+				public static MyModJumpGateWaypointConfiguration FromDictionary(Dictionary<string, object> map)
+				{
+					return (map == null) ? null : new MyModJumpGateWaypointConfiguration() {
+						AllowLargeGateGPSWaypoints = map.GetValueOrDefault("AllowLargeGateGPSWaypoints") as bool?,
+						AllowSmallGateGPSWaypoints = map.GetValueOrDefault("AllowSmallGateGPSWaypoints") as bool?,
+						AllowLargeGateBeaconWaypoints = map.GetValueOrDefault("AllowLargeGateBeaconWaypoints") as bool?,
+						AllowSmallGateBeaconWaypoints = map.GetValueOrDefault("AllowSmallGateBeaconWaypoints") as bool?,
+						AllowLargeGateJumpGateWaypoints = map.GetValueOrDefault("AllowLargeGateJumpGateWaypoints") as bool?,
+						AllowSmallGateJumpGateWaypoints = map.GetValueOrDefault("AllowSmallGateJumpGateWaypoints") as bool?,
+						AllowLargeGateServerWaypoints = map.GetValueOrDefault("AllowLargeGateServerWaypoints") as bool?,
+						AllowSmallGateServerWaypoints = map.GetValueOrDefault("AllowSmallGateServerWaypoints") as bool?,
+					};
+				}
+
+				/// <summary>
+				/// Overlays a jump gate waypoint configuration on top of this one<br />
+				/// Any null values in this configuration will be replaced by values from "config"
+				/// </summary>
+				/// <param name="config">The configuration to overlay</param>
+				public void Overlay(MyModJumpGateWaypointConfiguration config)
+				{
+					if (config == null) return;
+					this.AllowLargeGateGPSWaypoints = this.AllowLargeGateGPSWaypoints ?? config.AllowLargeGateGPSWaypoints;
+					this.AllowSmallGateGPSWaypoints = this.AllowSmallGateGPSWaypoints ?? config.AllowSmallGateGPSWaypoints;
+					this.AllowLargeGateBeaconWaypoints = this.AllowLargeGateBeaconWaypoints ?? config.AllowLargeGateBeaconWaypoints;
+					this.AllowSmallGateBeaconWaypoints = this.AllowSmallGateBeaconWaypoints ?? config.AllowSmallGateBeaconWaypoints;
+					this.AllowLargeGateJumpGateWaypoints = this.AllowLargeGateJumpGateWaypoints ?? config.AllowLargeGateJumpGateWaypoints;
+					this.AllowSmallGateJumpGateWaypoints = this.AllowSmallGateJumpGateWaypoints ?? this.AllowSmallGateJumpGateWaypoints;
+					this.AllowLargeGateServerWaypoints = this.AllowLargeGateServerWaypoints ?? config.AllowLargeGateServerWaypoints;
+					this.AllowSmallGateServerWaypoints = this.AllowSmallGateServerWaypoints ?? config.AllowSmallGateServerWaypoints;
+				}
+
+				/// <summary>
+				/// Validates this configuration<br />
+				/// Any invalid values will be replaced with defaults
+				/// </summary>
+				public void Validate()
+				{
+					MyModJumpGateWaypointConfiguration defaults = MyModJumpGateWaypointConfiguration.Defaults();
+					this.Overlay(defaults);
+				}
+
+				/// <summary>
+				/// Clones this configuration
+				/// </summary>
+				/// <returns>The cloned configuration</returns>
+				public MyModJumpGateWaypointConfiguration Clone()
+				{
+					MyModJumpGateWaypointConfiguration clone = new MyModJumpGateWaypointConfiguration();
+					clone.Overlay(this);
+					return clone;
+				}
+
+				/// <summary>
+				/// Saves this configuration to a dictionary
+				/// </summary>
+				/// <returns>The configuration as a dictionary</returns>
+				public Dictionary<string, object> ToDictionary()
+				{
+					return new Dictionary<string, object> {
+						["AllowLargeGateGPSWaypoints"] = this.AllowLargeGateGPSWaypoints,
+						["AllowSmallGateGPSWaypoints"] = this.AllowSmallGateGPSWaypoints,
+						["AllowLargeGateBeaconWaypoints"] = this.AllowLargeGateBeaconWaypoints,
+						["AllowSmallGateBeaconWaypoints"] = this.AllowSmallGateBeaconWaypoints,
+						["AllowLargeGateJumpGateWaypoints"] = this.AllowLargeGateJumpGateWaypoints,
+						["AllowSmallGateJumpGateWaypoints"] = this.AllowSmallGateJumpGateWaypoints,
+						["AllowLargeGateServerWaypoints"] = this.AllowLargeGateServerWaypoints,
+						["AllowSmallGateServerWaypoints"] = this.AllowSmallGateServerWaypoints,
+					};
+				}
+				#endregion
+			}
 			#endregion
 
 			#region Schema
@@ -1240,6 +1405,13 @@ namespace IOTA.ModularJumpGates.ModConfiguration
 			[XmlElement]
 			[ProtoMember(101)]
 			public MyModJumpGateWormholeConfiguration JumpGateWormholeConfiguration;
+
+			/// <summary>
+			/// The jump gate waypoint configuration
+			/// </summary>
+			[XmlElement]
+			[ProtoMember(102)]
+			public MyModJumpGateWaypointConfiguration JumpGateWaypointConfiguration;
 			#endregion
 
 			#region Public Methods
@@ -1275,6 +1447,7 @@ namespace IOTA.ModularJumpGates.ModConfiguration
 					MaximumGravitySegmentCount = 100000,
 					JumpGateExplosionConfiguration = MyModJumpGateExplosionConfiguration.Defaults(),
 					JumpGateWormholeConfiguration = MyModJumpGateWormholeConfiguration.Defaults(),
+					JumpGateWaypointConfiguration = MyModJumpGateWaypointConfiguration.Defaults(),
 				};
 			}
 
@@ -1312,6 +1485,7 @@ namespace IOTA.ModularJumpGates.ModConfiguration
 					MaximumGravitySegmentCount = map.GetValueOrDefault("MaximumGravitySegmentCount") as uint?,
 					JumpGateExplosionConfiguration = MyModJumpGateExplosionConfiguration.FromDictionary(map.GetValueOrDefault("JumpGateExplosionConfiguration") as Dictionary<string, object>),
 					JumpGateWormholeConfiguration = MyModJumpGateWormholeConfiguration.FromDictionary(map.GetValueOrDefault("JumpGateWormholeConfiguration") as Dictionary<string, object>),
+					JumpGateWaypointConfiguration = MyModJumpGateWaypointConfiguration.FromDictionary(map.GetValueOrDefault("JumpGateWaypointConfiguration") as Dictionary<string, object>),
 				};
 			}
 
@@ -1353,6 +1527,8 @@ namespace IOTA.ModularJumpGates.ModConfiguration
 				else this.JumpGateExplosionConfiguration.Overlay(config.JumpGateExplosionConfiguration);
 				if (this.JumpGateWormholeConfiguration == null) this.JumpGateWormholeConfiguration = config.JumpGateWormholeConfiguration;
 				else this.JumpGateWormholeConfiguration.Overlay(config.JumpGateWormholeConfiguration);
+				if (this.JumpGateWaypointConfiguration == null) this.JumpGateWaypointConfiguration = config.JumpGateWaypointConfiguration;
+				else this.JumpGateWaypointConfiguration.Overlay(config.JumpGateWaypointConfiguration);
 			}
 
 			/// <summary>
@@ -1386,8 +1562,12 @@ namespace IOTA.ModularJumpGates.ModConfiguration
 				this.ConfineUntetheredSpread = this.ConfineUntetheredSpread ?? defaults.ConfineUntetheredSpread ?? false;
 				this.MinimumControlOwnerFactionRatio = MyModConfigurationV1.ValidateValue(this.MinimumControlOwnerFactionRatio, defaults.MinimumControlOwnerFactionRatio, 0, 1);
 				this.MaximumGravitySegmentCount = MyModConfigurationV1.ValidateValue(this.MaximumGravitySegmentCount, defaults.MaximumGravitySegmentCount, 1);
-				this.JumpGateExplosionConfiguration?.Validate();
-				this.JumpGateWormholeConfiguration?.Validate();
+				if (this.JumpGateExplosionConfiguration == null) this.JumpGateExplosionConfiguration = MyModJumpGateExplosionConfiguration.Defaults();
+				else this.JumpGateExplosionConfiguration.Validate();
+				if (this.JumpGateWormholeConfiguration == null) this.JumpGateWormholeConfiguration = MyModJumpGateWormholeConfiguration.Defaults();
+				else this.JumpGateWormholeConfiguration.Validate();
+				if (this.JumpGateWaypointConfiguration == null) this.JumpGateWaypointConfiguration = MyModJumpGateWaypointConfiguration.Defaults();
+				else this.JumpGateWaypointConfiguration.Validate();
 
 				this.LargeGateDistanceScaleExponent = Math.Log((this.MaxLargeJumpGate50Distance.Value - this.MinimumLargeJumpDistance.Value) / 1000d, 50d);
 				this.SmallGateDistanceScaleExponent = Math.Log((this.MaxSmallJumpGate50Distance.Value - this.MinimumSmallJumpDistance.Value) / 1000d, 50d);
@@ -1402,6 +1582,7 @@ namespace IOTA.ModularJumpGates.ModConfiguration
 				MyModJumpGateConfiguration clone = new MyModJumpGateConfiguration {
 					JumpGateExplosionConfiguration = this.JumpGateExplosionConfiguration?.Clone(),
 					JumpGateWormholeConfiguration = this.JumpGateWormholeConfiguration?.Clone(),
+					JumpGateWaypointConfiguration = this.JumpGateWaypointConfiguration?.Clone(),
 				};
 				clone.Overlay(this);
 				return clone;
@@ -1440,6 +1621,7 @@ namespace IOTA.ModularJumpGates.ModConfiguration
 					["MaximumGravitySegmentCount"] = this.MaximumGravitySegmentCount,
 					["JumpGateExplosionConfiguration"] = this.JumpGateExplosionConfiguration?.ToDictionary(),
 					["JumpGateWormholeConfiguration"] = this.JumpGateWormholeConfiguration?.ToDictionary(),
+					["JumpGateWaypointConfiguration"] = this.JumpGateWaypointConfiguration?.ToDictionary(),
 				};
 			}
 			#endregion
@@ -1448,7 +1630,7 @@ namespace IOTA.ModularJumpGates.ModConfiguration
 		[Serializable]
 		[XmlRoot("ConstructConfiguration")]
 		[ProtoContract(UseProtoMembersOnly = true)]
-		public class MyModConstructConfiguration : IMYConfigurationSchema
+		public class MyModConstructConfiguration : IMyConfigurationSchema
 		{
 			#region Schema
 			/// <summary>
@@ -1571,7 +1753,7 @@ namespace IOTA.ModularJumpGates.ModConfiguration
 		[Serializable]
 		[XmlRoot("GeneralConfiguration")]
 		[ProtoContract(UseProtoMembersOnly = true)]
-		public class MyModGeneralConfiguration : IMYConfigurationSchema
+		public class MyModGeneralConfiguration : IMyConfigurationSchema
 		{
 			#region Schema
 			/// <summary>
@@ -1775,7 +1957,7 @@ namespace IOTA.ModularJumpGates.ModConfiguration
 		[Serializable]
 		[XmlRoot("ModSettings")]
 		[ProtoContract(UseProtoMembersOnly = true)]
-		public class MyModSettings : IMYConfigurationSchema
+		public class MyModSettings : IMyConfigurationSchema
 		{
 			#region Schema
 			/// <summary>
@@ -1849,7 +2031,7 @@ namespace IOTA.ModularJumpGates.ModConfiguration
 		[Serializable]
 		[XmlRoot("LocalConfiguration")]
 		[ProtoContract(UseProtoMembersOnly = true)]
-		public sealed class MyLocalModConfiguration : IMYConfigurationSchema
+		public sealed class MyLocalModConfiguration : IMyConfigurationSchema
 		{
 			#region Schema
 			/// <summary>
@@ -1996,7 +2178,7 @@ namespace IOTA.ModularJumpGates.ModConfiguration
 		[Serializable]
 		[XmlRoot("GlobalConfiguration")]
 		[ProtoContract(UseProtoMembersOnly = true)]
-		public sealed class MyGlobalModConfiguration : IMYConfigurationSchema
+		public sealed class MyGlobalModConfiguration : IMyConfigurationSchema
 		{
 			#region Schema
 			/// <summary>
@@ -2388,6 +2570,26 @@ namespace IOTA.ModularJumpGates.ModConfiguration
 			/// </summary>
 			public readonly uint MaximumGravitySegmentCount = 100000;
 
+			/// <summary>
+			/// Whether to allow jump gates to target GPS waypoints
+			/// </summary>
+			public bool AllowGPSWaypoints;
+
+			/// <summary>
+			/// Whether to allow jump gates to target server waypoints
+			/// </summary>
+			public bool AllowBeaconWaypoints;
+
+			/// <summary>
+			/// Whether to allow jump gates to target jump gate waypoints
+			/// </summary>
+			public bool AllowJumpGateWaypoints;
+
+			/// <summary>
+			/// Whether to allow jump gates to target server waypoints
+			/// </summary>
+			public bool AllowServerWaypoints;
+
 			internal MyLocalJumpGateConfiguration(MyModJumpGateConfiguration configuration, MyCubeSize grid_size)
 			{
 				switch (grid_size)
@@ -2412,6 +2614,10 @@ namespace IOTA.ModularJumpGates.ModConfiguration
 						this.MaxWormholeDurationSeconds = configuration.JumpGateWormholeConfiguration.MaxSmallGateWormholeDurationSeconds.Value;
 						this.JumpDistancePerExplosionPower = configuration.JumpGateWormholeConfiguration.SmallGateJumpDistancePerExplosionPower.Value;
 						this.AllowWormholeStargateJumps = configuration.JumpGateWormholeConfiguration.AllowSmallWormholeStargateJumps.Value;
+						this.AllowGPSWaypoints = configuration.JumpGateWaypointConfiguration.AllowSmallGateGPSWaypoints.Value;
+						this.AllowBeaconWaypoints = configuration.JumpGateWaypointConfiguration.AllowSmallGateBeaconWaypoints.Value;
+						this.AllowJumpGateWaypoints = configuration.JumpGateWaypointConfiguration.AllowSmallGateJumpGateWaypoints.Value;
+						this.AllowServerWaypoints = configuration.JumpGateWaypointConfiguration.AllowSmallGateServerWaypoints.Value;
 						break;
 					case MyCubeSize.Large:
 						this.MinimumJumpDistance = configuration.MinimumLargeJumpDistance.Value;
@@ -2433,6 +2639,10 @@ namespace IOTA.ModularJumpGates.ModConfiguration
 						this.MaxWormholeDurationSeconds = configuration.JumpGateWormholeConfiguration.MaxLargeGateWormholeDurationSeconds.Value;
 						this.JumpDistancePerExplosionPower = configuration.JumpGateWormholeConfiguration.LargeGateJumpDistancePerExplosionPower.Value;
 						this.AllowWormholeStargateJumps = configuration.JumpGateWormholeConfiguration.AllowLargeWormholeStargateJumps.Value;
+						this.AllowGPSWaypoints = configuration.JumpGateWaypointConfiguration.AllowLargeGateGPSWaypoints.Value;
+						this.AllowBeaconWaypoints = configuration.JumpGateWaypointConfiguration.AllowLargeGateBeaconWaypoints.Value;
+						this.AllowJumpGateWaypoints = configuration.JumpGateWaypointConfiguration.AllowLargeGateJumpGateWaypoints.Value;
+						this.AllowServerWaypoints = configuration.JumpGateWaypointConfiguration.AllowLargeGateServerWaypoints.Value;
 						break;
 					default:
 						throw new InvalidOperationException("Illegal grid size during configuration");

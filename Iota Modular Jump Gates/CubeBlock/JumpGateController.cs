@@ -24,6 +24,7 @@ using VRage.ModAPI;
 using VRage.ObjectBuilders;
 using VRage.Utils;
 using VRageMath;
+using IOTA.ModularJumpGates.ModConfiguration;
 
 namespace IOTA.ModularJumpGates.CubeBlock
 {
@@ -1358,20 +1359,22 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// <param name="jump_gate_valid">Whether the gate is valid</param>
 		private void UpdateControllerApplicableWaypoints(MyJumpGate jump_gate, bool jump_gate_valid)
 		{
-			if (jump_gate_valid && this.BaseBlockSettings != null && !MyNetworkInterface.IsDedicatedMultiplayerServer && MyAPIGateway.Gui.GetCurrentScreen == MyTerminalPageEnum.ControlPanel && this.LocalGameTick % 60 == 0)
+			if (!jump_gate_valid || this.BaseBlockSettings == null || MyNetworkInterface.IsDedicatedMultiplayerServer || MyAPIGateway.Gui.GetCurrentScreen != MyTerminalPageEnum.ControlPanel || this.LocalGameTick % 60 != 0) return;
+			bool src_do_wormhole = this.BlockSettings.DoSustainedWormhole();
+			long player_identity = MyAPIGateway.Players.TryGetIdentityId(MyAPIGateway.Multiplayer.MyId);
+			double distance;
+			IEnumerable<MyJumpGateConstruct> reachable_grids = (MyJumpGateModSession.Instance.Configuration.ConstructConfiguration.RequireGridCommLink.Value) ? this.JumpGateGrid.GetCommLinkedJumpGateGrids() : MyJumpGateModSession.Instance.GetAllJumpGateGrids();
+			Vector3D jump_node = jump_gate.WorldJumpNode;
+			this.WaypointsList.Clear();
+			MyModConfigurationV1.MyLocalJumpGateConfiguration configuration = jump_gate.JumpGateConfiguration;
+
+			if (configuration.AllowServerWaypoints && jump_gate.ServerAntenna != null)
 			{
-				bool src_do_wormhole = this.BlockSettings.DoSustainedWormhole();
-				long player_identity = MyAPIGateway.Players.TryGetIdentityId(MyAPIGateway.Multiplayer.MyId);
-				double distance;
-				IEnumerable<MyJumpGateConstruct> reachable_grids = (MyJumpGateModSession.Instance.Configuration.ConstructConfiguration.RequireGridCommLink.Value) ? this.JumpGateGrid.GetCommLinkedJumpGateGrids() : MyJumpGateModSession.Instance.GetAllJumpGateGrids();
-				Vector3D jump_node = jump_gate.WorldJumpNode;
-				this.WaypointsList.Clear();
 
-				if (jump_gate.ServerAntenna != null)
-				{
+			}
 
-				}
-
+			if (configuration.AllowJumpGateWaypoints)
+			{
 				foreach (MyJumpGateConstruct connected_grid in reachable_grids)
 				{
 					if (connected_grid == this.JumpGateGrid || !MyJumpGateModSession.Instance.IsJumpGateGridMultiplayerValid(connected_grid)) continue;
@@ -1411,7 +1414,10 @@ namespace IOTA.ModularJumpGates.CubeBlock
 						}
 					}
 				}
+			}
 
+			if (configuration.AllowBeaconWaypoints)
+			{
 				foreach (MyBeaconLinkWrapper beacon in this.JumpGateGrid.GetBeaconsWithinReverseBroadcastSphere())
 				{
 					if (beacon == null || beacon.Beacon == null || beacon.Beacon.MarkedForClose) continue;
@@ -1422,7 +1428,10 @@ namespace IOTA.ModularJumpGates.CubeBlock
 					else waypoint.InvalidationReason = MyWaypointInvalidationReason.NONE;
 					this.WaypointsList.AddWaypoint(waypoint);
 				}
+			}
 
+			if (configuration.AllowGPSWaypoints)
+			{
 				foreach (IMyGps gps in MyAPIGateway.Session.GPS.GetGpsList(player_identity))
 				{
 					if (!MyJumpGateController.IsGPSValid(gps)) continue;
@@ -1443,38 +1452,50 @@ namespace IOTA.ModularJumpGates.CubeBlock
 		/// <param name="jump_gate_valid">Whether the jump gate is valid</param>
 		private void CheckClearSelectedWaypoint(MyJumpGate jump_gate, bool jump_gate_valid)
 		{
-			if (jump_gate_valid && MyNetworkInterface.IsServerLike && this.BaseBlockSettings != null)
+			if (!jump_gate_valid || !MyNetworkInterface.IsServerLike || this.BaseBlockSettings == null) return;
+			MyJumpGateWaypoint selected_waypoint = this.BlockSettings.SelectedWaypoint();
+			if (selected_waypoint == null) return;
+			MyModConfigurationV1.MyLocalJumpGateConfiguration configuration = jump_gate.JumpGateConfiguration;
+			Vector3D? waypoint_endpoint = selected_waypoint.GetEndpoint();
+			bool waypoint_cleared = false;
+
+			if (
+				(selected_waypoint.WaypointType == MyWaypointType.GPS && !configuration.AllowGPSWaypoints)
+				|| (selected_waypoint.WaypointType == MyWaypointType.BEACON && !configuration.AllowBeaconWaypoints)
+				|| (selected_waypoint.WaypointType == MyWaypointType.JUMP_GATE && !configuration.AllowJumpGateWaypoints)
+				|| (selected_waypoint.WaypointType == MyWaypointType.SERVER && !configuration.AllowServerWaypoints)
+			)
 			{
-				MyJumpGateWaypoint selected_waypoint = this.BlockSettings.SelectedWaypoint();
-				Vector3D? waypoint_endpoint = selected_waypoint?.GetEndpoint();
-				bool waypoint_cleared = false;
+				this.BaseBlockSettings.SelectedWaypoint(null);
+				this.SetDirty();
+				waypoint_cleared = true;
+			}
 
-				if (waypoint_endpoint != null)
+			if (!waypoint_cleared && waypoint_endpoint != null)
+			{
+				Vector3D endpoint = waypoint_endpoint.Value;
+				double distance = Vector3D.Distance(endpoint, jump_gate.WorldJumpNode);
+
+				if (configuration != null && (distance < configuration.MinimumJumpDistance || distance > configuration.MaximumJumpDistance))
 				{
-					Vector3D endpoint = waypoint_endpoint.Value;
-					double distance = Vector3D.Distance(endpoint, jump_gate.WorldJumpNode);
+					this.BaseBlockSettings.SelectedWaypoint(null);
+					this.SetDirty();
+					waypoint_cleared = true;
+				}
+			}
 
-					if (jump_gate.JumpGateConfiguration != null && (distance < jump_gate.JumpGateConfiguration.MinimumJumpDistance || distance > jump_gate.JumpGateConfiguration.MaximumJumpDistance))
-					{
-						this.BaseBlockSettings.SelectedWaypoint(null);
-						this.SetDirty();
-						waypoint_cleared = true;
-					}
+			if (!waypoint_cleared && selected_waypoint.WaypointType == MyWaypointType.GPS && MyJumpGateModSession.Instance.ModsList.RealSolarSystemsEnabled)
+			{
+				MyGpsWrapper gps = selected_waypoint.GPS;
+				MyGpsWrapper src = gps.GetProxiedRSSGPS();
+
+				if (src == null)
+				{
+					this.BaseBlockSettings.SelectedWaypoint(null);
+					this.SetDirty();
 				}
 
-				if (!waypoint_cleared && selected_waypoint != null && selected_waypoint.WaypointType == MyWaypointType.GPS && MyJumpGateModSession.Instance.ModsList.RealSolarSystemsEnabled)
-				{
-					MyGpsWrapper gps = selected_waypoint.GPS;
-					MyGpsWrapper src = gps.GetProxiedRSSGPS();
-
-					if (src == null)
-					{
-						this.BaseBlockSettings.SelectedWaypoint(null);
-						this.SetDirty();
-					}
-
-					this.TEMP_WaypointGPS.Clear();
-				}
+				this.TEMP_WaypointGPS.Clear();
 			}
 		}
 
